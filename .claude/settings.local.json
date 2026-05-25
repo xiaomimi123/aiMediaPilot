@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh api *)",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl *)",
+      "Bash(npm --version)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(npm config *)",
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "Bash(node *)",
+      "Bash(open *)",
+      "Bash(docker info *)",
+      "Bash(osascript -e 'quit app \"Docker\"')",
+      "Bash(docker pull *)",
+      "Bash(docker exec *)",
+      "Bash(npx prisma *)",
+      "Bash(/Users/lizhishaoniange/.claude/plugins/cache/claude-plugins-official/superpowers/5.1.0/skills/brainstorming/scripts/start-server.sh *)",
+      "Bash(git init *)",
+      "Bash(git config *)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
+    ]
+  }
+}

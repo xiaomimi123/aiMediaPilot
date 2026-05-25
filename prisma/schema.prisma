@@ -1,0 +1,379 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== 用户与配置 ====================
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?  @unique
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  aiConfigs       AIConfig[]
+  imageGenConfigs ImageGenConfig[]
+  accounts        PlatformAccount[]
+  contents        Content[]
+  schedules       PublishTask[]
+  competitors     Competitor[]
+}
+
+model AIConfig {
+  id        String   @id @default(cuid())
+  userId    String
+  provider  String   // "openai" | "anthropic" | "zhipu" | "qwen" | "doubao"
+  apiKey    String   // 加密存储
+  modelId   String   // 具体模型标识
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, provider])
+}
+
+model ImageGenConfig {
+  id        String        @id @default(cuid())
+  userId    String
+  provider  ImageProvider
+  apiKey    String        // 加密存储
+  modelId   String        // 如 "dall-e-3", "flux-2-pro"
+  baseUrl   String?       // 自定义 API 地址 (SiliconFlow/Replicate 等)
+  isDefault Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, provider])
+}
+
+enum ImageProvider {
+  OPENAI
+  REPLICATE
+  STABILITY
+  MIDJOURNEY
+  GOOGLE
+  TONGYI_WANX
+  ZHIPU_COGVIEW
+  JIMENG
+  SILICONFLOW
+  CUSTOM
+}
+
+// ==================== 平台账号 ====================
+
+model PlatformAccount {
+  id             String    @id @default(cuid())
+  userId         String
+  platform       Platform
+  platformUid    String
+  nickname       String
+  avatar         String?
+  bio            String?
+  profileUrl     String?
+  followerCount  Int       @default(0)
+  followingCount Int       @default(0)
+  noteCount      Int       @default(0)
+  likeCount      Int       @default(0)
+  isActive       Boolean   @default(true)
+  cookieData     Json?     // 加密存储登录态
+  lastSyncAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id])
+  metrics        AccountMetric[]
+  notes          PlatformNote[]
+  syncTasks      SyncTask[]
+  publishTargets PublishTarget[]
+
+  @@unique([platform, platformUid])
+  @@index([userId, platform])
+}
+
+enum Platform {
+  XIAOHONGSHU
+  DOUYIN
+  WECHAT_MP
+  BILIBILI
+  KUAISHOU
+  WEIBO
+}
+
+// ==================== 账号指标时序数据 ====================
+
+model AccountMetric {
+  id             String   @id @default(cuid())
+  accountId      String
+  date           DateTime @db.Date
+  followerCount  Int
+  followingCount Int
+  noteCount      Int
+  totalLikes     Int
+  totalComments  Int
+  totalShares    Int
+  totalViews     Int
+  followerDelta  Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  account PlatformAccount @relation(fields: [accountId], references: [id])
+
+  @@unique([accountId, date])
+  @@index([accountId, date])
+}
+
+// ==================== 平台笔记/作品 ====================
+
+model PlatformNote {
+  id             String    @id @default(cuid())
+  accountId      String
+  platformNoteId String
+  title          String
+  content        String?   @db.Text
+  type           NoteType
+  coverUrl       String?
+  tags           String[]
+  publishedAt    DateTime?
+  likeCount      Int       @default(0)
+  commentCount   Int       @default(0)
+  shareCount     Int       @default(0)
+  viewCount      Int       @default(0)
+  collectCount   Int       @default(0)
+  isTop          Boolean   @default(false)
+  sourceUrl      String?
+  rawData        Json?
+  lastSyncAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  account PlatformAccount @relation(fields: [accountId], references: [id])
+  metrics NoteMetric[]
+
+  @@unique([accountId, platformNoteId])
+  @@index([accountId, publishedAt])
+}
+
+enum NoteType {
+  IMAGE_TEXT
+  VIDEO
+  LIVE
+}
+
+// ==================== 单篇笔记指标时序 ====================
+
+model NoteMetric {
+  id           String   @id @default(cuid())
+  noteId       String
+  date         DateTime @db.Date
+  likeCount    Int
+  commentCount Int
+  shareCount   Int
+  viewCount    Int
+  collectCount Int
+  createdAt    DateTime @default(now())
+
+  note PlatformNote @relation(fields: [noteId], references: [id])
+
+  @@unique([noteId, date])
+  @@index([noteId, date])
+}
+
+// ==================== AI 创作内容 ====================
+
+model Content {
+  id          String        @id @default(cuid())
+  userId      String
+  platform    Platform
+  type        ContentType
+  title       String?
+  body        String        @db.Text
+  tags        String[]
+  coverPrompt String?
+  coverUrl    String?
+  aiProvider  String?
+  aiModel     String?
+  prompt      String?       @db.Text
+  status      ContentStatus @default(DRAFT)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id])
+  publishTasks PublishTask[]
+
+  @@index([userId, platform, status])
+}
+
+enum ContentType {
+  NOTE_COPY
+  VIDEO_SCRIPT
+  TITLE
+  TAGS
+  COVER_IMAGE
+  PUBLISH_PLAN
+}
+
+enum ContentStatus {
+  DRAFT
+  READY
+  PUBLISHED
+  ARCHIVED
+}
+
+// ==================== 发布任务 ====================
+
+model PublishTask {
+  id          String        @id @default(cuid())
+  userId      String
+  contentId   String
+  title       String
+  mode        PublishMode   @default(SCHEDULED)
+  scheduledAt DateTime?
+  status      PublishStatus @default(DRAFT)
+  reviewNote  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  user    User            @relation(fields: [userId], references: [id])
+  content Content         @relation(fields: [contentId], references: [id])
+  targets PublishTarget[]
+
+  @@index([userId, status])
+  @@index([status, scheduledAt])
+}
+
+model PublishTarget {
+  id             String              @id @default(cuid())
+  publishTaskId  String
+  accountId      String
+  platform       Platform
+  adaptedTitle   String?
+  adaptedContent String?             @db.Text
+  adaptedTags    String[]
+  mediaFiles     Json?
+  coverImage     String?
+  status         TargetPublishStatus @default(PENDING)
+  publishedUrl   String?
+  platformNoteId String?
+  error          String?
+  retryCount     Int                 @default(0)
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  publishTask PublishTask     @relation(fields: [publishTaskId], references: [id])
+  account     PlatformAccount @relation(fields: [accountId], references: [id])
+
+  @@index([publishTaskId])
+  @@index([status])
+}
+
+enum PublishMode {
+  IMMEDIATE
+  SCHEDULED
+}
+
+enum PublishStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  PUBLISHING
+  COMPLETED
+  PARTIAL_FAILED
+  FAILED
+  CANCELLED
+}
+
+enum TargetPublishStatus {
+  PENDING
+  ADAPTING
+  READY
+  PUBLISHING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+// ==================== 竞品账号 ====================
+
+model Competitor {
+  id             String    @id @default(cuid())
+  userId         String
+  platform       Platform
+  platformUid    String
+  nickname       String
+  avatar         String?
+  followerCount  Int       @default(0)
+  noteCount      Int       @default(0)
+  analysisResult Json?
+  lastAnalyzedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user  User             @relation(fields: [userId], references: [id])
+  notes CompetitorNote[]
+
+  @@unique([userId, platform, platformUid])
+}
+
+model CompetitorNote {
+  id             String    @id @default(cuid())
+  competitorId   String
+  platformNoteId String
+  title          String
+  type           NoteType
+  likeCount      Int       @default(0)
+  commentCount   Int       @default(0)
+  shareCount     Int       @default(0)
+  viewCount      Int       @default(0)
+  publishedAt    DateTime?
+  tags           String[]
+  createdAt      DateTime  @default(now())
+
+  competitor Competitor @relation(fields: [competitorId], references: [id])
+
+  @@unique([competitorId, platformNoteId])
+}
+
+// ==================== 采集任务 ====================
+
+model SyncTask {
+  id         String     @id @default(cuid())
+  accountId  String
+  type       SyncType
+  status     TaskStatus @default(PENDING)
+  result     Json?
+  error      String?
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime   @default(now())
+
+  account PlatformAccount @relation(fields: [accountId], references: [id])
+
+  @@index([accountId, status])
+}
+
+enum SyncType {
+  PROFILE
+  NOTES
+  NOTE_DETAIL
+  METRICS
+  COMPETITOR
+}
+
+enum TaskStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
+}

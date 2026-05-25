@@ -1,0 +1,93 @@
+services:
+  # 数据库
+  postgres:
+    image: postgres:16-alpine
+    container_name: mediapilot-postgres
+    environment:
+      POSTGRES_USER: mediapilot
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-mediapilot_dev_pwd}
+      POSTGRES_DB: mediapilot
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mediapilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 缓存 + 队列 (Phase 2 才用到,但 Phase 1 一起启起来也无妨)
+  redis:
+    image: redis:7-alpine
+    container_name: mediapilot-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  # CloakBrowser 浏览器管理器 — Phase 2 才会用到
+  # 默认不启动,通过 `docker compose --profile crawler up` 启用
+  cloakbrowser-manager:
+    image: cloakhq/cloakbrowser-manager
+    container_name: mediapilot-cloakbrowser
+    profiles: ["crawler"]
+    ports:
+      - "8080:8080"
+    environment:
+      - AUTH_TOKEN=${CLOAK_AUTH_TOKEN}
+    volumes:
+      - cloak-profiles:/data
+    restart: unless-stopped
+
+  # 主应用 — 生产部署时使用,本地开发请用 `npm run dev`
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mediapilot-app
+    profiles: ["prod"]
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://mediapilot:${DB_PASSWORD:-mediapilot_dev_pwd}@postgres:5432/mediapilot
+      - REDIS_URL=redis://redis:6379
+      - CLOAKBROWSER_MANAGER_URL=http://cloakbrowser-manager:8080
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - app-data:/app/data
+    restart: unless-stopped
+
+  # 任务调度 Worker — Phase 2 起启用
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mediapilot-worker
+    profiles: ["prod"]
+    command: node dist/jobs/worker.js
+    environment:
+      - DATABASE_URL=postgresql://mediapilot:${DB_PASSWORD:-mediapilot_dev_pwd}@postgres:5432/mediapilot
+      - REDIS_URL=redis://redis:6379
+      - CLOAKBROWSER_MANAGER_URL=http://cloakbrowser-manager:8080
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - NODE_ENV=production
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+  cloak-profiles:
+  app-data:
