@@ -1,5 +1,5 @@
-import { Placeholder } from '@/components/layout/placeholder';
+import { AccountGrid } from '@/components/accounts/account-grid';
 
 export default function AccountsPage() {
-  return <Placeholder title="账号管理" phase="Phase 2" />;
+  return <AccountGrid />;
 }
