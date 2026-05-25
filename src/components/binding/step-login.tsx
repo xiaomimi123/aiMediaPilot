@@ -1,18 +1,20 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 
 export function StepLogin({
-  sessionId, vncUrl, onLoggedIn, onCancel,
-}: { sessionId: string; vncUrl: string; onLoggedIn: (accountId: string) => void; onCancel: () => void }) {
+  sessionId, onLoggedIn, onCancel,
+}: { sessionId: string; onLoggedIn: (accountId: string) => void; onCancel: () => void }) {
   const [status, setStatus] = useState('STARTING');
+  const [qrCode, setQrCode] = useState<string | null>(null);
 
   useEffect(() => {
     const es = new EventSource(`/api/v1/sessions/${sessionId}/events`);
     es.onmessage = (ev) => {
       const data = JSON.parse(ev.data);
       if (data.status) setStatus(data.status);
+      if (data.qrCode) setQrCode(data.qrCode);
       if (data.status === 'LOGGED_IN' && data.accountId) onLoggedIn(data.accountId);
     };
     es.onerror = () => es.close();
@@ -24,33 +26,48 @@ export function StepLogin({
     onCancel();
   };
 
+  const statusLabel: Record<string, string> = {
+    STARTING: '正在启动浏览器...',
+    WAITING_LOGIN: '等待扫码,二维码 3 分钟有效',
+    SCRAPING: '已登录,正在抓取主页...',
+    EXPIRED: '会话超时',
+    ERROR: '出错了',
+  };
+
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold">在嵌入浏览器里登录</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            手机小红书 App → 我 → 右上扫码图标 → 扫下方二维码 → 手机确认
-          </p>
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <span className="rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800">
-            ⏳ {status === 'STARTING' ? '启动中...' : status === 'WAITING_LOGIN' ? '等待扫码...' : status}
-          </span>
-          <Button variant="outline" size="sm" onClick={handleCancel}>取消</Button>
-        </div>
+      <div>
+        <h2 className="text-xl font-semibold">手机扫码登录</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          手机小红书 App → 我 → 右上扫码图标 → 扫下方二维码 → 手机确认
+        </p>
       </div>
-      <Card className="overflow-hidden">
-        {/* iframe 占满宽 + 用容器比例 (1280:800 = 16:10) 保证容器内 Chromium 1:1 显示,二维码不再被压缩 */}
-        <div className="relative w-full" style={{ aspectRatio: '1280 / 800' }}>
-          <iframe
-            src={vncUrl}
-            className="absolute inset-0 h-full w-full border-0"
-            title="noVNC"
-            allow="fullscreen; clipboard-read; clipboard-write"
-          />
-        </div>
+
+      <Card>
+        <CardContent className="flex flex-col items-center gap-4 py-12">
+          {qrCode ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={qrCode}
+                alt="登录二维码"
+                className="h-64 w-64 rounded-lg border bg-white p-3"
+              />
+              <div className="text-sm text-muted-foreground">
+                {statusLabel[status] ?? status}
+              </div>
+            </>
+          ) : (
+            <div className="flex h-64 w-64 items-center justify-center rounded-lg border bg-muted text-sm text-muted-foreground">
+              {statusLabel[status] ?? status}
+            </div>
+          )}
+        </CardContent>
       </Card>
+
+      <div className="flex justify-end">
+        <Button variant="outline" onClick={handleCancel}>取消</Button>
+      </div>
     </div>
   );
 }

@@ -34,16 +34,15 @@ export default function BindAccountPage() {
                   });
                   const json = await res.json();
                   if (!json.success) { alert(json.message); return; }
-                  next({ proxy, sessionId: json.data.sessionId, vncUrl: json.data.vncUrl });
+                  next({ proxy, sessionId: json.data.sessionId });
                 }}
               />
             );
           }
-          if (step === 2 && state.sessionId && state.vncUrl) {
+          if (step === 2 && state.sessionId) {
             return (
               <StepLogin
                 sessionId={state.sessionId}
-                vncUrl={state.vncUrl}
                 onLoggedIn={(accountId) => next({ accountId })}
                 onCancel={() => router.push('/accounts')}
               />

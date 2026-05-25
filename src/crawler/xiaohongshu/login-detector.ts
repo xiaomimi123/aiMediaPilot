@@ -2,17 +2,25 @@ import type { Page } from 'playwright-core';
 import { XHS } from './selectors';
 
 /**
- * 已登录判定:URL 为非 /login 且能找到用户头像链接(href 含 /user/profile/{uid})
+ * 已登录判定:URL 离开 /login,且找不到 login-container 模态
  */
 export async function isXiaohongshuLoggedIn(page: Page): Promise<boolean> {
   const url = page.url();
-  if (url.includes('/login') || url.includes('xiaohongshu.com/explore')) return false;
+  if (url.includes('/login')) return false;
+  // login-container 还在(在其他页面也会弹) = 未登录
+  return (await page.locator(XHS.LOGIN_CONTAINER).count()) === 0;
+}
+
+/**
+ * 抓取登录页当前的二维码 base64 (含 data:image/png 前缀)
+ * 二维码 src 会定期变化,worker 轮询调用
+ */
+export async function fetchXiaohongshuQrCode(page: Page): Promise<string | null> {
   try {
-    await page.waitForSelector(XHS.LOGGED_IN_USER_LINK, { timeout: 3_000, state: 'attached' });
-    const href = await page.locator(XHS.LOGGED_IN_USER_LINK).first().getAttribute('href');
-    return !!(href && XHS.LOGGED_IN_PROFILE_HREF_REGEX.test(href));
+    await page.waitForSelector(XHS.QR_IMG, { timeout: 15000, state: 'attached' });
+    return await page.locator(XHS.QR_IMG).first().getAttribute('src');
   } catch {
-    return false;
+    return null;
   }
 }
 

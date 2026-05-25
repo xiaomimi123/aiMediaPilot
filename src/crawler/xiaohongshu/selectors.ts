@@ -4,6 +4,11 @@ export const XHS = {
   HOME_URL: 'https://www.xiaohongshu.com',
   PROFILE_URL: (uid: string) => `https://www.xiaohongshu.com/user/profile/${uid}`,
 
+  // 登录页二维码 img (探查确认)
+  QR_IMG: 'img.qrcode-img',
+  LOGIN_CONTAINER: '.login-container',
+
+  // 登录后 profile 抓取 selectors v1 (后续调优)
   LOGGED_IN_USER_LINK: 'a.user.side-bar-component',
   LOGGED_IN_PROFILE_HREF_REGEX: /\/user\/profile\/([a-f0-9]+)/,
 

@@ -5,13 +5,14 @@ import { decrypt } from '@/lib/crypto';
 import type { ProxyConfig } from '@/lib/proxy';
 import { openContext } from '@/crawler/browser-pool';
 import { xiaohongshuCrawler } from '@/crawler/xiaohongshu/crawler';
+import { fetchXiaohongshuQrCode } from '@/crawler/xiaohongshu/login-detector';
 import { PLATFORM_META } from '@/lib/platform';
 import { QUEUES } from '@/jobs/queue';
 import type { SessionStatus } from '@prisma/client';
 
 type JobData = { sessionId: string; encryptedProxy: string | null };
 
-const POLL_INTERVAL_MS = 2000;
+const POLL_INTERVAL_MS = 1500;
 const MAX_POLL_MS = 8 * 60 * 1000;
 
 async function setStatus(sessionId: string, status: SessionStatus) {
@@ -38,8 +39,21 @@ async function handleBind(job: Job<JobData>) {
 
   const startedAt = Date.now();
   let loggedIn = false;
+  let lastQr: string | null = null;
   while (Date.now() - startedAt < MAX_POLL_MS) {
     if (await crawler.isLoggedIn(page)) { loggedIn = true; break; }
+
+    // 抓 QR (仅小红书)
+    if (platform === 'XIAOHONGSHU') {
+      const qr = await fetchXiaohongshuQrCode(page);
+      if (qr && qr !== lastQr) {
+        lastQr = qr;
+        await prisma.browserSession.update({
+          where: { id: sessionId },
+          data: { qrCode: qr, status: 'WAITING_LOGIN' },
+        });
+      }
+    }
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
   }
 

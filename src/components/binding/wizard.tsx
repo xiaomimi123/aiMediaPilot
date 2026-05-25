@@ -9,7 +9,6 @@ export interface WizardState {
   platform?: 'XIAOHONGSHU' | 'DOUYIN';
   proxy?: import('@/lib/proxy').ProxyConfig | null;
   sessionId?: string;
-  vncUrl?: string;
   accountId?: string;
 }
 

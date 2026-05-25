@@ -53,7 +53,6 @@ export async function POST(req: NextRequest) {
 
     return ok({
       sessionId: session.id,
-      vncUrl: `${process.env.CHROMIUM_VNC_URL || 'http://localhost:6080'}/vnc.html?autoconnect=1&resize=scale&path=websockify`,
       expiresAt: session.expiresAt.toISOString(),
     });
   } catch (error) {

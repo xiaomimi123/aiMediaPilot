@@ -400,6 +400,7 @@ model BrowserSession {
   vncPath     String
   containerId String?
   proxyTest   Json?
+  qrCode      String?       @db.Text
   expiresAt   DateTime
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
