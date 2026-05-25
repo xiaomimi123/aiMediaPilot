@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       fonts-noto-cjk \
       dumb-init \
       curl \
+      socat \
     && rm -rf /var/lib/apt/lists/*
 
 RUN ln -s /usr/share/novnc/vnc.html /usr/share/novnc/index.html
