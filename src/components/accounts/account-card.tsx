@@ -35,7 +35,10 @@ export function AccountCard({ account }: { account: Account }) {
       <CardContent className="space-y-3 pt-6">
         <div className="flex items-center gap-3">
           {account.avatar
-            ? <img src={account.avatar} alt="" className="h-12 w-12 rounded-full object-cover" />
+            ? <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={account.avatar} alt="" className="h-12 w-12 rounded-full object-cover" />
+            </>
             : <div className="h-12 w-12 rounded-full bg-muted" />}
           <div className="flex-1">
             <div className="font-semibold">{PLATFORM_EMOJI[account.platform]} @{account.nickname}</div>
