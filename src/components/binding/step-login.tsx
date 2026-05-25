@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 
 export function StepLogin({
   sessionId, vncUrl, onLoggedIn, onCancel,
@@ -26,27 +26,31 @@ export function StepLogin({
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-semibold">在嵌入浏览器里登录</h2>
-      <div className="grid grid-cols-3 gap-4">
-        <Card className="col-span-2 overflow-hidden">
-          <iframe src={vncUrl} className="h-[500px] w-full border-0" title="noVNC" />
-        </Card>
-        <Card>
-          <CardContent className="space-y-3 pt-6">
-            <h3 className="font-semibold">操作指引</h3>
-            <ol className="list-decimal space-y-2 pl-5 text-sm">
-              <li>打开手机小红书 App</li>
-              <li>&ldquo;我&rdquo; → 右上扫码图标</li>
-              <li>扫左边的二维码</li>
-              <li>手机上确认登录</li>
-            </ol>
-            <div className="rounded-md bg-amber-50 p-2 text-xs text-amber-800">
-              ⏳ 等待登录中... <br/>当前状态: <code>{status}</code>
-            </div>
-            <Button variant="outline" size="sm" onClick={handleCancel}>取消</Button>
-          </CardContent>
-        </Card>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold">在嵌入浏览器里登录</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            手机小红书 App → 我 → 右上扫码图标 → 扫下方二维码 → 手机确认
+          </p>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800">
+            ⏳ {status === 'STARTING' ? '启动中...' : status === 'WAITING_LOGIN' ? '等待扫码...' : status}
+          </span>
+          <Button variant="outline" size="sm" onClick={handleCancel}>取消</Button>
+        </div>
       </div>
+      <Card className="overflow-hidden">
+        {/* iframe 占满宽 + 用容器比例 (1280:800 = 16:10) 保证容器内 Chromium 1:1 显示,二维码不再被压缩 */}
+        <div className="relative w-full" style={{ aspectRatio: '1280 / 800' }}>
+          <iframe
+            src={vncUrl}
+            className="absolute inset-0 h-full w-full border-0"
+            title="noVNC"
+            allow="fullscreen; clipboard-read; clipboard-write"
+          />
+        </div>
+      </Card>
     </div>
   );
 }
