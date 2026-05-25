@@ -36,7 +36,7 @@ export function StepLogin({
             <h3 className="font-semibold">操作指引</h3>
             <ol className="list-decimal space-y-2 pl-5 text-sm">
               <li>打开手机小红书 App</li>
-              <li>"我" → 右上扫码图标</li>
+              <li>&ldquo;我&rdquo; → 右上扫码图标</li>
               <li>扫左边的二维码</li>
               <li>手机上确认登录</li>
             </ol>
