@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-mkdir -p /profiles/default
-# 清掉上次容器残留的 lock,否则 Chromium 启动报 process_singleton_posix.cc 然后退出
-rm -f /profiles/default/Singleton*
+# cloakserve stores per-seed user-data in /tmp/cloakserve (default in container).
+# Clear any stale SingletonLock files from previous runs.
+find /tmp/cloakserve -name 'Singleton*' -delete 2>/dev/null || true
 exec /usr/bin/supervisord -c /etc/supervisor/supervisord.conf -n
