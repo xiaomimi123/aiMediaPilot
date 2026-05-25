@@ -29,19 +29,23 @@ services:
       - "6379:6379"
     restart: unless-stopped
 
-  # CloakBrowser 浏览器管理器 — Phase 2 才会用到
-  # 默认不启动,通过 `docker compose --profile crawler up` 启用
-  cloakbrowser-manager:
-    image: cloakhq/cloakbrowser-manager
-    container_name: mediapilot-cloakbrowser
-    profiles: ["crawler"]
+  # Chromium + NoVNC 浏览器服务 — Phase 2 自建镜像
+  chromium:
+    build:
+      context: ./src/docker/chromium-novnc
+    container_name: mediapilot-chromium
     ports:
-      - "8080:8080"
-    environment:
-      - AUTH_TOKEN=${CLOAK_AUTH_TOKEN}
+      - "127.0.0.1:9222:9222"
+      - "127.0.0.1:6080:6080"
     volumes:
-      - cloak-profiles:/data
+      - chromium-profiles:/profiles
+    shm_size: "2gb"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9222/json/version"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   # 主应用 — 生产部署时使用,本地开发请用 `npm run dev`
   app:
@@ -55,7 +59,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://mediapilot:${DB_PASSWORD:-mediapilot_dev_pwd}@postgres:5432/mediapilot
       - REDIS_URL=redis://redis:6379
-      - CLOAKBROWSER_MANAGER_URL=http://cloakbrowser-manager:8080
+      - CHROMIUM_REMOTE_DEBUG_URL=http://chromium:9222
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - NODE_ENV=production
     depends_on:
@@ -78,7 +82,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://mediapilot:${DB_PASSWORD:-mediapilot_dev_pwd}@postgres:5432/mediapilot
       - REDIS_URL=redis://redis:6379
-      - CLOAKBROWSER_MANAGER_URL=http://cloakbrowser-manager:8080
+      - CHROMIUM_REMOTE_DEBUG_URL=http://chromium:9222
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - NODE_ENV=production
     depends_on:
@@ -89,5 +93,5 @@ services:
 volumes:
   postgres-data:
   redis-data:
-  cloak-profiles:
+  chromium-profiles:
   app-data:
