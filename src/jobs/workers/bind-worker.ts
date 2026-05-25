@@ -39,8 +39,19 @@ async function handleBind(job: Job<JobData>) {
 
   const startedAt = Date.now();
   let loggedIn = false;
+  let cancelled = false;
   let lastQr: string | null = null;
   while (Date.now() - startedAt < MAX_POLL_MS) {
+    // 检查 session 是否被用户取消(API 把 status 改成 EXPIRED)
+    const current = await prisma.browserSession.findUnique({
+      where: { id: sessionId },
+      select: { status: true },
+    });
+    if (!current || current.status === 'EXPIRED' || current.status === 'ERROR') {
+      cancelled = true;
+      break;
+    }
+
     if (await crawler.isLoggedIn(page)) { loggedIn = true; break; }
 
     // 抓 QR (仅小红书)
@@ -55,6 +66,11 @@ async function handleBind(job: Job<JobData>) {
       }
     }
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+  }
+
+  if (cancelled) {
+    await ctx.close();
+    return; // 不抛错,任务正常结束,worker 释放去处理下一个
   }
 
   if (!loggedIn) {
