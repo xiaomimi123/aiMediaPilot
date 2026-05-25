@@ -16,6 +16,7 @@ export interface WizardState {
 export function Wizard({ children }: { children: (props: {
   step: Step;
   state: WizardState;
+  update: (partial: Partial<WizardState>) => void;
   next: (partial?: Partial<WizardState>) => void;
   prev: () => void;
 }) => React.ReactNode }) {
@@ -42,6 +43,7 @@ export function Wizard({ children }: { children: (props: {
       {children({
         step,
         state,
+        update: (partial) => setState((s) => ({ ...s, ...partial })),
         next: (partial = {}) => { setState((s) => ({ ...s, ...partial })); setStep((s) => Math.min(3, s + 1) as Step); },
         prev: () => setStep((s) => Math.max(0, s - 1) as Step),
       })}
