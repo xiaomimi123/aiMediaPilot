@@ -41,6 +41,7 @@ async function handleBind(job: Job<JobData>) {
   let loggedIn = false;
   let cancelled = false;
   let lastQr: string | null = null;
+  let lastLog = 0;
   while (Date.now() - startedAt < MAX_POLL_MS) {
     // 检查 session 是否被用户取消(API 把 status 改成 EXPIRED)
     const current = await prisma.browserSession.findUnique({
@@ -52,7 +53,17 @@ async function handleBind(job: Job<JobData>) {
       break;
     }
 
-    if (await crawler.isLoggedIn(page)) { loggedIn = true; break; }
+    const isIn = await crawler.isLoggedIn(page);
+    // 每 5 秒打印一次诊断:URL + login-container count + isLoggedIn 判定
+    if (Date.now() - lastLog > 5000) {
+      lastLog = Date.now();
+      const url = page.url();
+      const containerCount = await page.locator('.login-container').count().catch(() => -1);
+      console.log(
+        `[bind-worker:${sessionId.slice(0, 8)}] url=${url.slice(0, 80)} login-container=${containerCount} isLoggedIn=${isIn}`
+      );
+    }
+    if (isIn) { loggedIn = true; break; }
 
     // 抓 QR (仅小红书)
     if (platform === 'XIAOHONGSHU') {

@@ -2,12 +2,10 @@ import type { Page } from 'playwright-core';
 import { XHS } from './selectors';
 
 /**
- * 已登录判定:URL 离开 /login,且找不到 login-container 模态
+ * 已登录判定:`.login-container` 模态被关闭就视为已登录。
+ * 不能看 URL — 小红书是 SPA,扫码登录后 URL 经常仍是 /login,但模态会消失。
  */
 export async function isXiaohongshuLoggedIn(page: Page): Promise<boolean> {
-  const url = page.url();
-  if (url.includes('/login')) return false;
-  // login-container 还在(在其他页面也会弹) = 未登录
   return (await page.locator(XHS.LOGIN_CONTAINER).count()) === 0;
 }
 
