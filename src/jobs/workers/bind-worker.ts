@@ -42,6 +42,9 @@ async function handleBind(job: Job<JobData>) {
   let cancelled = false;
   let lastQr: string | null = null;
   let lastLog = 0;
+  // 状态机:必须先看到 login-container,再看到它消失,才算真登录。
+  // 不能直接 count===0,因为页面刚开还没渲染模态时也是 0,会误判。
+  let loginContainerEverSeen = false;
   while (Date.now() - startedAt < MAX_POLL_MS) {
     // 检查 session 是否被用户取消(API 把 status 改成 EXPIRED)
     const current = await prisma.browserSession.findUnique({
@@ -53,20 +56,21 @@ async function handleBind(job: Job<JobData>) {
       break;
     }
 
-    const isIn = await crawler.isLoggedIn(page);
-    // 每 5 秒打印一次诊断:URL + login-container count + isLoggedIn 判定
+    const containerCount = await page.locator('.login-container').count().catch(() => -1);
+    if (containerCount > 0) loginContainerEverSeen = true;
+    const isIn = containerCount === 0 && loginContainerEverSeen;
+
+    // 每 5 秒打印一次诊断
     if (Date.now() - lastLog > 5000) {
       lastLog = Date.now();
-      const url = page.url();
-      const containerCount = await page.locator('.login-container').count().catch(() => -1);
       console.log(
-        `[bind-worker:${sessionId.slice(0, 8)}] url=${url.slice(0, 80)} login-container=${containerCount} isLoggedIn=${isIn}`
+        `[bind-worker:${sessionId.slice(0, 8)}] url=${page.url().slice(0, 80)} login-container=${containerCount} ever-seen=${loginContainerEverSeen} isLoggedIn=${isIn}`
       );
     }
     if (isIn) { loggedIn = true; break; }
 
-    // 抓 QR (仅小红书)
-    if (platform === 'XIAOHONGSHU') {
+    // 抓 QR (仅小红书) — 仅在 login-container 存在时抓
+    if (platform === 'XIAOHONGSHU' && containerCount > 0) {
       const qr = await fetchXiaohongshuQrCode(page);
       if (qr && qr !== lastQr) {
         lastQr = qr;
