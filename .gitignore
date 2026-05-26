@@ -9,3 +9,7 @@ dist
 .env*.local
 prisma/migrations/dev.db*
 .superpowers/
+# Claude Code local permission settings — may contain machine-specific paths
+.claude/settings.local.json
+# TypeScript incremental build cache
+*.tsbuildinfo

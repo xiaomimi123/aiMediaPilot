@@ -95,6 +95,22 @@ async function handleBind(job: Job<JobData>) {
   }
 
   await setStatus(sessionId, 'SCRAPING');
+
+  // DEBUG: 扫码成功后先 dump 登录态首页 HTML,便于校准 selectors。
+  // 后续 selector 稳定后这段可删。
+  try {
+    await page.goto('https://www.xiaohongshu.com', { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await page.waitForTimeout(4000);
+    const fs = await import('fs/promises');
+    const html = await page.content();
+    await fs.writeFile('/tmp/xhs-loggedin.html', html, 'utf-8');
+    const shotPath = '/tmp/xhs-loggedin.png';
+    await page.screenshot({ path: shotPath, fullPage: true });
+    console.log(`[bind-worker:${sessionId.slice(0, 8)}] dumped HTML to /tmp/xhs-loggedin.html (${html.length} bytes) + screenshot ${shotPath}`);
+  } catch (e) {
+    console.error('[bind-worker] dump failed:', e instanceof Error ? e.message : e);
+  }
+
   try {
     const profile = await crawler.scrapeProfile(ctx);
     const notes = await crawler.scrapeNotes(ctx, 20);
