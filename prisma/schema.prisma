@@ -23,6 +23,7 @@ model User {
   contents        Content[]
   schedules       PublishTask[]
   competitors     Competitor[]
+  contentAnalyses ContentAnalysis[]
 }
 
 model AIConfig {
@@ -416,4 +417,64 @@ enum SessionStatus {
   SCRAPING
   EXPIRED
   ERROR
+}
+
+// ==================== Phase 3 / Direction A: 内容预诊断 ====================
+
+model ContentAnalysis {
+  id               String                @id @default(cuid())
+  userId           String
+  user             User                  @relation(fields: [userId], references: [id])
+
+  // 视频源 (相对路径,根目录 ./uploads/)
+  videoPath        String
+  videoFilename    String
+  videoSizeBytes   Int
+  videoDurationSec Float
+  videoMimeType    String
+
+  // 用户输入草稿 (null → AI 生成; 非 null → AI 评价)
+  draftTitle       String?
+  draftCaption     String?
+  draftCoverPath   String?
+
+  // 配置
+  niche            String                @default("ai-knowledge")
+
+  // 状态机
+  status           ContentAnalysisStatus @default(QUEUED)
+  errorMessage     String?
+  retryCount       Int                   @default(0)
+
+  // 进度 (SSE)
+  progress         Json?
+
+  // 预处理产物
+  framesDir        String?
+  audioPath        String?
+  transcriptPath   String?
+  coverCandidates  Json?
+
+  // AI 结果
+  report           Json?
+
+  // 成本审计
+  llmUsage         Json?
+
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  startedAt        DateTime?
+  completedAt      DateTime?
+
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+enum ContentAnalysisStatus {
+  QUEUED
+  PREPROCESSING
+  ANALYZING
+  COMPLETED
+  FAILED
+  CANCELLED
 }
