@@ -1,7 +1,7 @@
-import type { BrowserContext } from 'playwright-core';
+import type { BrowserContext, Page } from 'playwright-core';
 import type { ICrawler, NoteSummary, ProfileSnapshot } from '../base';
 import { XHS } from './selectors';
-import { extractXiaohongshuUid, isXiaohongshuLoggedIn } from './login-detector';
+import { extractXiaohongshuUid, fetchXiaohongshuQrCode } from './login-detector';
 
 export class SelectorMissingError extends Error {
   constructor(selector: string) {
@@ -11,7 +11,10 @@ export class SelectorMissingError extends Error {
 }
 
 export const xiaohongshuCrawler: ICrawler = {
-  isLoggedIn: isXiaohongshuLoggedIn,
+  async isLoginModalVisible(page: Page): Promise<boolean> {
+    return (await page.locator(XHS.LOGIN_CONTAINER).count().catch(() => 0)) > 0;
+  },
+  fetchQrCode: fetchXiaohongshuQrCode,
 
   async scrapeProfile(ctx: BrowserContext): Promise<ProfileSnapshot> {
     const page = await ctx.newPage();

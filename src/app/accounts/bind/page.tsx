@@ -39,10 +39,11 @@ export default function BindAccountPage() {
               />
             );
           }
-          if (step === 2 && state.sessionId) {
+          if (step === 2 && state.sessionId && state.platform) {
             return (
               <StepLogin
                 sessionId={state.sessionId}
+                platform={state.platform}
                 onLoggedIn={(accountId) => next({ accountId })}
                 onCancel={() => router.push('/accounts')}
               />

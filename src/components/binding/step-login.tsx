@@ -3,9 +3,16 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
+type Platform = 'XIAOHONGSHU' | 'DOUYIN';
+
+const SCAN_INSTRUCTIONS: Record<Platform, string> = {
+  XIAOHONGSHU: '手机小红书 App → 我 → 右上扫码图标 → 扫下方二维码 → 手机确认',
+  DOUYIN: '手机抖音 App → 我 → 右上三横线 → 扫一扫 → 扫下方二维码 → 手机确认',
+};
+
 export function StepLogin({
-  sessionId, onLoggedIn, onCancel,
-}: { sessionId: string; onLoggedIn: (accountId: string) => void; onCancel: () => void }) {
+  sessionId, platform, onLoggedIn, onCancel,
+}: { sessionId: string; platform: Platform; onLoggedIn: (accountId: string) => void; onCancel: () => void }) {
   const [status, setStatus] = useState('STARTING');
   const [qrCode, setQrCode] = useState<string | null>(null);
 
@@ -39,7 +46,7 @@ export function StepLogin({
       <div>
         <h2 className="text-xl font-semibold">手机扫码登录</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          手机小红书 App → 我 → 右上扫码图标 → 扫下方二维码 → 手机确认
+          {SCAN_INSTRUCTIONS[platform]}
         </p>
       </div>
 

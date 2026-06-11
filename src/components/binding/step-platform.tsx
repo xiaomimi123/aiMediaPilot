@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 
 const PLATFORMS = [
   { id: 'XIAOHONGSHU' as const, emoji: '🔴', label: '小红书', desc: '图文笔记 · 视频' },
-  { id: 'DOUYIN' as const, emoji: '⚫', label: '抖音', desc: '短视频 (Plan 2)', disabled: true },
+  { id: 'DOUYIN' as const, emoji: '⚫', label: '抖音', desc: '短视频' },
 ];
 
 export function StepPlatform({
@@ -18,10 +18,9 @@ export function StepPlatform({
           <button
             key={p.id}
             type="button"
-            disabled={p.disabled}
             onClick={() => onSelect(p.id)}
             className={cn(
-              'rounded-lg border bg-card p-6 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+              'rounded-lg border bg-card p-6 text-left transition-colors',
               selected === p.id ? 'border-primary ring-2 ring-primary/20' : 'border-border hover:bg-accent'
             )}
           >

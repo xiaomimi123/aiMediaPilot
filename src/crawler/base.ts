@@ -27,8 +27,13 @@ export interface NoteSummary {
 }
 
 export interface ICrawler {
-  /** 判断当前页是否已登录 */
-  isLoggedIn(page: Page): Promise<boolean>;
+  /**
+   * 登录模态当前是否在 DOM 里。bind-worker 用"先见后无"状态机判定登录:
+   * 必须先看到 modal 出现,再看到它消失,才认登录成功 — 避免页面初次加载尚未渲染时误判。
+   */
+  isLoginModalVisible(page: Page): Promise<boolean>;
+  /** 抓登录页当前的二维码 src (含 data:image 前缀)。QR 周期刷新,worker 轮询调用。 */
+  fetchQrCode(page: Page): Promise<string | null>;
   /** 已登录 context 上抓主页 */
   scrapeProfile(ctx: BrowserContext): Promise<ProfileSnapshot>;
   /** 已登录 context 上抓笔记列表 */

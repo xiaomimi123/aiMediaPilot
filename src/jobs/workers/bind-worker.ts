@@ -4,8 +4,7 @@ import { redis } from '@/lib/redis';
 import { decrypt } from '@/lib/crypto';
 import type { ProxyConfig } from '@/lib/proxy';
 import { openContext } from '@/crawler/browser-pool';
-import { xiaohongshuCrawler } from '@/crawler/xiaohongshu/crawler';
-import { fetchXiaohongshuQrCode } from '@/crawler/xiaohongshu/login-detector';
+import { getCrawler } from '@/crawler/registry';
 import { PLATFORM_META } from '@/lib/platform';
 import { QUEUES } from '@/jobs/queue';
 import type { SessionStatus } from '@prisma/client';
@@ -26,8 +25,7 @@ async function handleBind(job: Job<JobData>) {
 
   const platform = session.platform;
   const meta = PLATFORM_META[platform];
-  const crawler = platform === 'XIAOHONGSHU' ? xiaohongshuCrawler : null;
-  if (!crawler) throw new Error(`Plan 1 仅支持小红书,收到 ${platform}`);
+  const crawler = getCrawler(platform);
 
   const proxy: ProxyConfig | null = encryptedProxy ? JSON.parse(decrypt(encryptedProxy)) : null;
 
@@ -42,9 +40,9 @@ async function handleBind(job: Job<JobData>) {
   let cancelled = false;
   let lastQr: string | null = null;
   let lastLog = 0;
-  // 状态机:必须先看到 login-container,再看到它消失,才算真登录。
-  // 不能直接 count===0,因为页面刚开还没渲染模态时也是 0,会误判。
-  let loginContainerEverSeen = false;
+  // 状态机:必须先看到登录 modal,再看到它消失,才算真登录。
+  // 不能直接 visible===false,因为页面刚开还没渲染模态时也算 false,会误判。
+  let loginModalEverSeen = false;
   while (Date.now() - startedAt < MAX_POLL_MS) {
     // 检查 session 是否被用户取消(API 把 status 改成 EXPIRED)
     const current = await prisma.browserSession.findUnique({
@@ -56,22 +54,22 @@ async function handleBind(job: Job<JobData>) {
       break;
     }
 
-    const containerCount = await page.locator('.login-container').count().catch(() => -1);
-    if (containerCount > 0) loginContainerEverSeen = true;
-    const isIn = containerCount === 0 && loginContainerEverSeen;
+    const modalVisible = await crawler.isLoginModalVisible(page);
+    if (modalVisible) loginModalEverSeen = true;
+    const isIn = !modalVisible && loginModalEverSeen;
 
     // 每 5 秒打印一次诊断
     if (Date.now() - lastLog > 5000) {
       lastLog = Date.now();
       console.log(
-        `[bind-worker:${sessionId.slice(0, 8)}] url=${page.url().slice(0, 80)} login-container=${containerCount} ever-seen=${loginContainerEverSeen} isLoggedIn=${isIn}`
+        `[bind-worker:${sessionId.slice(0, 8)}] platform=${platform} url=${page.url().slice(0, 80)} modal-visible=${modalVisible} ever-seen=${loginModalEverSeen} isLoggedIn=${isIn}`
       );
     }
     if (isIn) { loggedIn = true; break; }
 
-    // 抓 QR (仅小红书) — 仅在 login-container 存在时抓
-    if (platform === 'XIAOHONGSHU' && containerCount > 0) {
-      const qr = await fetchXiaohongshuQrCode(page);
+    // 仅在登录 modal 还在时抓 QR,避免在已登录页面误抓其他 img
+    if (modalVisible) {
+      const qr = await crawler.fetchQrCode(page);
       if (qr && qr !== lastQr) {
         lastQr = qr;
         await prisma.browserSession.update({
@@ -96,17 +94,19 @@ async function handleBind(job: Job<JobData>) {
 
   await setStatus(sessionId, 'SCRAPING');
 
-  // DEBUG: 扫码成功后先 dump 登录态首页 HTML,便于校准 selectors。
+  // DEBUG: 扫码成功后先 dump 登录态首页 HTML + 截图,便于校准 selectors。
   // 后续 selector 稳定后这段可删。
   try {
-    await page.goto('https://www.xiaohongshu.com', { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await page.goto(meta.homeUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
     await page.waitForTimeout(4000);
     const fs = await import('fs/promises');
     const html = await page.content();
-    await fs.writeFile('/tmp/xhs-loggedin.html', html, 'utf-8');
-    const shotPath = '/tmp/xhs-loggedin.png';
+    const slug = platform.toLowerCase();
+    const htmlPath = `/tmp/${slug}-loggedin.html`;
+    const shotPath = `/tmp/${slug}-loggedin.png`;
+    await fs.writeFile(htmlPath, html, 'utf-8');
     await page.screenshot({ path: shotPath, fullPage: true });
-    console.log(`[bind-worker:${sessionId.slice(0, 8)}] dumped HTML to /tmp/xhs-loggedin.html (${html.length} bytes) + screenshot ${shotPath}`);
+    console.log(`[bind-worker:${sessionId.slice(0, 8)}] dumped HTML to ${htmlPath} (${html.length} bytes) + screenshot ${shotPath}`);
   } catch (e) {
     console.error('[bind-worker] dump failed:', e instanceof Error ? e.message : e);
   }
