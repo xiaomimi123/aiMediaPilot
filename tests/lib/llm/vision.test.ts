@@ -38,7 +38,7 @@ describe('OpenAIVisionLLM.callStructured', () => {
     expect(out.usage.model).toBe('gpt-4o');
   });
 
-  it('OpenAI 抛错 → 3 次重试後再抛', async () => {
+  it('OpenAI 抛错 → 3 次重试后再抛', async () => {
     parseMock.mockReset();
     parseMock.mockRejectedValue(new Error('network'));
     const llm = new OpenAIVisionLLM({ apiKey: 'sk-test', maxRetries: 3 });
