@@ -10,5 +10,8 @@ export function startContentAnalyzeWorker() {
     },
     { connection: redis }
   );
+  worker.on('failed', (job, err) => {
+    console.error('[content-analyze-worker] failed', job?.id, err);
+  });
   return worker;
 }
