@@ -60,8 +60,11 @@ export class OpenAIVisionLLM implements IVisionLLM {
         response_format: zodResponseFormat(opts.responseSchema as z.ZodTypeAny, 'response'),
         max_tokens: opts.maxTokens,
       });
-      // Pre-attach a no-op rejection handler so Node.js does not emit unhandledRejection
-      // before the try/catch below consumes the promise. The actual error is caught below.
+      // Node.js fires 'unhandledRejection' if a Promise is rejected before
+      // any rejection handler is attached. Because .parse() returns immediately
+      // with a Promise that may reject before the try/await line below runs
+      // (a microtask boundary exists here), we pre-attach a no-op handler.
+      // The actual error is still caught by the try/catch below.
       p.catch(() => undefined);
       try {
         const completion = await p;

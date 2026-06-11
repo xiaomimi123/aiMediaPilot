@@ -39,6 +39,12 @@ describe('OpenAIVisionLLM.callStructured', () => {
   });
 
   it('OpenAI 抛错 → 3 次重试后再抛', async () => {
+    // Replace setTimeout with an immediate no-delay version so retry back-off
+    // does not slow the test suite down by ~3 s.
+    const realSetTimeout = global.setTimeout;
+    vi.spyOn(global, 'setTimeout').mockImplementation((fn: TimerHandler, _delay?: number, ...args: any[]) => {
+      return realSetTimeout(fn as (...args: any[]) => void, 0, ...args);
+    });
     parseMock.mockReset();
     parseMock.mockRejectedValue(new Error('network'));
     const llm = new OpenAIVisionLLM({ apiKey: 'sk-test', maxRetries: 3 });
@@ -48,5 +54,6 @@ describe('OpenAIVisionLLM.callStructured', () => {
       responseSchema: Schema,
     })).rejects.toThrow('network');
     expect(parseMock).toHaveBeenCalledTimes(3);
+    vi.restoreAllMocks();
   });
 });
