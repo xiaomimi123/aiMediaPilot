@@ -56,7 +56,7 @@ describe('buildExtractSingleFrameArgs', () => {
 });
 
 describe('parseProbeOutput', () => {
-  it('从 ffprobe JSON 解出 duration + mimeType', () => {
+  it('从 ffprobe JSON 解出 duration + formatName', () => {
     const json = JSON.stringify({
       format: { duration: '67.5', format_name: 'mov,mp4,m4a,3gp,3g2,mj2' },
     });
@@ -67,5 +67,13 @@ describe('parseProbeOutput', () => {
 
   it('损坏的 JSON 抛错', () => {
     expect(() => parseProbeOutput('not json')).toThrow();
+  });
+
+  it('format 字段缺失抛错', () => {
+    expect(() => parseProbeOutput('{}')).toThrow(/missing .format/);
+  });
+
+  it('duration 缺失抛错', () => {
+    expect(() => parseProbeOutput(JSON.stringify({ format: { format_name: 'mp4' } }))).toThrow(/invalid duration/);
   });
 });

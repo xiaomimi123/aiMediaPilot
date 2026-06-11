@@ -1,5 +1,6 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import path from 'path';
 
 const execFileAsync = promisify(execFile);
 
@@ -17,15 +18,20 @@ export function buildProbeArgs(videoPath: string): string[] {
 
 export function parseProbeOutput(stdout: string): ProbeResult {
   const json = JSON.parse(stdout);
-  const fmt = json.format ?? {};
+  const fmt = json?.format;
+  if (!fmt) throw new Error('ffprobe output missing .format key');
+  const duration = parseFloat(fmt.duration ?? '');
+  if (!Number.isFinite(duration) || duration <= 0) {
+    throw new Error(`ffprobe returned invalid duration: ${fmt.duration}`);
+  }
   return {
-    durationSec: parseFloat(fmt.duration ?? '0'),
+    durationSec: duration,
     formatName: fmt.format_name ?? '',
   };
 }
 
 export async function probeVideo(videoPath: string): Promise<ProbeResult> {
-  const { stdout } = await execFileAsync(FFPROBE_BIN, buildProbeArgs(videoPath));
+  const { stdout } = await execFileAsync(FFPROBE_BIN, buildProbeArgs(videoPath), { timeout: 30_000 });
   return parseProbeOutput(stdout);
 }
 
@@ -41,12 +47,12 @@ export function buildExtractFramesArgs(opts: ExtractFramesOpts): string[] {
     '-i', opts.videoPath,
     '-vf', `fps=1/${opts.intervalSec}`,
     '-q:v', '3',
-    `${opts.framesDir}/frame_%04d.jpg`,
+    path.join(opts.framesDir, 'frame_%04d.jpg'),
   ];
 }
 
 export async function extractFrames(opts: ExtractFramesOpts): Promise<void> {
-  await execFileAsync(FFMPEG_BIN, buildExtractFramesArgs(opts));
+  await execFileAsync(FFMPEG_BIN, buildExtractFramesArgs(opts), { timeout: 600_000 });
 }
 
 export interface ExtractAudioOpts {
@@ -67,7 +73,7 @@ export function buildExtractAudioArgs(opts: ExtractAudioOpts): string[] {
 }
 
 export async function extractAudio(opts: ExtractAudioOpts): Promise<void> {
-  await execFileAsync(FFMPEG_BIN, buildExtractAudioArgs(opts));
+  await execFileAsync(FFMPEG_BIN, buildExtractAudioArgs(opts), { timeout: 600_000 });
 }
 
 export interface ExtractSingleFrameOpts {
@@ -88,5 +94,5 @@ export function buildExtractSingleFrameArgs(opts: ExtractSingleFrameOpts): strin
 }
 
 export async function extractSingleFrame(opts: ExtractSingleFrameOpts): Promise<void> {
-  await execFileAsync(FFMPEG_BIN, buildExtractSingleFrameArgs(opts));
+  await execFileAsync(FFMPEG_BIN, buildExtractSingleFrameArgs(opts), { timeout: 30_000 });
 }
