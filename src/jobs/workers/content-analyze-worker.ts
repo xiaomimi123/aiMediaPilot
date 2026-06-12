@@ -22,6 +22,7 @@ import { RETENTION } from '@/lib/llm/prompts/ai-knowledge/retention';
 import { TITLE_CAPTION } from '@/lib/llm/prompts/ai-knowledge/title-caption';
 import { COVER } from '@/lib/llm/prompts/ai-knowledge/cover';
 import { SYNTHESIZE } from '@/lib/llm/prompts/ai-knowledge/synthesize';
+import { Prisma } from '@prisma/client';
 import type { ContentAnalysisStatus } from '@prisma/client';
 
 type JobData = { analysisId: string };
@@ -308,7 +309,7 @@ async function handleAnalyze(job: Job<JobData>) {
       // Disk artifacts gone — clear DB fields so next retry re-runs preprocess fresh
       await prisma.contentAnalysis.update({
         where: { id: analysisId },
-        data: { framesDir: null, audioPath: null, transcriptPath: null, hookFramesDir: null, coverCandidates: undefined },
+        data: { framesDir: null, audioPath: null, transcriptPath: null, hookFramesDir: null, coverCandidates: Prisma.DbNull },
       });
       throw new Error('Preprocessed artifacts missing on disk; cleared DB state, retry will re-preprocess');
     }
