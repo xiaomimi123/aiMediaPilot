@@ -25,7 +25,14 @@ function readAdapterEnv(): AdapterEnv {
   };
 }
 
-/** 跑 crawler.py list 检测 cookie。 退出码 0 = 有效。 */
+/**
+ * 跑 review.py list 检测 cookie。退出码 0 = 有效。
+ *
+ * 注: cheat-on-content 的 crawler.py 没有 CLI 子命令 (它的 main 只调 ensure_login),
+ *     review.py 才有 list/video/login 三个子命令。review.py list 直接走 fetch_recent_videos,
+ *     cookie 失效时会在打开创作者中心首页时拿不到数据 → 我们的 30s 超时会杀掉它,
+ *     退出码非 0,probeDouyinCookie 返回 false。
+ */
 export async function probeDouyinCookie(): Promise<boolean> {
   let env: AdapterEnv;
   try {
@@ -37,7 +44,7 @@ export async function probeDouyinCookie(): Promise<boolean> {
   try {
     await execFileAsync(
       env.pythonBin,
-      [path.join(env.adapterPath, 'crawler.py'), 'list'],
+      [path.join(env.adapterPath, 'review.py'), 'list'],
       { cwd: env.contentDir, timeout: 30_000 }
     );
     return true;

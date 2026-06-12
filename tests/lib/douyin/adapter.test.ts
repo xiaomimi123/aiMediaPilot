@@ -31,7 +31,7 @@ describe('probeDouyinCookie', () => {
     expect(await probeDouyinCookie()).toBe(true);
     expect(execFileMock).toHaveBeenCalledWith(
       'python3',
-      [path.join('/adapter', 'crawler.py'), 'list'],
+      [path.join('/adapter', 'review.py'), 'list'],
       expect.objectContaining({ cwd: '/content', timeout: 30000 }),
       expect.any(Function)
     );
