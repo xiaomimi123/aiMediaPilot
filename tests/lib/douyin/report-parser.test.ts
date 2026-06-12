@@ -37,16 +37,35 @@ describe('parseReportMd', () => {
     expect(r.topComments?.[4]).toEqual({ text: '期待下一期', likes: 32 });
   });
 
-  it('缺失字段返回 null 不抛错', async () => {
-    const tmpPath = path.join(__dirname, 'minimal-report.md');
+  it('缺失可选字段返回 null 不抛错 (核心字段全在时)', async () => {
     const fs = await import('fs/promises');
+    const os = await import('os');
+    const pathMod = await import('path');
+    const tmpPath = pathMod.join(os.tmpdir(), `minimal-report-${Date.now()}.md`);
     await fs.writeFile(tmpPath, '# 视频复盘报告\n## 数据快照\n- 播放: 100\n- 点赞: 10\n- 评论: 1\n- 转发: 0\n- 收藏: 0\n');
-    const r = await parseReportMd(tmpPath);
-    expect(r.plays).toBe(100n);
-    expect(r.completionRateBp).toBeNull();
-    expect(r.retention3sBp).toBeNull();
-    expect(r.followConversionBp).toBeNull();
-    expect(r.topComments).toBeNull();
-    await fs.unlink(tmpPath);
+    try {
+      const r = await parseReportMd(tmpPath);
+      expect(r.plays).toBe(100n);
+      expect(r.completionRateBp).toBeNull();
+      expect(r.retention3sBp).toBeNull();
+      expect(r.followConversionBp).toBeNull();
+      expect(r.topComments).toBeNull();
+    } finally {
+      await fs.unlink(tmpPath);
+    }
+  });
+
+  it('核心字段缺失 (e.g. 播放) 抛错', async () => {
+    const fs = await import('fs/promises');
+    const os = await import('os');
+    const pathMod = await import('path');
+    const tmpPath = pathMod.join(os.tmpdir(), `bad-report-${Date.now()}.md`);
+    // 缺播放
+    await fs.writeFile(tmpPath, '# 视频复盘报告\n## 数据快照\n- 点赞: 10\n- 评论: 1\n- 转发: 0\n- 收藏: 0\n');
+    try {
+      await expect(parseReportMd(tmpPath)).rejects.toThrow(/缺少必填字段/);
+    } finally {
+      await fs.unlink(tmpPath);
+    }
   });
 });

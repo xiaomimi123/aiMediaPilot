@@ -15,9 +15,9 @@ export interface ActualMetricInput {
   topComments: { text: string; likes: number }[] | null;
 }
 
-function extractBigInt(md: string, regex: RegExp): bigint {
+function requireBigInt(md: string, regex: RegExp, fieldName: string): bigint {
   const m = regex.exec(md);
-  if (!m) return 0n;
+  if (!m) throw new Error(`report.md 缺少必填字段: ${fieldName}`);
   return BigInt(m[1].replace(/,/g, ''));
 }
 
@@ -50,11 +50,11 @@ function extractTopComments(md: string): { text: string; likes: number }[] | nul
 export async function parseReportMd(filePath: string): Promise<ActualMetricInput> {
   const md = await fs.readFile(filePath, 'utf-8');
 
-  const plays = extractBigInt(md, /播放[:\s]+([\d,]+)/);
-  const likes = extractBigInt(md, /点赞[:\s]+([\d,]+)/);
-  const comments = extractBigInt(md, /评论[:\s]+([\d,]+)/);
-  const shares = extractBigInt(md, /转发[:\s]+([\d,]+)/);
-  const collects = extractBigInt(md, /收藏[:\s]+([\d,]+)/);
+  const plays = requireBigInt(md, /播放[:\s]+([\d,]+)/, '播放');
+  const likes = requireBigInt(md, /点赞[:\s]+([\d,]+)/, '点赞');
+  const comments = requireBigInt(md, /评论[:\s]+([\d,]+)/, '评论');
+  const shares = requireBigInt(md, /转发[:\s]+([\d,]+)/, '转发');
+  const collects = requireBigInt(md, /收藏[:\s]+([\d,]+)/, '收藏');
 
   return {
     plays,
