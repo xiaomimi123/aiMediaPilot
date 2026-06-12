@@ -13,14 +13,18 @@ import {
 import {
   computeFrameSamplingPlan,
   computeCoverCandidateTimestamps,
+  computeHookFrameTimestamps,
 } from '@/lib/video/sampling';
 import { WhisperClient } from '@/lib/llm/whisper';
+import { OpenAIVisionLLM, type IVisionLLM, type TokenUsage } from '@/lib/llm/vision';
+import { HOOK } from '@/lib/llm/prompts/ai-knowledge/hook';
+import { RETENTION } from '@/lib/llm/prompts/ai-knowledge/retention';
+import { TITLE_CAPTION } from '@/lib/llm/prompts/ai-knowledge/title-caption';
+import { COVER } from '@/lib/llm/prompts/ai-knowledge/cover';
+import { SYNTHESIZE } from '@/lib/llm/prompts/ai-knowledge/synthesize';
 import type { ContentAnalysisStatus } from '@prisma/client';
 
 type JobData = { analysisId: string };
-
-const POLL_INTERVAL_MS = 1500;
-const MAX_POLL_MS = 8 * 60 * 1000;
 
 async function setStatus(analysisId: string, status: ContentAnalysisStatus, extra: Record<string, unknown> = {}) {
   await prisma.contentAnalysis.update({
@@ -86,6 +90,157 @@ export async function runPreprocess(opts: PreprocessOpts): Promise<PreprocessRes
   };
 }
 
+export interface AIAnalysisInput {
+  durationSec: number;
+  framesDir: string;
+  audioPath: string;
+  transcript: { text: string; segments: { startSec: number; endSec: number; text: string }[]; durationSec: number };
+  coverCandidates: { path: string; timestampSec: number }[];
+  draftTitle: string | null;
+  draftCaption: string | null;
+  draftCoverPath: string | null;
+}
+
+export interface AIAnalysisDeps {
+  llm: IVisionLLM;
+  synthesizeLLM: IVisionLLM;
+}
+
+export interface AIAnalysisResult {
+  report: Record<string, any>;
+  llmUsage: { byCall: TokenUsage[]; total: TokenUsage };
+}
+
+function emptyTotal(): TokenUsage {
+  return { model: 'aggregate', promptTokens: 0, completionTokens: 0, estCostUSD: 0 };
+}
+
+function accumulate(total: TokenUsage, u: TokenUsage): TokenUsage {
+  return {
+    model: 'aggregate',
+    promptTokens: total.promptTokens + u.promptTokens,
+    completionTokens: total.completionTokens + u.completionTokens,
+    estCostUSD: total.estCostUSD + u.estCostUSD,
+  };
+}
+
+async function listFramePaths(framesDir: string): Promise<string[]> {
+  const files = await fs.readdir(framesDir);
+  return files.filter((f) => f.endsWith('.jpg')).sort().map((f) => path.join(framesDir, f));
+}
+
+export async function runAIAnalysis(input: AIAnalysisInput, deps: AIAnalysisDeps): Promise<AIAnalysisResult> {
+  const allFrames = await listFramePaths(input.framesDir);
+
+  const hookFrames = allFrames.slice(0, computeHookFrameTimestamps().length);
+  const retentionFrames = allFrames;
+
+  const transcript03s = input.transcript.segments
+    .filter((s) => s.startSec < 3)
+    .map((s) => s.text)
+    .join(' ');
+
+  const callTracking: { name: string; usage: TokenUsage }[] = [];
+  const tracked = async <T>(name: string, fn: () => Promise<{ result: T; usage: TokenUsage }>): Promise<T | { error: string }> => {
+    try {
+      const out = await fn();
+      callTracking.push({ name, usage: out.usage });
+      return out.result;
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : String(e) };
+    }
+  };
+
+  const [hookResult, retentionResult, titleCaptionResult, coverResult] = await Promise.all([
+    tracked('hook', () => deps.llm.callStructured({
+      systemPrompt: HOOK.systemPrompt,
+      userMessage: HOOK.buildUserMessage({
+        durationSec: input.durationSec,
+        frameImagePaths: hookFrames,
+        transcript03s,
+      }),
+      responseSchema: HOOK.responseSchema,
+      model: 'gpt-4o',
+    })),
+    tracked('retention', () => deps.llm.callStructured({
+      systemPrompt: RETENTION.systemPrompt,
+      userMessage: RETENTION.buildUserMessage({
+        durationSec: input.durationSec,
+        frameImagePaths: retentionFrames,
+        transcriptSegments: input.transcript.segments,
+      }),
+      responseSchema: RETENTION.responseSchema,
+      model: 'gpt-4o',
+    })),
+    tracked('titleCaption', () => deps.llm.callStructured({
+      systemPrompt: TITLE_CAPTION.systemPrompt,
+      userMessage: TITLE_CAPTION.buildUserMessage({
+        transcriptText: input.transcript.text,
+        draftTitle: input.draftTitle,
+        draftCaption: input.draftCaption,
+      }),
+      responseSchema: TITLE_CAPTION.responseSchema,
+      model: 'gpt-4o',
+    })),
+    tracked('cover', () => deps.llm.callStructured({
+      systemPrompt: COVER.systemPrompt,
+      userMessage: COVER.buildUserMessage({
+        transcriptFirstChunk: input.transcript.segments.slice(0, 3).map((s) => s.text).join(' '),
+        userCoverPath: input.draftCoverPath,
+        candidatePaths: input.coverCandidates.map((c) => c.path),
+      }),
+      responseSchema: COVER.responseSchema,
+      model: 'gpt-4o',
+    })),
+  ]);
+
+  const allOk =
+    !('error' in (hookResult as any)) &&
+    !('error' in (retentionResult as any)) &&
+    !('error' in (titleCaptionResult as any)) &&
+    !('error' in (coverResult as any));
+
+  let overallScore: number | null = null;
+  let topActionItems: string[] = [];
+
+  if (allOk) {
+    try {
+      const synOut = await deps.synthesizeLLM.callStructured({
+        systemPrompt: SYNTHESIZE.systemPrompt,
+        userMessage: SYNTHESIZE.buildUserMessage({
+          hook: hookResult,
+          retention: retentionResult,
+          titleCaption: titleCaptionResult,
+          cover: coverResult,
+        }),
+        responseSchema: SYNTHESIZE.responseSchema,
+        model: 'gpt-4o-mini',
+      });
+      overallScore = synOut.result.overallScore;
+      topActionItems = synOut.result.topActionItems;
+      callTracking.push({ name: 'synthesize', usage: synOut.usage });
+    } catch {
+      // synthesize 失败不阻断,留 null
+    }
+  }
+
+  const total = callTracking.reduce((acc, c) => accumulate(acc, c.usage), emptyTotal());
+
+  return {
+    report: {
+      schemaVersion: 1,
+      niche: 'ai-knowledge',
+      hook: hookResult,
+      retention: retentionResult,
+      titleCaption: titleCaptionResult,
+      cover: coverResult,
+      overallScore,
+      topActionItems,
+    },
+    llmUsage: { byCall: callTracking.map((c) => c.usage), total },
+  };
+}
+
 async function handleAnalyze(job: Job<JobData>) {
   const { analysisId } = job.data;
   const analysis = await prisma.contentAnalysis.findUnique({ where: { id: analysisId } });
@@ -96,28 +251,70 @@ async function handleAnalyze(job: Job<JobData>) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY not set');
 
-  await setStatus(analysisId, 'PREPROCESSING', { startedAt: new Date() });
+  let framesDir = analysis.framesDir;
+  let audioPath = analysis.audioPath;
+  let transcriptPath = analysis.transcriptPath;
+  let coverCandidates = (analysis.coverCandidates as { path: string; timestampSec: number }[] | null) ?? null;
+  let durationSec = analysis.videoDurationSec;
 
-  const pre = await runPreprocess({
-    analysisId,
-    videoPath: analysis.videoPath,
-    uploadsRoot,
-    openaiApiKey: apiKey,
-  });
+  // 如果未预处理 (新任务) 或 retry 后未保留产物 → 跑预处理
+  if (!framesDir || !audioPath || !transcriptPath || !coverCandidates) {
+    await setStatus(analysisId, 'PREPROCESSING', { startedAt: new Date() });
+    const pre = await runPreprocess({
+      analysisId,
+      videoPath: analysis.videoPath,
+      uploadsRoot,
+      openaiApiKey: apiKey,
+    });
+    framesDir = pre.framesDir;
+    audioPath = pre.audioPath;
+    transcriptPath = pre.transcriptPath;
+    coverCandidates = pre.coverCandidates;
+    durationSec = pre.durationSec;
+    await prisma.contentAnalysis.update({
+      where: { id: analysisId },
+      data: { framesDir, audioPath, transcriptPath, coverCandidates, videoDurationSec: durationSec },
+    });
+  }
+
+  // 取消检查
+  const recheck = await prisma.contentAnalysis.findUnique({ where: { id: analysisId }, select: { status: true } });
+  if (recheck?.status === 'CANCELLED') return;
+
+  await setStatus(analysisId, 'ANALYZING');
+
+  const transcriptJson = JSON.parse(await fs.readFile(transcriptPath, 'utf-8')) as {
+    text: string;
+    segments: { startSec: number; endSec: number; text: string }[];
+    durationSec: number;
+  };
+
+  const llm = new OpenAIVisionLLM({ apiKey, defaultModel: 'gpt-4o' });
+  const synthesizeLLM = new OpenAIVisionLLM({ apiKey, defaultModel: 'gpt-4o-mini' });
+
+  const ai = await runAIAnalysis(
+    {
+      durationSec,
+      framesDir,
+      audioPath,
+      transcript: transcriptJson,
+      coverCandidates,
+      draftTitle: analysis.draftTitle,
+      draftCaption: analysis.draftCaption,
+      draftCoverPath: analysis.draftCoverPath,
+    },
+    { llm, synthesizeLLM }
+  );
 
   await prisma.contentAnalysis.update({
     where: { id: analysisId },
     data: {
-      framesDir: pre.framesDir,
-      audioPath: pre.audioPath,
-      transcriptPath: pre.transcriptPath,
-      coverCandidates: pre.coverCandidates,
-      videoDurationSec: pre.durationSec,
+      status: 'COMPLETED',
+      completedAt: new Date(),
+      report: ai.report,
+      llmUsage: ai.llmUsage as any,
     },
   });
-
-  // Task 13 接 AI 阶段
-  throw new Error('AI stage not yet implemented (Task 13)');
 }
 
 export function startContentAnalyzeWorker() {
