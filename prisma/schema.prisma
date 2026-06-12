@@ -467,8 +467,22 @@ model ContentAnalysis {
   startedAt   DateTime?
   completedAt DateTime?
 
+  // ===== Phase 3 / Direction A v2 =====
+  douyinUrl         String?
+  douyinAwemeId     String?
+  publishedAt       DateTime?
+  retroStatus       RetroStatus?
+  retroErrorMessage String?
+  retroReport       Json?
+  retroStartedAt    DateTime?
+  retroCompletedAt  DateTime?
+
+  actualMetrics     ActualMetric[]
+
   @@index([userId, createdAt])
   @@index([status])
+  @@index([douyinAwemeId])
+  @@index([retroStatus])
 }
 
 enum ContentAnalysisStatus {
@@ -478,4 +492,44 @@ enum ContentAnalysisStatus {
   COMPLETED
   FAILED
   CANCELLED
+}
+
+enum RetroStatus {
+  SCHEDULED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model ActualMetric {
+  id                  String           @id @default(cuid())
+  analysisId          String
+  analysis            ContentAnalysis  @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  snapshotAt          DateTime         @default(now())
+  daysAfterPublish    Float
+  source              String           @default("douyin-creator-center")
+
+  plays               BigInt
+  likes               BigInt
+  comments            BigInt
+  shares              BigInt
+  collects            BigInt
+
+  likeRateBp          Int?
+  commentRateBp       Int?
+  shareRateBp         Int?
+
+  completionRateBp    Int?
+  retention3sBp       Int?
+  followConversionBp  Int?
+
+  topComments         Json?
+
+  rawReportPath       String?
+
+  createdAt           DateTime         @default(now())
+
+  @@index([analysisId, snapshotAt])
 }
