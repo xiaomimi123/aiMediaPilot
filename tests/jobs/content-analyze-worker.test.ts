@@ -4,7 +4,13 @@ import { RetentionResponseSchema } from '@/lib/llm/prompts/ai-knowledge/retentio
 
 vi.mock('@/lib/redis', () => ({ redis: {} }));
 vi.mock('@/jobs/queue', () => ({ QUEUES: { ANALYZE: 'content-analyze' } }));
-vi.mock('@/lib/prisma', () => ({ prisma: {} }));
+vi.mock('@/lib/prisma', () => ({
+  prisma: {
+    contentAnalysis: {
+      update: vi.fn(async () => ({})),
+    },
+  },
+}));
 
 vi.mock('@/lib/video/ffmpeg', () => ({
   probeVideo:           vi.fn(async () => ({ durationSec: 45, formatName: 'mp4' })),

@@ -11,6 +11,7 @@ type Analysis = {
   videoDurationSec: number;
   status: string;
   errorMessage: string | null;
+  progress: { stage?: string; percent?: number; label?: string } | null;
   report: any | null;
   llmUsage: any | null;
   coverCandidates: { path: string; timestampSec: number }[] | null;
@@ -65,7 +66,7 @@ export default function PreflightDetailPage() {
         </p>
       </div>
 
-      <ProgressStages status={data.status} errorMessage={data.errorMessage} />
+      <ProgressStages status={data.status} progress={data.progress} errorMessage={data.errorMessage} />
 
       {data.status === 'COMPLETED' && data.report && (
         <ReportView

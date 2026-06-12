@@ -8,11 +8,19 @@ const STAGES = [
   { key: 'COMPLETED', label: '完成' },
 ];
 
-export function ProgressStages({ status, errorMessage }: { status: string; errorMessage?: string | null }) {
+export function ProgressStages({
+  status,
+  progress,
+  errorMessage,
+}: {
+  status: string;
+  progress?: { stage?: string; percent?: number; label?: string } | null;
+  errorMessage?: string | null;
+}) {
   const isFailed = status === 'FAILED' || status === 'CANCELLED';
   const idx = STAGES.findIndex((s) => s.key === status);
   const pctMap: Record<string, number> = { QUEUED: 5, PREPROCESSING: 30, ANALYZING: 70, COMPLETED: 100 };
-  const pct = pctMap[status] ?? (isFailed ? 50 : 0);
+  const pct = progress?.percent ?? pctMap[status] ?? (isFailed ? 50 : 0);
 
   return (
     <div className="space-y-3">
@@ -32,6 +40,9 @@ export function ProgressStages({ status, errorMessage }: { status: string; error
         ))}
       </div>
       <Progress value={pct} />
+      {progress?.label && !isFailed && (
+        <div className="text-xs text-muted-foreground">{progress.label}</div>
+      )}
       {errorMessage && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{errorMessage}</div>}
     </div>
   );

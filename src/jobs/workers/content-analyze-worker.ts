@@ -34,6 +34,18 @@ async function setStatus(analysisId: string, status: ContentAnalysisStatus, extr
   });
 }
 
+async function setProgress(
+  analysisId: string,
+  stage: string,
+  percent: number,
+  label: string
+) {
+  await prisma.contentAnalysis.update({
+    where: { id: analysisId },
+    data: { progress: { stage, percent, label } },
+  });
+}
+
 export interface PreprocessResult {
   framesDir: string;
   hookFramesDir: string;
@@ -68,13 +80,18 @@ export async function runPreprocess(opts: PreprocessOpts): Promise<PreprocessRes
   const { durationSec } = await probeVideo(opts.videoPath);
   const plan = computeFrameSamplingPlan(durationSec);
 
+  await setProgress(opts.analysisId, 'preprocess.frames', 10, '抽帧中');
   await extractFrames({ videoPath: opts.videoPath, framesDir, intervalSec: plan.intervalSec });
+
+  await setProgress(opts.analysisId, 'preprocess.audio', 20, '抽音轨中');
   await extractAudio({ videoPath: opts.videoPath, audioPath });
 
+  await setProgress(opts.analysisId, 'preprocess.whisper', 30, 'Whisper 转写中');
   const whisper = new WhisperClient(opts.openaiApiKey);
   const transcription = await whisper.transcribe(audioPath);
   await fs.writeFile(transcriptPath, JSON.stringify(transcription), 'utf-8');
 
+  await setProgress(opts.analysisId, 'preprocess.covers', 45, '抽候选封面');
   const coverTimestamps = computeCoverCandidateTimestamps(durationSec);
   const coverCandidates = await Promise.all(
     coverTimestamps.map(async (t, i) => {
@@ -84,6 +101,7 @@ export async function runPreprocess(opts: PreprocessOpts): Promise<PreprocessRes
     })
   );
 
+  await setProgress(opts.analysisId, 'preprocess.hook', 48, '抽钩子帧');
   const hookTimestamps = computeHookFrameTimestamps();
   await Promise.all(
     hookTimestamps.map((t, i) =>
@@ -327,6 +345,7 @@ async function handleAnalyze(job: Job<JobData>) {
   const llm = new OpenAIVisionLLM({ apiKey, defaultModel: 'gpt-4o' });
   const synthesizeLLM = new OpenAIVisionLLM({ apiKey, defaultModel: 'gpt-4o-mini' });
 
+  await setProgress(analysisId, 'analyze.dimensions', 50, 'AI 4 维度并行评估');
   const ai = await runAIAnalysis(
     {
       durationSec,
@@ -340,6 +359,7 @@ async function handleAnalyze(job: Job<JobData>) {
     },
     { llm, synthesizeLLM }
   );
+  await setProgress(analysisId, 'analyze.synthesize', 90, '综合评分');
 
   // Fix 1: inject Whisper cost into llmUsage so it shows up in 烧 $x display
   if (whisperCostUSD > 0) {
