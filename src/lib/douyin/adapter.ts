@@ -53,27 +53,33 @@ export async function probeDouyinCookie(): Promise<boolean> {
   }
 }
 
-/** 跑 review.py video <aweme_id> 拉取数据。 返回 report.md 绝对路径。 */
+/**
+ * 跑 review.py video <aweme_id> 拉取数据。 返回 report.md 绝对路径。
+ *
+ * 注: cheat-on-content review.py 把 report.md 写到 `<CHEAT_CONTENT_PROJECT_DIR>/videos/<date>_<slug>/`,
+ *     slug 从视频 desc 动态生成不可预测。 我们从 stdout 解析 review.py 最后打印的 `✓ <path>` 行获取实际路径。
+ *     若 review.py 后续改 print 格式, 这里需要跟改。
+ */
 export async function runDouyinAdapter(awemeId: string): Promise<string> {
   const { adapterPath, contentDir, pythonBin } = readAdapterEnv();
-
-  const outputDir = path.join(os.tmpdir(), `retro-${awemeId}-${Date.now()}`);
-  await fs.mkdir(outputDir, { recursive: true });
-  const scriptPath = path.join(outputDir, 'script.md');
-  await fs.writeFile(scriptPath, `# placeholder\nawemeId: ${awemeId}\n`);
 
   try {
     const { stdout, stderr } = await execFileAsync(
       pythonBin,
-      [path.join(adapterPath, 'review.py'), 'video', awemeId, scriptPath],
+      [path.join(adapterPath, 'review.py'), 'video', awemeId],
       { cwd: contentDir, timeout: 5 * 60_000 }
     );
 
-    const reportPath = path.join(outputDir, 'report.md');
-    if (!existsSync(reportPath)) {
+    // review.py 最后打印 `\n✓ /absolute/path/to/report.md`
+    const match = stdout.match(/✓\s+(.+report\.md)\s*$/m);
+    if (!match) {
       throw new Error(
-        `adapter 未生成 report.md\nstdout 末段: ${stdout.slice(-200)}\nstderr 末段: ${stderr.slice(-200)}`
+        `adapter 未输出 report.md 路径标记\nstdout 末段: ${stdout.slice(-500)}\nstderr 末段: ${stderr.slice(-200)}`
       );
+    }
+    const reportPath = match[1].trim();
+    if (!existsSync(reportPath)) {
+      throw new Error(`adapter 报告路径不存在: ${reportPath}`);
     }
     return reportPath;
   } catch (err) {

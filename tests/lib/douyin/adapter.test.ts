@@ -44,16 +44,26 @@ describe('probeDouyinCookie', () => {
 });
 
 describe('runDouyinAdapter', () => {
-  it('happy path 返回 report.md 路径', async () => {
-    execFileMock.mockImplementation((_c, _a, _o, cb) => cb(null, { stdout: 'ok', stderr: '' }));
+  it('happy path: 从 stdout `✓ <path>` 行解析 report.md 路径', async () => {
+    const fakeReportPath = '/Users/test/my-content/videos/2026-03-10_demo/report.md';
+    execFileMock.mockImplementation((_c, _a, _o, cb) =>
+      cb(null, { stdout: `[抓取] 视频 7234567890\n  → ok\n\n✓ ${fakeReportPath}\n`, stderr: '' })
+    );
     const reportPath = await runDouyinAdapter('7234567890');
-    expect(reportPath).toMatch(/retro-7234567890-\d+\/report\.md$/);
+    expect(reportPath).toBe(fakeReportPath);
     expect(execFileMock).toHaveBeenCalledWith(
       'python3',
-      expect.arrayContaining([path.join('/adapter', 'review.py'), 'video', '7234567890']),
+      [path.join('/adapter', 'review.py'), 'video', '7234567890'],
       expect.objectContaining({ cwd: '/content', timeout: 300000 }),
       expect.any(Function)
     );
+  });
+
+  it('stdout 缺 `✓ <path>` 行抛错', async () => {
+    execFileMock.mockImplementation((_c, _a, _o, cb) =>
+      cb(null, { stdout: '[抓取] 视频 7234567890\n抓完没打印路径', stderr: '' })
+    );
+    await expect(runDouyinAdapter('7234567890')).rejects.toThrow(/未输出 report\.md 路径标记/);
   });
 
   it('未配置 env 抛错', async () => {
