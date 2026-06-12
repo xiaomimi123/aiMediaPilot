@@ -22,7 +22,7 @@ export function ProgressStages({ status, errorMessage }: { status: string; error
             key={s.key}
             className={cn(
               'rounded-full px-3 py-1',
-              isFailed && i <= idx ? 'bg-destructive/10 text-destructive' :
+              isFailed ? 'bg-destructive/10 text-destructive' :
               i < idx ? 'bg-primary/20 text-primary' :
               i === idx ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
             )}

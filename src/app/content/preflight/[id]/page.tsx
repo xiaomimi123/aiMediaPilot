@@ -31,7 +31,6 @@ export default function PreflightDetailPage() {
         if (j.success) setData(j.data);
       });
     };
-    es.onerror = () => es.close();
     fetch(`/api/v1/content/analyses/${params.id}`).then((r) => r.json()).then((j) => {
       if (j.success) setData(j.data);
     });

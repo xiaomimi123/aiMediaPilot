@@ -2,9 +2,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 function Stars({ rating }: { rating: number }) {
+  const clamped = Math.max(1, Math.min(5, Math.round(rating)));
   return (
     <span className="text-amber-500">
-      {'★'.repeat(rating)}{'☆'.repeat(5 - rating)}
+      {'★'.repeat(clamped)}{'☆'.repeat(5 - clamped)}
     </span>
   );
 }

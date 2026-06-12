@@ -14,7 +14,7 @@ export async function GET(_req: Request, { params }: { params: { id: string; idx
   const UPLOADS_ROOT = path.resolve(process.env.UPLOADS_ROOT || './uploads');
   const expectedPrefix = path.resolve(UPLOADS_ROOT, a.id);
   const resolved = path.resolve(candidates[idx].path);
-  if (!resolved.startsWith(expectedPrefix)) return fail('forbidden', 403);
+  if (!resolved.startsWith(expectedPrefix + path.sep)) return fail('forbidden', 403);
 
   const buf = await fs.readFile(resolved);
   return new Response(buf as any, {
