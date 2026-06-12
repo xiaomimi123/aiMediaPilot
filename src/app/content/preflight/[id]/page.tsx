@@ -14,7 +14,7 @@ type Analysis = {
   progress: { stage?: string; percent?: number; label?: string } | null;
   report: any | null;
   llmUsage: any | null;
-  coverCandidates: { path: string; timestampSec: number }[] | null;
+  coverCandidatesCount: number;
   retryCount: number;
 };
 
@@ -72,7 +72,7 @@ export default function PreflightDetailPage() {
         <ReportView
           analysisId={data.id}
           report={data.report}
-          coverCandidateCount={data.coverCandidates?.length ?? 0}
+          coverCandidateCount={data.coverCandidatesCount}
         />
       )}
 

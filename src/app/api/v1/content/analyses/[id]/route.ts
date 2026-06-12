@@ -4,9 +4,43 @@ import { prisma } from '@/lib/prisma';
 import { ok, fail } from '@/lib/api';
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const a = await prisma.contentAnalysis.findUnique({ where: { id: params.id } });
+  const a = await prisma.contentAnalysis.findUnique({
+    where: { id: params.id },
+    select: {
+      id: true,
+      videoFilename: true,
+      videoDurationSec: true,
+      videoMimeType: true,
+      status: true,
+      errorMessage: true,
+      progress: true,
+      retryCount: true,
+      report: true,
+      llmUsage: true,
+      coverCandidates: true,
+      createdAt: true,
+      startedAt: true,
+      completedAt: true,
+    },
+  });
   if (!a) return fail('not found', 404);
-  return ok(a);
+  const covers = (a.coverCandidates as { path: string }[] | null) ?? [];
+  return ok({
+    id: a.id,
+    videoFilename: a.videoFilename,
+    videoDurationSec: a.videoDurationSec,
+    videoMimeType: a.videoMimeType,
+    status: a.status,
+    errorMessage: a.errorMessage,
+    progress: a.progress,
+    retryCount: a.retryCount,
+    report: a.report,
+    llmUsage: a.llmUsage,
+    coverCandidatesCount: covers.length,
+    createdAt: a.createdAt,
+    startedAt: a.startedAt,
+    completedAt: a.completedAt,
+  });
 }
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
