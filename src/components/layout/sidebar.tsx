@@ -10,6 +10,7 @@ import {
   Search,
   Calendar,
   Settings,
+  Video,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { APP_NAME } from '@/lib/constants';
@@ -18,6 +19,7 @@ const NAV = [
   { href: '/dashboard', label: '总览', icon: LayoutDashboard },
   { href: '/accounts', label: '账号', icon: Users },
   { href: '/create', label: '创作', icon: PenSquare },
+  { href: '/content/preflight', label: '内容预诊断', icon: Video },
   { href: '/contents', label: '内容', icon: FileText },
   { href: '/competitors', label: '竞品', icon: Search },
   { href: '/calendar', label: '日历', icon: Calendar },
