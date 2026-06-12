@@ -9,8 +9,16 @@ import { analyzeQueue } from '@/jobs/queue';
 
 const MAX_BYTES = 500 * 1024 * 1024;
 const ALLOWED_VIDEO_MIME = /^video\/(mp4|quicktime|webm|x-matroska)$/;
+const MAX_COVER_BYTES = 10 * 1024 * 1024; // 10MB
+const ALLOWED_COVER_MIME = /^image\/(jpeg|png|webp)$/;
 
 const UPLOADS_ROOT = process.env.UPLOADS_ROOT || './uploads';
+
+/** Only allow simple alphanum extensions (1-5 chars) to prevent path traversal via crafted filenames. */
+function safeExt(name: string | undefined, fallback: string): string {
+  const raw = (name ?? '').split('.').pop() ?? '';
+  return /^[a-zA-Z0-9]{1,5}$/.test(raw) ? raw.toLowerCase() : fallback;
+}
 
 export async function POST(req: NextRequest | Request) {
   let form: FormData;
@@ -24,6 +32,7 @@ export async function POST(req: NextRequest | Request) {
   if (!(video instanceof File)) return fail('缺少 video 字段', 400);
   if (!ALLOWED_VIDEO_MIME.test(video.type)) return fail(`不支持的视频格式: ${video.type}`, 400);
   if (video.size > MAX_BYTES) return fail(`视频超过 500MB 上限 (${(video.size / 1024 / 1024).toFixed(1)} MB)`, 400);
+  // TODO: enforce ≤ 15 min duration via ffprobe (currently bounded by retention frame cap)
 
   const draftTitle = (form.get('draftTitle') as string | null) || null;
   const draftCaption = (form.get('draftCaption') as string | null) || null;
@@ -34,14 +43,18 @@ export async function POST(req: NextRequest | Request) {
   const analysisDir = path.join(UPLOADS_ROOT, analysisId);
   await fs.mkdir(analysisDir, { recursive: true });
 
-  const ext = video.name.split('.').pop() || 'mp4';
+  // Fix 4: sanitize extension to prevent path traversal via crafted filenames
+  const ext = safeExt(video.name, 'mp4');
   const videoPath = path.join(analysisDir, `original.${ext}`);
   const videoBuffer = Buffer.from(await video.arrayBuffer());
   await fs.writeFile(videoPath, videoBuffer);
 
   let draftCoverPath: string | null = null;
+  // Fix 5: validate cover MIME and size before accepting
   if (draftCover instanceof File && draftCover.size > 0) {
-    const coverExt = draftCover.name.split('.').pop() || 'jpg';
+    if (!ALLOWED_COVER_MIME.test(draftCover.type)) return fail(`不支持的封面格式: ${draftCover.type}`, 400);
+    if (draftCover.size > MAX_COVER_BYTES) return fail(`封面超过 10MB 上限`, 400);
+    const coverExt = safeExt(draftCover.name, 'jpg');
     draftCoverPath = path.join(analysisDir, `draft-cover.${coverExt}`);
     await fs.writeFile(draftCoverPath, Buffer.from(await draftCover.arrayBuffer()));
   }
@@ -64,7 +77,7 @@ export async function POST(req: NextRequest | Request) {
   await analyzeQueue.add(
     'analyze',
     { analysisId: analysis.id },
-    { jobId: `analyze-${analysis.id}`, removeOnComplete: true, removeOnFail: false }
+    { jobId: `analyze-${analysis.id}`, removeOnComplete: true, removeOnFail: { age: 7 * 24 * 3600, count: 100 } }
   );
 
   return ok({ analysisId: analysis.id });

@@ -24,7 +24,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   await analyzeQueue.add(
     'analyze',
     { analysisId: a.id },
-    { jobId: `analyze-${a.id}-retry-${a.retryCount + 1}`, removeOnComplete: true, removeOnFail: false }
+    { jobId: `analyze-${a.id}-retry-${a.retryCount + 1}`, removeOnComplete: true, removeOnFail: { age: 7 * 24 * 3600, count: 100 } }
   );
 
   return ok({ id: params.id, retryCount: a.retryCount + 1 });

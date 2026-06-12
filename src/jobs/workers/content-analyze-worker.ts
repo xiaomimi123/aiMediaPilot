@@ -149,7 +149,11 @@ export async function runAIAnalysis(input: AIAnalysisInput, deps: AIAnalysisDeps
   const allFrames = await listFramePaths(input.framesDir);
 
   const hookFrames = await listFramePaths(input.hookFramesDir);
-  const retentionFrames = allFrames;
+  // Cap at 100 frames to bound LLM cost on long videos (sampling.MAX_FRAMES intent)
+  const MAX_RETENTION_FRAMES = 100;
+  const retentionFrames = allFrames.length <= MAX_RETENTION_FRAMES
+    ? allFrames
+    : allFrames.filter((_, i) => i % Math.ceil(allFrames.length / MAX_RETENTION_FRAMES) === 0);
 
   const transcript03s = input.transcript.segments
     .filter((s) => s.startSec < 3)
@@ -274,6 +278,9 @@ async function handleAnalyze(job: Job<JobData>) {
   let coverCandidates = (analysis.coverCandidates as { path: string; timestampSec: number }[] | null) ?? null;
   let durationSec = analysis.videoDurationSec;
 
+  // Tracks Whisper cost when preprocess actually runs this attempt (retry skips preprocess)
+  let whisperCostUSD = 0;
+
   // 如果未预处理 (新任务) 或 retry 后未保留产物 → 跑预处理
   if (!framesDir || !audioPath || !transcriptPath || !coverCandidates || !hookFramesDir) {
     await setStatus(analysisId, 'PREPROCESSING', { startedAt: new Date() });
@@ -289,6 +296,7 @@ async function handleAnalyze(job: Job<JobData>) {
     transcriptPath = pre.transcriptPath;
     coverCandidates = pre.coverCandidates;
     durationSec = pre.durationSec;
+    whisperCostUSD = pre.whisperCostUSD;
     await prisma.contentAnalysis.update({
       where: { id: analysisId },
       data: { framesDir, hookFramesDir, audioPath, transcriptPath, coverCandidates, videoDurationSec: durationSec },
@@ -333,15 +341,37 @@ async function handleAnalyze(job: Job<JobData>) {
     { llm, synthesizeLLM }
   );
 
-  await prisma.contentAnalysis.update({
-    where: { id: analysisId },
+  // Fix 1: inject Whisper cost into llmUsage so it shows up in 烧 $x display
+  if (whisperCostUSD > 0) {
+    const whisperUsage: TokenUsage = {
+      model: 'whisper-1',
+      promptTokens: 0,
+      completionTokens: 0,
+      estCostUSD: whisperCostUSD,
+    };
+    ai.llmUsage.byCall.push(whisperUsage);
+    ai.llmUsage.total = {
+      model: 'aggregate',
+      promptTokens: ai.llmUsage.total.promptTokens,
+      completionTokens: ai.llmUsage.total.completionTokens,
+      estCostUSD: ai.llmUsage.total.estCostUSD + whisperCostUSD,
+    };
+  }
+
+  // Fix 2: guard against cancel-mid-AI race — don't overwrite CANCELLED → COMPLETED
+  const updated = await prisma.contentAnalysis.updateMany({
+    where: { id: analysisId, status: { not: 'CANCELLED' } },
     data: {
       status: 'COMPLETED',
       completedAt: new Date(),
-      report: ai.report,
+      report: ai.report as any,
       llmUsage: ai.llmUsage as any,
     },
   });
+  if (updated.count === 0) {
+    // Was cancelled during AI; bail without overwriting
+    return;
+  }
 }
 
 export function startContentAnalyzeWorker() {
