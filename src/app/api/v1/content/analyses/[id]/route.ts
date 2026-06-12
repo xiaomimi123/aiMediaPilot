@@ -3,9 +3,10 @@ import path from 'path';
 import { prisma } from '@/lib/prisma';
 import { ok, fail } from '@/lib/api';
 
-/** BigInt 转 string 让 JSON.stringify 不抛错。 */
+/** BigInt 转 string 让 JSON.stringify 不抛错。Date 原样透传让 JSON.stringify 输出 ISO 字符串。 */
 function serializeBigInts(obj: unknown): unknown {
   if (typeof obj === 'bigint') return obj.toString();
+  if (obj instanceof Date) return obj;          // let Date pass through unchanged (JSON.stringify will format it)
   if (Array.isArray(obj)) return obj.map(serializeBigInts);
   if (obj && typeof obj === 'object') {
     return Object.fromEntries(Object.entries(obj as any).map(([k, v]) => [k, serializeBigInts(v)]));
