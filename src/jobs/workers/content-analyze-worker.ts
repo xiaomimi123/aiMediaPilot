@@ -35,6 +35,7 @@ async function setStatus(analysisId: string, status: ContentAnalysisStatus, extr
 
 export interface PreprocessResult {
   framesDir: string;
+  hookFramesDir: string;
   audioPath: string;
   transcriptPath: string;
   coverCandidates: { path: string; timestampSec: number }[];
@@ -54,11 +55,13 @@ export async function runPreprocess(opts: PreprocessOpts): Promise<PreprocessRes
   const sep = opts.uploadsRoot.endsWith('/') ? '' : '/';
   const analysisDir = `${opts.uploadsRoot}${sep}${opts.analysisId}`;
   const framesDir = `${analysisDir}/frames`;
+  const hookFramesDir = `${analysisDir}/hook-frames`;
   const coversDir = `${analysisDir}/covers`;
   const audioPath = `${analysisDir}/audio.wav`;
   const transcriptPath = `${analysisDir}/transcript.json`;
 
   await fs.mkdir(framesDir, { recursive: true });
+  await fs.mkdir(hookFramesDir, { recursive: true });
   await fs.mkdir(coversDir, { recursive: true });
 
   const { durationSec } = await probeVideo(opts.videoPath);
@@ -80,8 +83,20 @@ export async function runPreprocess(opts: PreprocessOpts): Promise<PreprocessRes
     })
   );
 
+  const hookTimestamps = computeHookFrameTimestamps();
+  await Promise.all(
+    hookTimestamps.map((t, i) =>
+      extractSingleFrame({
+        videoPath: opts.videoPath,
+        timestampSec: t,
+        outputPath: `${hookFramesDir}/frame_${i}.jpg`,
+      })
+    )
+  );
+
   return {
     framesDir,
+    hookFramesDir,
     audioPath,
     transcriptPath,
     coverCandidates,
@@ -93,7 +108,7 @@ export async function runPreprocess(opts: PreprocessOpts): Promise<PreprocessRes
 export interface AIAnalysisInput {
   durationSec: number;
   framesDir: string;
-  audioPath: string;
+  hookFramesDir: string;
   transcript: { text: string; segments: { startSec: number; endSec: number; text: string }[]; durationSec: number };
   coverCandidates: { path: string; timestampSec: number }[];
   draftTitle: string | null;
@@ -132,7 +147,7 @@ async function listFramePaths(framesDir: string): Promise<string[]> {
 export async function runAIAnalysis(input: AIAnalysisInput, deps: AIAnalysisDeps): Promise<AIAnalysisResult> {
   const allFrames = await listFramePaths(input.framesDir);
 
-  const hookFrames = allFrames.slice(0, computeHookFrameTimestamps().length);
+  const hookFrames = await listFramePaths(input.hookFramesDir);
   const retentionFrames = allFrames;
 
   const transcript03s = input.transcript.segments
@@ -252,13 +267,14 @@ async function handleAnalyze(job: Job<JobData>) {
   if (!apiKey) throw new Error('OPENAI_API_KEY not set');
 
   let framesDir = analysis.framesDir;
+  let hookFramesDir = analysis.hookFramesDir;
   let audioPath = analysis.audioPath;
   let transcriptPath = analysis.transcriptPath;
   let coverCandidates = (analysis.coverCandidates as { path: string; timestampSec: number }[] | null) ?? null;
   let durationSec = analysis.videoDurationSec;
 
   // 如果未预处理 (新任务) 或 retry 后未保留产物 → 跑预处理
-  if (!framesDir || !audioPath || !transcriptPath || !coverCandidates) {
+  if (!framesDir || !audioPath || !transcriptPath || !coverCandidates || !hookFramesDir) {
     await setStatus(analysisId, 'PREPROCESSING', { startedAt: new Date() });
     const pre = await runPreprocess({
       analysisId,
@@ -267,13 +283,14 @@ async function handleAnalyze(job: Job<JobData>) {
       openaiApiKey: apiKey,
     });
     framesDir = pre.framesDir;
+    hookFramesDir = pre.hookFramesDir;
     audioPath = pre.audioPath;
     transcriptPath = pre.transcriptPath;
     coverCandidates = pre.coverCandidates;
     durationSec = pre.durationSec;
     await prisma.contentAnalysis.update({
       where: { id: analysisId },
-      data: { framesDir, audioPath, transcriptPath, coverCandidates, videoDurationSec: durationSec },
+      data: { framesDir, hookFramesDir, audioPath, transcriptPath, coverCandidates, videoDurationSec: durationSec },
     });
   }
 
@@ -283,11 +300,20 @@ async function handleAnalyze(job: Job<JobData>) {
 
   await setStatus(analysisId, 'ANALYZING');
 
-  const transcriptJson = JSON.parse(await fs.readFile(transcriptPath, 'utf-8')) as {
-    text: string;
-    segments: { startSec: number; endSec: number; text: string }[];
-    durationSec: number;
-  };
+  let transcriptJson: { text: string; segments: { startSec: number; endSec: number; text: string }[]; durationSec: number };
+  try {
+    transcriptJson = JSON.parse(await fs.readFile(transcriptPath, 'utf-8')) as typeof transcriptJson;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+      // Disk artifacts gone — clear DB fields so next retry re-runs preprocess fresh
+      await prisma.contentAnalysis.update({
+        where: { id: analysisId },
+        data: { framesDir: null, audioPath: null, transcriptPath: null, hookFramesDir: null, coverCandidates: undefined },
+      });
+      throw new Error('Preprocessed artifacts missing on disk; cleared DB state, retry will re-preprocess');
+    }
+    throw e;
+  }
 
   const llm = new OpenAIVisionLLM({ apiKey, defaultModel: 'gpt-4o' });
   const synthesizeLLM = new OpenAIVisionLLM({ apiKey, defaultModel: 'gpt-4o-mini' });
@@ -296,7 +322,7 @@ async function handleAnalyze(job: Job<JobData>) {
     {
       durationSec,
       framesDir,
-      audioPath,
+      hookFramesDir,
       transcript: transcriptJson,
       coverCandidates,
       draftTitle: analysis.draftTitle,

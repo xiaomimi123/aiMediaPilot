@@ -57,6 +57,7 @@ describe('runPreprocess', () => {
       openaiApiKey: 'sk-x',
     });
     expect(result.framesDir).toBe('./uploads/a1/frames');
+    expect(result.hookFramesDir).toBe('./uploads/a1/hook-frames');
     expect(result.audioPath).toBe('./uploads/a1/audio.wav');
     expect(result.transcriptPath).toBe('./uploads/a1/transcript.json');
     expect(result.coverCandidates).toHaveLength(3);
@@ -69,7 +70,7 @@ describe('runAIAnalysis (fail-soft)', () => {
   const baseInput = {
     durationSec: 45,
     framesDir: '/frames',
-    audioPath: '/audio.wav',
+    hookFramesDir: '/hook-frames',
     transcript: { text: 'demo', segments: [], durationSec: 45 },
     coverCandidates: [{ path: '/c.jpg', timestampSec: 0 }],
     draftTitle: null,
@@ -95,7 +96,7 @@ describe('runAIAnalysis (fail-soft)', () => {
     } as any;
 
     const fsp = await import('fs/promises');
-    vi.spyOn(fsp, 'readdir').mockResolvedValue(['frame_0001.jpg'] as any);
+    vi.spyOn(fsp, 'readdir').mockResolvedValue(['frame_0001.jpg'] as any); // works for any path
 
     const result = await runAIAnalysis(baseInput, { llm: fakeLLM, synthesizeLLM: fakeLLM });
     expect(calls).toContain('hook');

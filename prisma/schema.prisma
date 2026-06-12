@@ -422,9 +422,9 @@ enum SessionStatus {
 // ==================== Phase 3 / Direction A: 内容预诊断 ====================
 
 model ContentAnalysis {
-  id               String                @id @default(cuid())
-  userId           String
-  user             User                  @relation(fields: [userId], references: [id])
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
   // 视频源 (相对路径,根目录 ./uploads/)
   videoPath        String
@@ -434,37 +434,38 @@ model ContentAnalysis {
   videoMimeType    String
 
   // 用户输入草稿 (null → AI 生成; 非 null → AI 评价)
-  draftTitle       String?
-  draftCaption     String?
-  draftCoverPath   String?
+  draftTitle     String?
+  draftCaption   String?
+  draftCoverPath String?
 
   // 配置
-  niche            String                @default("ai-knowledge")
+  niche String @default("ai-knowledge")
 
   // 状态机
-  status           ContentAnalysisStatus @default(QUEUED)
-  errorMessage     String?
-  retryCount       Int                   @default(0)
+  status       ContentAnalysisStatus @default(QUEUED)
+  errorMessage String?
+  retryCount   Int                   @default(0)
 
   // 进度 (SSE)
-  progress         Json?
+  progress Json?
 
   // 预处理产物
-  framesDir        String?
-  audioPath        String?
-  transcriptPath   String?
-  coverCandidates  Json?
+  framesDir       String?
+  hookFramesDir   String?               // 钩子专用 6 张帧 (0/0.5/1/1.5/2/2.5s)
+  audioPath       String?
+  transcriptPath  String?
+  coverCandidates Json?
 
   // AI 结果
-  report           Json?
+  report Json?
 
   // 成本审计
-  llmUsage         Json?
+  llmUsage Json?
 
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
-  startedAt        DateTime?
-  completedAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  startedAt   DateTime?
+  completedAt DateTime?
 
   @@index([userId, createdAt])
   @@index([status])
