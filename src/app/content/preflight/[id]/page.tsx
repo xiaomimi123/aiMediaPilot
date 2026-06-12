@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { ProgressStages } from '@/components/content/progress-stages';
 import { ReportView } from '@/components/content/report-view';
+import { RetroSection } from '@/components/content/retro-section';
 
 type Analysis = {
   id: string;
@@ -16,6 +17,14 @@ type Analysis = {
   llmUsage: any | null;
   coverCandidatesCount: number;
   retryCount: number;
+  // v2
+  douyinUrl: string | null;
+  douyinAwemeId: string | null;
+  publishedAt: string | null;
+  retroStatus: 'SCHEDULED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | null;
+  retroErrorMessage: string | null;
+  retroReport: any | null;
+  actualMetric: any | null;
 };
 
 export default function PreflightDetailPage() {
@@ -74,6 +83,14 @@ export default function PreflightDetailPage() {
           report={data.report}
           coverCandidateCount={data.coverCandidatesCount}
         />
+      )}
+
+      {data.status === 'COMPLETED' && (
+        <RetroSection analysis={data} onChanged={() => {
+          fetch(`/api/v1/content/analyses/${data.id}`).then((r) => r.json()).then((j) => {
+            if (j.success) setData(j.data);
+          });
+        }} />
       )}
 
       <div className="flex gap-2">
