@@ -30,9 +30,8 @@ export async function POST(req: NextRequest | Request) {
   const draftCover = form.get('draftCover');
 
   const user = await getOrCreateDefaultUser();
-  // Generate a short ID for filesystem path; DB row id comes back from Prisma (or mock)
-  const shortId = randomUUID().slice(0, 12);
-  const analysisDir = path.join(UPLOADS_ROOT, shortId);
+  const analysisId = randomUUID().slice(0, 12);
+  const analysisDir = path.join(UPLOADS_ROOT, analysisId);
   await fs.mkdir(analysisDir, { recursive: true });
 
   const ext = video.name.split('.').pop() || 'mp4';
@@ -49,6 +48,7 @@ export async function POST(req: NextRequest | Request) {
 
   const analysis = await prisma.contentAnalysis.create({
     data: {
+      id: analysisId,
       userId: user.id,
       videoPath,
       videoFilename: video.name,

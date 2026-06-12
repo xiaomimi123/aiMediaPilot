@@ -3,7 +3,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     contentAnalysis: {
-      create: vi.fn(async (args: any) => ({ id: 'a1', ...args.data, createdAt: new Date() })),
+      create: vi.fn(async (args: any) => ({ ...args.data, id: 'a1', createdAt: new Date() })),
       findMany: vi.fn(async () => [{ id: 'a1', status: 'COMPLETED', createdAt: new Date(), videoFilename: 'x.mp4', report: { overallScore: 80 } }]),
     },
   },
