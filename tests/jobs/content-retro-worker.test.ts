@@ -114,4 +114,33 @@ describe('runRetroPipeline', () => {
     await runRetroPipeline('a1');
     expect(prismaMock.actualMetric.create).not.toHaveBeenCalled();
   });
+
+  it('analysis 缺 douyinAwemeId → 早退', async () => {
+    prismaMock.contentAnalysis.findUnique.mockResolvedValueOnce({
+      id: 'a1',
+      douyinAwemeId: null,
+      publishedAt: new Date(Date.now() - 3 * 86400000),
+      retroStatus: 'SCHEDULED',
+      report: {},
+      llmUsage: null,
+    });
+    await runRetroPipeline('a1');
+    expect(prismaMock.contentAnalysis.update).not.toHaveBeenCalled();
+    expect(prismaMock.actualMetric.create).not.toHaveBeenCalled();
+  });
+
+  it('runDouyinAdapter 抛错 → retroStatus=FAILED 且消息含"数据采集失败"', async () => {
+    const { runDouyinAdapter } = await import('@/lib/douyin/adapter');
+    (runDouyinAdapter as any).mockRejectedValueOnce(new Error('adapter exit 1'));
+    await runRetroPipeline('a1');
+    expect(prismaMock.contentAnalysis.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          retroStatus: 'FAILED',
+          retroErrorMessage: expect.stringMatching(/数据采集失败/),
+        }),
+      })
+    );
+    expect(prismaMock.actualMetric.create).not.toHaveBeenCalled();
+  });
 });
