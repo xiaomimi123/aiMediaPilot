@@ -13,3 +13,5 @@ prisma/migrations/dev.db*
 .claude/settings.local.json
 # TypeScript incremental build cache
 *.tsbuildinfo
+# Phase 3: user video uploads (analyzed content)
+uploads/
