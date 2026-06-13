@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { TITLE_CAPTION, TitleCaptionResponseSchema } from '@/lib/llm/prompts/ai-knowledge/title-caption';
+import { TITLE_CAPTION, TitleCaptionResponseSchema } from '@/lib/llm/prompts/title-caption';
 
 describe('TITLE_CAPTION', () => {
+  it('buildSystemPrompt("ai-knowledge") 含 "AI 知识"', () => {
+    expect(TITLE_CAPTION.buildSystemPrompt('ai-knowledge')).toContain('AI 知识');
+  });
+
+  it('buildSystemPrompt("财经") 含 "财经" (custom niche injection)', () => {
+    expect(TITLE_CAPTION.buildSystemPrompt('财经')).toContain('财经');
+  });
+
   it('evaluate 模式 (有草稿) → systemPrompt 提及评价', () => {
     const parts = TITLE_CAPTION.buildUserMessage({
       transcriptText: 'demo',

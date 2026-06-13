@@ -1,10 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { RETRO_GAP, RetroGapResponseSchema } from '@/lib/llm/prompts/ai-knowledge/retro-gap';
+import { RETRO_GAP, RetroGapResponseSchema } from '@/lib/llm/prompts/retro-gap';
 
 describe('RETRO_GAP', () => {
-  it('systemPrompt 含专家人设 + 落差分析关键词', () => {
-    expect(RETRO_GAP.systemPrompt).toMatch(/AI 知识类/);
-    expect(RETRO_GAP.systemPrompt).toMatch(/落差|对比|accuracy/);
+  it('buildSystemPrompt 含专家人设 + 落差分析关键词 (ai-knowledge)', () => {
+    const sys = RETRO_GAP.buildSystemPrompt('ai-knowledge');
+    expect(sys).toMatch(/AI 知识/);
+    expect(sys).toMatch(/落差|对比|accuracy/);
+  });
+
+  it('buildSystemPrompt("ai-knowledge") 含 "AI 知识"', () => {
+    expect(RETRO_GAP.buildSystemPrompt('ai-knowledge')).toContain('AI 知识');
+  });
+
+  it('buildSystemPrompt("体育") 含 "体育" (custom niche injection)', () => {
+    expect(RETRO_GAP.buildSystemPrompt('体育')).toContain('体育');
   });
 
   it('buildUserMessage 含 A v1 报告 + 实际数据字段', () => {

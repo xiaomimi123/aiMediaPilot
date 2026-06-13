@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { EXPERT_PERSONA } from './expert-persona';
-import { JSON_STRICTNESS } from '../base';
+import { getExpertPersona } from './expert-persona';
+import { JSON_STRICTNESS } from './base';
 import type { ContentPart } from '@/lib/llm/vision';
 
 export interface SynthesizeInput {
@@ -18,13 +18,15 @@ export const SynthesizeResponseSchema = z.object({
 export type SynthesizeResponse = z.infer<typeof SynthesizeResponseSchema>;
 
 export const SYNTHESIZE = {
-  systemPrompt: `${EXPERT_PERSONA}
+  buildSystemPrompt(niche: string): string {
+    return `${getExpertPersona(niche)}
 
 任务: 综合 4 个维度的评估子报告, 给出 1-100 的综合评分 + 3-5 条"现在去改"的高优先级 action items。
 - overallScore: 权重参考 = 钩子 30%, 完播 30%, 标题/文案 20%, 封面 20%
 - topActionItems: 跨维度凝练, 每条具体可执行 (不要说"提升观感", 要说"把 0:01 改成提问句")
 
-${JSON_STRICTNESS}`,
+${JSON_STRICTNESS}`;
+  },
   buildUserMessage(input: SynthesizeInput): ContentPart[] {
     return [
       {

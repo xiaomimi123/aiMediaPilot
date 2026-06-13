@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { SYNTHESIZE, SynthesizeResponseSchema } from '@/lib/llm/prompts/ai-knowledge/synthesize';
+import { SYNTHESIZE, SynthesizeResponseSchema } from '@/lib/llm/prompts/synthesize';
 
 describe('SYNTHESIZE', () => {
+  it('buildSystemPrompt("ai-knowledge") 含 "AI 知识"', () => {
+    expect(SYNTHESIZE.buildSystemPrompt('ai-knowledge')).toContain('AI 知识');
+  });
+
+  it('buildSystemPrompt("二次元") 含 "二次元" (custom niche injection)', () => {
+    expect(SYNTHESIZE.buildSystemPrompt('二次元')).toContain('二次元');
+  });
+
   it('buildUserMessage 含 4 个维度子报告', () => {
     const parts = SYNTHESIZE.buildUserMessage({
       hook: { rating: 3 },

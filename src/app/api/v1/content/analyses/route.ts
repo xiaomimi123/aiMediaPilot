@@ -37,6 +37,7 @@ export async function POST(req: NextRequest | Request) {
   const draftTitle = (form.get('draftTitle') as string | null) || null;
   const draftCaption = (form.get('draftCaption') as string | null) || null;
   const draftCover = form.get('draftCover');
+  const niche = ((form.get('niche') as string | null) || '').trim() || 'ai-knowledge';
 
   const user = await getOrCreateDefaultUser();
   const analysisId = randomUUID().slice(0, 12);
@@ -71,6 +72,7 @@ export async function POST(req: NextRequest | Request) {
       draftTitle,
       draftCaption,
       draftCoverPath: draftCoverPath || undefined,
+      niche,
     },
   });
 

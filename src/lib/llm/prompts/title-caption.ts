@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { EXPERT_PERSONA } from './expert-persona';
-import { JSON_STRICTNESS } from '../base';
+import { getExpertPersona } from './expert-persona';
+import { JSON_STRICTNESS } from './base';
 import type { ContentPart } from '@/lib/llm/vision';
 
 export interface TitleCaptionInput {
@@ -33,13 +33,15 @@ export const TitleCaptionResponseSchema = z.discriminatedUnion('mode', [
 export type TitleCaptionResponse = z.infer<typeof TitleCaptionResponseSchema>;
 
 export const TITLE_CAPTION = {
-  systemPrompt: `${EXPERT_PERSONA}
+  buildSystemPrompt(niche: string): string {
+    return `${getExpertPersona(niche)}
 
 任务: 评价或生成视频的标题和文案。
 - 用户提供了草稿: mode="evaluate", 给评分 + 问题点 + 至少 2 个重写候选 (titleFeedback/captionFeedback)
 - 用户未提供草稿: mode="generate", 生成 3 个标题候选 + 3 个文案候选
 
-${JSON_STRICTNESS}`,
+${JSON_STRICTNESS}`;
+  },
   buildUserMessage(input: TitleCaptionInput): ContentPart[] {
     const hasAny = input.draftTitle !== null || input.draftCaption !== null;
     const mode = hasAny ? 'evaluate' : 'generate';

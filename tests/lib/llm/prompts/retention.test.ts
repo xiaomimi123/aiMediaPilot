@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { RETENTION, RetentionResponseSchema } from '@/lib/llm/prompts/ai-knowledge/retention';
+import { RETENTION, RetentionResponseSchema } from '@/lib/llm/prompts/retention';
 
 describe('RETENTION', () => {
+  it('buildSystemPrompt("ai-knowledge") 含 "AI 知识"', () => {
+    expect(RETENTION.buildSystemPrompt('ai-knowledge')).toContain('AI 知识');
+  });
+
+  it('buildSystemPrompt("娱乐") 含 "娱乐" (custom niche injection)', () => {
+    expect(RETENTION.buildSystemPrompt('娱乐')).toContain('娱乐');
+  });
+
   it('buildUserMessage 含全段 transcript 时间戳 + 多张帧', () => {
     const parts = RETENTION.buildUserMessage({
       durationSec: 90,

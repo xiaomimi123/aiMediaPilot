@@ -7,7 +7,7 @@ import { probeDouyinCookie, runDouyinAdapter } from '@/lib/douyin/adapter';
 import { parseReportMd } from '@/lib/douyin/report-parser';
 import { OpenAIVisionLLM, type IVisionLLM, type TokenUsage } from '@/lib/llm/vision';
 import { DeepSeekTextLLM } from '@/lib/llm/deepseek';
-import { RETRO_GAP, type RetroGapResponse } from '@/lib/llm/prompts/ai-knowledge/retro-gap';
+import { RETRO_GAP, type RetroGapResponse } from '@/lib/llm/prompts/retro-gap';
 import type { RetroStatus } from '@prisma/client';
 
 type JobData = { analysisId: string };
@@ -91,9 +91,13 @@ export async function runRetroPipeline(analysisId: string): Promise<void> {
     const deepseekKey = process.env.DEEPSEEK_API_KEY;
     const llm: IVisionLLM = deepseekKey
       ? new DeepSeekTextLLM({ apiKey: deepseekKey })
-      : new OpenAIVisionLLM({ apiKey: process.env.OPENAI_API_KEY!, defaultModel: 'gpt-4o-mini' });
+      : new OpenAIVisionLLM({
+          apiKey: process.env.OPENAI_API_KEY!,
+          baseURL: process.env.OPENAI_BASE_URL || undefined,
+          defaultModel: process.env.OPENAI_SYNTHESIZE_MODEL || 'gpt-4o-mini',
+        });
     const out = await llm.callStructured({
-      systemPrompt: RETRO_GAP.systemPrompt,
+      systemPrompt: RETRO_GAP.buildSystemPrompt(analysis.niche || 'ai-knowledge'),
       userMessage: RETRO_GAP.buildUserMessage({
         report: analysis.report as any,
         actual: parsed,

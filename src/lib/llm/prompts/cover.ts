@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { EXPERT_PERSONA } from './expert-persona';
-import { JSON_STRICTNESS } from '../base';
+import { getExpertPersona } from './expert-persona';
+import { JSON_STRICTNESS } from './base';
 import type { ContentPart } from '@/lib/llm/vision';
 
 export interface CoverInput {
@@ -34,13 +34,15 @@ export const CoverResponseSchema = z.discriminatedUnion('mode', [
 export type CoverResponse = z.infer<typeof CoverResponseSchema>;
 
 export const COVER = {
-  systemPrompt: `${EXPERT_PERSONA}
+  buildSystemPrompt(niche: string): string {
+    return `${getExpertPersona(niche)}
 
 任务: 评价封面 (用户上传时) 或从候选中推选封面 (未上传时)。
 - evaluate: 给 1-5 评分 + 问题点 + 改进建议
 - generate: 评每张候选适合度 + 给出 recommendedIdx (从 0 开始的索引)
 
-${JSON_STRICTNESS}`,
+${JSON_STRICTNESS}`;
+  },
   buildUserMessage(input: CoverInput): ContentPart[] {
     const transcript = input.transcriptFirstChunk.trim() || '(无语音)';
 

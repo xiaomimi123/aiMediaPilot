@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { COVER, CoverResponseSchema } from '@/lib/llm/prompts/ai-knowledge/cover';
+import { COVER, CoverResponseSchema } from '@/lib/llm/prompts/cover';
 
 describe('COVER', () => {
+  it('buildSystemPrompt("ai-knowledge") 含 "AI 知识"', () => {
+    expect(COVER.buildSystemPrompt('ai-knowledge')).toContain('AI 知识');
+  });
+
+  it('buildSystemPrompt("美食") 含 "美食" (custom niche injection)', () => {
+    expect(COVER.buildSystemPrompt('美食')).toContain('美食');
+  });
+
   it('evaluate 模式 (用户上传了封面)', () => {
     const parts = COVER.buildUserMessage({
       transcriptFirstChunk: 'demo',

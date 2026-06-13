@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { EXPERT_PERSONA } from './expert-persona';
-import { JSON_STRICTNESS } from '../base';
+import { getExpertPersona } from './expert-persona';
+import { JSON_STRICTNESS } from './base';
 import type { ContentPart } from '@/lib/llm/vision';
 
 export interface HookInput {
@@ -22,13 +22,15 @@ export const HookResponseSchema = z.object({
 export type HookResponse = z.infer<typeof HookResponseSchema>;
 
 export const HOOK = {
-  systemPrompt: `${EXPERT_PERSONA}
+  buildSystemPrompt(niche: string): string {
+    return `${getExpertPersona(niche)}
 
 任务: 评估视频前 3 秒钩子。给出 1-5 评分、一句话总结、可执行改进建议、关键帧观察。
 - rating 1: 平淡无反差,大概率被划走
 - rating 5: 强烈反差/钩子,大概率留住观看
 
-${JSON_STRICTNESS}`,
+${JSON_STRICTNESS}`;
+  },
   buildUserMessage(input: HookInput): ContentPart[] {
     const transcript = input.transcript03s.trim() || '(无语音)';
     return [

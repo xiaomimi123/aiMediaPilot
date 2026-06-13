@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { EXPERT_PERSONA } from './expert-persona';
-import { JSON_STRICTNESS } from '../base';
+import { getExpertPersona } from './expert-persona';
+import { JSON_STRICTNESS } from './base';
 import type { ContentPart } from '@/lib/llm/vision';
 import type { ActualMetricInput } from '@/lib/douyin/report-parser';
 
@@ -94,7 +94,8 @@ function getRiskPointCount(dim: unknown): number {
 }
 
 export const RETRO_GAP = {
-  systemPrompt: `${EXPERT_PERSONA}
+  buildSystemPrompt(niche: string): string {
+    return `${getExpertPersona(niche)}
 
 任务: 对比 AI 预诊断 (4 维度评估) vs 抖音实际播放数据, 生成跨维度落差分析。
 
@@ -108,7 +109,8 @@ overallTakeaway: 1-2 句跨维度总结
 predictedOverallScore: 抄 A v1
 inferredActualScore: AI 主观转换实际指标为 1-100 综合分
 
-${JSON_STRICTNESS}`,
+${JSON_STRICTNESS}`;
+  },
   buildUserMessage(input: RetroGapInput): ContentPart[] {
     const r = input.report;
     const a = input.actual;

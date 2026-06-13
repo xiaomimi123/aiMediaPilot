@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { EXPERT_PERSONA } from './expert-persona';
-import { JSON_STRICTNESS } from '../base';
+import { getExpertPersona } from './expert-persona';
+import { JSON_STRICTNESS } from './base';
 import type { ContentPart } from '@/lib/llm/vision';
 import type { TranscriptSegment } from '@/lib/llm/whisper';
 
@@ -24,11 +24,13 @@ export const RetentionResponseSchema = z.object({
 export type RetentionResponse = z.infer<typeof RetentionResponseSchema>;
 
 export const RETENTION = {
-  systemPrompt: `${EXPERT_PERSONA}
+  buildSystemPrompt(niche: string): string {
+    return `${getExpertPersona(niche)}
 
 任务: 通览整段视频, 标出可能让观众划走 (低完播率) 的时段。每个风险点给 start/end 秒数、严重程度 (low/medium/high)、原因、改进建议。如果整段流畅可以返回空数组。
 
-${JSON_STRICTNESS}`,
+${JSON_STRICTNESS}`;
+  },
   buildUserMessage(input: RetentionInput): ContentPart[] {
     const transcript = input.transcriptSegments.length === 0
       ? '(无语音)'

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { runPreprocess, runAIAnalysis } from '@/jobs/workers/content-analyze-worker';
-import { RetentionResponseSchema } from '@/lib/llm/prompts/ai-knowledge/retention';
+import { RetentionResponseSchema } from '@/lib/llm/prompts/retention';
 
 vi.mock('@/lib/redis', () => ({ redis: {} }));
 vi.mock('@/jobs/queue', () => ({ QUEUES: { ANALYZE: 'content-analyze' } }));
@@ -90,6 +90,7 @@ describe('runAIAnalysis (fail-soft)', () => {
     draftTitle: null,
     draftCaption: null,
     draftCoverPath: null,
+    niche: 'ai-knowledge',
   };
 
   it('1 个维度失败,其他维度继续', async () => {

@@ -19,11 +19,11 @@ import { LocalWhisperClient } from '@/lib/llm/local-whisper';
 import type { TranscriptionResult } from '@/lib/llm/whisper';
 import { OpenAIVisionLLM, type IVisionLLM, type TokenUsage } from '@/lib/llm/vision';
 import { DeepSeekTextLLM } from '@/lib/llm/deepseek';
-import { HOOK } from '@/lib/llm/prompts/ai-knowledge/hook';
-import { RETENTION } from '@/lib/llm/prompts/ai-knowledge/retention';
-import { TITLE_CAPTION } from '@/lib/llm/prompts/ai-knowledge/title-caption';
-import { COVER } from '@/lib/llm/prompts/ai-knowledge/cover';
-import { SYNTHESIZE } from '@/lib/llm/prompts/ai-knowledge/synthesize';
+import { HOOK } from '@/lib/llm/prompts/hook';
+import { RETENTION } from '@/lib/llm/prompts/retention';
+import { TITLE_CAPTION } from '@/lib/llm/prompts/title-caption';
+import { COVER } from '@/lib/llm/prompts/cover';
+import { SYNTHESIZE } from '@/lib/llm/prompts/synthesize';
 import { Prisma } from '@prisma/client';
 import type { ContentAnalysisStatus } from '@prisma/client';
 
@@ -142,6 +142,7 @@ export interface AIAnalysisInput {
   draftTitle: string | null;
   draftCaption: string | null;
   draftCoverPath: string | null;
+  niche: string;
 }
 
 export interface AIAnalysisDeps {
@@ -201,7 +202,7 @@ export async function runAIAnalysis(input: AIAnalysisInput, deps: AIAnalysisDeps
 
   const [hookResult, retentionResult, titleCaptionResult, coverResult] = await Promise.all([
     tracked('hook', () => deps.visionLLM.callStructured({
-      systemPrompt: HOOK.systemPrompt,
+      systemPrompt: HOOK.buildSystemPrompt(input.niche),
       userMessage: HOOK.buildUserMessage({
         durationSec: input.durationSec,
         frameImagePaths: hookFrames,
@@ -210,7 +211,7 @@ export async function runAIAnalysis(input: AIAnalysisInput, deps: AIAnalysisDeps
       responseSchema: HOOK.responseSchema,
     })),
     tracked('retention', () => deps.visionLLM.callStructured({
-      systemPrompt: RETENTION.systemPrompt,
+      systemPrompt: RETENTION.buildSystemPrompt(input.niche),
       userMessage: RETENTION.buildUserMessage({
         durationSec: input.durationSec,
         frameImagePaths: retentionFrames,
@@ -219,7 +220,7 @@ export async function runAIAnalysis(input: AIAnalysisInput, deps: AIAnalysisDeps
       responseSchema: RETENTION.responseSchema,
     })),
     tracked('titleCaption', () => deps.textLLM.callStructured({
-      systemPrompt: TITLE_CAPTION.systemPrompt,
+      systemPrompt: TITLE_CAPTION.buildSystemPrompt(input.niche),
       userMessage: TITLE_CAPTION.buildUserMessage({
         transcriptText: input.transcript.text,
         draftTitle: input.draftTitle,
@@ -228,7 +229,7 @@ export async function runAIAnalysis(input: AIAnalysisInput, deps: AIAnalysisDeps
       responseSchema: TITLE_CAPTION.responseSchema,
     })),
     tracked('cover', () => deps.visionLLM.callStructured({
-      systemPrompt: COVER.systemPrompt,
+      systemPrompt: COVER.buildSystemPrompt(input.niche),
       userMessage: COVER.buildUserMessage({
         transcriptFirstChunk: input.transcript.segments.slice(0, 3).map((s) => s.text).join(' '),
         userCoverPath: input.draftCoverPath,
@@ -250,7 +251,7 @@ export async function runAIAnalysis(input: AIAnalysisInput, deps: AIAnalysisDeps
   if (allOk) {
     try {
       const synOut = await deps.synthesizeLLM.callStructured({
-        systemPrompt: SYNTHESIZE.systemPrompt,
+        systemPrompt: SYNTHESIZE.buildSystemPrompt(input.niche),
         userMessage: SYNTHESIZE.buildUserMessage({
           hook: hookResult,
           retention: retentionResult,
@@ -272,7 +273,7 @@ export async function runAIAnalysis(input: AIAnalysisInput, deps: AIAnalysisDeps
   return {
     report: {
       schemaVersion: 1,
-      niche: 'ai-knowledge',
+      niche: input.niche,
       hook: hookResult,
       retention: retentionResult,
       titleCaption: titleCaptionResult,
@@ -379,6 +380,7 @@ async function handleAnalyze(job: Job<JobData>) {
       draftTitle: analysis.draftTitle,
       draftCaption: analysis.draftCaption,
       draftCoverPath: analysis.draftCoverPath,
+      niche: analysis.niche || 'ai-knowledge',
     },
     { visionLLM, textLLM: sharedTextLLM, synthesizeLLM }
   );

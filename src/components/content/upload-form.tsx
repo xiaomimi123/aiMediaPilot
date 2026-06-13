@@ -1,10 +1,11 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
+import { KNOWN_NICHES } from '@/lib/llm/prompts/expert-persona';
 
 export function UploadForm() {
   const router = useRouter();
@@ -12,9 +13,18 @@ export function UploadForm() {
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
   const [caption, setCaption] = useState('');
+  const [niche, setNiche] = useState<string>('ai-knowledge');
+  const [customNiche, setCustomNiche] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('mediapilot:lastNiche');
+    if (saved) setNiche(saved);
+  }, []);
+
+  const effectiveNiche = niche === '__custom' ? customNiche.trim() : niche;
 
   const handleSubmit = async () => {
     if (!videoFile) {
@@ -29,6 +39,7 @@ export function UploadForm() {
       if (coverFile) fd.append('draftCover', coverFile);
       if (title.trim()) fd.append('draftTitle', title.trim());
       if (caption.trim()) fd.append('draftCaption', caption.trim());
+      if (effectiveNiche) fd.append('niche', effectiveNiche);
 
       const res = await fetch('/api/v1/content/analyses', { method: 'POST', body: fd });
       const json = await res.json();
@@ -99,8 +110,29 @@ export function UploadForm() {
             />
             {coverFile && <p className="text-xs text-muted-foreground">已选: {coverFile.name}</p>}
           </div>
-          <div className="text-xs text-muted-foreground">
-            垂类: <span className="font-medium">AI 知识</span> (后期可在设置里改)
+          <div className="space-y-1">
+            <Label>内容垂类</Label>
+            <select
+              value={niche}
+              onChange={(e) => {
+                const v = e.target.value;
+                setNiche(v);
+                if (v !== '__custom') localStorage.setItem('mediapilot:lastNiche', v);
+              }}
+              className="w-full rounded-md border border-border bg-background p-2 text-sm"
+            >
+              {KNOWN_NICHES.map((n) => (
+                <option key={n.key} value={n.key}>{n.label}</option>
+              ))}
+              <option value="__custom">其他 (自填)</option>
+            </select>
+            {niche === '__custom' && (
+              <Input
+                value={customNiche}
+                onChange={(e) => setCustomNiche(e.target.value)}
+                placeholder="e.g. 健身, 二次元, 财经"
+              />
+            )}
           </div>
         </CardContent>
       </Card>

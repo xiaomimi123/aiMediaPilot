@@ -1,10 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { HOOK, HookResponseSchema } from '@/lib/llm/prompts/ai-knowledge/hook';
+import { HOOK, HookResponseSchema } from '@/lib/llm/prompts/hook';
 
 describe('HOOK', () => {
-  it('systemPrompt 含专家人设关键词', () => {
-    expect(HOOK.systemPrompt).toMatch(/AI 知识类/);
-    expect(HOOK.systemPrompt).toMatch(/钩子|前 3 秒/);
+  it('buildSystemPrompt 含专家人设关键词 (ai-knowledge)', () => {
+    const sys = HOOK.buildSystemPrompt('ai-knowledge');
+    expect(sys).toMatch(/AI 知识/);
+    expect(sys).toMatch(/钩子|前 3 秒/);
+  });
+
+  it('buildSystemPrompt("ai-knowledge") 含 "AI 知识"', () => {
+    expect(HOOK.buildSystemPrompt('ai-knowledge')).toContain('AI 知识');
+  });
+
+  it('buildSystemPrompt("健身") 含 "健身" (custom niche injection)', () => {
+    expect(HOOK.buildSystemPrompt('健身')).toContain('健身');
   });
 
   it('buildUserMessage 构造文本 + 图片', () => {
