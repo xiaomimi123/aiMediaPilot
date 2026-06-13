@@ -451,7 +451,7 @@ model ContentAnalysis {
 
   // 预处理产物
   framesDir       String?
-  hookFramesDir   String?               // 钩子专用 6 张帧 (0/0.5/1/1.5/2/2.5s)
+  hookFramesDir   String? // 钩子专用 6 张帧 (0/0.5/1/1.5/2/2.5s)
   audioPath       String?
   transcriptPath  String?
   coverCandidates Json?
@@ -477,7 +477,7 @@ model ContentAnalysis {
   retroStartedAt    DateTime?
   retroCompletedAt  DateTime?
 
-  actualMetrics     ActualMetric[]
+  actualMetrics ActualMetric[]
 
   @@index([userId, createdAt])
   @@index([status])
@@ -503,33 +503,33 @@ enum RetroStatus {
 }
 
 model ActualMetric {
-  id                  String           @id @default(cuid())
-  analysisId          String
-  analysis            ContentAnalysis  @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  id         String          @id @default(cuid())
+  analysisId String
+  analysis   ContentAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
 
-  snapshotAt          DateTime         @default(now())
-  daysAfterPublish    Float
-  source              String           @default("douyin-creator-center")
+  snapshotAt       DateTime @default(now())
+  daysAfterPublish Float
+  source           String   @default("douyin-creator-center")
 
-  plays               BigInt
-  likes               BigInt
-  comments            BigInt
-  shares              BigInt
-  collects            BigInt
+  plays    BigInt
+  likes    BigInt
+  comments BigInt
+  shares   BigInt
+  collects BigInt
 
-  likeRateBp          Int?
-  commentRateBp       Int?
-  shareRateBp         Int?
+  likeRateBp    Int?
+  commentRateBp Int?
+  shareRateBp   Int?
 
-  completionRateBp    Int?
-  retention3sBp       Int?
-  followConversionBp  Int?
+  completionRateBp   Int?
+  retention3sBp      Int?
+  followConversionBp Int?
 
-  topComments         Json?
+  topComments Json?
 
-  rawReportPath       String?
+  rawReportPath String?
 
-  createdAt           DateTime         @default(now())
+  createdAt DateTime @default(now())
 
   @@index([analysisId, snapshotAt])
 }
