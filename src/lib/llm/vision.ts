@@ -92,6 +92,12 @@ export class OpenAIVisionLLM implements IVisionLLM {
         };
       } catch (err) {
         lastError = err;
+        // 非 5xx 的 OpenAI APIError 通常是配置/请求错 (401 wrong key, 400 bad req),
+        // 重试无意义,直接抛
+        const e = err as { status?: number };
+        if (typeof e?.status === 'number' && e.status >= 400 && e.status < 500) {
+          throw err;
+        }
         if (attempt < this.maxRetries) {
           await new Promise((r) => setTimeout(r, 2 ** attempt * 500));
         }
@@ -121,7 +127,13 @@ export class OpenAIVisionLLM implements IVisionLLM {
           response_format: { type: 'json_object' },
           max_tokens: opts.maxTokens,
         });
+        if (!completion.choices || completion.choices.length === 0) {
+          throw new Error('LLM 返回空 choices (可能触发 content filter 或 API 错误)');
+        }
         const content = completion.choices[0]?.message.content ?? '';
+        if (!content.trim()) {
+          throw new Error(`LLM 返回空内容 (finish_reason=${completion.choices[0]?.finish_reason ?? 'unknown'})`);
+        }
         const parsed = JSON.parse(content) as unknown;
         const result = opts.responseSchema.parse(parsed) as T;
         const usage = completion.usage;
@@ -136,6 +148,12 @@ export class OpenAIVisionLLM implements IVisionLLM {
         };
       } catch (err) {
         lastError = err;
+        // 非 5xx 的 OpenAI APIError 通常是配置/请求错 (401 wrong key, 400 bad req),
+        // 重试无意义,直接抛
+        const e = err as { status?: number };
+        if (typeof e?.status === 'number' && e.status >= 400 && e.status < 500) {
+          throw err;
+        }
         if (attempt < this.maxRetries) {
           await new Promise((r) => setTimeout(r, 2 ** attempt * 500));
         }

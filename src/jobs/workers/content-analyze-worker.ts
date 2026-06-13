@@ -345,16 +345,16 @@ async function handleAnalyze(job: Job<JobData>) {
   // vision LLM (always OpenAI) — hook / retention / cover need video frames
   const visionLLM = new OpenAIVisionLLM({ apiKey, defaultModel: 'gpt-4o' });
 
-  // text LLM — DeepSeek if env set, else OpenAI gpt-4o-mini fallback
+  // text LLM — DeepSeek if env set, else OpenAI gpt-4o fallback (保留 v1 同模型)
   const deepseekKey = process.env.DEEPSEEK_API_KEY;
-  const textLLM: IVisionLLM = deepseekKey
+  const sharedTextLLM: IVisionLLM = deepseekKey
     ? new DeepSeekTextLLM({ apiKey: deepseekKey })
-    : new OpenAIVisionLLM({ apiKey, defaultModel: 'gpt-4o-mini' });
+    : new OpenAIVisionLLM({ apiKey, defaultModel: 'gpt-4o' });  // fallback 保留 v1 同模型
 
-  // synthesize keeps gpt-4o-mini equivalent (cheap text-only)
+  // synthesize: DeepSeek 时复用同一实例; 无 DeepSeek 时走 mini (cheap text-only)
   const synthesizeLLM: IVisionLLM = deepseekKey
-    ? new DeepSeekTextLLM({ apiKey: deepseekKey })
-    : new OpenAIVisionLLM({ apiKey, defaultModel: 'gpt-4o-mini' });
+    ? sharedTextLLM  // 同一实例
+    : new OpenAIVisionLLM({ apiKey, defaultModel: 'gpt-4o-mini' });  // synthesize 总是 mini
 
   await setProgress(analysisId, 'analyze.dimensions', 50, 'AI 4 维度并行评估');
   const ai = await runAIAnalysis(
@@ -368,7 +368,7 @@ async function handleAnalyze(job: Job<JobData>) {
       draftCaption: analysis.draftCaption,
       draftCoverPath: analysis.draftCoverPath,
     },
-    { visionLLM, textLLM, synthesizeLLM }
+    { visionLLM, textLLM: sharedTextLLM, synthesizeLLM }
   );
   await setProgress(analysisId, 'analyze.synthesize', 90, '综合评分');
 

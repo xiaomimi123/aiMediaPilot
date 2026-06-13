@@ -30,12 +30,16 @@ const llmCallMock = vi.fn();
 vi.mock('@/lib/llm/vision', () => ({
   OpenAIVisionLLM: class { callStructured = llmCallMock; },
 }));
+vi.mock('@/lib/llm/deepseek', () => ({
+  DeepSeekTextLLM: class { callStructured = llmCallMock; },
+}));
 
 import { runRetroPipeline } from '@/jobs/workers/content-retro-worker';
 
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.OPENAI_API_KEY = 'sk-test';
+  delete process.env.DEEPSEEK_API_KEY;  // 强制走 OpenAI 路径,避免 dev .env 影响测试
   prismaMock.contentAnalysis.findUnique.mockResolvedValue({
     id: 'a1',
     douyinAwemeId: '7234567890',
