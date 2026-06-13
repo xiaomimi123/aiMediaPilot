@@ -3,6 +3,7 @@ import { zodResponseFormat } from 'openai/helpers/zod';
 import { promises as fs } from 'fs';
 import path from 'path';
 import type { z, ZodSchema } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 import { estimateCostUSD } from './pricing';
 
 export type ContentPart =
@@ -110,9 +111,23 @@ export class OpenAIVisionLLM implements IVisionLLM {
     const model = opts.model ?? this.defaultModel;
     const userMessage = await this.encodeFileImages(opts.userMessage);
 
+    // 把 Zod schema 转 JSON Schema 注入 system prompt，DeepSeek/兼容 API 才知道精确字段
+    const jsonSchema = zodToJsonSchema(opts.responseSchema as ZodSchema, {
+      target: 'jsonSchema7',
+      $refStrategy: 'none',
+    });
+    const schemaJson = JSON.stringify(jsonSchema, null, 2);
+    if (schemaJson.length > 5000) {
+      console.warn(`[VisionLLM] JSON Schema hint is large (${schemaJson.length} bytes) — this will bloat every prompt`);
+    }
     const schemaHint = `
 
-输出格式: 严格 JSON 对象, 无 markdown 代码块标记, 不要解释文字。`;
+输出必须严格符合以下 JSON Schema (注意字段名大小写、必填项、enum 取值):
+\`\`\`json
+${schemaJson}
+\`\`\`
+
+只输出 JSON 对象本体, 不要 markdown 代码块标记, 不要解释文字。`;
     const finalSystem = opts.systemPrompt + schemaHint;
 
     let lastError: unknown;

@@ -81,9 +81,10 @@ describe('OpenAIVisionLLM.callStructured', () => {
     expect(out.usage.completionTokens).toBe(50);
     expect(out.usage.model).toBe('deepseek-chat');
     expect(createMock).toHaveBeenCalledTimes(1);
-    // system prompt should contain schema hint
+    // system prompt should contain the JSON Schema hint injected for schema-blind APIs (e.g. DeepSeek)
     const callArgs = createMock.mock.calls[0][0];
-    expect(callArgs.messages[0].content).toContain('严格 JSON');
+    expect(callArgs.messages[0].content).toContain('JSON Schema');
+    expect(callArgs.messages[0].content).toContain('"rating"');
     expect(callArgs.response_format).toEqual({ type: 'json_object' });
   });
 
