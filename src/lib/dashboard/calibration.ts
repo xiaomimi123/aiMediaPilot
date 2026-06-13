@@ -46,7 +46,6 @@ function finalizeWorstBucket(dist: AccuracyDistribution): void {
   const buckets: Array<{ key: AccuracyVerdict; count: number }> = [
     { key: 'over-estimated', count: dist.overEstimated },
     { key: 'under-estimated', count: dist.underEstimated },
-    { key: 'unknown', count: dist.unknown },
   ];
   buckets.sort((a, b) => b.count - a.count);
   dist.worstBucket = buckets[0].count > 0 ? buckets[0].key : null;
@@ -82,6 +81,13 @@ export function computeCalibration(reports: RetroReportLike[]): CalibrationData 
 
 export function generateInsight(matrix: CalibrationData['matrix']): string {
   type DimKey = keyof typeof matrix;
+
+  const totals = (Object.values(matrix) as AccuracyDistribution[]);
+  const totalSamples = totals.reduce((sum, d) => sum + d.total, 0);
+  const totalUnknown = totals.reduce((sum, d) => sum + d.unknown, 0);
+  if (totalSamples > 0 && totalUnknown / totalSamples > 0.6) {
+    return '多数维度准确率未知, 数据积累后将显示校准趋势。';
+  }
 
   const overRanking = (Object.entries(matrix) as Array<[DimKey, AccuracyDistribution]>)
     .map(([dim, dist]) => ({ dim, pct: dist.total > 0 ? dist.overEstimated / dist.total : 0 }))

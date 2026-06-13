@@ -62,6 +62,10 @@ describe('computeCalibration', () => {
     const result = computeCalibration(reports);
     expect(result!.matrix.hookGap.worstBucket).toBeNull();
   });
+
+  it('空数组返回 null', () => {
+    expect(computeCalibration([])).toBeNull();
+  });
 });
 
 describe('generateInsight', () => {
@@ -104,5 +108,26 @@ describe('generateInsight', () => {
       coverGap: mkDist(0, 0, 5, 0),
     };
     expect(generateInsight(matrix)).toMatch(/良好|整体校准/);
+  });
+
+  it('两者同时 >= 40%, over-estimated 优先', () => {
+    const matrix = {
+      hookGap: mkDist(0, 4, 1, 0),        // 80% under
+      retentionGap: mkDist(3, 0, 2, 0),   // 60% over
+      titleCaptionGap: mkDist(0, 0, 5, 0),
+      coverGap: mkDist(0, 0, 5, 0),
+    };
+    const msg = generateInsight(matrix);
+    expect(msg).toMatch(/完播.*偏乐观/);
+  });
+
+  it('多数 unknown → 提示数据未知', () => {
+    const matrix = {
+      hookGap: mkDist(0, 0, 0, 5),
+      retentionGap: mkDist(0, 0, 0, 5),
+      titleCaptionGap: mkDist(0, 0, 0, 5),
+      coverGap: mkDist(0, 0, 0, 5),
+    };
+    expect(generateInsight(matrix)).toMatch(/未知|数据积累/);
   });
 });
