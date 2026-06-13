@@ -208,7 +208,6 @@ export async function runAIAnalysis(input: AIAnalysisInput, deps: AIAnalysisDeps
         transcript03s,
       }),
       responseSchema: HOOK.responseSchema,
-      model: 'gpt-4o',
     })),
     tracked('retention', () => deps.visionLLM.callStructured({
       systemPrompt: RETENTION.systemPrompt,
@@ -218,7 +217,6 @@ export async function runAIAnalysis(input: AIAnalysisInput, deps: AIAnalysisDeps
         transcriptSegments: input.transcript.segments,
       }),
       responseSchema: RETENTION.responseSchema,
-      model: 'gpt-4o',
     })),
     tracked('titleCaption', () => deps.textLLM.callStructured({
       systemPrompt: TITLE_CAPTION.systemPrompt,
@@ -237,7 +235,6 @@ export async function runAIAnalysis(input: AIAnalysisInput, deps: AIAnalysisDeps
         candidatePaths: input.coverCandidates.map((c) => c.path),
       }),
       responseSchema: COVER.responseSchema,
-      model: 'gpt-4o',
     })),
   ]);
 
@@ -350,24 +347,26 @@ async function handleAnalyze(job: Job<JobData>) {
     throw e;
   }
 
-  // OpenAI 配置 — 支持 baseURL 代理 (e.g. kedaya.xyz) + 自定义视觉模型 (e.g. gpt-5.5)
+  // OpenAI 配置 — 支持 baseURL 代理 (kedaya/百炼/SiliconFlow 等) + 自定义模型
   const openaiBaseURL = process.env.OPENAI_BASE_URL || undefined;
   const visionModel = process.env.OPENAI_VISION_MODEL || 'gpt-4o';
   const synthesizeModel = process.env.OPENAI_SYNTHESIZE_MODEL || 'gpt-4o-mini';
+  // 非 OpenAI 兼容端 (Qwen-VL / GLM-4V 等) 通常不支持 beta.chat.completions.parse 严格模式 → JSON-mode fallback
+  const useJsonMode = process.env.OPENAI_USE_JSON_MODE === 'true';
 
-  // vision LLM (always OpenAI 兼容) — hook / retention / cover need video frames
-  const visionLLM = new OpenAIVisionLLM({ apiKey, baseURL: openaiBaseURL, defaultModel: visionModel });
+  // vision LLM — hook / retention / cover need video frames
+  const visionLLM = new OpenAIVisionLLM({ apiKey, baseURL: openaiBaseURL, defaultModel: visionModel, jsonModeFallback: useJsonMode });
 
   // text LLM — DeepSeek if env set, else OpenAI (用 visionModel 保留 v1 行为)
   const deepseekKey = process.env.DEEPSEEK_API_KEY;
   const sharedTextLLM: IVisionLLM = deepseekKey
     ? new DeepSeekTextLLM({ apiKey: deepseekKey })
-    : new OpenAIVisionLLM({ apiKey, baseURL: openaiBaseURL, defaultModel: visionModel });
+    : new OpenAIVisionLLM({ apiKey, baseURL: openaiBaseURL, defaultModel: visionModel, jsonModeFallback: useJsonMode });
 
-  // synthesize: DeepSeek 时复用同一实例; 无 DeepSeek 时走 synthesizeModel (默认 mini)
+  // synthesize: DeepSeek 时复用同一实例; 无 DeepSeek 时走 synthesizeModel
   const synthesizeLLM: IVisionLLM = deepseekKey
     ? sharedTextLLM  // 同一实例
-    : new OpenAIVisionLLM({ apiKey, baseURL: openaiBaseURL, defaultModel: synthesizeModel });
+    : new OpenAIVisionLLM({ apiKey, baseURL: openaiBaseURL, defaultModel: synthesizeModel, jsonModeFallback: useJsonMode });
 
   await setProgress(analysisId, 'analyze.dimensions', 50, 'AI 4 维度并行评估');
   const ai = await runAIAnalysis(
