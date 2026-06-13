@@ -5,7 +5,8 @@ import { redis } from '@/lib/redis';
 import { QUEUES } from '@/jobs/queue';
 import { probeDouyinCookie, runDouyinAdapter } from '@/lib/douyin/adapter';
 import { parseReportMd } from '@/lib/douyin/report-parser';
-import { OpenAIVisionLLM, type TokenUsage } from '@/lib/llm/vision';
+import { OpenAIVisionLLM, type IVisionLLM, type TokenUsage } from '@/lib/llm/vision';
+import { DeepSeekTextLLM } from '@/lib/llm/deepseek';
 import { RETRO_GAP, type RetroGapResponse } from '@/lib/llm/prompts/ai-knowledge/retro-gap';
 import type { RetroStatus } from '@prisma/client';
 
@@ -87,7 +88,10 @@ export async function runRetroPipeline(analysisId: string): Promise<void> {
   let retroReport: RetroGapResponse | null = null;
   let llmUsageDelta: TokenUsage | null = null;
   try {
-    const llm = new OpenAIVisionLLM({ apiKey: process.env.OPENAI_API_KEY!, defaultModel: 'gpt-4o-mini' });
+    const deepseekKey = process.env.DEEPSEEK_API_KEY;
+    const llm: IVisionLLM = deepseekKey
+      ? new DeepSeekTextLLM({ apiKey: deepseekKey })
+      : new OpenAIVisionLLM({ apiKey: process.env.OPENAI_API_KEY!, defaultModel: 'gpt-4o-mini' });
     const out = await llm.callStructured({
       systemPrompt: RETRO_GAP.systemPrompt,
       userMessage: RETRO_GAP.buildUserMessage({
@@ -95,7 +99,6 @@ export async function runRetroPipeline(analysisId: string): Promise<void> {
         actual: parsed,
       }),
       responseSchema: RETRO_GAP.responseSchema,
-      model: 'gpt-4o-mini',
     });
     retroReport = out.result;
     llmUsageDelta = out.usage;

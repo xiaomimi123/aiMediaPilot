@@ -104,7 +104,7 @@ describe('runAIAnalysis (fail-soft)', () => {
     const fsp = await import('fs/promises');
     vi.spyOn(fsp, 'readdir').mockResolvedValue(['frame_0001.jpg'] as any); // works for any path
 
-    const result = await runAIAnalysis(baseInput, { llm: fakeLLM, synthesizeLLM: fakeLLM });
+    const result = await runAIAnalysis(baseInput, { visionLLM: fakeLLM, textLLM: fakeLLM, synthesizeLLM: fakeLLM });
     expect(calls).toContain('hook');
     expect(result.report.hook).toHaveProperty('error');
     expect(result.report.retention).not.toHaveProperty('error');

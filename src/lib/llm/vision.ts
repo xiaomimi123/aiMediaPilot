@@ -20,7 +20,7 @@ export interface CallStructuredOpts<T> {
   systemPrompt: string;
   userMessage: ContentPart[];
   responseSchema: ZodSchema<T>;
-  model?: 'gpt-4o' | 'gpt-4o-mini';
+  model?: string;
   maxTokens?: number;
 }
 
@@ -30,22 +30,33 @@ export interface IVisionLLM {
 
 export interface OpenAIVisionLLMOpts {
   apiKey: string;
+  baseURL?: string;
+  jsonModeFallback?: boolean;
   maxRetries?: number;
-  defaultModel?: 'gpt-4o' | 'gpt-4o-mini';
+  defaultModel?: string;
 }
 
 export class OpenAIVisionLLM implements IVisionLLM {
   private client: OpenAI;
   private maxRetries: number;
-  private defaultModel: 'gpt-4o' | 'gpt-4o-mini';
+  private defaultModel: string;
+  private jsonModeFallback: boolean;
 
   constructor(opts: OpenAIVisionLLMOpts) {
-    this.client = new OpenAI({ apiKey: opts.apiKey });
+    this.client = new OpenAI({ apiKey: opts.apiKey, ...(opts.baseURL ? { baseURL: opts.baseURL } : {}) });
     this.maxRetries = opts.maxRetries ?? 3;
     this.defaultModel = opts.defaultModel ?? 'gpt-4o';
+    this.jsonModeFallback = opts.jsonModeFallback ?? false;
   }
 
   async callStructured<T>(opts: CallStructuredOpts<T>): Promise<{ result: T; usage: TokenUsage }> {
+    if (this.jsonModeFallback) {
+      return this.callViaJsonMode(opts);
+    }
+    return this.callViaBetaParse(opts);
+  }
+
+  private async callViaBetaParse<T>(opts: CallStructuredOpts<T>): Promise<{ result: T; usage: TokenUsage }> {
     const model = opts.model ?? this.defaultModel;
     const userMessage = await this.encodeFileImages(opts.userMessage);
 
@@ -72,6 +83,50 @@ export class OpenAIVisionLLM implements IVisionLLM {
         const usage = completion.usage;
         return {
           result: parsed,
+          usage: {
+            model: completion.model ?? model,
+            promptTokens: usage?.prompt_tokens ?? 0,
+            completionTokens: usage?.completion_tokens ?? 0,
+            estCostUSD: estimateCostUSD(model, usage?.prompt_tokens ?? 0, usage?.completion_tokens ?? 0),
+          },
+        };
+      } catch (err) {
+        lastError = err;
+        if (attempt < this.maxRetries) {
+          await new Promise((r) => setTimeout(r, 2 ** attempt * 500));
+        }
+      }
+    }
+    throw lastError;
+  }
+
+  private async callViaJsonMode<T>(opts: CallStructuredOpts<T>): Promise<{ result: T; usage: TokenUsage }> {
+    const model = opts.model ?? this.defaultModel;
+    const userMessage = await this.encodeFileImages(opts.userMessage);
+
+    const schemaHint = `
+
+输出格式: 严格 JSON 对象, 无 markdown 代码块标记, 不要解释文字。`;
+    const finalSystem = opts.systemPrompt + schemaHint;
+
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      try {
+        const completion = await this.client.chat.completions.create({
+          model,
+          messages: [
+            { role: 'system', content: finalSystem },
+            { role: 'user', content: userMessage as any },
+          ],
+          response_format: { type: 'json_object' },
+          max_tokens: opts.maxTokens,
+        });
+        const content = completion.choices[0]?.message.content ?? '';
+        const parsed = JSON.parse(content) as unknown;
+        const result = opts.responseSchema.parse(parsed) as T;
+        const usage = completion.usage;
+        return {
+          result,
           usage: {
             model: completion.model ?? model,
             promptTokens: usage?.prompt_tokens ?? 0,

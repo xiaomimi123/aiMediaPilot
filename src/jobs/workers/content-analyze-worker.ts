@@ -17,6 +17,7 @@ import {
 } from '@/lib/video/sampling';
 import { WhisperClient } from '@/lib/llm/whisper';
 import { OpenAIVisionLLM, type IVisionLLM, type TokenUsage } from '@/lib/llm/vision';
+import { DeepSeekTextLLM } from '@/lib/llm/deepseek';
 import { HOOK } from '@/lib/llm/prompts/ai-knowledge/hook';
 import { RETENTION } from '@/lib/llm/prompts/ai-knowledge/retention';
 import { TITLE_CAPTION } from '@/lib/llm/prompts/ai-knowledge/title-caption';
@@ -136,7 +137,8 @@ export interface AIAnalysisInput {
 }
 
 export interface AIAnalysisDeps {
-  llm: IVisionLLM;
+  visionLLM: IVisionLLM;
+  textLLM: IVisionLLM;
   synthesizeLLM: IVisionLLM;
 }
 
@@ -190,7 +192,7 @@ export async function runAIAnalysis(input: AIAnalysisInput, deps: AIAnalysisDeps
   };
 
   const [hookResult, retentionResult, titleCaptionResult, coverResult] = await Promise.all([
-    tracked('hook', () => deps.llm.callStructured({
+    tracked('hook', () => deps.visionLLM.callStructured({
       systemPrompt: HOOK.systemPrompt,
       userMessage: HOOK.buildUserMessage({
         durationSec: input.durationSec,
@@ -200,7 +202,7 @@ export async function runAIAnalysis(input: AIAnalysisInput, deps: AIAnalysisDeps
       responseSchema: HOOK.responseSchema,
       model: 'gpt-4o',
     })),
-    tracked('retention', () => deps.llm.callStructured({
+    tracked('retention', () => deps.visionLLM.callStructured({
       systemPrompt: RETENTION.systemPrompt,
       userMessage: RETENTION.buildUserMessage({
         durationSec: input.durationSec,
@@ -210,7 +212,7 @@ export async function runAIAnalysis(input: AIAnalysisInput, deps: AIAnalysisDeps
       responseSchema: RETENTION.responseSchema,
       model: 'gpt-4o',
     })),
-    tracked('titleCaption', () => deps.llm.callStructured({
+    tracked('titleCaption', () => deps.textLLM.callStructured({
       systemPrompt: TITLE_CAPTION.systemPrompt,
       userMessage: TITLE_CAPTION.buildUserMessage({
         transcriptText: input.transcript.text,
@@ -218,9 +220,8 @@ export async function runAIAnalysis(input: AIAnalysisInput, deps: AIAnalysisDeps
         draftCaption: input.draftCaption,
       }),
       responseSchema: TITLE_CAPTION.responseSchema,
-      model: 'gpt-4o',
     })),
-    tracked('cover', () => deps.llm.callStructured({
+    tracked('cover', () => deps.visionLLM.callStructured({
       systemPrompt: COVER.systemPrompt,
       userMessage: COVER.buildUserMessage({
         transcriptFirstChunk: input.transcript.segments.slice(0, 3).map((s) => s.text).join(' '),
@@ -252,7 +253,6 @@ export async function runAIAnalysis(input: AIAnalysisInput, deps: AIAnalysisDeps
           cover: coverResult,
         }),
         responseSchema: SYNTHESIZE.responseSchema,
-        model: 'gpt-4o-mini',
       });
       overallScore = synOut.result.overallScore;
       topActionItems = synOut.result.topActionItems;
@@ -342,8 +342,19 @@ async function handleAnalyze(job: Job<JobData>) {
     throw e;
   }
 
-  const llm = new OpenAIVisionLLM({ apiKey, defaultModel: 'gpt-4o' });
-  const synthesizeLLM = new OpenAIVisionLLM({ apiKey, defaultModel: 'gpt-4o-mini' });
+  // vision LLM (always OpenAI) — hook / retention / cover need video frames
+  const visionLLM = new OpenAIVisionLLM({ apiKey, defaultModel: 'gpt-4o' });
+
+  // text LLM — DeepSeek if env set, else OpenAI gpt-4o-mini fallback
+  const deepseekKey = process.env.DEEPSEEK_API_KEY;
+  const textLLM: IVisionLLM = deepseekKey
+    ? new DeepSeekTextLLM({ apiKey: deepseekKey })
+    : new OpenAIVisionLLM({ apiKey, defaultModel: 'gpt-4o-mini' });
+
+  // synthesize keeps gpt-4o-mini equivalent (cheap text-only)
+  const synthesizeLLM: IVisionLLM = deepseekKey
+    ? new DeepSeekTextLLM({ apiKey: deepseekKey })
+    : new OpenAIVisionLLM({ apiKey, defaultModel: 'gpt-4o-mini' });
 
   await setProgress(analysisId, 'analyze.dimensions', 50, 'AI 4 维度并行评估');
   const ai = await runAIAnalysis(
@@ -357,7 +368,7 @@ async function handleAnalyze(job: Job<JobData>) {
       draftCaption: analysis.draftCaption,
       draftCoverPath: analysis.draftCoverPath,
     },
-    { llm, synthesizeLLM }
+    { visionLLM, textLLM, synthesizeLLM }
   );
   await setProgress(analysisId, 'analyze.synthesize', 90, '综合评分');
 
