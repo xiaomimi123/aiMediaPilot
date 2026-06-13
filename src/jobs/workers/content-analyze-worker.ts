@@ -15,7 +15,8 @@ import {
   computeCoverCandidateTimestamps,
   computeHookFrameTimestamps,
 } from '@/lib/video/sampling';
-import { WhisperClient } from '@/lib/llm/whisper';
+import { LocalWhisperClient } from '@/lib/llm/local-whisper';
+import type { TranscriptionResult } from '@/lib/llm/whisper';
 import { OpenAIVisionLLM, type IVisionLLM, type TokenUsage } from '@/lib/llm/vision';
 import { DeepSeekTextLLM } from '@/lib/llm/deepseek';
 import { HOOK } from '@/lib/llm/prompts/ai-knowledge/hook';
@@ -88,8 +89,15 @@ export async function runPreprocess(opts: PreprocessOpts): Promise<PreprocessRes
   await extractAudio({ videoPath: opts.videoPath, audioPath });
 
   await setProgress(opts.analysisId, 'preprocess.whisper', 30, 'Whisper 转写中');
-  const whisper = new WhisperClient(opts.openaiApiKey);
-  const transcription = await whisper.transcribe(audioPath);
+  // 本地 faster-whisper, 失败 fail-soft (spec §5.1: 不阻断, 空 transcript)
+  let transcription: TranscriptionResult;
+  try {
+    const localWhisper = new LocalWhisperClient();
+    transcription = await localWhisper.transcribe(audioPath);
+  } catch (err) {
+    console.warn('[content-analyze-worker] Whisper 转写失败, 继续以空 transcript 跑:', err instanceof Error ? err.message : err);
+    transcription = { text: '', segments: [], durationSec: 0, estCostUSD: 0 };
+  }
   await fs.writeFile(transcriptPath, JSON.stringify(transcription), 'utf-8');
 
   await setProgress(opts.analysisId, 'preprocess.covers', 45, '抽候选封面');
@@ -342,19 +350,24 @@ async function handleAnalyze(job: Job<JobData>) {
     throw e;
   }
 
-  // vision LLM (always OpenAI) — hook / retention / cover need video frames
-  const visionLLM = new OpenAIVisionLLM({ apiKey, defaultModel: 'gpt-4o' });
+  // OpenAI 配置 — 支持 baseURL 代理 (e.g. kedaya.xyz) + 自定义视觉模型 (e.g. gpt-5.5)
+  const openaiBaseURL = process.env.OPENAI_BASE_URL || undefined;
+  const visionModel = process.env.OPENAI_VISION_MODEL || 'gpt-4o';
+  const synthesizeModel = process.env.OPENAI_SYNTHESIZE_MODEL || 'gpt-4o-mini';
 
-  // text LLM — DeepSeek if env set, else OpenAI gpt-4o fallback (保留 v1 同模型)
+  // vision LLM (always OpenAI 兼容) — hook / retention / cover need video frames
+  const visionLLM = new OpenAIVisionLLM({ apiKey, baseURL: openaiBaseURL, defaultModel: visionModel });
+
+  // text LLM — DeepSeek if env set, else OpenAI (用 visionModel 保留 v1 行为)
   const deepseekKey = process.env.DEEPSEEK_API_KEY;
   const sharedTextLLM: IVisionLLM = deepseekKey
     ? new DeepSeekTextLLM({ apiKey: deepseekKey })
-    : new OpenAIVisionLLM({ apiKey, defaultModel: 'gpt-4o' });  // fallback 保留 v1 同模型
+    : new OpenAIVisionLLM({ apiKey, baseURL: openaiBaseURL, defaultModel: visionModel });
 
-  // synthesize: DeepSeek 时复用同一实例; 无 DeepSeek 时走 mini (cheap text-only)
+  // synthesize: DeepSeek 时复用同一实例; 无 DeepSeek 时走 synthesizeModel (默认 mini)
   const synthesizeLLM: IVisionLLM = deepseekKey
     ? sharedTextLLM  // 同一实例
-    : new OpenAIVisionLLM({ apiKey, defaultModel: 'gpt-4o-mini' });  // synthesize 总是 mini
+    : new OpenAIVisionLLM({ apiKey, baseURL: openaiBaseURL, defaultModel: synthesizeModel });
 
   await setProgress(analysisId, 'analyze.dimensions', 50, 'AI 4 维度并行评估');
   const ai = await runAIAnalysis(

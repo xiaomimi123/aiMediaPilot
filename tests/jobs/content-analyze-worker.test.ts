@@ -27,6 +27,14 @@ vi.mock('@/lib/llm/whisper', () => ({
   },
 }));
 
+vi.mock('@/lib/llm/local-whisper', () => ({
+  LocalWhisperClient: class {
+    async transcribe() {
+      return { text: 'demo', segments: [], durationSec: 45, estCostUSD: 0 };
+    }
+  },
+}));
+
 vi.mock('fs/promises', async () => {
   const actual = await vi.importActual<typeof import('fs/promises')>('fs/promises');
   return {
@@ -68,7 +76,7 @@ describe('runPreprocess', () => {
     expect(result.transcriptPath).toBe('./uploads/a1/transcript.json');
     expect(result.coverCandidates).toHaveLength(3);
     expect(result.durationSec).toBe(45);
-    expect(result.whisperCostUSD).toBeCloseTo(0.005);
+    expect(result.whisperCostUSD).toBeCloseTo(0); // local faster-whisper = zero cost
   });
 });
 
