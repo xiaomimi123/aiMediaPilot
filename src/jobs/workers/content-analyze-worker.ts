@@ -24,6 +24,10 @@ import { RETENTION } from '@/lib/llm/prompts/retention';
 import { TITLE_CAPTION } from '@/lib/llm/prompts/title-caption';
 import { COVER } from '@/lib/llm/prompts/cover';
 import { SYNTHESIZE } from '@/lib/llm/prompts/synthesize';
+import { computePrediction } from '@/lib/prediction/formula';
+import { resolveBaseline } from '@/lib/prediction/baseline';
+import { computeCalibration } from '@/lib/dashboard/calibration';
+import type { RetroReportLike } from '@/lib/dashboard/types';
 import { Prisma } from '@prisma/client';
 import type { ContentAnalysisStatus } from '@prisma/client';
 
@@ -385,6 +389,33 @@ async function handleAnalyze(job: Job<JobData>) {
     { visionLLM, textLLM: sharedTextLLM, synthesizeLLM }
   );
   await setProgress(analysisId, 'analyze.synthesize', 90, '综合评分');
+
+  // L1 prediction — 确定性公式, fail-soft (插入 predictedPlaysRange 到 report)
+  try {
+    if (typeof ai.report.overallScore === 'number') {
+      const baseline = await resolveBaseline(analysis.userId);
+      if (baseline) {
+        const retroReports = await prisma.contentAnalysis.findMany({
+          where: { userId: analysis.userId, retroStatus: 'COMPLETED' },
+          select: { retroReport: true },
+        });
+        const calibration = computeCalibration(
+          retroReports
+            .map((r) => r.retroReport as RetroReportLike | null)
+            .filter((r): r is RetroReportLike => r !== null)
+        );
+        ai.report.predictedPlaysRange = computePrediction({
+          overallScore: ai.report.overallScore,
+          baseline: baseline.value,
+          calibration,
+          retroSampleCount: baseline.retroSampleCount,
+          basisSource: baseline.source,
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[content-analyze-worker] runPredict failed:', err);
+  }
 
   // Fix 1: inject Whisper cost into llmUsage so it shows up in 烧 $x display
   if (whisperCostUSD > 0) {
