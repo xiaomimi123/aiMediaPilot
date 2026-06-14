@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { ProgressStages } from '@/components/content/progress-stages';
 import { ReportView } from '@/components/content/report-view';
 import { RetroSection } from '@/components/content/retro-section';
+import { PredictionCard } from '@/components/content/prediction-card';
 
 type Analysis = {
   id: string;
@@ -76,6 +77,10 @@ export default function PreflightDetailPage() {
       </div>
 
       <ProgressStages status={data.status} progress={data.progress} errorMessage={data.errorMessage} />
+
+      {data.status === 'COMPLETED' && data.report && (
+        <PredictionCard data={data.report.predictedPlaysRange} />
+      )}
 
       {data.status === 'COMPLETED' && data.report && (
         <ReportView
