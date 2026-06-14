@@ -37,4 +37,14 @@ describe('GET /api/v1/dashboard/summary', () => {
     expect(json.success).toBe(false);
     expect(json.message).toMatch(/db down|失败/);
   });
+
+  it('getOrCreateDefaultUser 抛错 → 500', async () => {
+    const { getOrCreateDefaultUser } = await import('@/lib/user');
+    (getOrCreateDefaultUser as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('upsert failed'));
+    const res = await GET();
+    expect(res.status).toBe(500);
+    const json = await res.json();
+    expect(json.success).toBe(false);
+    expect(json.message).toMatch(/upsert failed|失败/);
+  });
 });

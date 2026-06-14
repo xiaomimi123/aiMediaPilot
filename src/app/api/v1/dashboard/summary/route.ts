@@ -8,6 +8,7 @@ export async function GET() {
     const summary = await aggregateDashboard(user.id);
     return ok(summary);
   } catch (e) {
+    console.error('[dashboard/summary] aggregation failed', e);
     const msg = e instanceof Error ? e.message : String(e);
     return fail(`dashboard 加载失败: ${msg}`, 500);
   }
