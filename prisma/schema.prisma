@@ -17,6 +17,10 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // L1 prediction: 用户上传 onboarding 填的 "通常多少播放";
+  // ≥3 条 retro 后会被 retro median 自动覆盖。
+  baselinePlays BigInt?
+
   aiConfigs       AIConfig[]
   imageGenConfigs ImageGenConfig[]
   accounts        PlatformAccount[]
