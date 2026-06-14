@@ -32,7 +32,6 @@ export async function aggregateDashboard(userId: string): Promise<DashboardSumma
     nicheRows,
     topPerformerRows,
     missCandidateRows,
-    spendRaw,
   ] = await Promise.all([
     prisma.contentAnalysis.count({ where: { userId } }),
     prisma.contentAnalysis.count({ where: { userId, createdAt: { gte: last7dCutoff } } }),
@@ -73,14 +72,15 @@ export async function aggregateDashboard(userId: string): Promise<DashboardSumma
       where: { userId, retroStatus: 'COMPLETED', retroReport: { not: Prisma.JsonNull } },
       select: { id: true, videoFilename: true, retroReport: true },
     }),
-    (prisma.$queryRaw as any)`
-      SELECT COALESCE(SUM(("llmUsage"->'total'->>'estCostUSD')::float), 0)::float AS total
-      FROM "ContentAnalysis" WHERE "userId" = ${userId}
-    `,
   ]);
 
-  const totalSpendUSD = (spendRaw as any)[0]?.total ?? 0;
+  const spendRaw = await prisma.$queryRaw<{ total: number | null }[]>`
+    SELECT COALESCE(SUM(("llmUsage"->'total'->>'estCostUSD')::float), 0)::float AS total
+    FROM "ContentAnalysis" WHERE "userId" = ${userId}
+  `;
+  const totalSpendUSD = spendRaw[0]?.total ?? 0;
 
+  // completedAt is always set when status='COMPLETED' (set by content-analyze-worker)
   const trend: TrendPoint[] = (trendRows as any[])
     .map((r: any) => ({
       id: r.id,
