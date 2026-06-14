@@ -40,6 +40,23 @@ export async function POST(req: NextRequest | Request) {
   const niche = ((form.get('niche') as string | null) || '').trim() || 'ai-knowledge';
 
   const user = await getOrCreateDefaultUser();
+
+  // baselinePlays onboarding — 仅当 form 传了非空数字时写, 失败静默 (不阻断 analysis 创建)
+  const baselineRaw = form.get('baselinePlays');
+  if (typeof baselineRaw === 'string' && baselineRaw.trim() !== '') {
+    const parsed = Number(baselineRaw);
+    if (Number.isFinite(parsed) && parsed > 0 && parsed <= 1e8) {
+      try {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { baselinePlays: BigInt(Math.round(parsed)) },
+        });
+      } catch (err) {
+        console.error('[POST analyses] baselinePlays write failed', err);
+      }
+    }
+  }
+
   const analysisId = randomUUID().slice(0, 12);
   const analysisDir = path.join(UPLOADS_ROOT, analysisId);
   await fs.mkdir(analysisDir, { recursive: true });
