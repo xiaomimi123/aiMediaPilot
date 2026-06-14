@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { KNOWN_NICHES } from '@/lib/llm/prompts/expert-persona';
 
-export function UploadForm() {
+export function UploadForm({ needsBaselineOnboarding = false }: { needsBaselineOnboarding?: boolean }) {
   const router = useRouter();
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -15,6 +15,7 @@ export function UploadForm() {
   const [caption, setCaption] = useState('');
   const [niche, setNiche] = useState<string>('ai-knowledge');
   const [customNiche, setCustomNiche] = useState<string>('');
+  const [baselinePlays, setBaselinePlays] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -40,6 +41,10 @@ export function UploadForm() {
       if (title.trim()) fd.append('draftTitle', title.trim());
       if (caption.trim()) fd.append('draftCaption', caption.trim());
       if (effectiveNiche) fd.append('niche', effectiveNiche);
+      const baselineTrimmed = baselinePlays.trim();
+      if (baselineTrimmed && Number(baselineTrimmed) > 0) {
+        fd.append('baselinePlays', baselineTrimmed);
+      }
 
       const res = await fetch('/api/v1/content/analyses', { method: 'POST', body: fd });
       const json = await res.json();
@@ -136,6 +141,31 @@ export function UploadForm() {
           </div>
         </CardContent>
       </Card>
+
+      {needsBaselineOnboarding && (
+        <Card>
+          <CardContent className="space-y-2 pt-6">
+            <div className="rounded-md border-2 border-dashed border-amber-300 bg-amber-50 p-3">
+              <Label htmlFor="baselinePlays" className="text-sm font-medium">
+                🎯 一次性设置: 你最近 10 条视频平均多少播放?
+              </Label>
+              <p className="mt-1 text-xs text-muted-foreground">
+                用于校准 L1 预测。 不填的话短期内不出预测, 等 3 条复盘后会从实测数据自动算出。
+              </p>
+              <Input
+                id="baselinePlays"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                placeholder="例如: 800"
+                value={baselinePlays}
+                onChange={(e) => setBaselinePlays(e.target.value)}
+                className="mt-2"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {error && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
 
