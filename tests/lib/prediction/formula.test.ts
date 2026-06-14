@@ -94,7 +94,7 @@ describe('computePrediction', () => {
     expect(computePrediction({ ...base, retroSampleCount: 10 }).confidence).toBe('high');
   });
 
-  it('overflow clamp: baseline=1e9, score=100 → predicted ≤ 1e9', () => {
+  it('overflow clamp: baseline=1e9, score=100 → predicted ≤ 5e8 (upper ≤ 1e9)', () => {
     const result = computePrediction({
       overallScore: 100,
       baseline: 1e9,
@@ -102,7 +102,9 @@ describe('computePrediction', () => {
       retroSampleCount: 0,
       basisSource: 'onboarding',
     });
-    expect(result.predicted).toBeLessThanOrEqual(1e9);
+    expect(result.predicted).toBeLessThanOrEqual(5e8);
+    expect(result.upper).toBeLessThanOrEqual(1e9);
+    expect(result.upper).toBe(result.predicted * 2);
   });
 
   it('calibration 影响最终值 (偏乐观时下移)', () => {
@@ -139,10 +141,11 @@ describe('formatPlays', () => {
   it('1k-10k → "X.Xk"', () => {
     expect(formatPlays(1000)).toBe('1.0k');
     expect(formatPlays(1234)).toBe('1.2k');
-    expect(formatPlays(9999)).toBe('10.0k');
+    expect(formatPlays(9940)).toBe('9.9k');
   });
   it('≥ 10k → "X.Xw"', () => {
     expect(formatPlays(10000)).toBe('1.0w');
+    expect(formatPlays(9950)).toBe('1.0w');  // boundary: snaps to w-band
     expect(formatPlays(15234)).toBe('1.5w');
     expect(formatPlays(123456)).toBe('12.3w');
   });

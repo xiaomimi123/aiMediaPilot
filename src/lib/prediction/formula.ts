@@ -5,7 +5,8 @@ import type {
   PredictionConfidence,
 } from './types';
 
-const MAX_PREDICTED = 1e9;
+const MAX_UPPER = 1e9;
+const MAX_PREDICTED = MAX_UPPER / 2;  // ensures upper = predicted * 2 ≤ MAX_UPPER
 const MIN_PREDICTED = 0;
 
 export function scoreMultiplier(overallScore: number): number {
@@ -50,7 +51,7 @@ export function computePrediction(input: {
   return {
     predicted,
     lower: Math.round(predicted * 0.5),
-    upper: Math.round(clamp(predicted * 2)),
+    upper: Math.round(predicted * 2),
     confidence: confidenceFor(input.retroSampleCount),
     basisSource: input.basisSource,
     basisValue: input.baseline,
@@ -59,6 +60,6 @@ export function computePrediction(input: {
 
 export function formatPlays(n: number): string {
   if (n < 1000) return n.toString();
-  if (n < 10000) return `${(n / 1000).toFixed(1)}k`;
+  if (n < 9950) return `${(n / 1000).toFixed(1)}k`;
   return `${(n / 10000).toFixed(1)}w`;
 }
