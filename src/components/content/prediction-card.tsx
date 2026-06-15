@@ -1,4 +1,6 @@
+import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { formatPlays } from '@/lib/prediction/formula';
 import type { PredictedPlaysRange } from '@/lib/prediction/types';
@@ -30,12 +32,15 @@ export function PredictionCard({ data }: { data: PredictedPlaysRange | null | un
   if (!data) {
     return (
       <Card>
-        <CardContent className="space-y-2 pt-6">
+        <CardContent className="space-y-3 pt-6">
           <h3 className="font-semibold">💡 L1 播放预测暂未生成</h3>
           <ul className="space-y-1 text-sm text-muted-foreground">
             <li>• 设了账号基线 → 上传时立即出预测</li>
             <li>• 没设的话, 等 3 条复盘后会自动从实测数据反算出基线</li>
           </ul>
+          <Link href="/settings/baseline">
+            <Button size="sm" variant="outline">设置基线 →</Button>
+          </Link>
         </CardContent>
       </Card>
     );
@@ -61,7 +66,10 @@ export function PredictionCard({ data }: { data: PredictedPlaysRange | null | un
           {badge.hint && <span className="text-xs text-muted-foreground">({badge.hint})</span>}
         </div>
         <div className="text-center text-xs text-muted-foreground">
-          基线 {formatPlays(data.basisValue)} ({SOURCE_LABEL[data.basisSource]})
+          基线 {formatPlays(data.basisValue)} ({SOURCE_LABEL[data.basisSource]}) ·{' '}
+          <Link href="/settings/baseline" className="hover:text-primary underline-offset-2 hover:underline">
+            修改 →
+          </Link>
         </div>
       </CardContent>
     </Card>
