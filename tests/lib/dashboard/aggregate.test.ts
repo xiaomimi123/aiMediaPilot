@@ -116,4 +116,53 @@ describe('aggregateDashboard', () => {
     expect(result.nicheDistribution[0].label).toBe('AI 知识');
     expect(result.nicheDistribution[1].label).toBe('custom-fitness');
   });
+
+  it('predictionAccuracy: 1 in-range + 1 over 时正确 (有 prediction 和 retro)', async () => {
+    prismaMock.contentAnalysis.findMany
+      .mockResolvedValueOnce([])  // trendRows
+      .mockResolvedValueOnce([])  // retroSourceRows
+      .mockResolvedValueOnce([])  // missCandidateRows
+      .mockResolvedValueOnce([    // predictionAccuracyRows
+        {
+          id: 'a-in',
+          videoFilename: 'in.mp4',
+          completedAt: new Date('2026-06-10T00:00:00Z'),
+          report: { predictedPlaysRange: { predicted: 1000, lower: 500, upper: 2000 } },
+          actualMetrics: [{ plays: 1200n }],
+        },
+        {
+          id: 'a-over',
+          videoFilename: 'over.mp4',
+          completedAt: new Date('2026-06-09T00:00:00Z'),
+          report: { predictedPlaysRange: { predicted: 2000, lower: 1000, upper: 4000 } },
+          actualMetrics: [{ plays: 500n }],
+        },
+      ]);
+    const result = await aggregateDashboard('user1');
+    expect(result.predictionAccuracy).not.toBeNull();
+    expect(result.predictionAccuracy!.totalSamples).toBe(2);
+    expect(result.predictionAccuracy!.inRangeCount).toBe(1);
+    expect(result.predictionAccuracy!.overCount).toBe(1);
+    expect(result.predictionAccuracy!.underCount).toBe(0);
+    expect(result.predictionAccuracy!.recent).toHaveLength(2);
+    expect(result.predictionAccuracy!.recent[0].id).toBe('a-in');
+  });
+
+  it('predictionAccuracy=null 当无 prediction-retro 配对', async () => {
+    prismaMock.contentAnalysis.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: 'a-no-retro',
+          videoFilename: 'x.mp4',
+          completedAt: new Date(),
+          report: { predictedPlaysRange: { predicted: 1000, lower: 500, upper: 2000 } },
+          actualMetrics: [],
+        },
+      ]);
+    const result = await aggregateDashboard('user1');
+    expect(result.predictionAccuracy).toBeNull();
+  });
 });

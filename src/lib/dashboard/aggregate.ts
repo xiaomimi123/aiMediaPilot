@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { KNOWN_NICHES } from '@/lib/llm/prompts/expert-persona';
 import { computeCalibration } from './calibration';
+import { verdictOf, deltaPct } from './prediction-accuracy';
 import type {
   DashboardSummary,
   RetroReportLike,
@@ -9,6 +10,8 @@ import type {
   NicheRow,
   TopPerformer,
   BiggestMiss,
+  PredictionAccuracyEntry,
+  PredictionAccuracySummary,
 } from './types';
 
 const TREND_LIMIT = 10;
@@ -32,6 +35,7 @@ export async function aggregateDashboard(userId: string): Promise<DashboardSumma
     nicheRows,
     topPerformerRows,
     missCandidateRows,
+    predictionAccuracyRows,
   ] = await Promise.all([
     prisma.contentAnalysis.count({ where: { userId } }),
     prisma.contentAnalysis.count({ where: { userId, createdAt: { gte: last7dCutoff } } }),
@@ -71,6 +75,20 @@ export async function aggregateDashboard(userId: string): Promise<DashboardSumma
     prisma.contentAnalysis.findMany({
       where: { userId, retroStatus: 'COMPLETED', retroReport: { not: Prisma.JsonNull } },
       select: { id: true, videoFilename: true, retroReport: true },
+    }),
+    prisma.contentAnalysis.findMany({
+      where: { userId, status: 'COMPLETED' },
+      select: {
+        id: true,
+        videoFilename: true,
+        completedAt: true,
+        report: true,
+        actualMetrics: {
+          select: { plays: true },
+          orderBy: { snapshotAt: 'desc' },
+          take: 1,
+        },
+      },
     }),
   ]);
 
@@ -138,6 +156,43 @@ export async function aggregateDashboard(userId: string): Promise<DashboardSumma
     .sort((a, b) => b.gap - a.gap)
     .slice(0, TOP_LIMIT);
 
+  // ---- predictionAccuracy: JOIN report.predictedPlaysRange × ActualMetric.plays ----
+  const predictionAccuracyEntries: PredictionAccuracyEntry[] = predictionAccuracyRows
+    .map((r) => {
+      const range = (r.report as any)?.predictedPlaysRange as
+        | { predicted: number; lower: number; upper: number }
+        | undefined;
+      const metric = r.actualMetrics[0];
+      if (!range || !metric) return null;
+      const actual = Number(metric.plays);
+      return {
+        id: r.id,
+        videoFilename: r.videoFilename,
+        // completedAt is always set when status='COMPLETED' (set by content-analyze-worker)
+        completedAt: r.completedAt!.toISOString(),
+        predicted: range.predicted,
+        lower: range.lower,
+        upper: range.upper,
+        actual,
+        verdict: verdictOf(actual, range),
+        deltaPct: deltaPct(actual, range.predicted),
+      };
+    })
+    .filter((e): e is PredictionAccuracyEntry => e !== null);
+
+  const predictionAccuracy: PredictionAccuracySummary | null =
+    predictionAccuracyEntries.length === 0
+      ? null
+      : {
+          totalSamples: predictionAccuracyEntries.length,
+          inRangeCount: predictionAccuracyEntries.filter((e) => e.verdict === 'in-range').length,
+          overCount: predictionAccuracyEntries.filter((e) => e.verdict === 'over').length,
+          underCount: predictionAccuracyEntries.filter((e) => e.verdict === 'under').length,
+          recent: [...predictionAccuracyEntries]
+            .sort((a, b) => b.completedAt.localeCompare(a.completedAt))
+            .slice(0, 5),
+        };
+
   return {
     stats: {
       totalAnalyses,
@@ -150,5 +205,6 @@ export async function aggregateDashboard(userId: string): Promise<DashboardSumma
     nicheDistribution,
     topPerformers,
     biggestMisses: missesAll,
+    predictionAccuracy,
   };
 }
