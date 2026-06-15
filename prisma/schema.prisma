@@ -21,6 +21,9 @@ model User {
   // ≥3 条 retro 后会被 retro median 自动覆盖。
   baselinePlays BigInt?
 
+  // Auto-sync (Sub-project D): 最近一次成功 cron tick 的时间戳
+  lastAutoSyncAt DateTime?
+
   aiConfigs       AIConfig[]
   imageGenConfigs ImageGenConfig[]
   accounts        PlatformAccount[]
