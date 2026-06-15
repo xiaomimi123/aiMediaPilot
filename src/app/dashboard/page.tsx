@@ -5,6 +5,8 @@ import { EmptyState } from '@/components/dashboard/empty-state';
 import { OverallScoreTrend } from '@/components/dashboard/overall-score-trend';
 import { CalibrationMatrix } from '@/components/dashboard/calibration-matrix';
 import { CalibrationLocked } from '@/components/dashboard/calibration-locked';
+import { PredictionAccuracy } from '@/components/dashboard/prediction-accuracy';
+import { PredictionAccuracyLocked } from '@/components/dashboard/prediction-accuracy-locked';
 import { NicheDistribution } from '@/components/dashboard/niche-distribution';
 import { TopPerformers } from '@/components/dashboard/top-performers';
 import { BiggestMisses } from '@/components/dashboard/biggest-misses';
@@ -57,6 +59,10 @@ export default function DashboardPage() {
       {data.calibration
         ? <CalibrationMatrix data={data.calibration} />
         : <CalibrationLocked sampleCount={data.stats.retroedCount} />}
+
+      {data.predictionAccuracy
+        ? <PredictionAccuracy data={data.predictionAccuracy} />
+        : <PredictionAccuracyLocked />}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <NicheDistribution rows={data.nicheDistribution} />
