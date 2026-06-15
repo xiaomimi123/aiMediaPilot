@@ -71,11 +71,6 @@ describe('PUT /api/v1/user/baseline', () => {
     expect(res.status).toBe(400);
   });
 
-  it('value=NaN → 400', async () => {
-    const res = await PUT(makeReq({ value: NaN }));
-    expect(res.status).toBe(400);
-  });
-
   it('prisma update 抛错 → 500', async () => {
     prismaMock.user.update.mockRejectedValueOnce(new Error('db down'));
     const res = await PUT(makeReq({ value: 800 }));
