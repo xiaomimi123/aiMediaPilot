@@ -62,6 +62,29 @@ export interface DashboardSummary {
   nicheDistribution: NicheRow[];
   topPerformers: TopPerformer[];
   biggestMisses: BiggestMiss[];
+  predictionAccuracy: PredictionAccuracySummary | null;
+}
+
+export type PredictionVerdict = 'in-range' | 'over' | 'under';
+
+export interface PredictionAccuracyEntry {
+  id: string;
+  videoFilename: string;
+  completedAt: string;
+  predicted: number;
+  lower: number;
+  upper: number;
+  actual: number;
+  verdict: PredictionVerdict;
+  deltaPct: number;
+}
+
+export interface PredictionAccuracySummary {
+  totalSamples: number;
+  inRangeCount: number;
+  overCount: number;
+  underCount: number;
+  recent: PredictionAccuracyEntry[];
 }
 
 /**
