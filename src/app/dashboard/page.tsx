@@ -1,5 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 import { StatsBar } from '@/components/dashboard/stats-bar';
 import { EmptyState } from '@/components/dashboard/empty-state';
 import { OverallScoreTrend } from '@/components/dashboard/overall-score-trend';
@@ -50,7 +52,12 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">数据总览</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">数据总览</h1>
+        <Link href="/content/retro-sync">
+          <Button size="sm" variant="outline">抖音同步 →</Button>
+        </Link>
+      </div>
 
       <StatsBar stats={data.stats} />
 
