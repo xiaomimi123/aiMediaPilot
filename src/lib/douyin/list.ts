@@ -45,6 +45,9 @@ export function parseListOutput(stdout: string): DouyinListItem[] {
     }));
 }
 
+/** Maximum ms to wait for review.py list to respond. */
+export const ADAPTER_TIMEOUT_MS = 60_000;
+
 export async function runDouyinListAdapter(): Promise<DouyinListItem[]> {
   const env = readAdapterEnv();
   const { stdout } = await execFileAsync(
@@ -53,7 +56,7 @@ export async function runDouyinListAdapter(): Promise<DouyinListItem[]> {
     {
       cwd: env.adapterPath,
       env: { ...process.env, PYTHONPATH: env.contentDir },
-      timeout: 60_000,
+      timeout: ADAPTER_TIMEOUT_MS,
     }
   );
   return parseListOutput(stdout);
