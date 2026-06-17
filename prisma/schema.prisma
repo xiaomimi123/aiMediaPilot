@@ -31,6 +31,19 @@ model User {
   schedules       PublishTask[]
   competitors     Competitor[]
   contentAnalyses ContentAnalysis[]
+  scriptDrafts    ScriptDraft[]
+}
+
+model ScriptDraft {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  topic     String
+  niche     String
+  output    Json
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 model AIConfig {
