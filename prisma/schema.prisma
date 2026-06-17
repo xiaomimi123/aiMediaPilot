@@ -469,6 +469,9 @@ model ContentAnalysis {
   // 进度 (SSE)
   progress Json?
 
+  // 发前 checklist (Sub-project J): 用户必须 review + 决策才能"可以发了"
+  publishChecklist Json?
+
   // 预处理产物
   framesDir       String?
   hookFramesDir   String? // 钩子专用 6 张帧 (0/0.5/1/1.5/2/2.5s)
