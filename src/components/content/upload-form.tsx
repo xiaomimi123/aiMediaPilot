@@ -1,6 +1,7 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -62,6 +63,16 @@ export function UploadForm({ needsBaselineOnboarding = false }: { needsBaselineO
 
   return (
     <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">
+        没准备稿子?{' '}
+        <Link
+          href="/content/script/new"
+          className="hover:text-primary underline-offset-2 hover:underline"
+        >
+          让 AI 帮你写 →
+        </Link>
+      </p>
+
       <Card>
         <CardContent className="space-y-4 pt-6">
           <div

@@ -54,9 +54,14 @@ export default function DashboardPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">数据总览</h1>
-        <Link href="/content/retro-sync">
-          <Button size="sm" variant="outline">抖音同步 →</Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/content/script/new">
+            <Button size="sm" variant="outline">✏️ 写脚本 →</Button>
+          </Link>
+          <Link href="/content/retro-sync">
+            <Button size="sm" variant="outline">抖音同步 →</Button>
+          </Link>
+        </div>
       </div>
 
       <StatsBar stats={data.stats} />
