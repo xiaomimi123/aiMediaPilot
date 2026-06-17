@@ -110,7 +110,7 @@ export async function aggregateDashboard(userId: string): Promise<DashboardSumma
         OR: [{ retroStatus: null }, { retroStatus: { in: ['SCHEDULED', 'FAILED'] } }],
       },
     }),
-    prisma.scriptDraft.count({ where: { userId } }),
+    prisma.scriptDraft.count({ where: { userId, analysisId: null } }),
   ]);
 
   // completedAt is always set when status='COMPLETED' (set by content-analyze-worker)
