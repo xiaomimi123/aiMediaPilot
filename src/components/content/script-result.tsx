@@ -31,7 +31,7 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-function UseScriptCard({ result, niche }: { result: ScriptGenerateResponse; niche: string }) {
+function UseScriptCard({ result, niche, draftId }: { result: ScriptGenerateResponse; niche: string; draftId: string }) {
   const router = useRouter();
   const [titleIdx, setTitleIdx] = useState(0);
   const [hookIdx, setHookIdx] = useState(0);
@@ -41,6 +41,7 @@ function UseScriptCard({ result, niche }: { result: ScriptGenerateResponse; nich
       title: result.titles[titleIdx].text,
       caption: result.hooks[hookIdx].text,
       niche,
+      fromScript: draftId,
     });
     router.push(`/content/preflight/new?${params.toString()}`);
   };
@@ -152,7 +153,7 @@ export function ScriptResult({ result, topic, niche, onRegenerate, readonly, dra
 
       {saveError && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{saveError}</div>}
 
-      {readonly && <UseScriptCard result={result} niche={niche} />}
+      {readonly && draftId && <UseScriptCard result={result} niche={niche} draftId={draftId} />}
 
       <Card>
         <CardContent className="space-y-3 pt-6">

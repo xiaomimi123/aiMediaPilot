@@ -93,6 +93,19 @@ export async function POST(req: NextRequest | Request) {
     },
   });
 
+  // K2: link incoming ScriptDraft (if upload form passed fromScript), 失败不阻断
+  const fromScript = (form.get('fromScript') as string | null)?.trim();
+  if (fromScript) {
+    try {
+      await prisma.scriptDraft.update({
+        where: { id: fromScript },
+        data: { analysisId: analysis.id },
+      });
+    } catch (err) {
+      console.error('[POST analyses] fromScript link failed', err);
+    }
+  }
+
   await analyzeQueue.add(
     'analyze',
     { analysisId: analysis.id },

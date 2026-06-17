@@ -68,6 +68,8 @@ export function UploadForm({ needsBaselineOnboarding = false }: { needsBaselineO
       if (baselineTrimmed && Number(baselineTrimmed) > 0) {
         fd.append('baselinePlays', baselineTrimmed);
       }
+      const fromScript = searchParams?.get('fromScript');
+      if (fromScript) fd.append('fromScript', fromScript);
 
       const res = await fetch('/api/v1/content/analyses', { method: 'POST', body: fd });
       const json = await res.json();
