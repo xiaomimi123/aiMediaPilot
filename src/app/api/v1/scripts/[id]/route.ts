@@ -11,6 +11,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     id: draft.id,
     topic: draft.topic,
     niche: draft.niche,
+    platform: draft.platform,
     output: draft.output,
     createdAt: draft.createdAt.toISOString(),
     analysisId: draft.analysisId,
