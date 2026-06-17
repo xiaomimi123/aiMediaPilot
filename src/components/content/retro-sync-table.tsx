@@ -171,7 +171,7 @@ export function RetroSyncTable({ unmatched }: { unmatched: UnmatchedAnalysis[] }
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
-        <Button onClick={handleRefresh} disabled={loading}>
+        <Button onClick={handleRefresh} disabled={loading} variant="brand">
           {loading ? '加载中...' : '🔄 刷新抖音列表'}
         </Button>
         {lastFetchAt && (

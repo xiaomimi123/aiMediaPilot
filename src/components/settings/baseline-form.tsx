@@ -108,7 +108,7 @@ export function BaselineForm({ initialValue, retroMedian, retroCount }: Props) {
       </div>
 
       <div className="flex gap-2">
-        <Button onClick={handleSave} disabled={saving || inputValue.trim() === ''}>
+        <Button onClick={handleSave} disabled={saving || inputValue.trim() === ''} variant="brand">
           {saving ? '保存中...' : '保存'}
         </Button>
         <Button variant="outline" onClick={handleClear} disabled={saving}>

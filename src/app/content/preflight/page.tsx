@@ -56,8 +56,11 @@ export default function PreflightListPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">内容预诊断</h1>
-        <Link href="/content/preflight/new"><Button>+ 新分析</Button></Link>
+        <div>
+          <h1 className="text-2xl font-semibold">内容预诊断</h1>
+          <p className="mt-1 text-sm text-muted-foreground">上传视频 → AI 4 维度评估 + L1 预测 + retro 复盘。</p>
+        </div>
+        <Link href="/content/preflight/new"><Button variant="brand">+ 新分析</Button></Link>
       </div>
       {rows.length === 0 && (
         <div className="rounded-lg border bg-muted/30 p-12 text-center">
