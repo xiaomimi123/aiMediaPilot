@@ -37,7 +37,8 @@ export function PredictionAccuracy({ data }: { data: PredictionAccuracySummary }
           <Stat emoji="⚠" label="偏低" count={data.underCount} cls="bg-blue-100 text-blue-900" />
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Desktop: 4-col table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-xs text-muted-foreground">
@@ -71,6 +72,29 @@ export function PredictionAccuracy({ data }: { data: PredictionAccuracySummary }
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile: stacked card per row */}
+        <div className="space-y-3 md:hidden">
+          {data.recent.map((row) => {
+            const badge = VERDICT_BADGE[row.verdict];
+            return (
+              <div key={row.id} className="rounded-md border p-3 text-sm">
+                <div className="flex items-start justify-between gap-2">
+                  <Link href={`/content/preflight/${row.id}`} className="flex-1 truncate font-medium hover:text-primary">
+                    {row.videoFilename}
+                  </Link>
+                  <span className={cn('rounded px-2 py-0.5 text-xs font-semibold whitespace-nowrap', badge.cls)}>
+                    {badge.label(row.deltaPct)}
+                  </span>
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                  <div>预: <span className="font-medium tabular-nums text-foreground">{formatPlays(row.lower)} - {formatPlays(row.upper)}</span></div>
+                  <div>实: <span className="font-medium tabular-nums text-foreground">{formatPlays(row.actual)}</span></div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </CardContent>
     </Card>
