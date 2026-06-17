@@ -98,6 +98,21 @@ export async function aggregateDashboard(userId: string): Promise<DashboardSumma
   `;
   const totalSpendUSD = spendRaw[0]?.total ?? 0;
 
+  // workflow queue: actionable counts shown at top of Dashboard
+  const [unpublishedAnalyses, awaitingRetro, savedScripts] = await Promise.all([
+    prisma.contentAnalysis.count({
+      where: { userId, status: 'COMPLETED', douyinAwemeId: null },
+    }),
+    prisma.contentAnalysis.count({
+      where: {
+        userId,
+        douyinAwemeId: { not: null },
+        OR: [{ retroStatus: null }, { retroStatus: { in: ['SCHEDULED', 'FAILED'] } }],
+      },
+    }),
+    prisma.scriptDraft.count({ where: { userId } }),
+  ]);
+
   // completedAt is always set when status='COMPLETED' (set by content-analyze-worker)
   const trend: TrendPoint[] = (trendRows as any[])
     .map((r: any) => ({
@@ -206,5 +221,10 @@ export async function aggregateDashboard(userId: string): Promise<DashboardSumma
     topPerformers,
     biggestMisses: missesAll,
     predictionAccuracy,
+    workflowQueue: {
+      unpublishedAnalyses,
+      awaitingRetro,
+      savedScripts,
+    },
   };
 }

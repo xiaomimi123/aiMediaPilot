@@ -63,6 +63,13 @@ export interface DashboardSummary {
   topPerformers: TopPerformer[];
   biggestMisses: BiggestMiss[];
   predictionAccuracy: PredictionAccuracySummary | null;
+  workflowQueue: WorkflowQueue;
+}
+
+export interface WorkflowQueue {
+  unpublishedAnalyses: number;
+  awaitingRetro: number;
+  savedScripts: number;
 }
 
 export type PredictionVerdict = 'in-range' | 'over' | 'under';

@@ -10,6 +10,9 @@ const prismaMock = vi.hoisted(() => ({
   actualMetric: {
     findMany: vi.fn(),
   },
+  scriptDraft: {
+    count: vi.fn(),
+  },
   $queryRaw: vi.fn(),
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
@@ -30,6 +33,7 @@ beforeEach(() => {
   prismaMock.contentAnalysis.findMany.mockResolvedValue([]);
   prismaMock.contentAnalysis.groupBy.mockResolvedValue([]);
   prismaMock.actualMetric.findMany.mockResolvedValue([]);
+  prismaMock.scriptDraft.count.mockResolvedValue(0);
   prismaMock.$queryRaw.mockResolvedValue([{ total: 0 }]);
 });
 
@@ -164,5 +168,32 @@ describe('aggregateDashboard', () => {
       ]);
     const result = await aggregateDashboard('user1');
     expect(result.predictionAccuracy).toBeNull();
+  });
+
+  it('workflowQueue 返回 3 counts (unpublishedAnalyses / awaitingRetro / savedScripts)', async () => {
+    // Counts 4, 5, 6 are workflow queries (after main 3 counts).
+    // mockResolvedValueOnce chain — fall through default 0 for first 3 main counts.
+    prismaMock.contentAnalysis.count
+      .mockResolvedValueOnce(0)  // totalAnalyses
+      .mockResolvedValueOnce(0)  // last7dCount
+      .mockResolvedValueOnce(0)  // retroedCount
+      .mockResolvedValueOnce(3)  // unpublishedAnalyses
+      .mockResolvedValueOnce(2); // awaitingRetro
+    prismaMock.scriptDraft.count.mockResolvedValueOnce(7);
+    const result = await aggregateDashboard('user1');
+    expect(result.workflowQueue).toEqual({
+      unpublishedAnalyses: 3,
+      awaitingRetro: 2,
+      savedScripts: 7,
+    });
+  });
+
+  it('workflowQueue 全 0 时 仍返回 0 三元', async () => {
+    const result = await aggregateDashboard('user1');
+    expect(result.workflowQueue).toEqual({
+      unpublishedAnalyses: 0,
+      awaitingRetro: 0,
+      savedScripts: 0,
+    });
   });
 });
