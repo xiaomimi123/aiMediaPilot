@@ -1,7 +1,6 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -12,20 +11,76 @@ import {
   type PublishChecklistState,
 } from '@/lib/checklist/types';
 
+interface TitleFeedback {
+  lengthVerdict: 'good' | 'short' | 'long';
+  hookTypes: string[];
+  suggestions: string[];
+  overallScore: number;
+}
+
 interface Props {
   analysisId: string;
+  niche: string;
   hookScore: number | null;
   topActionItems: string[];
   initial: PublishChecklistState | null;
 }
 
-export function PublishChecklist({ analysisId, hookScore, topActionItems, initial }: Props) {
+export function PublishChecklist({ analysisId, niche, hookScore, topActionItems, initial }: Props) {
   const [state, setState] = useState<PublishChecklistState>(initial ?? emptyChecklist());
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // M: title feedback state
+  const [titleFeedback, setTitleFeedback] = useState<TitleFeedback | null>(null);
+  const [titleFeedbackLoading, setTitleFeedbackLoading] = useState(false);
+  const [titleFeedbackError, setTitleFeedbackError] = useState<string | null>(null);
+  const titleAbortRef = useRef<AbortController | null>(null);
+
   const ready = isReady({ state, hookScore });
   const needsHook = needsHookRewrite(hookScore);
+
+  // M: debounced LLM critique of finalTitle (1.5s)
+  useEffect(() => {
+    const title = state.finalTitle.trim();
+    if (title.length < 3) {
+      setTitleFeedback(null);
+      setTitleFeedbackError(null);
+      return;
+    }
+    titleAbortRef.current?.abort();
+    const controller = new AbortController();
+    titleAbortRef.current = controller;
+    const timer = setTimeout(async () => {
+      setTitleFeedbackLoading(true);
+      setTitleFeedbackError(null);
+      try {
+        const res = await fetch('/api/v1/checklist/title-feedback', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ title, niche }),
+          signal: controller.signal,
+        });
+        const json = await res.json();
+        if (controller.signal.aborted) return;
+        if (!json.success) {
+          setTitleFeedbackError(json.message);
+          setTitleFeedback(null);
+        } else {
+          setTitleFeedback(json.data as TitleFeedback);
+        }
+      } catch (e) {
+        if (controller.signal.aborted) return;
+        setTitleFeedbackError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!controller.signal.aborted) setTitleFeedbackLoading(false);
+      }
+    }, 1500);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [state.finalTitle, niche]);
 
   // Auto-save (debounce 500ms)
   useEffect(() => {
@@ -107,6 +162,32 @@ export function PublishChecklist({ analysisId, hookScore, topActionItems, initia
             onChange={(e) => setState((s) => ({ ...s, finalTitle: e.target.value }))}
             placeholder="发抖音时实际用的标题"
           />
+          {titleFeedbackLoading && (
+            <p className="text-xs text-muted-foreground">🤖 AI 评估中...</p>
+          )}
+          {titleFeedbackError && (
+            <p className="text-xs text-destructive">评估失败: {titleFeedbackError}</p>
+          )}
+          {titleFeedback && !titleFeedbackLoading && (
+            <div className="mt-2 rounded-md border border-blue-200 bg-blue-50/50 p-3 text-xs space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className={cn('rounded px-2 py-0.5 font-semibold', titleFeedback.lengthVerdict === 'good' ? 'bg-green-100 text-green-900' : 'bg-amber-100 text-amber-900')}>
+                  {titleFeedback.lengthVerdict === 'good' ? '✓ 字数合适' : titleFeedback.lengthVerdict === 'short' ? '⚠ 太短' : '⚠ 太长'}
+                </span>
+                <span className="text-muted-foreground">综合 {titleFeedback.overallScore}/100</span>
+                {titleFeedback.hookTypes.length > 0 && (
+                  <span className="text-muted-foreground">钩子: {titleFeedback.hookTypes.join(' · ')}</span>
+                )}
+              </div>
+              {titleFeedback.suggestions.length > 0 && (
+                <ul className="ml-4 list-disc space-y-0.5 text-muted-foreground">
+                  {titleFeedback.suggestions.map((s, i) => (
+                    <li key={i}>{s}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="space-y-1">

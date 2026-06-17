@@ -105,6 +105,7 @@ export default function PreflightDetailPage() {
       {data.status === 'COMPLETED' && data.report && (
         <PublishChecklist
           analysisId={data.id}
+          niche={data.report.niche || 'ai-knowledge'}
           hookScore={data.report.hook?.score ?? null}
           topActionItems={(data.report.topActionItems ?? []) as string[]}
           initial={data.publishChecklist}
