@@ -12,6 +12,7 @@ import { PredictionAccuracyLocked } from '@/components/dashboard/prediction-accu
 import { NicheDistribution } from '@/components/dashboard/niche-distribution';
 import { TopPerformers } from '@/components/dashboard/top-performers';
 import { BiggestMisses } from '@/components/dashboard/biggest-misses';
+import { QuickCreate } from '@/components/dashboard/quick-create';
 import type { DashboardSummary } from '@/lib/dashboard/types';
 
 export default function DashboardPage() {
@@ -45,7 +46,12 @@ export default function DashboardPage() {
       <div className="space-y-4">
         <h1 className="text-2xl font-semibold">数据总览</h1>
         <StatsBar stats={data.stats} />
-        <EmptyState />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="md:col-span-2">
+            <EmptyState />
+          </div>
+          <QuickCreate />
+        </div>
       </div>
     );
   }
@@ -66,7 +72,12 @@ export default function DashboardPage() {
 
       <StatsBar stats={data.stats} />
 
-      <OverallScoreTrend trend={data.trend} />
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="md:col-span-2">
+          <OverallScoreTrend trend={data.trend} />
+        </div>
+        <QuickCreate />
+      </div>
 
       {data.calibration
         ? <CalibrationMatrix data={data.calibration} />
