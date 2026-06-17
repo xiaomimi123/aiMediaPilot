@@ -35,15 +35,20 @@ model User {
 }
 
 model ScriptDraft {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  topic     String
-  niche     String
-  output    Json
-  createdAt DateTime @default(now())
+  id         String           @id @default(cuid())
+  userId     String
+  user       User             @relation(fields: [userId], references: [id])
+  topic      String
+  niche      String
+  output     Json
+  createdAt  DateTime         @default(now())
+
+  // K2: 链到具体被用于哪条 analysis (NULL = 还没拍/还没分析)
+  analysisId String?
+  analysis   ContentAnalysis? @relation(fields: [analysisId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
+  @@index([analysisId])
 }
 
 model AIConfig {
@@ -501,6 +506,7 @@ model ContentAnalysis {
   retroCompletedAt  DateTime?
 
   actualMetrics ActualMetric[]
+  fromScripts   ScriptDraft[]
 
   @@index([userId, createdAt])
   @@index([status])
