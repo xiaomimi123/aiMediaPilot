@@ -38,7 +38,7 @@ export async function GET() {
     where: { userId: user.id },
     orderBy: { createdAt: 'desc' },
     take: 20,
-    select: { id: true, topic: true, niche: true, createdAt: true },
+    select: { id: true, topic: true, niche: true, createdAt: true, analysisId: true },
   });
   return ok({
     items: items.map((i) => ({ ...i, createdAt: i.createdAt.toISOString() })),

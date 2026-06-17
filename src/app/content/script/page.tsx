@@ -13,7 +13,7 @@ export default async function ScriptListPage() {
     where: { userId: user.id },
     orderBy: { createdAt: 'desc' },
     take: 20,
-    select: { id: true, topic: true, niche: true, createdAt: true },
+    select: { id: true, topic: true, niche: true, createdAt: true, analysisId: true },
   });
 
   return (
@@ -47,6 +47,7 @@ export default async function ScriptListPage() {
                 <tr className="border-b text-xs text-muted-foreground">
                   <th className="py-2 text-left">主题</th>
                   <th className="py-2 text-left">垂类</th>
+                  <th className="py-2 text-left">状态</th>
                   <th className="py-2 text-right">时间</th>
                 </tr>
               </thead>
@@ -60,6 +61,18 @@ export default async function ScriptListPage() {
                     </td>
                     <td className="py-2 text-xs text-muted-foreground">
                       {NICHE_LABEL_MAP.get(it.niche) ?? it.niche}
+                    </td>
+                    <td className="py-2 text-xs">
+                      {it.analysisId ? (
+                        <Link
+                          href={`/content/preflight/${it.analysisId}`}
+                          className="rounded bg-green-100 px-2 py-0.5 text-green-900 hover:bg-green-200"
+                        >
+                          ✓ 已用
+                        </Link>
+                      ) : (
+                        <span className="text-muted-foreground">草稿</span>
+                      )}
                     </td>
                     <td className="py-2 text-right text-xs text-muted-foreground tabular-nums">
                       {new Date(it.createdAt).toLocaleString()}

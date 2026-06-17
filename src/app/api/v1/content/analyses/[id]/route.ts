@@ -74,7 +74,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     llmUsage: a.llmUsage,
     coverCandidatesCount: covers.length,
     publishChecklist: a.publishChecklist,
-    fromScript: a.fromScripts[0] ?? null,
+    fromScript: a.fromScripts?.[0] ?? null,
     createdAt: a.createdAt,
     startedAt: a.startedAt,
     completedAt: a.completedAt,
