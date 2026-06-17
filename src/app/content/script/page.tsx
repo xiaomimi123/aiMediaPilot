@@ -7,13 +7,19 @@ import { KNOWN_NICHES } from '@/lib/llm/prompts/expert-persona';
 
 const NICHE_LABEL_MAP = new Map(KNOWN_NICHES.map((n) => [n.key, n.label]));
 
+const PLATFORM_BADGE: Record<string, { label: string; cls: string }> = {
+  douyin: { label: '🎬 抖音', cls: 'bg-blue-100 text-blue-900' },
+  xiaohongshu: { label: '📕 小红书', cls: 'bg-pink-100 text-pink-900' },
+  gongzhonghao: { label: '📰 公众号', cls: 'bg-amber-100 text-amber-900' },
+};
+
 export default async function ScriptListPage() {
   const user = await getOrCreateDefaultUser();
   const items = await prisma.scriptDraft.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: 'desc' },
     take: 20,
-    select: { id: true, topic: true, niche: true, createdAt: true, analysisId: true },
+    select: { id: true, topic: true, niche: true, platform: true, createdAt: true, analysisId: true },
   });
 
   return (
@@ -45,6 +51,7 @@ export default async function ScriptListPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-xs text-muted-foreground">
+                  <th className="py-2 text-left">平台</th>
                   <th className="py-2 text-left">主题</th>
                   <th className="py-2 text-left">垂类</th>
                   <th className="py-2 text-left">状态</th>
@@ -52,33 +59,41 @@ export default async function ScriptListPage() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((it) => (
-                  <tr key={it.id} className="border-b">
-                    <td className="py-2">
-                      <Link href={`/content/script/${it.id}`} className="hover:text-primary">
-                        {it.topic}
-                      </Link>
-                    </td>
-                    <td className="py-2 text-xs text-muted-foreground">
-                      {NICHE_LABEL_MAP.get(it.niche) ?? it.niche}
-                    </td>
-                    <td className="py-2 text-xs">
-                      {it.analysisId ? (
-                        <Link
-                          href={`/content/preflight/${it.analysisId}`}
-                          className="rounded bg-green-100 px-2 py-0.5 text-green-900 hover:bg-green-200"
-                        >
-                          ✓ 已用
+                {items.map((it) => {
+                  const badge = PLATFORM_BADGE[it.platform] ?? { label: it.platform, cls: 'bg-muted' };
+                  return (
+                    <tr key={it.id} className="border-b">
+                      <td className="py-2">
+                        <span className={`rounded px-2 py-0.5 text-xs ${badge.cls}`}>
+                          {badge.label}
+                        </span>
+                      </td>
+                      <td className="py-2">
+                        <Link href={`/content/script/${it.id}`} className="hover:text-primary">
+                          {it.topic}
                         </Link>
-                      ) : (
-                        <span className="text-muted-foreground">草稿</span>
-                      )}
-                    </td>
-                    <td className="py-2 text-right text-xs text-muted-foreground tabular-nums">
-                      {new Date(it.createdAt).toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="py-2 text-xs text-muted-foreground">
+                        {NICHE_LABEL_MAP.get(it.niche) ?? it.niche}
+                      </td>
+                      <td className="py-2 text-xs">
+                        {it.analysisId ? (
+                          <Link
+                            href={`/content/preflight/${it.analysisId}`}
+                            className="rounded bg-green-100 px-2 py-0.5 text-green-900 hover:bg-green-200"
+                          >
+                            ✓ 已用
+                          </Link>
+                        ) : (
+                          <span className="text-muted-foreground">草稿</span>
+                        )}
+                      </td>
+                      <td className="py-2 text-right text-xs text-muted-foreground tabular-nums">
+                        {new Date(it.createdAt).toLocaleString()}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </CardContent>
