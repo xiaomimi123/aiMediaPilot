@@ -6,6 +6,8 @@ import { ProgressStages } from '@/components/content/progress-stages';
 import { ReportView } from '@/components/content/report-view';
 import { RetroSection } from '@/components/content/retro-section';
 import { PredictionCard } from '@/components/content/prediction-card';
+import { PublishChecklist } from '@/components/content/publish-checklist';
+import type { PublishChecklistState } from '@/lib/checklist/types';
 
 type Analysis = {
   id: string;
@@ -18,6 +20,7 @@ type Analysis = {
   llmUsage: any | null;
   coverCandidatesCount: number;
   retryCount: number;
+  publishChecklist: PublishChecklistState | null;
   // v2
   douyinUrl: string | null;
   douyinAwemeId: string | null;
@@ -87,6 +90,15 @@ export default function PreflightDetailPage() {
           analysisId={data.id}
           report={data.report}
           coverCandidateCount={data.coverCandidatesCount}
+        />
+      )}
+
+      {data.status === 'COMPLETED' && data.report && (
+        <PublishChecklist
+          analysisId={data.id}
+          hookScore={data.report.hook?.score ?? null}
+          topActionItems={(data.report.topActionItems ?? []) as string[]}
+          initial={data.publishChecklist}
         />
       )}
 
