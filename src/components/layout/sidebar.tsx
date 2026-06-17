@@ -4,27 +4,21 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
-  Users,
   PenSquare,
   FileText,
-  Search,
-  Calendar,
   Settings,
-  Video,
+  Sparkles,
   X,
+  Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { APP_NAME } from '@/lib/constants';
 
 const NAV = [
   { href: '/dashboard', label: '总览', icon: LayoutDashboard },
-  { href: '/accounts', label: '账号', icon: Users },
-  { href: '/create', label: '创作', icon: PenSquare },
-  { href: '/content/preflight', label: '内容预诊断', icon: Video },
-  { href: '/contents', label: '内容', icon: FileText },
-  { href: '/competitors', label: '竞品', icon: Search },
-  { href: '/calendar', label: '日历', icon: Calendar },
-  { href: '/settings', label: '设置', icon: Settings },
+  { href: '/content/script', label: '创作', icon: PenSquare },
+  { href: '/content/preflight', label: '内容', icon: FileText },
+  { href: '/settings/baseline', label: '设置', icon: Settings },
 ];
 
 interface Props {
@@ -47,7 +41,7 @@ export function Sidebar({ open = false, onClose }: Props) {
 
       <aside
         className={cn(
-          'flex h-screen w-56 flex-col border-r bg-card',
+          'flex h-screen w-60 flex-col border-r bg-card',
           // Mobile: drawer over content; hidden by default
           'fixed inset-y-0 left-0 z-40 -translate-x-full transition-transform duration-200',
           open && 'translate-x-0',
@@ -55,8 +49,15 @@ export function Sidebar({ open = false, onClose }: Props) {
           'md:static md:translate-x-0',
         )}
       >
-        <div className="flex h-14 items-center justify-between border-b px-6 text-lg font-semibold">
-          <span>{APP_NAME}</span>
+        {/* Header / Logo */}
+        <div className="flex items-start gap-3 border-b px-5 py-5">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-gradient text-white shadow-sm">
+            <Sparkles className="h-5 w-5" />
+          </div>
+          <div className="flex flex-1 flex-col">
+            <div className="text-base font-semibold leading-tight">{APP_NAME}</div>
+            <div className="mt-1 text-xs text-muted-foreground">单用户 MVP</div>
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -66,6 +67,8 @@ export function Sidebar({ open = false, onClose }: Props) {
             <X className="h-4 w-4" />
           </button>
         </div>
+
+        {/* Nav */}
         <nav className="flex-1 space-y-1 p-3">
           {NAV.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname?.startsWith(href + '/');
@@ -75,18 +78,30 @@ export function Sidebar({ open = false, onClose }: Props) {
                 href={href}
                 onClick={onClose}
                 className={cn(
-                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all',
                   active
-                    ? 'bg-accent text-accent-foreground'
+                    ? 'bg-brand-gradient text-white shadow-sm'
                     : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                 )}
               >
-                <Icon className="h-4 w-4" />
+                <Icon className="h-4 w-4 shrink-0" />
                 {label}
               </Link>
             );
           })}
         </nav>
+
+        {/* Bottom CTA */}
+        <div className="border-t p-3">
+          <Link
+            href="/content/preflight/new"
+            onClick={onClose}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-gradient px-4 py-3 text-sm font-semibold text-white shadow-md transition-shadow hover:shadow-lg"
+          >
+            <Plus className="h-4 w-4" />
+            新分析
+          </Link>
+        </div>
       </aside>
     </>
   );
