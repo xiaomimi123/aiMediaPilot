@@ -1,7 +1,7 @@
 import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
-import { ScriptGenerateResponseSchema } from '@/lib/llm/prompts/script-generate';
+import { ScriptGenerateResponseSchema } from '@/lib/llm/prompts/script-generate-douyin';
 
 export async function POST(req: Request) {
   let body: { topic?: unknown; niche?: unknown; output?: unknown };

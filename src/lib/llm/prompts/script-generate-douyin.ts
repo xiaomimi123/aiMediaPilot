@@ -3,7 +3,7 @@ import { getExpertPersona } from './expert-persona';
 import { JSON_STRICTNESS } from './base';
 import type { ContentPart } from '@/lib/llm/vision';
 
-export const ScriptGenerateResponseSchema = z.object({
+export const DouyinScriptResponseSchema = z.object({
   hooks: z.array(
     z.object({
       text: z.string().min(5).max(100),
@@ -30,13 +30,13 @@ export const ScriptGenerateResponseSchema = z.object({
   }),
 });
 
-export type ScriptGenerateResponse = z.infer<typeof ScriptGenerateResponseSchema>;
+export type DouyinScriptResponse = z.infer<typeof DouyinScriptResponseSchema>;
 
-export const SCRIPT_GENERATE = {
+export const SCRIPT_GENERATE_DOUYIN = {
   buildSystemPrompt(niche: string): string {
     return `${getExpertPersona(niche)}
 
-任务: 用户给你一个视频主题 (topic), 你为这个待拍视频生成 4 个区块:
+任务: 用户给你一个视频主题 (topic), 你为这个待拍 抖音短视频 生成 4 个区块:
 
 1. hooks (3 个候选钩子, 0:00-0:03 开头用)
    - text: 实际口播文案 / 屏幕字幕, ≤ 30 字
@@ -66,5 +66,10 @@ ${JSON_STRICTNESS}`;
       },
     ];
   },
-  responseSchema: ScriptGenerateResponseSchema,
+  responseSchema: DouyinScriptResponseSchema,
 };
+
+// Legacy aliases for backwards compat — consumers will migrate over time
+export const ScriptGenerateResponseSchema = DouyinScriptResponseSchema;
+export type ScriptGenerateResponse = DouyinScriptResponse;
+export const SCRIPT_GENERATE = SCRIPT_GENERATE_DOUYIN;

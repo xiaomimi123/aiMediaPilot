@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { KNOWN_NICHES } from '@/lib/llm/prompts/expert-persona';
-import type { ScriptGenerateResponse } from '@/lib/llm/prompts/script-generate';
+import type { ScriptGenerateResponse } from '@/lib/llm/prompts/script-generate-douyin';
 import { ScriptResult } from './script-result';
 
 export function ScriptForm() {

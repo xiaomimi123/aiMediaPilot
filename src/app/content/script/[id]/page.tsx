@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { ScriptResult } from '@/components/content/script-result';
-import type { ScriptGenerateResponse } from '@/lib/llm/prompts/script-generate';
+import type { ScriptGenerateResponse } from '@/lib/llm/prompts/script-generate-douyin';
 
 export default async function ScriptDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;

@@ -1,6 +1,6 @@
 import { ok, fail } from '@/lib/api';
 import { DeepSeekTextLLM } from '@/lib/llm/deepseek';
-import { SCRIPT_GENERATE } from '@/lib/llm/prompts/script-generate';
+import { SCRIPT_GENERATE } from '@/lib/llm/prompts/script-generate-douyin';
 
 export async function POST(req: Request) {
   let body: { topic?: unknown; niche?: unknown };
