@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,10 +21,32 @@ export function UploadForm({ needsBaselineOnboarding = false }: { needsBaselineO
   const [error, setError] = useState<string | null>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
+  const searchParams = useSearchParams();
+
   useEffect(() => {
     const saved = localStorage.getItem('mediapilot:lastNiche');
     if (saved) setNiche(saved);
   }, []);
+
+  // Prefill from script-generate flow (?title=...&caption=...&niche=...)
+  useEffect(() => {
+    if (!searchParams) return;
+    const qpTitle = searchParams.get('title');
+    const qpCaption = searchParams.get('caption');
+    const qpNiche = searchParams.get('niche');
+    if (qpTitle && !title) setTitle(qpTitle);
+    if (qpCaption && !caption) setCaption(qpCaption);
+    if (qpNiche) {
+      const known = KNOWN_NICHES.find((n) => n.key === qpNiche);
+      if (known) {
+        setNiche(qpNiche);
+      } else {
+        setNiche('__custom');
+        setCustomNiche(qpNiche);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const effectiveNiche = niche === '__custom' ? customNiche.trim() : niche;
 

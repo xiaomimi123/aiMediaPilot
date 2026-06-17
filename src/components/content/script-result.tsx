@@ -31,6 +31,62 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+function UseScriptCard({ result, niche }: { result: ScriptGenerateResponse; niche: string }) {
+  const router = useRouter();
+  const [titleIdx, setTitleIdx] = useState(0);
+  const [hookIdx, setHookIdx] = useState(0);
+
+  const handleGo = () => {
+    const params = new URLSearchParams({
+      title: result.titles[titleIdx].text,
+      caption: result.hooks[hookIdx].text,
+      niche,
+    });
+    router.push(`/content/preflight/new?${params.toString()}`);
+  };
+
+  return (
+    <Card className="border-amber-300 bg-amber-50/40">
+      <CardContent className="space-y-3 pt-6">
+        <h3 className="font-semibold">✏️ 用此脚本开新分析</h3>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">标题</label>
+            <select
+              value={titleIdx}
+              onChange={(e) => setTitleIdx(Number(e.target.value))}
+              className="w-full rounded border border-border bg-background p-2 text-sm"
+            >
+              {result.titles.map((t, i) => (
+                <option key={i} value={i}>
+                  {i + 1}. {t.text}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">钩子作为开场</label>
+            <select
+              value={hookIdx}
+              onChange={(e) => setHookIdx(Number(e.target.value))}
+              className="w-full rounded border border-border bg-background p-2 text-sm"
+            >
+              {result.hooks.map((h, i) => (
+                <option key={i} value={i}>
+                  {i + 1}. {h.text}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <Button onClick={handleGo} size="sm">
+          开新分析 →
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 function pad(n: number) {
   return n.toString().padStart(2, '0');
 }
@@ -95,6 +151,8 @@ export function ScriptResult({ result, topic, niche, onRegenerate, readonly, dra
       </div>
 
       {saveError && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{saveError}</div>}
+
+      {readonly && <UseScriptCard result={result} niche={niche} />}
 
       <Card>
         <CardContent className="space-y-3 pt-6">
