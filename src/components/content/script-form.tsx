@@ -91,7 +91,7 @@ export function ScriptForm() {
 
       {error && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
 
-      <Button onClick={handleGenerate} disabled={loading || topic.trim().length < 3} size="lg">
+      <Button onClick={handleGenerate} disabled={loading || topic.trim().length < 3} size="lg" variant="brand">
         {loading ? '生成中... (~10s)' : '生成脚本 →'}
       </Button>
 

@@ -203,7 +203,7 @@ export function UploadForm({ needsBaselineOnboarding = false }: { needsBaselineO
       {error && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
 
       <div className="flex justify-end">
-        <Button onClick={handleSubmit} disabled={submitting || !videoFile}>
+        <Button onClick={handleSubmit} disabled={submitting || !videoFile} variant="brand" size="lg">
           {submitting ? '上传中...' : '开始分析 →'}
         </Button>
       </div>

@@ -132,7 +132,7 @@ export function ScriptResult({ result, topic, niche, onRegenerate, readonly, dra
         <div className="flex gap-2">
           {!readonly && (
             <>
-              <Button onClick={handleSave} disabled={saving} size="sm">
+              <Button onClick={handleSave} disabled={saving} size="sm" variant="brand">
                 {saving ? '保存中...' : '💾 保存'}
               </Button>
               {onRegenerate && (

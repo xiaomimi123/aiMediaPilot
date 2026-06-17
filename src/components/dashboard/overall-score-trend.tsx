@@ -48,7 +48,7 @@ export function OverallScoreTrend({ trend }: { trend: TrendPoint[] }) {
                   type="monotone"
                   dataKey="overallScore"
                   name="预判 overallScore"
-                  stroke="#6366f1"
+                  stroke="#3b82f6"
                   strokeWidth={2}
                   dot={{ r: 4 }}
                   connectNulls
@@ -57,7 +57,7 @@ export function OverallScoreTrend({ trend }: { trend: TrendPoint[] }) {
                   type="monotone"
                   dataKey="inferredActualScore"
                   name="实测推算"
-                  stroke="#10b981"
+                  stroke="#a855f7"
                   strokeWidth={2}
                   strokeDasharray="5 5"
                   dot={{ r: 4 }}
