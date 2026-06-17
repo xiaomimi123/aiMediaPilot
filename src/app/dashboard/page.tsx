@@ -13,6 +13,7 @@ import { NicheDistribution } from '@/components/dashboard/niche-distribution';
 import { TopPerformers } from '@/components/dashboard/top-performers';
 import { BiggestMisses } from '@/components/dashboard/biggest-misses';
 import { QuickCreate } from '@/components/dashboard/quick-create';
+import { NextSteps } from '@/components/dashboard/next-steps';
 import type { DashboardSummary } from '@/lib/dashboard/types';
 
 export default function DashboardPage() {
@@ -69,6 +70,8 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      <NextSteps data={data.workflowQueue} />
 
       <StatsBar stats={data.stats} />
 
