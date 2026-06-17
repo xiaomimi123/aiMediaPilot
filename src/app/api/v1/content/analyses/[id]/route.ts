@@ -30,6 +30,10 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       llmUsage: true,
       coverCandidates: true,
       publishChecklist: true,
+      fromScripts: {
+        select: { id: true, topic: true },
+        take: 1,
+      },
       createdAt: true,
       startedAt: true,
       completedAt: true,
@@ -70,6 +74,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     llmUsage: a.llmUsage,
     coverCandidatesCount: covers.length,
     publishChecklist: a.publishChecklist,
+    fromScript: a.fromScripts[0] ?? null,
     createdAt: a.createdAt,
     startedAt: a.startedAt,
     completedAt: a.completedAt,

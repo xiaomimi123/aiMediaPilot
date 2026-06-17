@@ -21,6 +21,7 @@ type Analysis = {
   coverCandidatesCount: number;
   retryCount: number;
   publishChecklist: PublishChecklistState | null;
+  fromScript: { id: string; topic: string } | null;
   // v2
   douyinUrl: string | null;
   douyinAwemeId: string | null;
@@ -77,6 +78,14 @@ export default function PreflightDetailPage() {
           {cost !== undefined ? ` · 烧 $${cost.toFixed(3)}` : ''}
           {data.retryCount > 0 ? ` · 已重试 ${data.retryCount} 次` : ''}
         </p>
+        {data.fromScript && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            📜 来自脚本:{' '}
+            <a href={`/content/script/${data.fromScript.id}`} className="hover:text-primary underline-offset-2 hover:underline">
+              {data.fromScript.topic}
+            </a>
+          </p>
+        )}
       </div>
 
       <ProgressStages status={data.status} progress={data.progress} errorMessage={data.errorMessage} />
