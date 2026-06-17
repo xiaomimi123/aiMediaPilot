@@ -20,6 +20,79 @@ interface UnmatchedAnalysis {
   createdAt: string;
 }
 
+type RowStateValue = {
+  selectedAnalysisId: string;
+  status: 'idle' | 'matching' | 'done' | 'error';
+  error?: string;
+};
+
+type RowStateSetter = (
+  updater: (s: Record<string, RowStateValue>) => Record<string, RowStateValue>,
+) => void;
+
+function renderMatchCell(
+  awemeId: string,
+  state: RowStateValue,
+  unmatched: UnmatchedAnalysis[],
+  setRowState: RowStateSetter,
+  handleMatch: (awemeId: string, item: DouyinListItem) => void,
+  item: DouyinListItem,
+) {
+  if (state.status === 'done') {
+    return (
+      <Link
+        href={`/content/preflight/${state.selectedAnalysisId}`}
+        className="text-xs text-green-700 hover:underline"
+      >
+        ✓ 已匹配并复盘中 →
+      </Link>
+    );
+  }
+  if (unmatched.length === 0) {
+    return <span className="text-xs text-muted-foreground">无未匹配分析</span>;
+  }
+  return (
+    <div className="space-y-1">
+      <select
+        value={state.selectedAnalysisId}
+        onChange={(e) =>
+          setRowState((s) => ({
+            ...s,
+            [awemeId]: { ...state, selectedAnalysisId: e.target.value },
+          }))
+        }
+        className="w-full rounded border border-border bg-background p-1 text-xs"
+        disabled={state.status === 'matching'}
+      >
+        {unmatched.map((a) => (
+          <option key={a.id} value={a.id}>
+            {a.videoFilename}
+            {a.draftTitle ? ` · ${a.draftTitle.slice(0, 20)}` : ''}
+          </option>
+        ))}
+      </select>
+      <Button
+        size="sm"
+        onClick={() => handleMatch(awemeId, item)}
+        disabled={state.status === 'matching'}
+        className="w-full"
+      >
+        {state.status === 'matching' ? '匹配中...' : '匹配并复盘 →'}
+      </Button>
+      {state.error && (
+        <p
+          className={cn(
+            'text-xs',
+            state.error.includes('已') ? 'text-amber-700' : 'text-destructive',
+          )}
+        >
+          {state.error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function RetroSyncTable({ unmatched }: { unmatched: UnmatchedAnalysis[] }) {
   const router = useRouter();
   const [items, setItems] = useState<DouyinListItem[] | null>(null);
@@ -121,86 +194,67 @@ export function RetroSyncTable({ unmatched }: { unmatched: UnmatchedAnalysis[] }
       {items?.length === 0 && <p className="text-sm text-muted-foreground">无最近视频。</p>}
 
       {items && items.length > 0 && (
-        <Card>
-          <CardContent className="pt-6">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-xs text-muted-foreground">
-                  <th className="py-2 text-left">aweme</th>
-                  <th className="py-2 text-left">发布</th>
-                  <th className="py-2 text-right">播放</th>
-                  <th className="py-2 text-left">描述</th>
-                  <th className="py-2 text-left">匹配</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item) => {
-                  const state =
-                    rowState[item.awemeId] ?? { selectedAnalysisId: unmatched[0]?.id ?? '', status: 'idle' };
-                  return (
-                    <tr key={item.awemeId} className="border-b align-top">
-                      <td className="py-2 font-mono text-xs">{item.awemeId.slice(0, 10)}...</td>
-                      <td className="py-2 text-xs">{item.postedAt}</td>
-                      <td className="py-2 text-right tabular-nums">{item.plays}</td>
-                      <td className="py-2 max-w-xs truncate">{item.desc || '—'}</td>
-                      <td className="py-2 space-y-1">
-                        {state.status === 'done' ? (
-                          <Link
-                            href={`/content/preflight/${state.selectedAnalysisId}`}
-                            className="text-xs text-green-700 hover:underline"
-                          >
-                            ✓ 已匹配并复盘中 →
-                          </Link>
-                        ) : unmatched.length === 0 ? (
-                          <span className="text-xs text-muted-foreground">无未匹配分析</span>
-                        ) : (
-                          <>
-                            <select
-                              value={state.selectedAnalysisId}
-                              onChange={(e) =>
-                                setRowState((s) => ({
-                                  ...s,
-                                  [item.awemeId]: { ...state, selectedAnalysisId: e.target.value },
-                                }))
-                              }
-                              className="w-full rounded border border-border bg-background p-1 text-xs"
-                              disabled={state.status === 'matching'}
-                            >
-                              {unmatched.map((a) => (
-                                <option key={a.id} value={a.id}>
-                                  {a.videoFilename}
-                                  {a.draftTitle ? ` · ${a.draftTitle.slice(0, 20)}` : ''}
-                                </option>
-                              ))}
-                            </select>
-                            <Button
-                              size="sm"
-                              onClick={() => handleMatch(item.awemeId, item)}
-                              disabled={state.status === 'matching'}
-                              className="w-full"
-                            >
-                              {state.status === 'matching' ? '匹配中...' : '匹配并复盘 →'}
-                            </Button>
-                            {state.error && (
-                              <p
-                                className={cn(
-                                  'text-xs',
-                                  state.error.includes('已') ? 'text-amber-700' : 'text-destructive',
-                                )}
-                              >
-                                {state.error}
-                              </p>
-                            )}
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
+        <>
+          {/* Desktop: 5-col table */}
+          <Card className="hidden md:block">
+            <CardContent className="pt-6">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-xs text-muted-foreground">
+                    <th className="py-2 text-left">aweme</th>
+                    <th className="py-2 text-left">发布</th>
+                    <th className="py-2 text-right">播放</th>
+                    <th className="py-2 text-left">描述</th>
+                    <th className="py-2 text-left">匹配</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => {
+                    const state =
+                      rowState[item.awemeId] ?? { selectedAnalysisId: unmatched[0]?.id ?? '', status: 'idle' };
+                    return (
+                      <tr key={item.awemeId} className="border-b align-top">
+                        <td className="py-2 font-mono text-xs">{item.awemeId.slice(0, 10)}...</td>
+                        <td className="py-2 text-xs">{item.postedAt}</td>
+                        <td className="py-2 text-right tabular-nums">{item.plays}</td>
+                        <td className="py-2 max-w-xs truncate">{item.desc || '—'}</td>
+                        <td className="py-2 space-y-1">
+                          {renderMatchCell(item.awemeId, state, unmatched, setRowState, handleMatch, item)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+
+          {/* Mobile: stacked card per aweme */}
+          <div className="space-y-3 md:hidden">
+            {items.map((item) => {
+              const state =
+                rowState[item.awemeId] ?? { selectedAnalysisId: unmatched[0]?.id ?? '', status: 'idle' };
+              return (
+                <Card key={item.awemeId}>
+                  <CardContent className="space-y-3 pt-4 text-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{item.desc || '—'}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          <span className="font-mono">{item.awemeId.slice(0, 10)}...</span> · {item.postedAt}
+                        </p>
+                      </div>
+                      <span className="rounded bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums whitespace-nowrap">
+                        {item.plays}
+                      </span>
+                    </div>
+                    {renderMatchCell(item.awemeId, state, unmatched, setRowState, handleMatch, item)}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );
