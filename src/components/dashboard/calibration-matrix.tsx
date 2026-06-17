@@ -29,7 +29,8 @@ export function CalibrationMatrix({ data }: { data: CalibrationData }) {
           <div className="text-xs text-muted-foreground">基于 {data.sampleCount} 条复盘</div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Desktop: 5-col table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-xs text-muted-foreground">
@@ -63,6 +64,36 @@ export function CalibrationMatrix({ data }: { data: CalibrationData }) {
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile: stacked cards per dim */}
+        <div className="space-y-3 md:hidden">
+          {DIM_LABELS.map(({ key, label, emoji }) => {
+            const dist = data.matrix[key];
+            return (
+              <div key={key} className="rounded-md border p-3">
+                <div className="font-medium">{emoji} {label}</div>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                  <div className={cn('rounded p-2', cellClass('on-target', dist.worstBucket === 'on-target'))}>
+                    <div className="text-xs">✓ on-target</div>
+                    <div className="font-semibold tabular-nums">{pct(dist.onTarget, dist.total)} ({dist.onTarget})</div>
+                  </div>
+                  <div className={cn('rounded p-2', cellClass('over-estimated', dist.worstBucket === 'over-estimated'))}>
+                    <div className="text-xs">⚠ over</div>
+                    <div className="font-semibold tabular-nums">{pct(dist.overEstimated, dist.total)} ({dist.overEstimated})</div>
+                  </div>
+                  <div className={cn('rounded p-2', cellClass('under-estimated', dist.worstBucket === 'under-estimated'))}>
+                    <div className="text-xs">⚠ under</div>
+                    <div className="font-semibold tabular-nums">{pct(dist.underEstimated, dist.total)} ({dist.underEstimated})</div>
+                  </div>
+                  <div className={cn('rounded p-2', cellClass('unknown', dist.worstBucket === 'unknown'))}>
+                    <div className="text-xs">? unknown</div>
+                    <div className="font-semibold tabular-nums">{pct(dist.unknown, dist.total)} ({dist.unknown})</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-900">
