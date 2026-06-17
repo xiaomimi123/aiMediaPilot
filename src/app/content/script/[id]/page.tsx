@@ -2,8 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { getOrCreateDefaultUser } from '@/lib/user';
-import { ScriptResult } from '@/components/content/script-result';
-import type { ScriptGenerateResponse } from '@/lib/llm/prompts/script-generate-douyin';
+import { ScriptResult, type Platform } from '@/components/content/script-result';
 
 export default async function ScriptDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
@@ -22,7 +21,8 @@ export default async function ScriptDetailPage(props: { params: Promise<{ id: st
         </div>
       )}
       <ScriptResult
-        result={draft.output as unknown as ScriptGenerateResponse}
+        platform={(draft.platform as Platform) ?? 'douyin'}
+        result={draft.output as unknown as Record<string, unknown>}
         topic={draft.topic}
         niche={draft.niche}
         readonly

@@ -3,16 +3,27 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import type { ScriptGenerateResponse } from '@/lib/llm/prompts/script-generate-douyin';
+import type { DouyinScriptResponse } from '@/lib/llm/prompts/script-generate-douyin';
+import type { XHSScriptResponse } from '@/lib/llm/prompts/script-generate-xiaohongshu';
+import type { ArticleScriptResponse } from '@/lib/llm/prompts/script-generate-gongzhonghao';
+
+export type Platform = 'douyin' | 'xiaohongshu' | 'gongzhonghao';
 
 interface Props {
-  result: ScriptGenerateResponse;
+  platform: Platform;
+  result: Record<string, unknown>;
   topic: string;
   niche: string;
   onRegenerate?: () => void;
   readonly?: boolean;
   draftId?: string;
 }
+
+const PLATFORM_LABEL: Record<Platform, string> = {
+  douyin: '🎬 抖音脚本',
+  xiaohongshu: '📕 小红书笔记',
+  gongzhonghao: '📰 公众号文章',
+};
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -31,7 +42,11 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-function UseScriptCard({ result, niche, draftId }: { result: ScriptGenerateResponse; niche: string; draftId: string }) {
+function pad(n: number) {
+  return n.toString().padStart(2, '0');
+}
+
+function UseScriptCard({ result, niche, draftId }: { result: DouyinScriptResponse; niche: string; draftId: string }) {
   const router = useRouter();
   const [titleIdx, setTitleIdx] = useState(0);
   const [hookIdx, setHookIdx] = useState(0);
@@ -88,11 +103,252 @@ function UseScriptCard({ result, niche, draftId }: { result: ScriptGenerateRespo
   );
 }
 
-function pad(n: number) {
-  return n.toString().padStart(2, '0');
+function DouyinView({ data }: { data: DouyinScriptResponse }) {
+  return (
+    <>
+      <Card>
+        <CardContent className="space-y-3 pt-6">
+          <h3 className="font-semibold">🪝 钩子 (0:00-0:03)</h3>
+          <ol className="space-y-3 text-sm">
+            {data.hooks.map((h, i) => (
+              <li key={i} className="border-b pb-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <p className="font-medium">
+                      {i + 1}. &ldquo;{h.text}&rdquo;
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">理由: {h.rationale}</p>
+                  </div>
+                  <CopyButton text={h.text} />
+                </div>
+              </li>
+            ))}
+          </ol>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-2 pt-6">
+          <h3 className="font-semibold">⏱ 完播节奏</h3>
+          <table className="w-full text-sm">
+            <tbody>
+              {data.retentionBeats.map((b, i) => (
+                <tr key={i} className="border-b">
+                  <td className="py-2 font-mono text-xs text-muted-foreground">
+                    {pad(Math.floor(b.startSec / 60))}:{pad(b.startSec % 60)}-{pad(Math.floor(b.endSec / 60))}:{pad(b.endSec % 60)}
+                  </td>
+                  <td className="py-2">{b.beat}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-3 pt-6">
+          <h3 className="font-semibold">📝 标题候选</h3>
+          <ol className="space-y-3 text-sm">
+            {data.titles.map((t, i) => (
+              <li key={i} className="border-b pb-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <p className="font-medium">
+                      {i + 1}. {t.text}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">类型: {t.hookType}</p>
+                  </div>
+                  <CopyButton text={t.text} />
+                </div>
+              </li>
+            ))}
+          </ol>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-2 pt-6">
+          <h3 className="font-semibold">🖼 封面建议</h3>
+          <p className="text-sm">
+            <span className="text-muted-foreground">文字: </span>
+            <b>{data.cover.textOverlay}</b>
+          </p>
+          <p className="text-sm">
+            <span className="text-muted-foreground">镜头: </span>
+            {data.cover.shotIdea}
+          </p>
+          <p className="text-sm">
+            <span className="text-muted-foreground">色调: </span>
+            {data.cover.colorTone}
+          </p>
+        </CardContent>
+      </Card>
+    </>
+  );
 }
 
-export function ScriptResult({ result, topic, niche, onRegenerate, readonly, draftId }: Props) {
+function XHSView({ data }: { data: XHSScriptResponse }) {
+  return (
+    <>
+      <Card>
+        <CardContent className="space-y-3 pt-6">
+          <h3 className="font-semibold">📝 标题候选</h3>
+          <ol className="space-y-3 text-sm">
+            {data.titles.map((t, i) => (
+              <li key={i} className="border-b pb-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <p className="font-medium">
+                      {i + 1}. {t.text}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">类型: {t.hookType}</p>
+                  </div>
+                  <CopyButton text={t.text} />
+                </div>
+              </li>
+            ))}
+          </ol>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-2 pt-6">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="font-semibold">🖼 封面大字</h3>
+            <CopyButton text={data.coverText} />
+          </div>
+          <p className="text-2xl font-bold tracking-tight">{data.coverText}</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-2 pt-6">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="font-semibold">✨ 笔记开头钩子</h3>
+            <CopyButton text={data.intro} />
+          </div>
+          <p className="text-sm whitespace-pre-wrap">{data.intro}</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-2 pt-6">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="font-semibold">📄 正文</h3>
+            <CopyButton text={data.body} />
+          </div>
+          <pre className="whitespace-pre-wrap text-sm font-sans leading-relaxed">{data.body}</pre>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-2 pt-6">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="font-semibold">🏷 标签</h3>
+            <CopyButton text={data.tags.map((t) => `#${t}`).join(' ')} />
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {data.tags.map((tag, i) => (
+              <span key={i} className="rounded bg-pink-100 px-2 py-1 text-xs text-pink-900">
+                #{tag}
+              </span>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-2 pt-6">
+          <h3 className="font-semibold">🎞 配图建议</h3>
+          <ol className="space-y-2 text-sm">
+            {data.shotIdeas.map((s) => (
+              <li key={s.idx} className="flex items-start gap-2 border-b pb-2">
+                <span className="font-mono text-xs text-muted-foreground">图 {s.idx}</span>
+                <span className="flex-1">{s.description}</span>
+              </li>
+            ))}
+          </ol>
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
+function GongzhonghaoView({ data }: { data: ArticleScriptResponse }) {
+  return (
+    <>
+      <Card>
+        <CardContent className="space-y-3 pt-6">
+          <h3 className="font-semibold">📝 标题候选</h3>
+          <ol className="space-y-3 text-sm">
+            {data.titles.map((t, i) => (
+              <li key={i} className="border-b pb-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <p className="font-medium">
+                      {i + 1}. {t.text}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">类型: {t.hookType}</p>
+                  </div>
+                  <CopyButton text={t.text} />
+                </div>
+              </li>
+            ))}
+          </ol>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-2 pt-6">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="font-semibold">📄 摘要</h3>
+            <CopyButton text={data.abstract} />
+          </div>
+          <p className="text-sm">{data.abstract}</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-2 pt-6">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="font-semibold">🗂 大纲</h3>
+            <CopyButton text={data.outline.map((o, i) => `${i + 1}. ${o}`).join('\n')} />
+          </div>
+          <ol className="space-y-1 text-sm">
+            {data.outline.map((o, i) => (
+              <li key={i} className="border-b pb-1">
+                <span className="font-mono text-xs text-muted-foreground">h2 #{i + 1}</span>{' '}
+                {o}
+              </li>
+            ))}
+          </ol>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-2 pt-6">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="font-semibold">📑 正文初稿</h3>
+            <CopyButton text={data.body} />
+          </div>
+          <pre className="whitespace-pre-wrap text-sm font-sans leading-relaxed">{data.body}</pre>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-2 pt-6">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="font-semibold">💬 文末互动</h3>
+            <CopyButton text={data.cta} />
+          </div>
+          <p className="text-sm whitespace-pre-wrap">{data.cta}</p>
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
+export function ScriptResult({ platform, result, topic, niche, onRegenerate, readonly, draftId }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -104,7 +360,7 @@ export function ScriptResult({ result, topic, niche, onRegenerate, readonly, dra
       const res = await fetch('/api/v1/scripts', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ topic, niche, output: result }),
+        body: JSON.stringify({ topic, niche, platform, output: result }),
       });
       const json = await res.json();
       if (!json.success) {
@@ -129,7 +385,9 @@ export function ScriptResult({ result, topic, niche, onRegenerate, readonly, dra
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">✏️ 脚本: {topic}</h2>
+        <h2 className="text-lg font-semibold">
+          {PLATFORM_LABEL[platform]}: {topic}
+        </h2>
         <div className="flex gap-2">
           {!readonly && (
             <>
@@ -153,83 +411,14 @@ export function ScriptResult({ result, topic, niche, onRegenerate, readonly, dra
 
       {saveError && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{saveError}</div>}
 
-      {readonly && draftId && <UseScriptCard result={result} niche={niche} draftId={draftId} />}
+      {/* "用此脚本开新分析" — 抖音 only (其它平台没有视频分析闭环) */}
+      {readonly && draftId && platform === 'douyin' && (
+        <UseScriptCard result={result as unknown as DouyinScriptResponse} niche={niche} draftId={draftId} />
+      )}
 
-      <Card>
-        <CardContent className="space-y-3 pt-6">
-          <h3 className="font-semibold">🪝 钩子 (0:00-0:03)</h3>
-          <ol className="space-y-3 text-sm">
-            {result.hooks.map((h, i) => (
-              <li key={i} className="border-b pb-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1">
-                    <p className="font-medium">{i + 1}. &ldquo;{h.text}&rdquo;</p>
-                    <p className="mt-1 text-xs text-muted-foreground">理由: {h.rationale}</p>
-                  </div>
-                  <CopyButton text={h.text} />
-                </div>
-              </li>
-            ))}
-          </ol>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="space-y-2 pt-6">
-          <h3 className="font-semibold">⏱ 完播节奏</h3>
-          <table className="w-full text-sm">
-            <tbody>
-              {result.retentionBeats.map((b, i) => (
-                <tr key={i} className="border-b">
-                  <td className="py-2 font-mono text-xs text-muted-foreground">
-                    {pad(Math.floor(b.startSec / 60))}:{pad(b.startSec % 60)}-{pad(Math.floor(b.endSec / 60))}:{pad(b.endSec % 60)}
-                  </td>
-                  <td className="py-2">{b.beat}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="space-y-3 pt-6">
-          <h3 className="font-semibold">📝 标题候选</h3>
-          <ol className="space-y-3 text-sm">
-            {result.titles.map((t, i) => (
-              <li key={i} className="border-b pb-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1">
-                    <p className="font-medium">
-                      {i + 1}. {t.text}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">类型: {t.hookType}</p>
-                  </div>
-                  <CopyButton text={t.text} />
-                </div>
-              </li>
-            ))}
-          </ol>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="space-y-2 pt-6">
-          <h3 className="font-semibold">🖼 封面建议</h3>
-          <p className="text-sm">
-            <span className="text-muted-foreground">文字: </span>
-            <b>{result.cover.textOverlay}</b>
-          </p>
-          <p className="text-sm">
-            <span className="text-muted-foreground">镜头: </span>
-            {result.cover.shotIdea}
-          </p>
-          <p className="text-sm">
-            <span className="text-muted-foreground">色调: </span>
-            {result.cover.colorTone}
-          </p>
-        </CardContent>
-      </Card>
+      {platform === 'douyin' && <DouyinView data={result as unknown as DouyinScriptResponse} />}
+      {platform === 'xiaohongshu' && <XHSView data={result as unknown as XHSScriptResponse} />}
+      {platform === 'gongzhonghao' && <GongzhonghaoView data={result as unknown as ArticleScriptResponse} />}
     </div>
   );
 }
