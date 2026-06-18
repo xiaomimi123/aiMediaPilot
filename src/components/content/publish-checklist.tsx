@@ -21,12 +21,13 @@ interface TitleFeedback {
 interface Props {
   analysisId: string;
   niche: string;
+  platform?: 'douyin' | 'xiaohongshu' | 'gongzhonghao';
   hookScore: number | null;
   topActionItems: string[];
   initial: PublishChecklistState | null;
 }
 
-export function PublishChecklist({ analysisId, niche, hookScore, topActionItems, initial }: Props) {
+export function PublishChecklist({ analysisId, niche, platform = 'douyin', hookScore, topActionItems, initial }: Props) {
   const [state, setState] = useState<PublishChecklistState>(initial ?? emptyChecklist());
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -58,7 +59,7 @@ export function PublishChecklist({ analysisId, niche, hookScore, topActionItems,
         const res = await fetch('/api/v1/checklist/title-feedback', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ title, niche }),
+          body: JSON.stringify({ title, niche, platform }),
           signal: controller.signal,
         });
         const json = await res.json();
@@ -80,7 +81,7 @@ export function PublishChecklist({ analysisId, niche, hookScore, topActionItems,
       clearTimeout(timer);
       controller.abort();
     };
-  }, [state.finalTitle, niche]);
+  }, [state.finalTitle, niche, platform]);
 
   // Auto-save (debounce 500ms)
   useEffect(() => {
