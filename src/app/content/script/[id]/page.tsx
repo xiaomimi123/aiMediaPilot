@@ -27,6 +27,7 @@ export default async function ScriptDetailPage(props: { params: Promise<{ id: st
         niche={draft.niche}
         readonly
         draftId={draft.id}
+        initialPicked={draft.picked as never}
       />
     </div>
   );

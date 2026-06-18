@@ -6,6 +6,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import type { DouyinScriptResponse } from '@/lib/llm/prompts/script-generate-douyin';
 import type { XHSScriptResponse } from '@/lib/llm/prompts/script-generate-xiaohongshu';
 import type { ArticleScriptResponse } from '@/lib/llm/prompts/script-generate-gongzhonghao';
+import type { PickedState } from '@/lib/script-picked/types';
+import { PickPanel } from './pick-panel';
 
 export type Platform = 'douyin' | 'xiaohongshu' | 'gongzhonghao';
 
@@ -17,6 +19,7 @@ interface Props {
   onRegenerate?: () => void;
   readonly?: boolean;
   draftId?: string;
+  initialPicked?: PickedState | null;
 }
 
 const PLATFORM_LABEL: Record<Platform, string> = {
@@ -348,7 +351,7 @@ function GongzhonghaoView({ data }: { data: ArticleScriptResponse }) {
   );
 }
 
-export function ScriptResult({ platform, result, topic, niche, onRegenerate, readonly, draftId }: Props) {
+export function ScriptResult({ platform, result, topic, niche, onRegenerate, readonly, draftId, initialPicked }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -410,6 +413,21 @@ export function ScriptResult({ platform, result, topic, niche, onRegenerate, rea
       </div>
 
       {saveError && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{saveError}</div>}
+
+      {/* D1: 发布前选定 — 所有平台都展示 (readonly 即已保存) */}
+      {readonly && draftId && (
+        <PickPanel
+          draftId={draftId}
+          platform={platform}
+          titles={((result as Record<string, unknown>).titles as { text: string }[] | undefined) ?? []}
+          hooks={
+            platform === 'douyin'
+              ? ((result as unknown as DouyinScriptResponse).hooks as { text: string }[])
+              : undefined
+          }
+          initial={initialPicked ?? null}
+        />
+      )}
 
       {/* "用此脚本开新分析" — 抖音 only (其它平台没有视频分析闭环) */}
       {readonly && draftId && platform === 'douyin' && (
