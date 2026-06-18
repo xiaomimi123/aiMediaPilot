@@ -2,6 +2,7 @@ import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { parseDouyinVideoUrl } from '@/lib/inspiration/url-parser';
+import { resolveDouyinShortLink } from '@/lib/inspiration/short-link-resolver';
 import { fetchPublicVideo } from '@/lib/inspiration/public-video-adapter';
 
 function bigOrNull(n: number | undefined): bigint | null {
@@ -39,13 +40,24 @@ export async function POST(req: Request) {
 
   const parsed = parseDouyinVideoUrl(url);
   if (!parsed) return fail('无法解析抖音视频 URL', 400);
-  if (parsed.isShortLink) return fail('暂不支持 v.douyin.com 短链, 请粘 www.douyin.com/video/xxx 完整链接', 400);
+
+  // 短链 → 服务端解析重定向, 拿真 aweme_id
+  let awemeId = parsed.awemeId;
+  let canonicalUrl = parsed.canonicalUrl;
+  if (parsed.isShortLink) {
+    const resolved = await resolveDouyinShortLink(parsed.canonicalUrl);
+    if (!resolved) {
+      return fail('短链解析失败, 请尝试粘完整 www.douyin.com/video/xxx URL', 400);
+    }
+    awemeId = resolved.awemeId;
+    canonicalUrl = `https://www.douyin.com/video/${resolved.awemeId}`;
+  }
 
   const user = await getOrCreateDefaultUser();
 
   // Already saved?
   const existing = await prisma.inspirationVideo.findFirst({
-    where: { userId: user.id, platform: 'douyin', awemeId: parsed.awemeId },
+    where: { userId: user.id, platform: 'douyin', awemeId },
     select: { id: true },
   });
   if (existing) return fail('该视频已在灵感库中', 409);
@@ -54,7 +66,7 @@ export async function POST(req: Request) {
   let fetched: Awaited<ReturnType<typeof fetchPublicVideo>> = null;
   let fetchError: string | null = null;
   try {
-    fetched = await fetchPublicVideo(parsed.awemeId);
+    fetched = await fetchPublicVideo(awemeId);
   } catch (e) {
     fetchError = e instanceof Error ? e.message : String(e);
     console.error('[POST inspiration/videos] auto fetch failed', e);
@@ -80,8 +92,8 @@ export async function POST(req: Request) {
       data: {
         userId: user.id,
         platform: 'douyin',
-        awemeId: parsed.awemeId,
-        videoUrl: parsed.canonicalUrl,
+        awemeId,
+        videoUrl: canonicalUrl,
         authorName: fetched?.authorName ?? m.authorName ?? null,
         title,
         playCount: bigOrNull(fetched?.playCount ?? m.playCount),

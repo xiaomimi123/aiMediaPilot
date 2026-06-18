@@ -52,4 +52,24 @@ describe('parseDouyinVideoUrl', () => {
   it('trim 空白', () => {
     expect(parseDouyinVideoUrl('  https://www.douyin.com/video/7234567890123456789  ')?.awemeId).toBe('7234567890123456789');
   });
+
+  it('抖音 APP share 文本 (含短链 + 标题 + 垃圾文字)', () => {
+    const shareText = '6.69 复制打开抖音，看看【灯下黑的作品】为什么进步一定伴随着负面情绪? # 心理学 # 成... https://v.douyin.com/JEXNRNoEuIY/ :2pm Jvs:/ Q@k.CU 04/19';
+    const r = parseDouyinVideoUrl(shareText);
+    expect(r).not.toBeNull();
+    expect(r?.isShortLink).toBe(true);
+    expect(r?.canonicalUrl).toBe('https://v.douyin.com/JEXNRNoEuIY/');
+  });
+
+  it('share 文本 含 canonical URL → 解出 aweme_id', () => {
+    const shareText = '看看这个 https://www.douyin.com/video/7234567890123456789 太赞了';
+    const r = parseDouyinVideoUrl(shareText);
+    expect(r?.awemeId).toBe('7234567890123456789');
+    expect(r?.isShortLink).toBe(false);
+  });
+
+  it('URL 末尾带中文标点 也能切掉', () => {
+    const r = parseDouyinVideoUrl('看看 https://v.douyin.com/JEXNRNoEuIY/。 很棒');
+    expect(r?.canonicalUrl).toBe('https://v.douyin.com/JEXNRNoEuIY/');
+  });
 });
