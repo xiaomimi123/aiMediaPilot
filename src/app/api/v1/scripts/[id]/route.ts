@@ -13,6 +13,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     niche: draft.niche,
     platform: draft.platform,
     output: draft.output,
+    picked: draft.picked,
     createdAt: draft.createdAt.toISOString(),
     analysisId: draft.analysisId,
   });

@@ -42,6 +42,7 @@ model ScriptDraft {
   niche      String
   platform   String           @default("douyin") // 'douyin' | 'xiaohongshu' | 'gongzhonghao'
   output     Json
+  picked     Json?            // D1: 用户选定要发的版本 (titleIdx / hookIdx / reviewed sections)
   createdAt  DateTime         @default(now())
 
   // K2: 链到具体被用于哪条 analysis (NULL = 还没拍/还没分析)
