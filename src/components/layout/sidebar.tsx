@@ -3,9 +3,9 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard,
-  PenSquare,
-  FileText,
+  Wand2,
+  Library,
+  BarChart3,
   Settings,
   Sparkles,
   X,
@@ -15,9 +15,9 @@ import { cn } from '@/lib/utils';
 import { APP_NAME } from '@/lib/constants';
 
 const NAV = [
-  { href: '/dashboard', label: '总览', icon: LayoutDashboard },
-  { href: '/content/script', label: '创作', icon: PenSquare },
-  { href: '/content/preflight', label: '内容', icon: FileText },
+  { href: '/agent', label: '智能体', icon: Wand2 },
+  { href: '/content', label: '我的作品', icon: Library },
+  { href: '/dashboard', label: '数据', icon: BarChart3 },
   { href: '/settings/baseline', label: '设置', icon: Settings },
 ];
 
@@ -94,12 +94,12 @@ export function Sidebar({ open = false, onClose }: Props) {
         {/* Bottom CTA */}
         <div className="border-t p-3">
           <Link
-            href="/content/preflight/new"
+            href="/agent"
             onClick={onClose}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-gradient px-4 py-3 text-sm font-semibold text-white shadow-md transition-shadow hover:shadow-lg"
           >
             <Plus className="h-4 w-4" />
-            新分析
+            新内容
           </Link>
         </div>
       </aside>
