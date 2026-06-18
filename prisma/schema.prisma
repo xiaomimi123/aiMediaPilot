@@ -32,6 +32,45 @@ model User {
   competitors     Competitor[]
   contentAnalyses ContentAnalysis[]
   scriptDrafts    ScriptDraft[]
+  inspirationVideos    InspirationVideo[]
+  inspirationInsights  InspirationInsight[]
+}
+
+// Sub-project G: 灵感视频库 — 用户精选爆款 + AI 总结共性
+model InspirationVideo {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  platform      String    @default("douyin")
+  awemeId       String
+  videoUrl      String
+  authorName    String?
+  title         String
+  playCount     BigInt?
+  likeCount     BigInt?
+  commentCount  BigInt?
+  shareCount    BigInt?
+  collectCount  BigInt?
+  duration      Int?
+  publishedAt   DateTime?
+  thumbnailUrl  String?
+  userNote      String?
+  rawData       Json?
+  fetchedAt     DateTime  @default(now())
+
+  @@unique([userId, platform, awemeId])
+  @@index([userId, fetchedAt])
+}
+
+model InspirationInsight {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  videoIds    Json     // [InspirationVideo.id, ...]
+  output      Json     // { titlePatterns, hookTypes, durationStats, recommendedTopics, ... }
+  generatedAt DateTime @default(now())
+
+  @@index([userId, generatedAt])
 }
 
 model ScriptDraft {
