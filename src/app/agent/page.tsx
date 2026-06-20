@@ -11,28 +11,44 @@ interface LatestRec {
   rationale: string;
 }
 
-async function getLatestInsight(): Promise<{ id: string; recommended: LatestRec[] } | null> {
+async function getOnboardingState(): Promise<{
+  latest: { id: string; recommended: LatestRec[] } | null;
+  hasInspirationVideos: boolean;
+  hasScripts: boolean;
+}> {
   try {
     const user = await getOrCreateDefaultUser();
-    const latest = await prisma.inspirationInsight.findFirst({
-      where: { userId: user.id },
-      orderBy: { generatedAt: 'desc' },
-      select: { id: true, output: true },
-    });
-    if (!latest) return null;
-    const out = latest.output as { recommendedTopics?: LatestRec[] } | null;
+    const [insight, videoCount, scriptCount] = await Promise.all([
+      prisma.inspirationInsight.findFirst({
+        where: { userId: user.id },
+        orderBy: { generatedAt: 'desc' },
+        select: { id: true, output: true },
+      }),
+      prisma.inspirationVideo.count({ where: { userId: user.id } }),
+      prisma.scriptDraft.count({ where: { userId: user.id } }),
+    ]);
+    const out = insight?.output as { recommendedTopics?: LatestRec[] } | null;
     return {
-      id: latest.id,
-      recommended: Array.isArray(out?.recommendedTopics) ? out!.recommendedTopics.slice(0, 4) : [],
+      latest: insight
+        ? {
+            id: insight.id,
+            recommended: Array.isArray(out?.recommendedTopics)
+              ? out!.recommendedTopics.slice(0, 4)
+              : [],
+          }
+        : null,
+      hasInspirationVideos: videoCount > 0,
+      hasScripts: scriptCount > 0,
     };
   } catch {
-    return null;
+    return { latest: null, hasInspirationVideos: false, hasScripts: false };
   }
 }
 
 export default async function AgentPage() {
-  const latest = await getLatestInsight();
+  const { latest, hasInspirationVideos, hasScripts } = await getOnboardingState();
   const recommended = latest?.recommended ?? [];
+  const isFirstTime = !hasInspirationVideos && !hasScripts && !latest;
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
@@ -41,6 +57,31 @@ export default async function AgentPage() {
           选平台 → 选垂类 → 输 topic, 一次生成 platform-ready 内容,复制粘贴去发。
         </p>
       </div>
+
+      {isFirstTime && (
+        <div className="rounded-xl border-2 border-dashed border-purple-300 bg-purple-50/40 p-5">
+          <p className="text-base font-semibold text-purple-900">👋 第一次来? 三步上手:</p>
+          <ol className="mt-3 space-y-2 text-sm text-purple-900">
+            <li>
+              <span className="font-medium">1. 去灵感库</span> 粘 5+ 个对标爆款 URL (抖音自动抓,
+              小红书/公众号手动填标题)
+            </li>
+            <li>
+              <span className="font-medium">2. AI 总结</span> 选 ≥ 2 条,系统给出标题模式 / 钩子类型 /
+              推荐你下一步可做的 topic
+            </li>
+            <li>
+              <span className="font-medium">3. 一键生成</span> 推荐 topic 点 [→ 用这个生成], 系统借鉴灵感库风格出 platform-ready 脚本
+            </li>
+          </ol>
+          <Link
+            href="/agent/inspiration"
+            className="mt-4 inline-block rounded-md bg-brand-gradient px-4 py-2 text-sm font-medium text-white shadow-sm transition-opacity hover:opacity-90"
+          >
+            去灵感库收第一条 →
+          </Link>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <Link

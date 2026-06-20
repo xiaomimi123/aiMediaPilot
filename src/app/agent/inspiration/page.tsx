@@ -267,9 +267,23 @@ export default function InspirationPage() {
       {loading ? (
         <p className="text-sm text-muted-foreground">加载中...</p>
       ) : items.length === 0 ? (
-        <Card>
-          <CardContent className="space-y-2 pt-6 text-center">
-            <p className="text-sm">还没有灵感视频。 点 [+ 添加视频 URL] 加第一条。</p>
+        <Card className="border-dashed">
+          <CardContent className="space-y-4 pt-8 pb-8 text-center">
+            <p className="text-3xl">📥</p>
+            <div className="space-y-1">
+              <p className="text-base font-semibold">收第一条灵感视频</p>
+              <p className="mx-auto max-w-md text-sm text-muted-foreground">
+                打开抖音 → 点分享 → 复制链接,直接粘到这里 (~30s 自动抓数据)。 小红书 / 公众号也支持
+                (手动填标题)。
+              </p>
+            </div>
+            <Button onClick={() => setShowAdd(true)} variant="brand" size="lg">
+              <Plus className="mr-1 h-4 w-4" />
+              添加第一条
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              提示: 至少 2 条同类型视频才能调用 AI 总结
+            </p>
           </CardContent>
         </Card>
       ) : filteredItems.length === 0 ? (
