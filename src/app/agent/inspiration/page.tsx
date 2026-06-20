@@ -33,6 +33,13 @@ interface InsightOutput {
   summary: string;
 }
 
+interface InsightHistoryItem {
+  id: string;
+  videoIds: string[];
+  output: InsightOutput;
+  generatedAt: string;
+}
+
 function formatPlays(s: string | null): string {
   if (!s) return '—';
   const n = Number(s);
@@ -49,13 +56,18 @@ export default function InspirationPage() {
   const [insight, setInsight] = useState<InsightOutput | null>(null);
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [history, setHistory] = useState<InsightHistoryItem[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   async function refresh() {
     setLoading(true);
     try {
-      const res = await fetch('/api/v1/inspiration/videos');
-      const json = await res.json();
-      if (json.success) setItems(json.data.items);
+      const [v, h] = await Promise.all([
+        fetch('/api/v1/inspiration/videos').then((r) => r.json()),
+        fetch('/api/v1/inspiration/insights').then((r) => r.json()),
+      ]);
+      if (v.success) setItems(v.data.items);
+      if (h.success) setHistory(h.data.items as InsightHistoryItem[]);
     } finally {
       setLoading(false);
     }
@@ -99,6 +111,7 @@ export default function InspirationPage() {
         setGenerateError(json.message);
       } else {
         setInsight(json.data.output as InsightOutput);
+        void refresh();
       }
     } catch (e) {
       setGenerateError(e instanceof Error ? e.message : String(e));
@@ -141,6 +154,62 @@ export default function InspirationPage() {
       )}
 
       {insight && <InsightPanel data={insight} onClose={() => setInsight(null)} />}
+
+      {history.length > 0 && (
+        <Card>
+          <CardContent className="pt-6">
+            <button
+              type="button"
+              onClick={() => setShowHistory((v) => !v)}
+              className="flex w-full items-center justify-between text-left"
+            >
+              <span className="text-sm font-medium">
+                📜 历史总结 ({history.length} 条)
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {showHistory ? '收起 ↑' : '展开 ↓'}
+              </span>
+            </button>
+            {showHistory && (
+              <ul className="mt-4 space-y-3">
+                {history.map((h) => (
+                  <li key={h.id} className="rounded-lg border p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(h.generatedAt).toLocaleString('zh-CN')} · 基于{' '}
+                        {Array.isArray(h.videoIds) ? h.videoIds.length : 0} 条视频
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setInsight(h.output)}
+                        className="text-xs text-blue-600 hover:underline"
+                      >
+                        查看完整 →
+                      </button>
+                    </div>
+                    <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
+                      {h.output.summary}
+                    </p>
+                    {h.output.recommendedTopics?.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {h.output.recommendedTopics.slice(0, 3).map((t, i) => (
+                          <a
+                            key={i}
+                            href={`/agent?topic=${encodeURIComponent(t.title)}&platform=douyin`}
+                            className="rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-900 hover:bg-purple-200"
+                          >
+                            {t.title}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {loading ? (
         <p className="text-sm text-muted-foreground">加载中...</p>

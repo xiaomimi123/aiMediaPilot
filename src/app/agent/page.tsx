@@ -1,8 +1,33 @@
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { ScriptForm } from '@/components/content/script-form';
+import { getOrCreateDefaultUser } from '@/lib/user';
+import { prisma } from '@/lib/prisma';
 
-export default function AgentPage() {
+export const dynamic = 'force-dynamic';
+
+interface LatestRec {
+  title: string;
+  rationale: string;
+}
+
+async function getLatestRecommendedTopics(): Promise<LatestRec[]> {
+  try {
+    const user = await getOrCreateDefaultUser();
+    const latest = await prisma.inspirationInsight.findFirst({
+      where: { userId: user.id },
+      orderBy: { generatedAt: 'desc' },
+      select: { output: true },
+    });
+    const out = latest?.output as { recommendedTopics?: LatestRec[] } | null;
+    return Array.isArray(out?.recommendedTopics) ? out!.recommendedTopics.slice(0, 4) : [];
+  } catch {
+    return [];
+  }
+}
+
+export default async function AgentPage() {
+  const recommended = await getLatestRecommendedTopics();
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
@@ -27,6 +52,34 @@ export default function AgentPage() {
           <span className="text-muted-foreground">→</span>
         </div>
       </Link>
+
+      {recommended.length > 0 && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-blue-900">
+              💡 最近灵感推荐的 topic
+            </p>
+            <Link
+              href="/agent/inspiration"
+              className="text-xs text-blue-700 hover:underline"
+            >
+              管理 →
+            </Link>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {recommended.map((t, i) => (
+              <Link
+                key={i}
+                href={`/agent?topic=${encodeURIComponent(t.title)}&platform=douyin`}
+                className="rounded-full bg-white px-3 py-1 text-xs text-blue-900 shadow-sm transition-shadow hover:shadow-md"
+                title={t.rationale}
+              >
+                {t.title}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       <Suspense fallback={<div className="text-sm text-muted-foreground">加载中…</div>}>
         <ScriptForm />
