@@ -53,7 +53,7 @@ export default function InspirationPage() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showAdd, setShowAdd] = useState(false);
-  const [insight, setInsight] = useState<InsightOutput | null>(null);
+  const [insight, setInsight] = useState<{ id: string; output: InsightOutput } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [history, setHistory] = useState<InsightHistoryItem[]>([]);
@@ -110,7 +110,10 @@ export default function InspirationPage() {
       if (!json.success) {
         setGenerateError(json.message);
       } else {
-        setInsight(json.data.output as InsightOutput);
+        setInsight({
+          id: json.data.id as string,
+          output: json.data.output as InsightOutput,
+        });
         void refresh();
       }
     } catch (e) {
@@ -153,7 +156,9 @@ export default function InspirationPage() {
         </div>
       )}
 
-      {insight && <InsightPanel data={insight} onClose={() => setInsight(null)} />}
+      {insight && (
+        <InsightPanel data={insight.output} insightId={insight.id} onClose={() => setInsight(null)} />
+      )}
 
       {history.length > 0 && (
         <Card>
@@ -181,7 +186,7 @@ export default function InspirationPage() {
                       </span>
                       <button
                         type="button"
-                        onClick={() => setInsight(h.output)}
+                        onClick={() => setInsight({ id: h.id, output: h.output })}
                         className="text-xs text-blue-600 hover:underline"
                       >
                         查看完整 →
@@ -195,7 +200,7 @@ export default function InspirationPage() {
                         {h.output.recommendedTopics.slice(0, 3).map((t, i) => (
                           <a
                             key={i}
-                            href={`/agent?topic=${encodeURIComponent(t.title)}&platform=douyin`}
+                            href={`/agent?topic=${encodeURIComponent(t.title)}&platform=douyin&inspirationId=${h.id}`}
                             className="rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-900 hover:bg-purple-200"
                           >
                             {t.title}
@@ -290,7 +295,15 @@ export default function InspirationPage() {
   );
 }
 
-function InsightPanel({ data, onClose }: { data: InsightOutput; onClose: () => void }) {
+function InsightPanel({
+  data,
+  insightId,
+  onClose,
+}: {
+  data: InsightOutput;
+  insightId: string | null;
+  onClose: () => void;
+}) {
   return (
     <Card className="border-2 border-purple-300 bg-purple-50/30">
       <CardContent className="space-y-4 pt-6">
@@ -345,7 +358,7 @@ function InsightPanel({ data, onClose }: { data: InsightOutput; onClose: () => v
                     <p className="mt-1 text-xs text-muted-foreground">{t.rationale}</p>
                   </div>
                   <a
-                    href={`/agent?topic=${encodeURIComponent(t.title)}&platform=douyin`}
+                    href={`/agent?topic=${encodeURIComponent(t.title)}&platform=douyin${insightId ? `&inspirationId=${insightId}` : ''}`}
                     className="shrink-0 rounded-md bg-brand-gradient px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-opacity hover:opacity-90"
                   >
                     用这个生成 →

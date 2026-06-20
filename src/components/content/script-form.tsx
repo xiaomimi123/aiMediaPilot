@@ -17,6 +17,12 @@ const PLATFORMS: { value: Platform; label: string; emoji: string; sub: string }[
   { value: 'gongzhonghao', label: '公众号', emoji: '📰', sub: '长文章 + 大纲 + 摘要' },
 ];
 
+interface InspirationStylePreview {
+  hookTypes: string[];
+  titlePatterns: string[];
+  durationInsight: string;
+}
+
 export function ScriptForm() {
   const searchParams = useSearchParams();
   const [platform, setPlatform] = useState<Platform>('douyin');
@@ -26,15 +32,18 @@ export function ScriptForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  const [inspirationId, setInspirationId] = useState<string | null>(null);
+  const [inspirationStyle, setInspirationStyle] = useState<InspirationStylePreview | null>(null);
 
   const effectiveNiche = niche === '__custom' ? customNiche.trim() : niche;
 
-  // Prefill from inspiration → /agent loop (?topic=X&platform=Y&niche=Z)
+  // Prefill from inspiration → /agent loop (?topic=X&platform=Y&niche=Z&inspirationId=ID)
   useEffect(() => {
     if (!searchParams) return;
     const qpTopic = searchParams.get('topic');
     const qpPlatform = searchParams.get('platform');
     const qpNiche = searchParams.get('niche');
+    const qpInspId = searchParams.get('inspirationId');
     if (qpTopic && !topic) setTopic(qpTopic);
     if (qpPlatform && (qpPlatform === 'douyin' || qpPlatform === 'xiaohongshu' || qpPlatform === 'gongzhonghao')) {
       setPlatform(qpPlatform);
@@ -47,6 +56,24 @@ export function ScriptForm() {
         setNiche('__custom');
         setCustomNiche(qpNiche);
       }
+    }
+    if (qpInspId) {
+      setInspirationId(qpInspId);
+      fetch(`/api/v1/inspiration/insights/${qpInspId}`)
+        .then((r) => r.json())
+        .then((j) => {
+          if (j.success && j.data.output) {
+            const o = j.data.output as Partial<InspirationStylePreview>;
+            setInspirationStyle({
+              hookTypes: Array.isArray(o.hookTypes) ? o.hookTypes : [],
+              titlePatterns: Array.isArray(o.titlePatterns) ? o.titlePatterns : [],
+              durationInsight: typeof o.durationInsight === 'string' ? o.durationInsight : '',
+            });
+          }
+        })
+        .catch(() => {
+          /* silently ignore — not blocking */
+        });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
@@ -66,7 +93,12 @@ export function ScriptForm() {
       const res = await fetch('/api/v1/scripts/generate', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ topic: topic.trim(), niche: effectiveNiche, platform }),
+        body: JSON.stringify({
+          topic: topic.trim(),
+          niche: effectiveNiche,
+          platform,
+          ...(inspirationId ? { inspirationId } : {}),
+        }),
       });
       const json = await res.json();
       if (!json.success) {
@@ -83,6 +115,56 @@ export function ScriptForm() {
 
   return (
     <div className="space-y-4">
+      {inspirationStyle && (
+        <Card className="border-purple-200 bg-purple-50/40">
+          <CardContent className="space-y-2 pt-5">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-purple-900">🪞 借鉴自这次灵感总结</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setInspirationId(null);
+                  setInspirationStyle(null);
+                }}
+                className="text-xs text-purple-700 hover:underline"
+              >
+                取消借鉴
+              </button>
+            </div>
+            <div className="space-y-1 text-xs">
+              {inspirationStyle.hookTypes.length > 0 && (
+                <p>
+                  <span className="text-muted-foreground">钩子: </span>
+                  {inspirationStyle.hookTypes.slice(0, 3).map((h, i) => (
+                    <span key={i} className="mr-1 rounded bg-white px-1.5 py-0.5 text-purple-900">
+                      {h}
+                    </span>
+                  ))}
+                </p>
+              )}
+              {inspirationStyle.titlePatterns.length > 0 && (
+                <p>
+                  <span className="text-muted-foreground">标题模式: </span>
+                  {inspirationStyle.titlePatterns.slice(0, 3).map((t, i) => (
+                    <span key={i} className="mr-1 rounded bg-white px-1.5 py-0.5 text-purple-900">
+                      {t}
+                    </span>
+                  ))}
+                </p>
+              )}
+              {inspirationStyle.durationInsight && (
+                <p>
+                  <span className="text-muted-foreground">时长: </span>
+                  <span className="rounded bg-white px-1.5 py-0.5 text-purple-900">
+                    {inspirationStyle.durationInsight}
+                  </span>
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardContent className="space-y-4 pt-6">
           <div className="space-y-2">

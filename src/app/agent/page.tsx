@@ -11,23 +11,28 @@ interface LatestRec {
   rationale: string;
 }
 
-async function getLatestRecommendedTopics(): Promise<LatestRec[]> {
+async function getLatestInsight(): Promise<{ id: string; recommended: LatestRec[] } | null> {
   try {
     const user = await getOrCreateDefaultUser();
     const latest = await prisma.inspirationInsight.findFirst({
       where: { userId: user.id },
       orderBy: { generatedAt: 'desc' },
-      select: { output: true },
+      select: { id: true, output: true },
     });
-    const out = latest?.output as { recommendedTopics?: LatestRec[] } | null;
-    return Array.isArray(out?.recommendedTopics) ? out!.recommendedTopics.slice(0, 4) : [];
+    if (!latest) return null;
+    const out = latest.output as { recommendedTopics?: LatestRec[] } | null;
+    return {
+      id: latest.id,
+      recommended: Array.isArray(out?.recommendedTopics) ? out!.recommendedTopics.slice(0, 4) : [],
+    };
   } catch {
-    return [];
+    return null;
   }
 }
 
 export default async function AgentPage() {
-  const recommended = await getLatestRecommendedTopics();
+  const latest = await getLatestInsight();
+  const recommended = latest?.recommended ?? [];
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
@@ -70,7 +75,7 @@ export default async function AgentPage() {
             {recommended.map((t, i) => (
               <Link
                 key={i}
-                href={`/agent?topic=${encodeURIComponent(t.title)}&platform=douyin`}
+                href={`/agent?topic=${encodeURIComponent(t.title)}&platform=douyin${latest ? `&inspirationId=${latest.id}` : ''}`}
                 className="rounded-full bg-white px-3 py-1 text-xs text-blue-900 shadow-sm transition-shadow hover:shadow-md"
                 title={t.rationale}
               >

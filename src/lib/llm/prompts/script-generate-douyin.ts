@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { getExpertPersona } from './expert-persona';
 import { JSON_STRICTNESS } from './base';
+import { formatStyleHints, type InspirationStyleHints } from './style-hints';
 import type { ContentPart } from '@/lib/llm/vision';
 
 export const DouyinScriptResponseSchema = z.object({
@@ -58,11 +59,11 @@ export const SCRIPT_GENERATE_DOUYIN = {
 
 ${JSON_STRICTNESS}`;
   },
-  buildUserMessage(input: { topic: string }): ContentPart[] {
+  buildUserMessage(input: { topic: string; styleHints?: InspirationStyleHints }): ContentPart[] {
     return [
       {
         type: 'text',
-        text: `主题: ${input.topic}\n\n按 schema 输出 4 个区块。`,
+        text: `主题: ${input.topic}${formatStyleHints(input.styleHints)}\n\n按 schema 输出 4 个区块。`,
       },
     ];
   },
