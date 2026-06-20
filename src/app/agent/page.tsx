@@ -42,21 +42,37 @@ export default async function AgentPage() {
         </p>
       </div>
 
-      <Link
-        href="/agent/inspiration"
-        className="block rounded-xl border border-purple-200 bg-purple-50/50 p-4 transition-colors hover:bg-purple-50"
-      >
-        <div className="flex items-center gap-3">
-          <span className="text-2xl">📚</span>
-          <div className="flex-1">
-            <p className="font-semibold">灵感视频库</p>
-            <p className="text-xs text-muted-foreground">
-              没 topic 想法? 收集对标爆款 → AI 总结共性 → 推荐你下一步可做的 topic
-            </p>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <Link
+          href="/agent/inspiration"
+          className="block rounded-xl border border-purple-200 bg-purple-50/50 p-4 transition-colors hover:bg-purple-50"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">📚</span>
+            <div className="flex-1">
+              <p className="font-semibold">灵感视频库</p>
+              <p className="text-xs text-muted-foreground">
+                收集对标爆款 → AI 总结共性 → 推荐 topic
+              </p>
+            </div>
           </div>
-          <span className="text-muted-foreground">→</span>
-        </div>
-      </Link>
+        </Link>
+
+        <Link
+          href="/agent/patterns"
+          className="block rounded-xl border border-blue-200 bg-blue-50/50 p-4 transition-colors hover:bg-blue-50"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">📈</span>
+            <div className="flex-1">
+              <p className="font-semibold">我的内容规律</p>
+              <p className="text-xs text-muted-foreground">
+                看你的标题字数 / 钩子偏好 / niche 分布,跟灵感库对照
+              </p>
+            </div>
+          </div>
+        </Link>
+      </div>
 
       {recommended.length > 0 && (
         <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4">
