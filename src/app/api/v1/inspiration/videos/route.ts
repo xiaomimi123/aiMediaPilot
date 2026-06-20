@@ -1,7 +1,7 @@
 import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
-import { parseDouyinVideoUrl } from '@/lib/inspiration/url-parser';
+import { detectInspirationSource, type InspirationPlatform } from '@/lib/inspiration/url-parser';
 import { resolveDouyinShortLink } from '@/lib/inspiration/short-link-resolver';
 import { fetchPublicVideo } from '@/lib/inspiration/public-video-adapter';
 
@@ -19,12 +19,13 @@ interface ManualMetadata {
   commentCount?: number;
   shareCount?: number;
   durationSec?: number;
+  publishedAtISO?: string;
 }
 
 interface AddBody {
   url?: unknown;
   userNote?: unknown;
-  manualMetadata?: ManualMetadata; // optional, used when auto-fetch yields nothing
+  manualMetadata?: ManualMetadata;
 }
 
 export async function POST(req: Request) {
@@ -35,21 +36,23 @@ export async function POST(req: Request) {
     return fail('请求体不是合法 JSON', 400);
   }
 
-  const url = typeof body.url === 'string' ? body.url.trim() : '';
+  const rawUrl = typeof body.url === 'string' ? body.url.trim() : '';
   const userNote = typeof body.userNote === 'string' ? body.userNote.trim() : '';
 
-  const parsed = parseDouyinVideoUrl(url);
-  if (!parsed) return fail('无法解析抖音视频 URL', 400);
+  const source = detectInspirationSource(rawUrl);
+  if (!source) return fail('无法识别 URL — 支持抖音 / 小红书 / 公众号链接或分享文本', 400);
 
-  // 短链 → 服务端解析重定向, 拿真 aweme_id
-  let awemeId = parsed.awemeId;
-  let canonicalUrl = parsed.canonicalUrl;
-  if (parsed.isShortLink) {
-    const resolved = await resolveDouyinShortLink(parsed.canonicalUrl);
+  let externalId = source.externalId;
+  let canonicalUrl = source.canonicalUrl;
+  const platform: InspirationPlatform = source.platform;
+
+  // Douyin 短链 → 服务端解析重定向, 拿真 aweme_id
+  if (platform === 'douyin' && source.isShortLink) {
+    const resolved = await resolveDouyinShortLink(source.canonicalUrl);
     if (!resolved) {
       return fail('短链解析失败, 请尝试粘完整 www.douyin.com/video/xxx URL', 400);
     }
-    awemeId = resolved.awemeId;
+    externalId = resolved.awemeId;
     canonicalUrl = `https://www.douyin.com/video/${resolved.awemeId}`;
   }
 
@@ -57,42 +60,53 @@ export async function POST(req: Request) {
 
   // Already saved?
   const existing = await prisma.inspirationVideo.findFirst({
-    where: { userId: user.id, platform: 'douyin', awemeId },
+    where: { userId: user.id, platform, awemeId: externalId },
     select: { id: true },
   });
   if (existing) return fail('该视频已在灵感库中', 409);
 
-  // Try auto-fetch first
+  // 只有 douyin 有 crawler
   let fetched: Awaited<ReturnType<typeof fetchPublicVideo>> = null;
   let fetchError: string | null = null;
-  try {
-    fetched = await fetchPublicVideo(awemeId);
-  } catch (e) {
-    fetchError = e instanceof Error ? e.message : String(e);
-    console.error('[POST inspiration/videos] auto fetch failed', e);
+  if (platform === 'douyin' && externalId) {
+    try {
+      fetched = await fetchPublicVideo(externalId);
+    } catch (e) {
+      fetchError = e instanceof Error ? e.message : String(e);
+      console.error('[POST inspiration/videos] auto fetch failed', e);
+    }
   }
 
-  // Determine final values: prefer fetched, fall back to manual
+  // Manual fallback
   const m = body.manualMetadata ?? {};
   const title = fetched?.title || (m.title ?? '').trim();
   if (!title) {
-    return fail(
-      fetchError
-        ? `自动抓取失败: ${fetchError}. 请提供 manualMetadata.title 等手动字段`
-        : '自动抓取无数据, 请提供 manualMetadata.title 等手动字段',
-      422,
-    );
+    const platformLabel =
+      platform === 'douyin' ? '抖音' : platform === 'xiaohongshu' ? '小红书' : '公众号';
+    if (platform === 'douyin') {
+      return fail(
+        fetchError
+          ? `自动抓取失败: ${fetchError}. 请提供 manualMetadata.title 等手动字段`
+          : '自动抓取无数据, 请提供 manualMetadata.title 等手动字段',
+        422,
+      );
+    }
+    return fail(`${platformLabel} 暂无自动抓取, 请填 manualMetadata.title (标题必填)`, 422);
   }
 
-  const createTimeSec = fetched?.createTime;
-  const publishedAt = createTimeSec ? new Date(createTimeSec * 1000) : null;
+  const publishedAt =
+    fetched?.createTime
+      ? new Date(fetched.createTime * 1000)
+      : m.publishedAtISO
+        ? new Date(m.publishedAtISO)
+        : null;
 
   try {
     const created = await prisma.inspirationVideo.create({
       data: {
         userId: user.id,
-        platform: 'douyin',
-        awemeId,
+        platform,
+        awemeId: externalId,
         videoUrl: canonicalUrl,
         authorName: fetched?.authorName ?? m.authorName ?? null,
         title,
@@ -104,14 +118,14 @@ export async function POST(req: Request) {
         duration: fetched?.durationMs
           ? Math.round(fetched.durationMs / 1000)
           : m.durationSec ?? null,
-        publishedAt,
+        publishedAt: publishedAt && !isNaN(publishedAt.getTime()) ? publishedAt : null,
         thumbnailUrl: fetched?.thumbnailUrl ?? null,
         userNote: userNote || null,
         rawData: fetched ? (fetched as unknown as object) : undefined,
       },
       select: { id: true },
     });
-    return ok({ id: created.id, source: fetched ? 'auto' : 'manual' });
+    return ok({ id: created.id, source: fetched ? 'auto' : 'manual', platform });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error('[POST inspiration/videos] db write failed', e);
@@ -119,10 +133,17 @@ export async function POST(req: Request) {
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const platformFilter = url.searchParams.get('platform');
+  const validPlatform =
+    platformFilter === 'douyin' || platformFilter === 'xiaohongshu' || platformFilter === 'gongzhonghao'
+      ? platformFilter
+      : null;
+
   const user = await getOrCreateDefaultUser();
   const items = await prisma.inspirationVideo.findMany({
-    where: { userId: user.id },
+    where: { userId: user.id, ...(validPlatform ? { platform: validPlatform } : {}) },
     orderBy: { fetchedAt: 'desc' },
     take: 100,
     select: {

@@ -37,6 +37,7 @@ export async function POST(req: Request) {
       commentCount: true,
       duration: true,
       userNote: true,
+      platform: true,
     },
   });
   if (videos.length !== videoIds.length) {
@@ -46,12 +47,20 @@ export async function POST(req: Request) {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) return fail('DEEPSEEK_API_KEY 未配置', 500);
 
+  // Infer batch platform — same across all → use it; else 'mixed'
+  const platformSet = new Set(videos.map((v) => v.platform));
+  const batchPlatform =
+    platformSet.size === 1
+      ? (videos[0].platform as 'douyin' | 'xiaohongshu' | 'gongzhonghao')
+      : ('mixed' as const);
+
   const llm = new DeepSeekTextLLM({ apiKey });
   try {
     const out = await llm.callStructured({
-      systemPrompt: INSPIRATION_INSIGHT.buildSystemPrompt(niche),
+      systemPrompt: INSPIRATION_INSIGHT.buildSystemPrompt(niche, batchPlatform),
       userMessage: INSPIRATION_INSIGHT.buildUserMessage({
         niche,
+        platform: batchPlatform,
         videos: videos.map((v) => ({
           title: v.title,
           authorName: v.authorName,

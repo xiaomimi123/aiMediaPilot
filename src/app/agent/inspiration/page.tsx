@@ -7,8 +7,18 @@ import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { Plus, Sparkles, Trash2, X } from 'lucide-react';
 
+type Platform = 'douyin' | 'xiaohongshu' | 'gongzhonghao';
+type PlatformFilter = 'all' | Platform;
+
+const PLATFORM_LABEL: Record<Platform, string> = {
+  douyin: '🎬 抖音',
+  xiaohongshu: '📕 小红书',
+  gongzhonghao: '📰 公众号',
+};
+
 interface VideoItem {
   id: string;
+  platform: Platform;
   awemeId: string;
   videoUrl: string;
   authorName: string | null;
@@ -58,6 +68,17 @@ export default function InspirationPage() {
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [history, setHistory] = useState<InsightHistoryItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
+
+  const filteredItems =
+    platformFilter === 'all' ? items : items.filter((v) => v.platform === platformFilter);
+  const countByPlatform = items.reduce<Record<Platform, number>>(
+    (acc, v) => {
+      acc[v.platform] = (acc[v.platform] ?? 0) + 1;
+      return acc;
+    },
+    { douyin: 0, xiaohongshu: 0, gongzhonghao: 0 },
+  );
 
   async function refresh() {
     setLoading(true);
@@ -128,8 +149,35 @@ export default function InspirationPage() {
       <div>
         <h1 className="text-2xl font-semibold">📚 灵感视频库</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          粘抖音公开视频 URL → 系统抓数据 → 选 ≥ 2 条让 AI 总结共性 + 推荐下一步 topic。
+          抖音自动抓 (粘 URL/分享文本); 小红书 / 公众号 手动填标题。 选 ≥ 2 条让 AI 总结共性。
         </p>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5 border-b">
+        {([
+          { key: 'all', label: '全部', count: items.length },
+          { key: 'douyin', label: PLATFORM_LABEL.douyin, count: countByPlatform.douyin },
+          { key: 'xiaohongshu', label: PLATFORM_LABEL.xiaohongshu, count: countByPlatform.xiaohongshu },
+          { key: 'gongzhonghao', label: PLATFORM_LABEL.gongzhonghao, count: countByPlatform.gongzhonghao },
+        ] as Array<{ key: PlatformFilter; label: string; count: number }>).map((t) => {
+          const active = platformFilter === t.key;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setPlatformFilter(t.key)}
+              className={cn(
+                '-mb-px border-b-2 px-3 py-2 text-sm transition-colors',
+                active
+                  ? 'border-primary font-medium text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {t.label}
+              <span className="ml-1 text-xs text-muted-foreground">({t.count})</span>
+            </button>
+          );
+        })}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -224,9 +272,15 @@ export default function InspirationPage() {
             <p className="text-sm">还没有灵感视频。 点 [+ 添加视频 URL] 加第一条。</p>
           </CardContent>
         </Card>
+      ) : filteredItems.length === 0 ? (
+        <Card>
+          <CardContent className="space-y-2 pt-6 text-center text-sm text-muted-foreground">
+            当前平台下还没有视频
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {items.map((v) => {
+          {filteredItems.map((v) => {
             const isSelected = selected.has(v.id);
             return (
               <Card
@@ -260,9 +314,12 @@ export default function InspirationPage() {
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
-                  {v.authorName && (
-                    <p className="text-xs text-muted-foreground">@{v.authorName}</p>
-                  )}
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">
+                      {PLATFORM_LABEL[v.platform] ?? v.platform}
+                    </span>
+                    {v.authorName && <span>@{v.authorName}</span>}
+                  </div>
                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground tabular-nums">
                     <span>▶ {formatPlays(v.playCount)}</span>
                     <span>♥ {formatPlays(v.likeCount)}</span>
@@ -281,7 +338,7 @@ export default function InspirationPage() {
                     onClick={(e) => e.stopPropagation()}
                     className="block text-xs text-blue-600 hover:underline"
                   >
-                    抖音原视频 →
+                    原视频 →
                   </a>
                 </CardContent>
               </Card>
@@ -386,12 +443,30 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+function detectClientPlatform(input: string): { platform: Platform | null; isShortLink: boolean } {
+  const t = input.trim();
+  if (!t) return { platform: null, isShortLink: false };
+  if (/douyin\.com|iesdouyin\.com/.test(t)) {
+    return { platform: 'douyin', isShortLink: /v\.douyin\.com/.test(t) };
+  }
+  if (/xiaohongshu\.com|xhslink\.com/.test(t)) {
+    return { platform: 'xiaohongshu', isShortLink: /xhslink\.com/.test(t) };
+  }
+  if (/mp\.weixin\.qq\.com/.test(t)) return { platform: 'gongzhonghao', isShortLink: false };
+  if (/^\d{15,25}$/.test(t)) return { platform: 'douyin', isShortLink: false };
+  return { platform: null, isShortLink: false };
+}
+
 function AddVideoModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
   const [url, setUrl] = useState('');
   const [userNote, setUserNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showManual, setShowManual] = useState(false);
+
+  const detected = detectClientPlatform(url);
+  const forceManual = detected.platform !== null && detected.platform !== 'douyin';
+  const showManualForm = showManual || forceManual;
 
   // Manual fields
   const [mTitle, setMTitle] = useState('');
@@ -453,15 +528,20 @@ function AddVideoModal({ onClose, onAdded }: { onClose: () => void; onAdded: () 
           </div>
 
           <div className="space-y-1">
-            <Label htmlFor="url">抖音视频 URL</Label>
+            <Label htmlFor="url">视频 URL</Label>
             <Input
               id="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://www.douyin.com/video/7xxxxxxxxx"
+              placeholder="抖音 / 小红书 / 公众号 链接或分享文本"
               disabled={saving}
             />
-            <p className="text-xs text-muted-foreground">复制抖音网页/APP 分享链接 → 粘贴这里</p>
+            <p className="text-xs text-muted-foreground">
+              {detected.platform === 'douyin' && '🎬 抖音 — 系统会自动抓数据'}
+              {detected.platform === 'xiaohongshu' && '📕 小红书 — 无 crawler, 请手动填标题'}
+              {detected.platform === 'gongzhonghao' && '📰 公众号 — 无 crawler, 请手动填标题'}
+              {detected.platform === null && '支持抖音 / 小红书 / 公众号 URL 或分享文本'}
+            </p>
           </div>
 
           <div className="space-y-1">
@@ -475,9 +555,13 @@ function AddVideoModal({ onClose, onAdded }: { onClose: () => void; onAdded: () 
             />
           </div>
 
-          {showManual && (
+          {showManualForm && (
             <div className="space-y-3 rounded-md border border-amber-300 bg-amber-50 p-3">
-              <p className="text-xs text-amber-900">⚠️ 自动抓取没拿到数据, 请手动填:</p>
+              <p className="text-xs text-amber-900">
+                {forceManual
+                  ? `${detected.platform === 'xiaohongshu' ? '📕 小红书' : '📰 公众号'} 无 crawler, 请手动填:`
+                  : '⚠️ 自动抓取没拿到数据, 请手动填:'}
+              </p>
               <div className="space-y-1">
                 <Label htmlFor="m-title">标题 (必填)</Label>
                 <Input id="m-title" value={mTitle} onChange={(e) => setMTitle(e.target.value)} />
@@ -513,13 +597,13 @@ function AddVideoModal({ onClose, onAdded }: { onClose: () => void; onAdded: () 
             <Button variant="outline" onClick={onClose} disabled={saving}>
               取消
             </Button>
-            {!showManual ? (
+            {!showManualForm ? (
               <Button onClick={() => submit(false)} disabled={!url.trim() || saving} variant="brand">
                 {saving ? '抓取中...' : '抓取并添加'}
               </Button>
             ) : (
               <Button onClick={() => submit(true)} disabled={!mTitle.trim() || saving} variant="brand">
-                {saving ? '保存中...' : '用手填数据保存'}
+                {saving ? '保存中...' : '保存'}
               </Button>
             )}
           </div>

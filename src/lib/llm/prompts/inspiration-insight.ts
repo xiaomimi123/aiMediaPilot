@@ -18,6 +18,8 @@ export const InspirationInsightSchema = z.object({
 
 export type InspirationInsightResponse = z.infer<typeof InspirationInsightSchema>;
 
+export type InsightPlatform = 'douyin' | 'xiaohongshu' | 'gongzhonghao' | 'mixed';
+
 export interface InsightInput {
   videos: {
     title: string;
@@ -29,12 +31,23 @@ export interface InsightInput {
     userNote?: string | null;
   }[];
   niche?: string;
+  platform?: InsightPlatform;
 }
 
+const PLATFORM_CONTEXT: Record<InsightPlatform, string> = {
+  douyin: '抖音 (短视频, 钩子前 3 秒决定完播)',
+  xiaohongshu: '小红书 (图文笔记 + 短标题, emoji 常见, 双栏阅读)',
+  gongzhonghao: '微信公众号 (长文章, 标题为单一抓人点)',
+  mixed: '多平台混合 — 抽提通用规律即可',
+};
+
 export const INSPIRATION_INSIGHT = {
-  buildSystemPrompt(niche?: string): string {
+  buildSystemPrompt(niche?: string, platform?: InsightPlatform): string {
     const nicheLine = niche ? `用户的内容垂类: ${niche}。 ` : '';
-    return `${nicheLine}你是抖音内容策略分析师。 用户提供 N 条他们精选的爆款视频 (标题/作者/播放/点赞/评论/时长), 你的任务是抽取共性规律 + 推出可执行的下一步 topic。
+    const platformLine = platform
+      ? `分析对象: ${PLATFORM_CONTEXT[platform]}。 `
+      : '分析对象: 抖音短视频。 ';
+    return `${nicheLine}${platformLine}你是内容策略分析师。 用户提供 N 条他们精选的爆款 (标题/作者/播放/点赞/评论/时长), 你的任务是抽取共性规律 + 推出可执行的下一步 topic。
 
 输出结构 (按 schema 严格输出):
 
@@ -68,10 +81,12 @@ ${JSON_STRICTNESS}`;
       const note = v.userNote ? `\n   笔记: ${v.userNote}` : '';
       return `${i + 1}. ${author} ${v.title}\n   ${stats}${note}`;
     });
+    const platformHint =
+      input.platform && input.platform !== 'mixed' ? ` (${PLATFORM_CONTEXT[input.platform]})` : '';
     return [
       {
         type: 'text',
-        text: `以下 ${input.videos.length} 条精选爆款视频:\n\n${lines.join('\n\n')}\n\n按 schema 输出共性分析 + 下一步推荐 topic。`,
+        text: `以下 ${input.videos.length} 条精选爆款${platformHint}:\n\n${lines.join('\n\n')}\n\n按 schema 输出共性分析 + 下一步推荐 topic。`,
       },
     ];
   },
