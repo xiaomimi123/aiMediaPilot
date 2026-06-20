@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { ScriptForm } from '@/components/content/script-form';
 
 export default function AgentPage() {
@@ -27,7 +28,9 @@ export default function AgentPage() {
         </div>
       </Link>
 
-      <ScriptForm />
+      <Suspense fallback={<div className="text-sm text-muted-foreground">加载中…</div>}>
+        <ScriptForm />
+      </Suspense>
     </div>
   );
 }

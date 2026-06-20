@@ -268,10 +268,20 @@ function InsightPanel({ data, onClose }: { data: InsightOutput; onClose: () => v
           <ol className="space-y-3 text-sm">
             {data.recommendedTopics.map((t, i) => (
               <li key={i} className="border-b pb-2">
-                <p className="font-medium">
-                  {i + 1}. {t.title}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">{t.rationale}</p>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1">
+                    <p className="font-medium">
+                      {i + 1}. {t.title}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">{t.rationale}</p>
+                  </div>
+                  <a
+                    href={`/agent?topic=${encodeURIComponent(t.title)}&platform=douyin`}
+                    className="shrink-0 rounded-md bg-brand-gradient px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-opacity hover:opacity-90"
+                  >
+                    用这个生成 →
+                  </a>
+                </div>
               </li>
             ))}
           </ol>

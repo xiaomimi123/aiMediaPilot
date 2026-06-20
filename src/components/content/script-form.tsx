@@ -1,5 +1,6 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,6 +18,7 @@ const PLATFORMS: { value: Platform; label: string; emoji: string; sub: string }[
 ];
 
 export function ScriptForm() {
+  const searchParams = useSearchParams();
   const [platform, setPlatform] = useState<Platform>('douyin');
   const [topic, setTopic] = useState('');
   const [niche, setNiche] = useState<string>('ai-knowledge');
@@ -26,6 +28,28 @@ export function ScriptForm() {
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
 
   const effectiveNiche = niche === '__custom' ? customNiche.trim() : niche;
+
+  // Prefill from inspiration → /agent loop (?topic=X&platform=Y&niche=Z)
+  useEffect(() => {
+    if (!searchParams) return;
+    const qpTopic = searchParams.get('topic');
+    const qpPlatform = searchParams.get('platform');
+    const qpNiche = searchParams.get('niche');
+    if (qpTopic && !topic) setTopic(qpTopic);
+    if (qpPlatform && (qpPlatform === 'douyin' || qpPlatform === 'xiaohongshu' || qpPlatform === 'gongzhonghao')) {
+      setPlatform(qpPlatform);
+    }
+    if (qpNiche) {
+      const known = KNOWN_NICHES.find((n) => n.key === qpNiche);
+      if (known) {
+        setNiche(qpNiche);
+      } else {
+        setNiche('__custom');
+        setCustomNiche(qpNiche);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const handleGenerate = async () => {
     setError(null);
