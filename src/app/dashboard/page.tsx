@@ -14,6 +14,7 @@ import { TopPerformers } from '@/components/dashboard/top-performers';
 import { BiggestMisses } from '@/components/dashboard/biggest-misses';
 import { QuickCreate } from '@/components/dashboard/quick-create';
 import { NextSteps } from '@/components/dashboard/next-steps';
+import { AccountRecent } from '@/components/dashboard/account-recent';
 import type { DashboardSummary } from '@/lib/dashboard/types';
 
 export default function DashboardPage() {
@@ -89,6 +90,8 @@ export default function DashboardPage() {
       {data.predictionAccuracy
         ? <PredictionAccuracy data={data.predictionAccuracy} />
         : <PredictionAccuracyLocked />}
+
+      <AccountRecent />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <NicheDistribution rows={data.nicheDistribution} />
