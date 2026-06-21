@@ -77,8 +77,23 @@ export function AccountRecent() {
         )}
 
         {error && (
-          <div className="mt-3 rounded-md bg-destructive/10 p-2.5 text-xs text-destructive">
-            {error}
+          <div className="mt-3 space-y-2 rounded-md bg-destructive/10 p-2.5 text-xs text-destructive">
+            <p>{error}</p>
+            {/login|登录|抓取失败|502/i.test(error) && (
+              <div className="rounded bg-white/60 p-2 text-foreground">
+                <p className="font-medium">可能是 cheat 端登录态过期。 解决:</p>
+                <ol className="ml-4 mt-1 list-decimal space-y-0.5 text-muted-foreground">
+                  <li>
+                    在终端运行:{' '}
+                    <code className="rounded bg-muted px-1 py-0.5">
+                      cd $CHEAT_ADAPTER_PATH && python3 review.py login
+                    </code>
+                  </li>
+                  <li>扫码登录创作者中心 → 关闭浏览器</li>
+                  <li>回这里点 [刷新] 重试</li>
+                </ol>
+              </div>
+            )}
           </div>
         )}
 

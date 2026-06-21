@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,6 +25,7 @@ interface InspirationStylePreview {
 
 export function ScriptForm() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [platform, setPlatform] = useState<Platform>('douyin');
   const [topic, setTopic] = useState('');
   const [niche, setNiche] = useState<string>('ai-knowledge');
@@ -125,6 +126,13 @@ export function ScriptForm() {
                 onClick={() => {
                   setInspirationId(null);
                   setInspirationStyle(null);
+                  // 同步清掉 URL 里的 inspirationId, 避免刷新页面又被自动应用
+                  if (searchParams?.has('inspirationId')) {
+                    const next = new URLSearchParams(searchParams.toString());
+                    next.delete('inspirationId');
+                    const qs = next.toString();
+                    router.replace(qs ? `/agent?${qs}` : '/agent', { scroll: false });
+                  }
                 }}
                 className="text-xs text-purple-700 hover:underline"
               >
