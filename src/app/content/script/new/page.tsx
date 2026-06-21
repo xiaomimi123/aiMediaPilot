@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { ScriptForm } from '@/components/content/script-form';
 
 export default function NewScriptPage() {
@@ -9,7 +10,9 @@ export default function NewScriptPage() {
           给定 topic + niche, 一次生成 4 区块: 钩子 / 完播节奏 / 标题 / 封面建议。
         </p>
       </div>
-      <ScriptForm />
+      <Suspense fallback={<div className="text-sm text-muted-foreground">加载中…</div>}>
+        <ScriptForm />
+      </Suspense>
     </div>
   );
 }

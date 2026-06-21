@@ -92,7 +92,7 @@ export function RetroSection({ analysis, onChanged }: { analysis: AnalysisV2; on
             <RetroGapView report={analysis.retroReport} />
           ) : (
             <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">
-              ⚠ AI 落差总结生成失败,可点"重新拉取"再试
+              ⚠ AI 落差总结生成失败,可点 [重新拉取] 再试
             </div>
           )}
           <div className="flex gap-2">

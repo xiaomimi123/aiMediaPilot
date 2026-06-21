@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { UploadForm } from '@/components/content/upload-form';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
@@ -13,7 +14,9 @@ export default async function NewAnalysisPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <h1 className="text-2xl font-semibold">新分析</h1>
-      <UploadForm needsBaselineOnboarding={!hasBaseline} />
+      <Suspense fallback={<div className="text-sm text-muted-foreground">加载中…</div>}>
+        <UploadForm needsBaselineOnboarding={!hasBaseline} />
+      </Suspense>
     </div>
   );
 }
