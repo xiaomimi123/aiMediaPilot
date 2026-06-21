@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { Plus, Sparkles, Trash2, X } from 'lucide-react';
+import { KNOWN_NICHES } from '@/lib/llm/prompts/expert-persona';
 
 type Platform = 'douyin' | 'xiaohongshu' | 'gongzhonghao';
 type PlatformFilter = 'all' | Platform;
@@ -69,6 +70,9 @@ export default function InspirationPage() {
   const [history, setHistory] = useState<InsightHistoryItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
+  const [niche, setNiche] = useState<string>('ai-knowledge');
+  const [customNiche, setCustomNiche] = useState('');
+  const effectiveNiche = niche === '__custom' ? customNiche.trim() : niche;
 
   const filteredItems =
     platformFilter === 'all' ? items : items.filter((v) => v.platform === platformFilter);
@@ -96,6 +100,22 @@ export default function InspirationPage() {
 
   useEffect(() => {
     void refresh();
+    // Fetch user's most-used niche as default selection
+    fetch('/api/v1/user/default-niche')
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.success && typeof j.data.niche === 'string') {
+          const found = KNOWN_NICHES.find((n) => n.key === j.data.niche);
+          if (found) setNiche(j.data.niche);
+          else {
+            setNiche('__custom');
+            setCustomNiche(j.data.niche);
+          }
+        }
+      })
+      .catch(() => {
+        /* keep default */
+      });
   }, []);
 
   const toggleSelected = (id: string) => {
@@ -125,7 +145,10 @@ export default function InspirationPage() {
       const res = await fetch('/api/v1/inspiration/insights/generate', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ videoIds: Array.from(selected), niche: 'ai-knowledge' }),
+        body: JSON.stringify({
+          videoIds: Array.from(selected),
+          niche: effectiveNiche || 'ai-knowledge',
+        }),
       });
       const json = await res.json();
       if (!json.success) {
@@ -187,12 +210,37 @@ export default function InspirationPage() {
         </Button>
         <Button
           onClick={handleGenerate}
-          disabled={selected.size < 2 || generating}
+          disabled={selected.size < 2 || generating || !effectiveNiche}
           variant={selected.size >= 2 ? 'brand' : 'outline'}
         >
           <Sparkles className="mr-1 h-4 w-4" />
           {generating ? '分析中...' : `🧠 让 AI 总结这 ${selected.size || 0} 条共性`}
         </Button>
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span>按 niche:</span>
+          <select
+            value={niche}
+            onChange={(e) => setNiche(e.target.value)}
+            disabled={generating}
+            className="rounded border border-border bg-background px-2 py-1 text-xs"
+          >
+            {KNOWN_NICHES.map((n) => (
+              <option key={n.key} value={n.key}>
+                {n.label}
+              </option>
+            ))}
+            <option value="__custom">其他 (自填)</option>
+          </select>
+          {niche === '__custom' && (
+            <Input
+              value={customNiche}
+              onChange={(e) => setCustomNiche(e.target.value)}
+              placeholder="自填 niche"
+              disabled={generating}
+              className="h-7 w-32 text-xs"
+            />
+          )}
+        </div>
         {selected.size > 0 && (
           <span className="text-xs text-muted-foreground">已选 {selected.size} 条</span>
         )}

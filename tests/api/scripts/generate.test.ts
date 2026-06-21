@@ -5,6 +5,15 @@ vi.mock('@/lib/llm/deepseek', () => ({
   DeepSeekTextLLM: vi.fn(() => llmMock),
 }));
 
+vi.mock('@/lib/user', () => ({
+  getOrCreateDefaultUser: vi.fn(async () => ({ id: 'user1' })),
+}));
+
+const prismaMock = vi.hoisted(() => ({
+  inspirationInsight: { findFirst: vi.fn() },
+}));
+vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
+
 import { POST } from '@/app/api/v1/scripts/generate/route';
 
 function makeReq(body: unknown): Request {
@@ -42,6 +51,7 @@ beforeEach(() => {
     result: validResponse,
     usage: { model: 'deepseek', promptTokens: 100, completionTokens: 200, estCostUSD: 0.001 },
   });
+  prismaMock.inspirationInsight.findFirst.mockResolvedValue(null);
 });
 
 describe('POST /api/v1/scripts/generate', () => {
@@ -67,5 +77,71 @@ describe('POST /api/v1/scripts/generate', () => {
     const json = await res.json();
     expect(json.success).toBe(false);
     expect(json.message).toMatch(/LLM down|生成失败/);
+  });
+
+  describe('inspirationId 透传', () => {
+    it('inspirationId 存在 → LLM userMessage 含 hookTypes/titlePatterns 文本片段', async () => {
+      prismaMock.inspirationInsight.findFirst.mockResolvedValue({
+        output: {
+          hookTypes: ['数字', '反差'],
+          titlePatterns: ['以数字开头', '含 emoji'],
+          durationInsight: '45-60s 最优',
+        },
+      });
+      const res = await POST(
+        makeReq({
+          topic: '主题示例',
+          niche: 'ai-knowledge',
+          inspirationId: 'insight1',
+        }),
+      );
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.data.inspirationApplied).toBe(true);
+
+      // 查 LLM call 的 userMessage 应该含 style hints
+      const call = llmMock.callStructured.mock.calls[0][0];
+      const userText = (call.userMessage[0] as { text: string }).text;
+      expect(userText).toContain('钩子类型: 数字 / 反差');
+      expect(userText).toContain('标题模式: 以数字开头 / 含 emoji');
+      expect(userText).toContain('时长规律: 45-60s 最优');
+      expect(userText).toContain('参考下面对标爆款的共性');
+
+      // findFirst 应该用 (id, userId) 双 where (ownership check)
+      expect(prismaMock.inspirationInsight.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'insight1', userId: 'user1' },
+        }),
+      );
+    });
+
+    it('inspirationId 不存在或不属于自己 → 跑下去 + inspirationApplied=false', async () => {
+      prismaMock.inspirationInsight.findFirst.mockResolvedValue(null);
+      const res = await POST(
+        makeReq({
+          topic: '主题示例',
+          niche: 'ai-knowledge',
+          inspirationId: 'not-mine',
+        }),
+      );
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.data.inspirationApplied).toBe(false);
+
+      const call = llmMock.callStructured.mock.calls[0][0];
+      const userText = (call.userMessage[0] as { text: string }).text;
+      expect(userText).not.toContain('参考下面对标爆款');
+    });
+
+    it('不传 inspirationId → 不查 Prisma, 不带 styleHints', async () => {
+      const res = await POST(
+        makeReq({ topic: '主题示例', niche: 'ai-knowledge' }),
+      );
+      expect(res.status).toBe(200);
+      expect(prismaMock.inspirationInsight.findFirst).not.toHaveBeenCalled();
+      const call = llmMock.callStructured.mock.calls[0][0];
+      const userText = (call.userMessage[0] as { text: string }).text;
+      expect(userText).not.toContain('参考下面对标爆款');
+    });
   });
 });
