@@ -8,6 +8,12 @@ import { RetroSection } from '@/components/content/retro-section';
 import { PredictionCard } from '@/components/content/prediction-card';
 import { PublishChecklist } from '@/components/content/publish-checklist';
 import type { PublishChecklistState } from '@/lib/checklist/types';
+import type { PredictedPlaysRange } from '@/lib/prediction/types';
+
+// Prisma Json 字段 — 运行时由各 zod schema 保证形状, 这里用 Record<string, unknown> 替代 any,
+// 保留 TS noUncheckedAccess 检查, 在向下游组件传时再 cast 到具体类型.
+type Report = Record<string, unknown>;
+type LLMUsage = Record<string, unknown>;
 
 type Analysis = {
   id: string;
@@ -16,8 +22,8 @@ type Analysis = {
   status: string;
   errorMessage: string | null;
   progress: { stage?: string; percent?: number; label?: string } | null;
-  report: any | null;
-  llmUsage: any | null;
+  report: Report | null;
+  llmUsage: LLMUsage | null;
   coverCandidatesCount: number;
   retryCount: number;
   publishChecklist: PublishChecklistState | null;
@@ -28,8 +34,8 @@ type Analysis = {
   publishedAt: string | null;
   retroStatus: 'SCHEDULED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | null;
   retroErrorMessage: string | null;
-  retroReport: any | null;
-  actualMetric: any | null;
+  retroReport: Record<string, unknown> | null;
+  actualMetric: Record<string, unknown> | null;
 };
 
 export default function PreflightDetailPage() {
@@ -67,7 +73,7 @@ export default function PreflightDetailPage() {
   };
 
   const isRunning = data.status === 'PREPROCESSING' || data.status === 'ANALYZING' || data.status === 'QUEUED';
-  const cost = data.llmUsage?.total?.estCostUSD;
+  const cost = (data.llmUsage as { total?: { estCostUSD?: number } } | null)?.total?.estCostUSD;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -91,13 +97,13 @@ export default function PreflightDetailPage() {
       <ProgressStages status={data.status} progress={data.progress} errorMessage={data.errorMessage} />
 
       {data.status === 'COMPLETED' && data.report && (
-        <PredictionCard data={data.report.predictedPlaysRange} />
+        <PredictionCard data={data.report.predictedPlaysRange as PredictedPlaysRange | null | undefined} />
       )}
 
       {data.status === 'COMPLETED' && data.report && (
         <ReportView
           analysisId={data.id}
-          report={data.report}
+          report={data.report as Parameters<typeof ReportView>[0]['report']}
           coverCandidateCount={data.coverCandidatesCount}
         />
       )}
@@ -105,8 +111,8 @@ export default function PreflightDetailPage() {
       {data.status === 'COMPLETED' && data.report && (
         <PublishChecklist
           analysisId={data.id}
-          niche={data.report.niche || 'ai-knowledge'}
-          hookScore={data.report.hook?.score ?? null}
+          niche={(data.report.niche as string | undefined) || 'ai-knowledge'}
+          hookScore={(data.report.hook as { score?: number } | undefined)?.score ?? null}
           topActionItems={(data.report.topActionItems ?? []) as string[]}
           initial={data.publishChecklist}
         />

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent } from '@/components/ui/card';
+import { isHookTypeOverlap } from '@/lib/patterns/hook-similarity';
 
 export const dynamic = 'force-dynamic';
 
@@ -257,7 +258,7 @@ export default async function PatternsPage() {
                 <p className="text-xs text-muted-foreground">灵感库主流钩子</p>
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   {latest.hookTypes.slice(0, 5).map((h, i) => {
-                    const overlap = stats.hookTypes.some((own) => own.type.includes(h) || h.includes(own.type));
+                    const overlap = stats.hookTypes.some((own) => isHookTypeOverlap(own.type, h));
                     return (
                       <span
                         key={i}
