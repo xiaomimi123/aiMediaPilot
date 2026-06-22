@@ -60,30 +60,45 @@ export default async function AgentPage() {
 
       {isFirstTime && (
         <div className="rounded-xl border-2 border-dashed border-purple-300 bg-purple-50/40 p-5">
-          <p className="text-base font-semibold text-purple-900">👋 第一次来? 三步上手:</p>
+          <p className="text-base font-semibold text-purple-900">👋 第一次来? 没选题灵感? 一键搞定:</p>
           <ol className="mt-3 space-y-2 text-sm text-purple-900">
             <li>
-              <span className="font-medium">1. 去灵感库</span> 粘 5+ 个对标爆款 URL (抖音自动抓,
-              小红书/公众号手动填标题)
+              <span className="font-medium">1. AI 想 topic</span> 点 [主题发现], 选 niche → 系统给 12 个可立刻上手的选题候选
+              (零输入, 不用提供链接素材)
             </li>
             <li>
-              <span className="font-medium">2. AI 总结</span> 选 ≥ 2 条,系统给出标题模式 / 钩子类型 /
-              推荐你下一步可做的 topic
+              <span className="font-medium">2. 一键生成脚本</span> 看到中意的 topic → 点 [用这个生成], 跳本页自动出 4 区块 platform-ready 脚本
             </li>
             <li>
-              <span className="font-medium">3. 一键生成</span> 推荐 topic 点 [→ 用这个生成], 系统借鉴灵感库风格出 platform-ready 脚本
+              <span className="font-medium">3. (可选) 收集对标</span> 想做 [借鉴爆款风格]?
+              去 [灵感库] 粘对标 URL → AI 总结共性 → 风格透传到下次生成
             </li>
           </ol>
           <Link
-            href="/agent/inspiration"
+            href="/agent/discover"
             className="mt-4 inline-block rounded-md bg-brand-gradient px-4 py-2 text-sm font-medium text-white shadow-sm transition-opacity hover:opacity-90"
           >
-            去灵感库收第一条 →
+            🎯 让 AI 给我 12 个选题 →
           </Link>
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <Link
+          href="/agent/discover"
+          className="block rounded-xl border-2 border-pink-300 bg-gradient-to-br from-pink-50 to-purple-50 p-4 transition-all hover:shadow-md"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🎯</span>
+            <div className="flex-1">
+              <p className="font-semibold">主题发现</p>
+              <p className="text-xs text-muted-foreground">
+                零输入 — AI 直接给 12 个选题, 含钩子/难度
+              </p>
+            </div>
+          </div>
+        </Link>
+
         <Link
           href="/agent/inspiration"
           className="block rounded-xl border border-purple-200 bg-purple-50/50 p-4 transition-colors hover:bg-purple-50"
@@ -93,7 +108,7 @@ export default async function AgentPage() {
             <div className="flex-1">
               <p className="font-semibold">灵感视频库</p>
               <p className="text-xs text-muted-foreground">
-                收集对标爆款 → AI 总结共性 → 推荐 topic
+                收对标爆款 → AI 总结共性 → 风格透传
               </p>
             </div>
           </div>
@@ -108,7 +123,7 @@ export default async function AgentPage() {
             <div className="flex-1">
               <p className="font-semibold">我的内容规律</p>
               <p className="text-xs text-muted-foreground">
-                看你的标题字数 / 钩子偏好 / niche 分布,跟灵感库对照
+                看你的标题字数 / 钩子偏好 / niche 分布
               </p>
             </div>
           </div>
