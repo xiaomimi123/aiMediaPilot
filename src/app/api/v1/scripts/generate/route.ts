@@ -1,24 +1,22 @@
 import { ok, fail } from '@/lib/api';
 import { getDeepSeekTextLLM } from '@/lib/llm/clients';
-import { SCRIPT_GENERATE_DOUYIN } from '@/lib/llm/prompts/script-generate-douyin';
-import { SCRIPT_GENERATE_XIAOHONGSHU } from '@/lib/llm/prompts/script-generate-xiaohongshu';
-import { SCRIPT_GENERATE_GONGZHONGHAO } from '@/lib/llm/prompts/script-generate-gongzhonghao';
+import {
+  SCRIPT_GENERATE_DOUYIN,
+  SCRIPT_GENERATE_XIAOHONGSHU,
+  SCRIPT_GENERATE_GONGZHONGHAO,
+} from '@/lib/llm/prompts';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
-import type { InspirationStyleHints } from '@/lib/llm/prompts/style-hints';
+import type { InspirationStyleHints } from '@/lib/llm/prompts';
 import { normalizeNiche } from '@/lib/niche';
+import { isContentPlatform, type ContentPlatform } from '@/lib/platform';
+import { readInspirationInsight } from '@/lib/json-readers';
 
 const PROMPT_BY_PLATFORM = {
   douyin: SCRIPT_GENERATE_DOUYIN,
   xiaohongshu: SCRIPT_GENERATE_XIAOHONGSHU,
   gongzhonghao: SCRIPT_GENERATE_GONGZHONGHAO,
 } as const;
-
-type Platform = keyof typeof PROMPT_BY_PLATFORM;
-
-function isPlatform(v: unknown): v is Platform {
-  return v === 'douyin' || v === 'xiaohongshu' || v === 'gongzhonghao';
-}
 
 async function loadStyleHints(inspirationId: string): Promise<InspirationStyleHints | null> {
   try {
@@ -28,15 +26,12 @@ async function loadStyleHints(inspirationId: string): Promise<InspirationStyleHi
       select: { output: true },
     });
     if (!insight) return null;
-    const out = insight.output as {
-      hookTypes?: string[];
-      titlePatterns?: string[];
-      durationInsight?: string;
-    };
+    const out = readInspirationInsight(insight.output);
+    if (!out) return null;
     return {
-      hookTypes: Array.isArray(out.hookTypes) ? out.hookTypes : undefined,
-      titlePatterns: Array.isArray(out.titlePatterns) ? out.titlePatterns : undefined,
-      durationInsight: typeof out.durationInsight === 'string' ? out.durationInsight : undefined,
+      hookTypes: out.hookTypes,
+      titlePatterns: out.titlePatterns,
+      durationInsight: out.durationInsight,
     };
   } catch (e) {
     console.warn('[loadStyleHints]', e);
@@ -54,7 +49,7 @@ export async function POST(req: Request) {
 
   const topic = typeof body.topic === 'string' ? body.topic.trim() : '';
   const niche = normalizeNiche(typeof body.niche === 'string' ? body.niche : '');
-  const platform: Platform = isPlatform(body.platform) ? body.platform : 'douyin';
+  const platform: ContentPlatform = isContentPlatform(body.platform) ? body.platform : 'douyin';
   const inspirationId =
     typeof body.inspirationId === 'string' && body.inspirationId.length > 0
       ? body.inspirationId

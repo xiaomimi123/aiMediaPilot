@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { Plus, Sparkles, Trash2 } from 'lucide-react';
-import { KNOWN_NICHES } from '@/lib/llm/prompts/expert-persona';
+import { KNOWN_NICHES } from '@/lib/llm/prompts';
 import {
   type Platform,
   type PlatformFilter,

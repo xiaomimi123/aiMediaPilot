@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 import { ScriptForm } from '@/components/content/script-form';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
+import { readInspirationInsight } from '@/lib/json-readers';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,14 +31,12 @@ async function getOnboardingState(): Promise<OnboardingState> {
       prisma.inspirationVideo.count({ where: { userId: user.id } }),
       prisma.scriptDraft.count({ where: { userId: user.id } }),
     ]);
-    const out = insight?.output as { recommendedTopics?: LatestRec[] } | null;
+    const out = insight ? readInspirationInsight(insight.output) : null;
     return {
       latest: insight
         ? {
             id: insight.id,
-            recommended: Array.isArray(out?.recommendedTopics)
-              ? out!.recommendedTopics.slice(0, 4)
-              : [],
+            recommended: out?.recommendedTopics?.slice(0, 4) ?? [],
           }
         : null,
       hasInspirationVideos: videoCount > 0,

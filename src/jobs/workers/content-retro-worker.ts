@@ -7,7 +7,7 @@ import { probeDouyinCookie, runDouyinAdapter } from '@/lib/douyin/adapter';
 import { parseReportMd } from '@/lib/douyin/report-parser';
 import { type IVisionLLM, type TokenUsage } from '@/lib/llm/vision';
 import { getDeepSeekTextLLM, getOpenAIVisionLLM } from '@/lib/llm/clients';
-import { RETRO_GAP, type RetroGapResponse } from '@/lib/llm/prompts/retro-gap';
+import { RETRO_GAP, type RetroGapResponse } from '@/lib/llm/prompts';
 import type { RetroStatus } from '@prisma/client';
 
 type JobData = { analysisId: string };

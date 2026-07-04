@@ -24,39 +24,39 @@ model User {
   // Auto-sync (Sub-project D): 最近一次成功 cron tick 的时间戳
   lastAutoSyncAt DateTime?
 
-  aiConfigs       AIConfig[]
-  imageGenConfigs ImageGenConfig[]
-  accounts        PlatformAccount[]
-  contents        Content[]
-  schedules       PublishTask[]
-  competitors     Competitor[]
-  contentAnalyses ContentAnalysis[]
-  scriptDrafts    ScriptDraft[]
-  inspirationVideos    InspirationVideo[]
-  inspirationInsights  InspirationInsight[]
+  aiConfigs           AIConfig[]
+  imageGenConfigs     ImageGenConfig[]
+  accounts            PlatformAccount[]
+  contents            Content[]
+  schedules           PublishTask[]
+  competitors         Competitor[]
+  contentAnalyses     ContentAnalysis[]
+  scriptDrafts        ScriptDraft[]
+  inspirationVideos   InspirationVideo[]
+  inspirationInsights InspirationInsight[]
 }
 
 // Sub-project G: 灵感视频库 — 用户精选爆款 + AI 总结共性
 model InspirationVideo {
-  id            String    @id @default(cuid())
-  userId        String
-  user          User      @relation(fields: [userId], references: [id])
-  platform      String    @default("douyin")
-  awemeId       String
-  videoUrl      String
-  authorName    String?
-  title         String
-  playCount     BigInt?
-  likeCount     BigInt?
-  commentCount  BigInt?
-  shareCount    BigInt?
-  collectCount  BigInt?
-  duration      Int?
-  publishedAt   DateTime?
-  thumbnailUrl  String?
-  userNote      String?
-  rawData       Json?
-  fetchedAt     DateTime  @default(now())
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  platform     String    @default("douyin")
+  awemeId      String
+  videoUrl     String
+  authorName   String?
+  title        String
+  playCount    BigInt?
+  likeCount    BigInt?
+  commentCount BigInt?
+  shareCount   BigInt?
+  collectCount BigInt?
+  duration     Int?
+  publishedAt  DateTime?
+  thumbnailUrl String?
+  userNote     String?
+  rawData      Json?
+  fetchedAt    DateTime  @default(now())
 
   @@unique([userId, platform, awemeId])
   @@index([userId, fetchedAt])
@@ -66,23 +66,23 @@ model InspirationInsight {
   id          String   @id @default(cuid())
   userId      String
   user        User     @relation(fields: [userId], references: [id])
-  videoIds    Json     // [InspirationVideo.id, ...]
-  output      Json     // { titlePatterns, hookTypes, durationStats, recommendedTopics, ... }
+  videoIds    Json // [InspirationVideo.id, ...]
+  output      Json // { titlePatterns, hookTypes, durationStats, recommendedTopics, ... }
   generatedAt DateTime @default(now())
 
   @@index([userId, generatedAt])
 }
 
 model ScriptDraft {
-  id         String           @id @default(cuid())
-  userId     String
-  user       User             @relation(fields: [userId], references: [id])
-  topic      String
-  niche      String
-  platform   String           @default("douyin") // 'douyin' | 'xiaohongshu' | 'gongzhonghao'
-  output     Json
-  picked     Json?            // D1: 用户选定要发的版本 (titleIdx / hookIdx / reviewed sections)
-  createdAt  DateTime         @default(now())
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  topic     String
+  niche     String
+  platform  String   @default("douyin") // 'douyin' | 'xiaohongshu' | 'gongzhonghao'
+  output    Json
+  picked    Json? // D1: 用户选定要发的版本 (titleIdx / hookIdx / reviewed sections)
+  createdAt DateTime @default(now())
 
   // K2: 链到具体被用于哪条 analysis (NULL = 还没拍/还没分析)
   analysisId String?
@@ -265,6 +265,10 @@ model NoteMetric {
 
 // ==================== AI 创作内容 ====================
 
+/// @deprecated pivot 前的老通用发布模型。 2026-07 起没有 src/ 代码读写它。
+/// 替代者: `ScriptDraft` (脚本生成产物) + `ContentAnalysis` (视频预诊断)。
+/// 表和数据保留是为了不丢历史; 新代码不要再写这里。 未来清理时一起 DROP:
+/// Content / PublishTask / PublishTarget / Competitor / CompetitorNote。
 model Content {
   id          String        @id @default(cuid())
   userId      String
@@ -304,8 +308,9 @@ enum ContentStatus {
   ARCHIVED
 }
 
-// ==================== 发布任务 ====================
+// ==================== 发布任务 (⚠️ deprecated, 见 Content) ====================
 
+/// @deprecated 见 [Content] 注释。 pivot 后不再"一键发布", 用户手动去平台发。
 model PublishTask {
   id          String        @id @default(cuid())
   userId      String
@@ -327,6 +332,7 @@ model PublishTask {
   @@index([status, scheduledAt])
 }
 
+/// @deprecated 见 [Content] 注释。
 model PublishTarget {
   id             String              @id @default(cuid())
   publishTaskId  String
@@ -380,8 +386,9 @@ enum TargetPublishStatus {
   CANCELLED
 }
 
-// ==================== 竞品账号 ====================
+// ==================== 竞品账号 (⚠️ deprecated) ====================
 
+/// @deprecated 见 [Content] 注释。 竞品分析目前走 InspirationVideo (用户手挑对标).
 model Competitor {
   id             String    @id @default(cuid())
   userId         String
@@ -402,6 +409,7 @@ model Competitor {
   @@unique([userId, platform, platformUid])
 }
 
+/// @deprecated 见 [Content] 注释。
 model CompetitorNote {
   id             String    @id @default(cuid())
   competitorId   String

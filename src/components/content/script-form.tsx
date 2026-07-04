@@ -5,17 +5,31 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import { KNOWN_NICHES } from '@/lib/llm/prompts/expert-persona';
+import { KNOWN_NICHES } from '@/lib/llm/prompts';
 import { ScriptResult } from './script-result';
 import { cn } from '@/lib/utils';
+import {
+  CONTENT_PLATFORMS,
+  CONTENT_PLATFORM_EMOJI,
+  CONTENT_PLATFORM_LABEL,
+  type ContentPlatform,
+} from '@/lib/platform';
 
-export type Platform = 'douyin' | 'xiaohongshu' | 'gongzhonghao';
+// 保留 Platform 别名, 老组件 import 稳定
+export type Platform = ContentPlatform;
 
-const PLATFORMS: { value: Platform; label: string; emoji: string; sub: string }[] = [
-  { value: 'douyin', label: '抖音', emoji: '🎬', sub: '短视频脚本 + 钩子 + 完播节奏' },
-  { value: 'xiaohongshu', label: '小红书', emoji: '📕', sub: '图文笔记 + 标签 + 配图建议' },
-  { value: 'gongzhonghao', label: '公众号', emoji: '📰', sub: '长文章 + 大纲 + 摘要' },
-];
+const PLATFORM_SUB: Record<ContentPlatform, string> = {
+  douyin: '短视频脚本 + 钩子 + 完播节奏',
+  xiaohongshu: '图文笔记 + 标签 + 配图建议',
+  gongzhonghao: '长文章 + 大纲 + 摘要',
+};
+
+const PLATFORMS = CONTENT_PLATFORMS.map((value) => ({
+  value,
+  label: CONTENT_PLATFORM_LABEL[value],
+  emoji: CONTENT_PLATFORM_EMOJI[value],
+  sub: PLATFORM_SUB[value],
+}));
 
 interface InspirationStylePreview {
   hookTypes: string[];

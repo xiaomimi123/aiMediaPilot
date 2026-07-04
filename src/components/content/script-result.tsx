@@ -3,13 +3,16 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import type { DouyinScriptResponse } from '@/lib/llm/prompts/script-generate-douyin';
-import type { XHSScriptResponse } from '@/lib/llm/prompts/script-generate-xiaohongshu';
-import type { ArticleScriptResponse } from '@/lib/llm/prompts/script-generate-gongzhonghao';
+import type {
+  DouyinScriptResponse,
+  XHSScriptResponse,
+  ArticleScriptResponse,
+} from '@/lib/llm/prompts';
 import type { PickedState } from '@/lib/script-picked/types';
+import type { ContentPlatform } from '@/lib/platform';
 import { PickPanel } from './pick-panel';
 
-export type Platform = 'douyin' | 'xiaohongshu' | 'gongzhonghao';
+export type Platform = ContentPlatform;
 
 interface Props {
   platform: Platform;

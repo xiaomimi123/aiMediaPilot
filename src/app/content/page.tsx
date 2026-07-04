@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { KNOWN_NICHES } from '@/lib/llm/prompts/expert-persona';
+import { KNOWN_NICHES } from '@/lib/llm/prompts';
 
 const NICHE_LABEL_MAP = new Map(KNOWN_NICHES.map((n) => [n.key, n.label]));
 

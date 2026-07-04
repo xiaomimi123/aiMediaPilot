@@ -3,6 +3,7 @@ import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent } from '@/components/ui/card';
 import { isHookTypeOverlap } from '@/lib/patterns/hook-similarity';
+import { readScriptDraftOutput } from '@/lib/json-readers';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,11 +57,8 @@ async function aggregate(): Promise<{ stats: ScriptStats; latest: LatestInsight 
     if (t >= D7) last7d++;
     if (t >= D30) last30d++;
 
-    const out = s.output as {
-      titles?: Array<{ text?: unknown; hookType?: unknown }>;
-      hooks?: Array<{ text?: unknown }>;
-    };
-    if (Array.isArray(out?.titles)) {
+    const out = readScriptDraftOutput(s.output);
+    if (out?.titles) {
       for (const t of out.titles) {
         if (typeof t.text === 'string') titleLengths.push(t.text.length);
         if (typeof t.hookType === 'string') {

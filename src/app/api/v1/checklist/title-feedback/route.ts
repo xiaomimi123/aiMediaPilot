@@ -1,12 +1,12 @@
 import { ok, fail } from '@/lib/api';
 import { getDeepSeekTextLLM } from '@/lib/llm/clients';
-import { CRITIQUE_BY_PLATFORM, type CritiquePlatform } from '@/lib/llm/prompts/title-critique';
+import { CRITIQUE_BY_PLATFORM, type CritiquePlatform } from '@/lib/llm/prompts';
 import { ipKey, rateLimit } from '@/lib/rate-limit';
 import { normalizeNiche } from '@/lib/niche';
+import { isContentPlatform } from '@/lib/platform';
 
-function isCritiquePlatform(v: unknown): v is CritiquePlatform {
-  return v === 'douyin' || v === 'xiaohongshu' || v === 'gongzhonghao';
-}
+// title-critique 的支持平台恰好等于 ContentPlatform, CritiquePlatform 名义上不同但值一致
+const isCritiquePlatform = (v: unknown): v is CritiquePlatform => isContentPlatform(v);
 
 export async function POST(req: Request) {
   // 前端已 debounce 1.5s + AbortController; 后端限流是 client-bypass 兜底,

@@ -2,7 +2,7 @@ import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { getDeepSeekTextLLM } from '@/lib/llm/clients';
-import { TOPIC_DISCOVERY } from '@/lib/llm/prompts/topic-discovery';
+import { TOPIC_DISCOVERY } from '@/lib/llm/prompts';
 import { normalizeNiche } from '@/lib/niche';
 
 interface ReqBody {

@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Sparkles } from 'lucide-react';
-import { KNOWN_NICHES } from '@/lib/llm/prompts/expert-persona';
+import { KNOWN_NICHES } from '@/lib/llm/prompts';
 import { cn } from '@/lib/utils';
+import { CONTENT_PLATFORMS, CONTENT_PLATFORM_EMOJI, CONTENT_PLATFORM_LABEL, type ContentPlatform } from '@/lib/platform';
 
 interface DiscoveredTopic {
   title: string;
@@ -31,18 +32,18 @@ const DIFFICULTY_BADGE: Record<DiscoveredTopic['difficulty'], { label: string; c
   high: { label: '高门槛 · 1+天', cls: 'bg-amber-100 text-amber-900' },
 };
 
-const PLATFORMS: { value: 'douyin' | 'xiaohongshu' | 'gongzhonghao'; label: string; emoji: string }[] = [
-  { value: 'douyin', label: '抖音', emoji: '🎬' },
-  { value: 'xiaohongshu', label: '小红书', emoji: '📕' },
-  { value: 'gongzhonghao', label: '公众号', emoji: '📰' },
-];
+const PLATFORMS = CONTENT_PLATFORMS.map((value) => ({
+  value,
+  label: CONTENT_PLATFORM_LABEL[value],
+  emoji: CONTENT_PLATFORM_EMOJI[value],
+}));
 
 export default function DiscoverPage() {
   const [niche, setNiche] = useState<string>('ai-knowledge');
   const [customNiche, setCustomNiche] = useState('');
   const [count, setCount] = useState(12);
   const [extraHint, setExtraHint] = useState('');
-  const [platform, setPlatform] = useState<'douyin' | 'xiaohongshu' | 'gongzhonghao'>('douyin');
+  const [platform, setPlatform] = useState<ContentPlatform>('douyin');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DiscoveryResult | null>(null);

@@ -2,8 +2,9 @@ import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { getDeepSeekTextLLM } from '@/lib/llm/clients';
-import { INSPIRATION_INSIGHT } from '@/lib/llm/prompts/inspiration-insight';
+import { INSPIRATION_INSIGHT } from '@/lib/llm/prompts';
 import { normalizeNiche } from '@/lib/niche';
+import type { ContentPlatform } from '@/lib/platform';
 
 interface ReqBody {
   videoIds?: unknown;
@@ -53,7 +54,7 @@ export async function POST(req: Request) {
   const platformSet = new Set(videos.map((v) => v.platform));
   const batchPlatform =
     platformSet.size === 1
-      ? (videos[0].platform as 'douyin' | 'xiaohongshu' | 'gongzhonghao')
+      ? (videos[0].platform as ContentPlatform)
       : ('mixed' as const);
 
   const llm = getDeepSeekTextLLM(apiKey);

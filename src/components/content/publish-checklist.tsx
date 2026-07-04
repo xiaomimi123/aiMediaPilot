@@ -10,6 +10,7 @@ import {
   needsHookRewrite,
   type PublishChecklistState,
 } from '@/lib/checklist/types';
+import type { ContentPlatform } from '@/lib/platform';
 
 interface TitleFeedback {
   lengthVerdict: 'good' | 'short' | 'long';
@@ -21,7 +22,7 @@ interface TitleFeedback {
 interface Props {
   analysisId: string;
   niche: string;
-  platform?: 'douyin' | 'xiaohongshu' | 'gongzhonghao';
+  platform?: ContentPlatform;
   hookScore: number | null;
   topActionItems: string[];
   initial: PublishChecklistState | null;

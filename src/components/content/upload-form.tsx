@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import { KNOWN_NICHES } from '@/lib/llm/prompts/expert-persona';
+import { KNOWN_NICHES } from '@/lib/llm/prompts';
 
 export function UploadForm({ needsBaselineOnboarding = false }: { needsBaselineOnboarding?: boolean }) {
   const router = useRouter();

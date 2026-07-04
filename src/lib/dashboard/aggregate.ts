@@ -1,8 +1,13 @@
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
-import { KNOWN_NICHES } from '@/lib/llm/prompts/expert-persona';
+import { KNOWN_NICHES } from '@/lib/llm/prompts';
 import { computeCalibration } from './calibration';
 import { verdictOf, deltaPct } from './prediction-accuracy';
+import {
+  readOverallScore,
+  readPredictedPlaysRange,
+  readRetroReport,
+} from '@/lib/json-readers';
 import type {
   DashboardSummary,
   RetroReportLike,
@@ -123,13 +128,13 @@ export async function aggregateDashboard(userId: string): Promise<DashboardSumma
   ]);
 
   // completedAt is always set when status='COMPLETED' (set by content-analyze-worker)
-  const trend: TrendPoint[] = (trendRows as any[])
-    .map((r: any) => ({
+  const trend: TrendPoint[] = trendRows
+    .map((r) => ({
       id: r.id,
       videoFilename: r.videoFilename,
       completedAt: r.completedAt!.toISOString(),
-      overallScore: (r.report as any)?.overallScore ?? null,
-      inferredActualScore: (r.retroReport as any)?.inferredActualScore ?? null,
+      overallScore: readOverallScore(r.report),
+      inferredActualScore: readRetroReport(r.retroReport)?.inferredActualScore ?? null,
     }))
     .reverse();
 
@@ -147,16 +152,16 @@ export async function aggregateDashboard(userId: string): Promise<DashboardSumma
     }))
     .sort((a, b) => b.count - a.count);
 
-  const topPerformers: TopPerformer[] = (topPerformerRows as any[]).map((r: any) => ({
+  const topPerformers: TopPerformer[] = topPerformerRows.map((r) => ({
     id: r.analysis.id,
     videoFilename: r.analysis.videoFilename,
     plays: r.plays.toString(),
-    overallScore: (r.analysis.report as any)?.overallScore ?? null,
+    overallScore: readOverallScore(r.analysis.report),
   }));
 
-  const missesAll: BiggestMiss[] = (missCandidateRows as any[])
-    .map((r: any) => {
-      const rr = r.retroReport as any;
+  const missesAll: BiggestMiss[] = missCandidateRows
+    .map((r) => {
+      const rr = readRetroReport(r.retroReport);
       const predicted = rr?.predictedOverallScore;
       const inferred = rr?.inferredActualScore;
       if (typeof predicted !== 'number' || typeof inferred !== 'number') return null;
@@ -175,9 +180,7 @@ export async function aggregateDashboard(userId: string): Promise<DashboardSumma
   // ---- predictionAccuracy: JOIN report.predictedPlaysRange × ActualMetric.plays ----
   const predictionAccuracyEntries: PredictionAccuracyEntry[] = predictionAccuracyRows
     .map((r) => {
-      const range = (r.report as any)?.predictedPlaysRange as
-        | { predicted: number; lower: number; upper: number }
-        | undefined;
+      const range = readPredictedPlaysRange(r.report);
       const metric = r.actualMetrics[0];
       if (!range || !metric) return null;
       const actual = Number(metric.plays);
