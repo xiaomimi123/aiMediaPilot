@@ -5,7 +5,6 @@ const prismaMock = vi.hoisted(() => ({
     count: vi.fn(),
     aggregate: vi.fn(),
     findMany: vi.fn(),
-    groupBy: vi.fn(),
   },
   actualMetric: {
     findMany: vi.fn(),
@@ -31,10 +30,10 @@ beforeEach(() => {
   prismaMock.contentAnalysis.count.mockResolvedValue(0);
   prismaMock.contentAnalysis.aggregate.mockResolvedValue({ _sum: {} });
   prismaMock.contentAnalysis.findMany.mockResolvedValue([]);
-  prismaMock.contentAnalysis.groupBy.mockResolvedValue([]);
   prismaMock.actualMetric.findMany.mockResolvedValue([]);
   prismaMock.scriptDraft.count.mockResolvedValue(0);
-  prismaMock.$queryRaw.mockResolvedValue([{ total: 0 }]);
+  // $queryRaw 现在两次: 首个 promise-all 里的 niche groupBy, 之后独立的 totalSpend
+  prismaMock.$queryRaw.mockResolvedValue([]);
 });
 
 describe('aggregateDashboard', () => {
@@ -108,16 +107,17 @@ describe('aggregateDashboard', () => {
   });
 
   it('niche label 来自 KNOWN_NICHES, 未知 niche 用原字符串', async () => {
-    prismaMock.contentAnalysis.groupBy.mockResolvedValueOnce([
-      { niche: 'ai-knowledge', _count: { _all: 5 } },
-      { niche: 'custom-fitness', _count: { _all: 2 } },
-    ]);
+    // $queryRaw 顺序: (1) Promise.all 内的 niche 分组, (2) 之后的 totalSpend
     prismaMock.$queryRaw
-      .mockResolvedValueOnce([{ total: 0 }])  // totalSpendUSD
-      .mockResolvedValueOnce([{ avg: 72 }])   // niche 1 avg
-      .mockResolvedValueOnce([{ avg: 60 }]);  // niche 2 avg
+      .mockResolvedValueOnce([
+        { niche: 'ai-knowledge', count: 5, avg: 72 },
+        { niche: 'custom-fitness', count: 2, avg: 60 },
+      ])
+      .mockResolvedValueOnce([{ total: 0 }]);
     const result = await aggregateDashboard('user1');
     expect(result.nicheDistribution[0].label).toBe('AI 知识');
+    expect(result.nicheDistribution[0].count).toBe(5);
+    expect(result.nicheDistribution[0].avgOverallScore).toBe(72);
     expect(result.nicheDistribution[1].label).toBe('custom-fitness');
   });
 

@@ -25,3 +25,24 @@ export function computeHookFrameTimestamps(): number[] {
 export function computeCoverCandidateTimestamps(durationSec: number): number[] {
   return [0, durationSec / 3, durationSec / 2];
 }
+
+/**
+ * 在 items 里等距取 k 个 (含头含尾)。 items.length <= k 时原样返回。
+ * 用 index = round(i * (n-1) / (k-1)) linspace, 保证稳定拿到恰好 k 帧,
+ * 而不像 mod-based 降采样在长度非 k 整数倍时给出偏少/偏多的帧数。
+ */
+export function pickEvenlySpaced<T>(items: T[], k: number): T[] {
+  const n = items.length;
+  if (k <= 0) return [];
+  if (n <= k) return items;
+  if (k === 1) return [items[0]];
+  const seen = new Set<number>();
+  const picked: T[] = [];
+  for (let i = 0; i < k; i++) {
+    const idx = Math.round((i * (n - 1)) / (k - 1));
+    if (seen.has(idx)) continue;
+    seen.add(idx);
+    picked.push(items[idx]);
+  }
+  return picked;
+}

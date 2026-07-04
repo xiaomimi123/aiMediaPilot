@@ -11,11 +11,14 @@ interface LatestRec {
   rationale: string;
 }
 
-async function getOnboardingState(): Promise<{
+interface OnboardingState {
   latest: { id: string; recommended: LatestRec[] } | null;
   hasInspirationVideos: boolean;
   hasScripts: boolean;
-}> {
+  loadFailed: boolean;
+}
+
+async function getOnboardingState(): Promise<OnboardingState> {
   try {
     const user = await getOrCreateDefaultUser();
     const [insight, videoCount, scriptCount] = await Promise.all([
@@ -39,16 +42,26 @@ async function getOnboardingState(): Promise<{
         : null,
       hasInspirationVideos: videoCount > 0,
       hasScripts: scriptCount > 0,
+      loadFailed: false,
     };
-  } catch {
-    return { latest: null, hasInspirationVideos: false, hasScripts: false };
+  } catch (err) {
+    // 之前静默 return 默认值会让老用户误看到"👋 第一次来"引导。
+    // 现在把失败标出来, 首屏可以显式提示 "加载失败" 而不是伪装成新用户。
+    console.error('[/agent getOnboardingState] failed', err);
+    return {
+      latest: null,
+      hasInspirationVideos: false,
+      hasScripts: false,
+      loadFailed: true,
+    };
   }
 }
 
 export default async function AgentPage() {
-  const { latest, hasInspirationVideos, hasScripts } = await getOnboardingState();
+  const { latest, hasInspirationVideos, hasScripts, loadFailed } = await getOnboardingState();
   const recommended = latest?.recommended ?? [];
-  const isFirstTime = !hasInspirationVideos && !hasScripts && !latest;
+  // loadFailed 时不显示 first-time 引导, 避免老用户被误引导
+  const isFirstTime = !loadFailed && !hasInspirationVideos && !hasScripts && !latest;
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
@@ -57,6 +70,12 @@ export default async function AgentPage() {
           选平台 → 选垂类 → 输 topic, 一次生成 platform-ready 内容,复制粘贴去发。
         </p>
       </div>
+
+      {loadFailed && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          ⚠️ 载入状态失败, 部分个性化(最近选题推荐 / 新手引导)可能缺失。 功能本身可用, 请稍后刷新。
+        </div>
+      )}
 
       {isFirstTime && (
         <div className="rounded-xl border-2 border-dashed border-purple-300 bg-purple-50/40 p-5">

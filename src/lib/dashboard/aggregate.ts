@@ -16,6 +16,9 @@ import type {
 
 const TREND_LIMIT = 10;
 const TOP_LIMIT = 3;
+// predictionAccuracy 只算最近 200 条 — 后面 recent[] 只 slice(0,5),
+// 全量拉取的成本会随分析总数无上限增长
+const PREDICTION_ACCURACY_LIMIT = 200;
 
 const nicheLabelMap = new Map(KNOWN_NICHES.map((n) => [n.key, n.label]));
 
@@ -56,11 +59,15 @@ export async function aggregateDashboard(userId: string): Promise<DashboardSumma
       where: { userId, retroStatus: 'COMPLETED' },
       select: { retroReport: true },
     }),
-    prisma.contentAnalysis.groupBy({
-      by: ['niche'],
-      where: { userId, status: 'COMPLETED' },
-      _count: { _all: true },
-    }),
+    // 单次 GROUP BY 拿 niche + count + avgScore, 替原来的 groupBy + 每 niche 一次 $queryRaw AVG (N+1)
+    prisma.$queryRaw<{ niche: string; count: number; avg: number | null }[]>`
+      SELECT "niche",
+             COUNT(*)::int AS count,
+             AVG(("report"->>'overallScore')::float)::float AS avg
+      FROM "ContentAnalysis"
+      WHERE "userId" = ${userId} AND "status" = 'COMPLETED'
+      GROUP BY "niche"
+    `,
     prisma.actualMetric.findMany({
       where: { analysis: { userId } },
       orderBy: { plays: 'desc' },
@@ -78,6 +85,8 @@ export async function aggregateDashboard(userId: string): Promise<DashboardSumma
     }),
     prisma.contentAnalysis.findMany({
       where: { userId, status: 'COMPLETED' },
+      orderBy: { completedAt: 'desc' },
+      take: PREDICTION_ACCURACY_LIMIT,
       select: {
         id: true,
         videoFilename: true,
@@ -129,22 +138,14 @@ export async function aggregateDashboard(userId: string): Promise<DashboardSumma
     .filter((r: RetroReportLike | null): r is RetroReportLike => r !== null);
   const calibration = computeCalibration(retroReports);
 
-  const nicheDistribution: NicheRow[] = await Promise.all(
-    (nicheRows as any[]).map(async (row: any) => {
-      const avgRaw = await (prisma.$queryRaw as any)`
-        SELECT AVG(("report"->>'overallScore')::float)::float AS avg
-        FROM "ContentAnalysis"
-        WHERE "userId" = ${userId} AND "status" = 'COMPLETED' AND "niche" = ${row.niche}
-      `;
-      return {
-        niche: row.niche,
-        label: labelForNiche(row.niche),
-        count: row._count._all,
-        avgOverallScore: (avgRaw as any)[0]?.avg ?? null,
-      };
-    })
-  );
-  nicheDistribution.sort((a, b) => b.count - a.count);
+  const nicheDistribution: NicheRow[] = nicheRows
+    .map((row) => ({
+      niche: row.niche,
+      label: labelForNiche(row.niche),
+      count: Number(row.count),
+      avgOverallScore: row.avg ?? null,
+    }))
+    .sort((a, b) => b.count - a.count);
 
   const topPerformers: TopPerformer[] = (topPerformerRows as any[]).map((r: any) => ({
     id: r.analysis.id,

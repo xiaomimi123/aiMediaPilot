@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { computeCoverCandidateTimestamps, computeFrameSamplingPlan, computeHookFrameTimestamps } from '@/lib/video/sampling';
+import {
+  computeCoverCandidateTimestamps,
+  computeFrameSamplingPlan,
+  computeHookFrameTimestamps,
+  pickEvenlySpaced,
+} from '@/lib/video/sampling';
 
 describe('computeFrameSamplingPlan', () => {
   it('短视频 (≤60s): 每 1s 抽 1 帧', () => {
@@ -50,5 +55,52 @@ describe('computeCoverCandidateTimestamps', () => {
 
   it('边界 0s: 全部折叠到 0, 返回 [0, 0, 0]', () => {
     expect(computeCoverCandidateTimestamps(0)).toEqual([0, 0, 0]);
+  });
+});
+
+describe('pickEvenlySpaced', () => {
+  const range = (n: number) => Array.from({ length: n }, (_, i) => i);
+
+  it('n <= k 时原样返回', () => {
+    expect(pickEvenlySpaced(range(5), 10)).toEqual([0, 1, 2, 3, 4]);
+    expect(pickEvenlySpaced(range(10), 10)).toEqual(range(10));
+  });
+
+  it('n=200, k=100: 拿到恰好 100 帧, 含首尾', () => {
+    const picked = pickEvenlySpaced(range(200), 100);
+    expect(picked).toHaveLength(100);
+    expect(picked[0]).toBe(0);
+    expect(picked[99]).toBe(199);
+  });
+
+  it('n=101, k=100 (旧 mod 公式的坏 case): 应拿到 100 帧, 不是 51 帧', () => {
+    const picked = pickEvenlySpaced(range(101), 100);
+    expect(picked).toHaveLength(100);
+    expect(picked[0]).toBe(0);
+    expect(picked[99]).toBe(100);
+  });
+
+  it('n=150, k=100: 恰好 100 帧, 无重复', () => {
+    const picked = pickEvenlySpaced(range(150), 100);
+    expect(picked).toHaveLength(100);
+    expect(new Set(picked).size).toBe(100);
+    expect(picked[0]).toBe(0);
+    expect(picked[99]).toBe(149);
+  });
+
+  it('n=250, k=100: 恰好 100 帧', () => {
+    const picked = pickEvenlySpaced(range(250), 100);
+    expect(picked).toHaveLength(100);
+    expect(picked[0]).toBe(0);
+    expect(picked[99]).toBe(249);
+  });
+
+  it('k=1: 返回首元素', () => {
+    expect(pickEvenlySpaced(range(50), 1)).toEqual([0]);
+  });
+
+  it('k=0 或负数: 空数组', () => {
+    expect(pickEvenlySpaced(range(50), 0)).toEqual([]);
+    expect(pickEvenlySpaced(range(50), -1)).toEqual([]);
   });
 });

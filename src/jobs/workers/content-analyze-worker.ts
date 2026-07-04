@@ -14,6 +14,7 @@ import {
   computeFrameSamplingPlan,
   computeCoverCandidateTimestamps,
   computeHookFrameTimestamps,
+  pickEvenlySpaced,
 } from '@/lib/video/sampling';
 import { LocalWhisperClient } from '@/lib/llm/local-whisper';
 import type { TranscriptionResult } from '@/lib/llm/whisper';
@@ -184,9 +185,7 @@ export async function runAIAnalysis(input: AIAnalysisInput, deps: AIAnalysisDeps
   const hookFrames = await listFramePaths(input.hookFramesDir);
   // Cap at 100 frames to bound LLM cost on long videos (sampling.MAX_FRAMES intent)
   const MAX_RETENTION_FRAMES = 100;
-  const retentionFrames = allFrames.length <= MAX_RETENTION_FRAMES
-    ? allFrames
-    : allFrames.filter((_, i) => i % Math.ceil(allFrames.length / MAX_RETENTION_FRAMES) === 0);
+  const retentionFrames = pickEvenlySpaced(allFrames, MAX_RETENTION_FRAMES);
 
   const transcript03s = input.transcript.segments
     .filter((s) => s.startSec < 3)
