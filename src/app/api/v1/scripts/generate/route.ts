@@ -1,11 +1,12 @@
 import { ok, fail } from '@/lib/api';
-import { DeepSeekTextLLM } from '@/lib/llm/deepseek';
+import { getDeepSeekTextLLM } from '@/lib/llm/clients';
 import { SCRIPT_GENERATE_DOUYIN } from '@/lib/llm/prompts/script-generate-douyin';
 import { SCRIPT_GENERATE_XIAOHONGSHU } from '@/lib/llm/prompts/script-generate-xiaohongshu';
 import { SCRIPT_GENERATE_GONGZHONGHAO } from '@/lib/llm/prompts/script-generate-gongzhonghao';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import type { InspirationStyleHints } from '@/lib/llm/prompts/style-hints';
+import { normalizeNiche } from '@/lib/niche';
 
 const PROMPT_BY_PLATFORM = {
   douyin: SCRIPT_GENERATE_DOUYIN,
@@ -52,7 +53,7 @@ export async function POST(req: Request) {
   }
 
   const topic = typeof body.topic === 'string' ? body.topic.trim() : '';
-  const niche = typeof body.niche === 'string' ? body.niche.trim() : '';
+  const niche = normalizeNiche(typeof body.niche === 'string' ? body.niche : '');
   const platform: Platform = isPlatform(body.platform) ? body.platform : 'douyin';
   const inspirationId =
     typeof body.inspirationId === 'string' && body.inspirationId.length > 0
@@ -74,7 +75,7 @@ export async function POST(req: Request) {
   const styleHints = inspirationId ? await loadStyleHints(inspirationId) : null;
 
   const prompt = PROMPT_BY_PLATFORM[platform];
-  const llm = new DeepSeekTextLLM({ apiKey });
+  const llm = getDeepSeekTextLLM(apiKey);
   try {
     const out = await llm.callStructured({
       systemPrompt: prompt.buildSystemPrompt(niche),

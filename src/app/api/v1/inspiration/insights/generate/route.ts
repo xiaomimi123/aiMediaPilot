@@ -1,8 +1,9 @@
 import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
-import { DeepSeekTextLLM } from '@/lib/llm/deepseek';
+import { getDeepSeekTextLLM } from '@/lib/llm/clients';
 import { INSPIRATION_INSIGHT } from '@/lib/llm/prompts/inspiration-insight';
+import { normalizeNiche } from '@/lib/niche';
 
 interface ReqBody {
   videoIds?: unknown;
@@ -23,7 +24,8 @@ export async function POST(req: Request) {
   if (videoIds.length < 2) return fail('至少选 2 条视频才能总结共性', 400);
   if (videoIds.length > 20) return fail('一次最多 20 条', 400);
 
-  const niche = typeof body.niche === 'string' ? body.niche.trim() : undefined;
+  const normalized = normalizeNiche(typeof body.niche === 'string' ? body.niche : '');
+  const niche = normalized.length > 0 ? normalized : undefined;
 
   const user = await getOrCreateDefaultUser();
   const videos = await prisma.inspirationVideo.findMany({
@@ -54,7 +56,7 @@ export async function POST(req: Request) {
       ? (videos[0].platform as 'douyin' | 'xiaohongshu' | 'gongzhonghao')
       : ('mixed' as const);
 
-  const llm = new DeepSeekTextLLM({ apiKey });
+  const llm = getDeepSeekTextLLM(apiKey);
   try {
     const out = await llm.callStructured({
       systemPrompt: INSPIRATION_INSIGHT.buildSystemPrompt(niche, batchPlatform),

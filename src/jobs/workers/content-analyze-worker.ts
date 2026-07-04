@@ -18,8 +18,8 @@ import {
 } from '@/lib/video/sampling';
 import { LocalWhisperClient } from '@/lib/llm/local-whisper';
 import type { TranscriptionResult } from '@/lib/llm/whisper';
-import { OpenAIVisionLLM, type IVisionLLM, type TokenUsage } from '@/lib/llm/vision';
-import { DeepSeekTextLLM } from '@/lib/llm/deepseek';
+import { type IVisionLLM, type TokenUsage } from '@/lib/llm/vision';
+import { getDeepSeekTextLLM, getOpenAIVisionLLM } from '@/lib/llm/clients';
 import { HOOK } from '@/lib/llm/prompts/hook';
 import { RETENTION } from '@/lib/llm/prompts/retention';
 import { TITLE_CAPTION } from '@/lib/llm/prompts/title-caption';
@@ -359,18 +359,18 @@ async function handleAnalyze(job: Job<JobData>) {
   const useJsonMode = process.env.OPENAI_USE_JSON_MODE === 'true';
 
   // vision LLM — hook / retention / cover need video frames
-  const visionLLM = new OpenAIVisionLLM({ apiKey, baseURL: openaiBaseURL, defaultModel: visionModel, jsonModeFallback: useJsonMode });
+  const visionLLM = getOpenAIVisionLLM({ apiKey, baseURL: openaiBaseURL, defaultModel: visionModel, jsonModeFallback: useJsonMode });
 
   // text LLM — DeepSeek if env set, else OpenAI (用 visionModel 保留 v1 行为)
   const deepseekKey = process.env.DEEPSEEK_API_KEY;
   const sharedTextLLM: IVisionLLM = deepseekKey
-    ? new DeepSeekTextLLM({ apiKey: deepseekKey })
-    : new OpenAIVisionLLM({ apiKey, baseURL: openaiBaseURL, defaultModel: visionModel, jsonModeFallback: useJsonMode });
+    ? getDeepSeekTextLLM(deepseekKey)
+    : getOpenAIVisionLLM({ apiKey, baseURL: openaiBaseURL, defaultModel: visionModel, jsonModeFallback: useJsonMode });
 
   // synthesize: DeepSeek 时复用同一实例; 无 DeepSeek 时走 synthesizeModel
   const synthesizeLLM: IVisionLLM = deepseekKey
     ? sharedTextLLM  // 同一实例
-    : new OpenAIVisionLLM({ apiKey, baseURL: openaiBaseURL, defaultModel: synthesizeModel, jsonModeFallback: useJsonMode });
+    : getOpenAIVisionLLM({ apiKey, baseURL: openaiBaseURL, defaultModel: synthesizeModel, jsonModeFallback: useJsonMode });
 
   await setProgress(analysisId, 'analyze.dimensions', 50, 'AI 4 维度并行评估');
   const ai = await runAIAnalysis(

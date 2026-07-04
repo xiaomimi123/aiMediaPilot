@@ -84,4 +84,16 @@ describe('resolveBaseline', () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({ id: 'u1', baselinePlays: 0n });
     expect(await resolveBaseline('u1')).toBeNull();
   });
+
+  it('baselinePlays 与新 median 相等时 不 UPDATE (避免热路径无谓写)', async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: 'u1', baselinePlays: 500n });
+    prismaMock.actualMetric.findMany.mockResolvedValueOnce([
+      { plays: 100n },
+      { plays: 500n },
+      { plays: 1000n },
+    ]);
+    const result = await resolveBaseline('u1');
+    expect(result?.value).toBe(500);
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
 });

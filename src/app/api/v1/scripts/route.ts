@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { DouyinScriptResponseSchema } from '@/lib/llm/prompts/script-generate-douyin';
 import { XHSScriptResponseSchema } from '@/lib/llm/prompts/script-generate-xiaohongshu';
 import { ArticleScriptResponseSchema } from '@/lib/llm/prompts/script-generate-gongzhonghao';
+import { normalizeNiche } from '@/lib/niche';
 
 const SCHEMA_BY_PLATFORM = {
   douyin: DouyinScriptResponseSchema,
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
   }
 
   const topic = typeof body.topic === 'string' ? body.topic.trim() : '';
-  const niche = typeof body.niche === 'string' ? body.niche.trim() : '';
+  const niche = normalizeNiche(typeof body.niche === 'string' ? body.niche : '');
   const platform: Platform = isPlatform(body.platform) ? body.platform : 'douyin';
   if (!topic || !niche) return fail('topic 和 niche 必填', 400);
 

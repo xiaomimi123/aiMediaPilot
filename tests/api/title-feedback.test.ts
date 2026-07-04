@@ -6,6 +6,8 @@ vi.mock('@/lib/llm/deepseek', () => ({
 }));
 
 import { POST } from '@/app/api/v1/checklist/title-feedback/route';
+import { __resetRateLimitForTest } from '@/lib/rate-limit';
+import { __resetLLMClientsForTest } from '@/lib/llm/clients';
 
 function reqJSON(body: unknown) {
   return new Request('http://t/api/v1/checklist/title-feedback', {
@@ -24,6 +26,8 @@ const validResponse = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  __resetRateLimitForTest();
+  __resetLLMClientsForTest();
   process.env.DEEPSEEK_API_KEY = 'sk-test';
   llmMock.callStructured.mockResolvedValue({
     result: validResponse,
@@ -58,5 +62,20 @@ describe('POST /api/v1/checklist/title-feedback', () => {
     const json = await res.json();
     expect(json.success).toBe(false);
     expect(json.message).toMatch(/LLM down|评估失败/);
+  });
+
+  it('3 秒内 > 3 次 → 429 (client-bypass 兜底)', async () => {
+    const body = { title: '正常标题', niche: 'ai-knowledge' };
+    const r1 = await POST(reqJSON(body));
+    const r2 = await POST(reqJSON(body));
+    const r3 = await POST(reqJSON(body));
+    const r4 = await POST(reqJSON(body));
+    expect(r1.status).toBe(200);
+    expect(r2.status).toBe(200);
+    expect(r3.status).toBe(200);
+    expect(r4.status).toBe(429);
+    const json = await r4.json();
+    expect(json.success).toBe(false);
+    expect(json.message).toMatch(/太频繁/);
   });
 });

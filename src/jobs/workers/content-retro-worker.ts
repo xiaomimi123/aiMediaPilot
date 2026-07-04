@@ -5,8 +5,8 @@ import { redis } from '@/lib/redis';
 import { QUEUES } from '@/jobs/queue';
 import { probeDouyinCookie, runDouyinAdapter } from '@/lib/douyin/adapter';
 import { parseReportMd } from '@/lib/douyin/report-parser';
-import { OpenAIVisionLLM, type IVisionLLM, type TokenUsage } from '@/lib/llm/vision';
-import { DeepSeekTextLLM } from '@/lib/llm/deepseek';
+import { type IVisionLLM, type TokenUsage } from '@/lib/llm/vision';
+import { getDeepSeekTextLLM, getOpenAIVisionLLM } from '@/lib/llm/clients';
 import { RETRO_GAP, type RetroGapResponse } from '@/lib/llm/prompts/retro-gap';
 import type { RetroStatus } from '@prisma/client';
 
@@ -90,8 +90,8 @@ export async function runRetroPipeline(analysisId: string): Promise<void> {
   try {
     const deepseekKey = process.env.DEEPSEEK_API_KEY;
     const llm: IVisionLLM = deepseekKey
-      ? new DeepSeekTextLLM({ apiKey: deepseekKey })
-      : new OpenAIVisionLLM({
+      ? getDeepSeekTextLLM(deepseekKey)
+      : getOpenAIVisionLLM({
           apiKey: process.env.OPENAI_API_KEY!,
           baseURL: process.env.OPENAI_BASE_URL || undefined,
           defaultModel: process.env.OPENAI_SYNTHESIZE_MODEL || 'gpt-4o-mini',

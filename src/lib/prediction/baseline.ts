@@ -27,13 +27,16 @@ export async function resolveBaseline(userId: string): Promise<ResolvedBaseline 
   if (retroSampleCount >= MIN_RETROS_FOR_MEDIAN) {
     const playsAsNumbers = metrics.map((m) => Number(m.plays));
     const m = Math.round(median(playsAsNumbers));
-    try {
-      await prisma.user.update({
-        where: { id: userId },
-        data: { baselinePlays: BigInt(m) },
-      });
-    } catch (err) {
-      console.error('[prediction/baseline] writeback failed', err);
+    // 只在 baseline 真正改变时才写 — 高频路径避免无谓 UPDATE
+    if (user?.baselinePlays !== BigInt(m)) {
+      try {
+        await prisma.user.update({
+          where: { id: userId },
+          data: { baselinePlays: BigInt(m) },
+        });
+      } catch (err) {
+        console.error('[prediction/baseline] writeback failed', err);
+      }
     }
     return { value: m, source: 'retro-median', retroSampleCount };
   }

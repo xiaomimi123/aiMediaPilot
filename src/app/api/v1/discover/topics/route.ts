@@ -1,8 +1,9 @@
 import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
-import { DeepSeekTextLLM } from '@/lib/llm/deepseek';
+import { getDeepSeekTextLLM } from '@/lib/llm/clients';
 import { TOPIC_DISCOVERY } from '@/lib/llm/prompts/topic-discovery';
+import { normalizeNiche } from '@/lib/niche';
 
 interface ReqBody {
   niche?: unknown;
@@ -23,7 +24,8 @@ export async function POST(req: Request) {
     return fail('请求体不是合法 JSON', 400);
   }
 
-  const niche = typeof body.niche === 'string' ? body.niche.trim() : '';
+  const rawNiche = typeof body.niche === 'string' ? body.niche : '';
+  const niche = normalizeNiche(rawNiche);
   if (!niche || niche.length > 60) {
     return fail('niche 必填, 1-60 字', 400);
   }
@@ -49,7 +51,7 @@ export async function POST(req: Request) {
   });
   const recentTopics = recent.map((s) => s.topic).filter((t): t is string => !!t);
 
-  const llm = new DeepSeekTextLLM({ apiKey });
+  const llm = getDeepSeekTextLLM(apiKey);
   try {
     const out = await llm.callStructured({
       systemPrompt: TOPIC_DISCOVERY.buildSystemPrompt(niche, todayISO()),

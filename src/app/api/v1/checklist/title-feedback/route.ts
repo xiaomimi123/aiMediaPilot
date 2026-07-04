@@ -1,12 +1,21 @@
 import { ok, fail } from '@/lib/api';
-import { DeepSeekTextLLM } from '@/lib/llm/deepseek';
+import { getDeepSeekTextLLM } from '@/lib/llm/clients';
 import { CRITIQUE_BY_PLATFORM, type CritiquePlatform } from '@/lib/llm/prompts/title-critique';
+import { ipKey, rateLimit } from '@/lib/rate-limit';
+import { normalizeNiche } from '@/lib/niche';
 
 function isCritiquePlatform(v: unknown): v is CritiquePlatform {
   return v === 'douyin' || v === 'xiaohongshu' || v === 'gongzhonghao';
 }
 
 export async function POST(req: Request) {
+  // 前端已 debounce 1.5s + AbortController; 后端限流是 client-bypass 兜底,
+  // 3 秒窗口内最多 3 次 — 正常前端一次修改只触发 1 次, 攻击/bypass 就挡住。
+  const rl = rateLimit(`title-feedback:${ipKey(req)}`, { limit: 3, windowMs: 3000 });
+  if (!rl.ok) {
+    return fail(`太频繁, 请 ${Math.ceil(rl.resetInMs / 1000)}s 后再试`, 429);
+  }
+
   let body: { title?: unknown; niche?: unknown; platform?: unknown };
   try {
     body = await req.json();
@@ -15,7 +24,7 @@ export async function POST(req: Request) {
   }
 
   const title = typeof body.title === 'string' ? body.title.trim() : '';
-  const niche = typeof body.niche === 'string' ? body.niche.trim() : '';
+  const niche = normalizeNiche(typeof body.niche === 'string' ? body.niche : '');
   const platform: CritiquePlatform = isCritiquePlatform(body.platform) ? body.platform : 'douyin';
 
   if (title.length < 3 || title.length > 100) {
@@ -31,7 +40,7 @@ export async function POST(req: Request) {
   }
 
   const prompt = CRITIQUE_BY_PLATFORM[platform];
-  const llm = new DeepSeekTextLLM({ apiKey });
+  const llm = getDeepSeekTextLLM(apiKey);
   try {
     const out = await llm.callStructured({
       systemPrompt: prompt.buildSystemPrompt(niche),
