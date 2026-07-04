@@ -51,6 +51,10 @@ export default function DiscoverPage() {
   const effectiveNiche = niche === '__custom' ? customNiche.trim() : niche;
 
   useEffect(() => {
+    // 标记用户已看过 discover 页 — /agent 首页据此不再展示 "👋 第一次来" 引导
+    // Max-age 30 天。 SameSite=Lax 保证同源跳转都能带上。 单用户 MVP 无 CSRF 顾虑。
+    document.cookie = 'has_seen_discover=1; path=/; max-age=2592000; SameSite=Lax';
+
     fetch('/api/v1/user/default-niche')
       .then((r) => r.json())
       .then((j) => {
@@ -176,11 +180,22 @@ export default function DiscoverPage() {
           </div>
 
           <div className="space-y-1">
-            <Label>额外要求 (可选)</Label>
+            <div className="flex items-center justify-between">
+              <Label>额外要求 (可选)</Label>
+              <span
+                className={cn(
+                  'text-[10px] tabular-nums',
+                  extraHint.length > 200 ? 'text-destructive' : 'text-muted-foreground',
+                )}
+              >
+                {extraHint.length}/200
+              </span>
+            </div>
             <Input
               value={extraHint}
-              onChange={(e) => setExtraHint(e.target.value)}
+              onChange={(e) => setExtraHint(e.target.value.slice(0, 200))}
               placeholder="例: 想要更偏新人入门 / 偏实操对比 / 想结合最近 AI agents 趋势"
+              maxLength={200}
               disabled={loading}
             />
           </div>

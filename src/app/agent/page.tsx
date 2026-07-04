@@ -1,9 +1,12 @@
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { cookies } from 'next/headers';
 import { ScriptForm } from '@/components/content/script-form';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { readInspirationInsight } from '@/lib/json-readers';
+
+const HAS_SEEN_DISCOVER_COOKIE = 'has_seen_discover';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,8 +62,11 @@ async function getOnboardingState(): Promise<OnboardingState> {
 export default async function AgentPage() {
   const { latest, hasInspirationVideos, hasScripts, loadFailed } = await getOnboardingState();
   const recommended = latest?.recommended ?? [];
-  // loadFailed 时不显示 first-time 引导, 避免老用户被误引导
-  const isFirstTime = !loadFailed && !hasInspirationVideos && !hasScripts && !latest;
+  // /agent/discover 首次访问会 set cookie。 看过 discover 就不再算 first-time,
+  // 防止 "点了但没保存" 的用户反复看到新手引导
+  const hasSeenDiscover = cookies().has(HAS_SEEN_DISCOVER_COOKIE);
+  const isFirstTime =
+    !loadFailed && !hasInspirationVideos && !hasScripts && !latest && !hasSeenDiscover;
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>

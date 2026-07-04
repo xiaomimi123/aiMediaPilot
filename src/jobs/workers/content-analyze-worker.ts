@@ -20,7 +20,7 @@ import { LocalWhisperClient } from '@/lib/llm/local-whisper';
 import type { TranscriptionResult } from '@/lib/llm/whisper';
 import { type IVisionLLM, type TokenUsage } from '@/lib/llm/vision';
 import { getDeepSeekTextLLM, getOpenAIVisionLLM } from '@/lib/llm/clients';
-import { HOOK, RETENTION, TITLE_CAPTION, COVER, SYNTHESIZE } from '@/lib/llm/prompts';
+import { HOOK, RETENTION, TITLE_CAPTION, COVER, SYNTHESIZE, SYNTHESIZE_WEIGHTS } from '@/lib/llm/prompts';
 import { computePrediction } from '@/lib/prediction/formula';
 import { resolveBaseline } from '@/lib/prediction/baseline';
 import { computeCalibration } from '@/lib/dashboard/calibration';
@@ -238,32 +238,44 @@ export async function runAIAnalysis(input: AIAnalysisInput, deps: AIAnalysisDeps
     })),
   ]);
 
-  const allOk =
-    !('error' in (hookResult as any)) &&
-    !('error' in (retentionResult as any)) &&
-    !('error' in (titleCaptionResult as any)) &&
-    !('error' in (coverResult as any));
+  const dimensionResults = {
+    hook: hookResult,
+    retention: retentionResult,
+    titleCaption: titleCaptionResult,
+    cover: coverResult,
+  };
+  const isDimOk = (r: unknown): boolean =>
+    r !== null && r !== undefined && !(typeof r === 'object' && r !== null && 'error' in r);
+  const okDimNames = (Object.keys(dimensionResults) as (keyof typeof dimensionResults)[]).filter(
+    (k) => isDimOk(dimensionResults[k]),
+  );
 
   let overallScore: number | null = null;
   let topActionItems: string[] = [];
+  let partial = false;
 
-  if (allOk) {
+  // ≥ 2 维通过就跑 synthesize (不再"全或无"), prompt 会告诉 LLM 哪些维度缺失。
+  // 只 0-1 个通过则 skip — 单维度评估价值太低, 也没 topActionItems 可跨维度提炼。
+  const MIN_DIMS_FOR_SYNTHESIZE = 2;
+  if (okDimNames.length >= MIN_DIMS_FOR_SYNTHESIZE) {
+    partial = okDimNames.length < 4;
     try {
       const synOut = await deps.synthesizeLLM.callStructured({
         systemPrompt: SYNTHESIZE.buildSystemPrompt(input.niche),
-        userMessage: SYNTHESIZE.buildUserMessage({
-          hook: hookResult,
-          retention: retentionResult,
-          titleCaption: titleCaptionResult,
-          cover: coverResult,
-        }),
+        userMessage: SYNTHESIZE.buildUserMessage(dimensionResults),
         responseSchema: SYNTHESIZE.responseSchema,
       });
       overallScore = synOut.result.overallScore;
       topActionItems = synOut.result.topActionItems;
       callTracking.push({ name: 'synthesize', usage: synOut.usage });
     } catch {
-      // synthesize 失败不阻断,留 null
+      // synthesize 本身失败: 走加权平均 fallback (从可用维度的 overallScore 字段推)
+      const fallback = computeFallbackScore(dimensionResults, okDimNames);
+      if (fallback !== null) {
+        overallScore = fallback;
+        topActionItems = [];
+        partial = true;
+      }
     }
   }
 
@@ -279,9 +291,38 @@ export async function runAIAnalysis(input: AIAnalysisInput, deps: AIAnalysisDeps
       cover: coverResult,
       overallScore,
       topActionItems,
+      // 消费方 (dashboard, publish-checklist) 可以据此显示 "*" 或类似标记
+      partial,
+      availableDimensions: okDimNames,
     },
     llmUsage: { byCall: callTracking.map((c) => c.usage), total },
   };
+}
+
+/** synthesize LLM 本身失败时的兜底: 用维度 report 里的子分数按权重合成。 缺项归一化。 */
+function computeFallbackScore(
+  results: {
+    hook: unknown;
+    retention: unknown;
+    titleCaption: unknown;
+    cover: unknown;
+  },
+  okDims: (keyof typeof results)[],
+): number | null {
+  const dimScore = (r: unknown): number | null => {
+    if (!r || typeof r !== 'object') return null;
+    const s = (r as { overallScore?: unknown }).overallScore;
+    return typeof s === 'number' ? s : null;
+  };
+  const scores: Array<[keyof typeof results, number]> = [];
+  for (const d of okDims) {
+    const s = dimScore(results[d]);
+    if (s !== null) scores.push([d, s]);
+  }
+  if (scores.length === 0) return null;
+  const totalWeight = scores.reduce((acc, [d]) => acc + SYNTHESIZE_WEIGHTS[d], 0);
+  const weighted = scores.reduce((acc, [d, s]) => acc + (s * SYNTHESIZE_WEIGHTS[d]) / totalWeight, 0);
+  return Math.round(weighted);
 }
 
 async function handleAnalyze(job: Job<JobData>) {

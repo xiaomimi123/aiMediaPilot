@@ -22,6 +22,32 @@ describe('SYNTHESIZE', () => {
     expect(text).toMatch(/retention/);
     expect(text).toMatch(/titleCaption/);
     expect(text).toMatch(/cover/);
+    expect(text).toMatch(/4 个维度全部就绪/);
+  });
+
+  it('buildUserMessage 某维度是 { error } → 标 missing + 列出可用', () => {
+    const parts = SYNTHESIZE.buildUserMessage({
+      hook: { rating: 3 },
+      retention: { error: 'LLM timeout' },
+      titleCaption: { mode: 'evaluate' },
+      cover: { mode: 'generate' },
+    });
+    const text = (parts[0] as any).text;
+    expect(text).toContain('retention: missing');
+    expect(text).toContain('可用维度: hook, titleCaption, cover');
+    expect(text).toContain('缺失维度: retention');
+  });
+
+  it('buildUserMessage 某维度 null 也算 missing', () => {
+    const parts = SYNTHESIZE.buildUserMessage({
+      hook: { rating: 3 },
+      retention: null,
+      titleCaption: undefined,
+      cover: { mode: 'generate' },
+    });
+    const text = (parts[0] as any).text;
+    expect(text).toContain('retention: missing');
+    expect(text).toContain('titleCaption: missing');
   });
 });
 

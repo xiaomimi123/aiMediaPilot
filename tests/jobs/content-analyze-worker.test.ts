@@ -119,4 +119,56 @@ describe('runAIAnalysis (fail-soft)', () => {
     expect(result.report.retention).not.toHaveProperty('error');
     expect(result.report.titleCaption).not.toHaveProperty('error');
   });
+
+  it('3/4 维通过 → synthesize 仍跑, report.partial=true, availableDimensions 只列 ok', async () => {
+    const fakeLLM = {
+      async callStructured(opts: any) {
+        const sys = opts.systemPrompt as string;
+        if (sys.match(/前 3 秒钩子/)) throw new Error('hook LLM broken');
+        // synthesize / retention / titleCaption / cover 都从这里出;
+        // 用 responseSchema 分流
+        const schemaName = opts.responseSchema?._def?.description ?? '';
+        if (sys.includes('综合最多 4 个维度')) {
+          return {
+            result: { overallScore: 66, topActionItems: ['把 0:01 改成提问句', '压缩 0:18'] },
+            usage: { model: 'gpt-4o', promptTokens: 100, completionTokens: 50, estCostUSD: 0.001 },
+          };
+        }
+        if (opts.responseSchema === RetentionResponseSchema) {
+          return { result: { riskPoints: [], overallSummary: 'ok' }, usage: { model: 'gpt-4o', promptTokens: 100, completionTokens: 50, estCostUSD: 0.001 } };
+        }
+        return { result: { mode: 'generate', generatedTitles: ['t1','t2','t3'], generatedCaptions: ['c1','c2','c3'] }, usage: { model: 'gpt-4o', promptTokens: 100, completionTokens: 50, estCostUSD: 0.001 } };
+      },
+    } as any;
+
+    const fsp = await import('fs/promises');
+    vi.spyOn(fsp, 'readdir').mockResolvedValue(['frame_0001.jpg'] as any);
+
+    const result = await runAIAnalysis(baseInput, { visionLLM: fakeLLM, textLLM: fakeLLM, synthesizeLLM: fakeLLM });
+    expect(result.report.overallScore).toBe(66);
+    expect(result.report.topActionItems).toHaveLength(2);
+    expect(result.report.partial).toBe(true);
+    expect(result.report.availableDimensions).toEqual(['retention', 'titleCaption', 'cover']);
+  });
+
+  it('只有 1 维通过 → skip synthesize, overallScore null', async () => {
+    const fakeLLM = {
+      async callStructured(opts: any) {
+        const sys = opts.systemPrompt as string;
+        if (opts.responseSchema === RetentionResponseSchema) {
+          return { result: { riskPoints: [], overallSummary: 'ok' }, usage: { model: 'gpt-4o', promptTokens: 100, completionTokens: 50, estCostUSD: 0.001 } };
+        }
+        // hook / titleCaption / cover 全炸
+        throw new Error(`${sys.slice(0, 20)} down`);
+      },
+    } as any;
+
+    const fsp = await import('fs/promises');
+    vi.spyOn(fsp, 'readdir').mockResolvedValue(['frame_0001.jpg'] as any);
+
+    const result = await runAIAnalysis(baseInput, { visionLLM: fakeLLM, textLLM: fakeLLM, synthesizeLLM: fakeLLM });
+    expect(result.report.overallScore).toBeNull();
+    expect(result.report.partial).toBe(false);
+    expect(result.report.availableDimensions).toEqual(['retention']);
+  });
 });
