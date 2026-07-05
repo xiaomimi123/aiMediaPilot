@@ -80,6 +80,30 @@ describe('aggregateDashboard', () => {
     expect(result.calibration!.sampleCount).toBe(3);
   });
 
+  it('trend 打 partial=true 标位, 但 score 仍出', async () => {
+    prismaMock.contentAnalysis.findMany.mockResolvedValueOnce([
+      { id: 'a', videoFilename: 'p.mp4', completedAt: new Date('2026-07-01T00:00:00Z'), report: { overallScore: 55, partial: true, availableDimensions: ['hook', 'retention'] }, retroReport: null },
+      { id: 'b', videoFilename: 'f.mp4', completedAt: new Date('2026-07-02T00:00:00Z'), report: { overallScore: 80 }, retroReport: null },
+    ]);
+    const result = await aggregateDashboard('user1');
+    // .reverse() 后顺序反了: b, a
+    expect(result.trend[0].id).toBe('b');
+    expect(result.trend[0].partial).toBe(false);
+    expect(result.trend[0].overallScore).toBe(80);
+    expect(result.trend[1].id).toBe('a');
+    expect(result.trend[1].partial).toBe(true);
+    expect(result.trend[1].overallScore).toBe(55);
+  });
+
+  it('topPerformer partial 报告 → overallScore null (排除 partial 出 comparable)', async () => {
+    prismaMock.actualMetric.findMany.mockResolvedValueOnce([
+      { plays: 9999n, analysis: { id: 'a1', videoFilename: 'x.mp4', report: { overallScore: 90, partial: true } } },
+    ]);
+    const result = await aggregateDashboard('user1');
+    expect(result.topPerformers[0].plays).toBe('9999');
+    expect(result.topPerformers[0].overallScore).toBeNull();
+  });
+
   it('plays (BigInt) 序列化为 string', async () => {
     prismaMock.actualMetric.findMany.mockResolvedValueOnce([
       { plays: 12345n, analysis: { id: 'a1', videoFilename: 'x.mp4', report: { overallScore: 75 } } },

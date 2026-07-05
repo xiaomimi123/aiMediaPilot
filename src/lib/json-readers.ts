@@ -26,6 +26,9 @@ const AnalysisReportReadSchema = z.object({
     })
     .partial()
     .optional(),
+  // P3-18 后 worker 会写这两个字段: 4 维中有 fail 时 partial=true, available 只列成功的
+  partial: z.boolean().optional(),
+  availableDimensions: z.array(z.string()).optional(),
 });
 export type AnalysisReportRead = z.infer<typeof AnalysisReportReadSchema>;
 
@@ -35,9 +38,20 @@ export function readAnalysisReport(json: unknown): AnalysisReportRead | null {
   return parsed.success ? parsed.data : null;
 }
 
+/** 只返回 4 维全通过时的分。 用于 topPerformers / niche avg 等需要严格 comparable 的场景。 */
 export function readOverallScore(json: unknown): number | null {
   const r = readAnalysisReport(json);
+  if (r?.partial === true) return null;
   return typeof r?.overallScore === 'number' ? r.overallScore : null;
+}
+
+/** 允许 partial 的读取。 用于 trend 之类需要展示"哪怕不完整也画出来"的场景, 返回 score + partial 标位。 */
+export function readOverallScoreWithMeta(
+  json: unknown,
+): { score: number; partial: boolean } | null {
+  const r = readAnalysisReport(json);
+  if (typeof r?.overallScore !== 'number') return null;
+  return { score: r.overallScore, partial: r.partial === true };
 }
 
 export function readPredictedPlaysRange(

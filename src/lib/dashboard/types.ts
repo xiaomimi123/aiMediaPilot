@@ -26,6 +26,8 @@ export interface TrendPoint {
   completedAt: string;
   overallScore: number | null;
   inferredActualScore: number | null;
+  // 部分维度未完成时 (worker P3-18 兜底), 打点仍显示但前端可以打星号 / 变浅色区分
+  partial: boolean;
 }
 
 export interface NicheRow {

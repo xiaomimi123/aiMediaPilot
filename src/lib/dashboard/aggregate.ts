@@ -5,6 +5,7 @@ import { computeCalibration } from './calibration';
 import { verdictOf, deltaPct } from './prediction-accuracy';
 import {
   readOverallScore,
+  readOverallScoreWithMeta,
   readPredictedPlaysRange,
   readRetroReport,
 } from '@/lib/json-readers';
@@ -65,10 +66,14 @@ export async function aggregateDashboard(userId: string): Promise<DashboardSumma
       select: { retroReport: true },
     }),
     // 单次 GROUP BY 拿 niche + count + avgScore, 替原来的 groupBy + 每 niche 一次 $queryRaw AVG (N+1)
+    // AVG 只统计 4 维全通过的分数 (partial IS NOT TRUE), 避免 partial 拉低 / 拉高 niche 均值。
+    // COUNT(*) 仍算全部, 保留活跃度信号。
     prisma.$queryRaw<{ niche: string; count: number; avg: number | null }[]>`
       SELECT "niche",
              COUNT(*)::int AS count,
-             AVG(("report"->>'overallScore')::float)::float AS avg
+             AVG(("report"->>'overallScore')::float)
+               FILTER (WHERE ("report"->>'partial')::boolean IS NOT TRUE)
+               ::float AS avg
       FROM "ContentAnalysis"
       WHERE "userId" = ${userId} AND "status" = 'COMPLETED'
       GROUP BY "niche"
@@ -128,14 +133,19 @@ export async function aggregateDashboard(userId: string): Promise<DashboardSumma
   ]);
 
   // completedAt is always set when status='COMPLETED' (set by content-analyze-worker)
+  // trend 允许 partial (让用户能看到 "在拍" 的进度), 但要标出来
   const trend: TrendPoint[] = trendRows
-    .map((r) => ({
-      id: r.id,
-      videoFilename: r.videoFilename,
-      completedAt: r.completedAt!.toISOString(),
-      overallScore: readOverallScore(r.report),
-      inferredActualScore: readRetroReport(r.retroReport)?.inferredActualScore ?? null,
-    }))
+    .map((r) => {
+      const meta = readOverallScoreWithMeta(r.report);
+      return {
+        id: r.id,
+        videoFilename: r.videoFilename,
+        completedAt: r.completedAt!.toISOString(),
+        overallScore: meta?.score ?? null,
+        inferredActualScore: readRetroReport(r.retroReport)?.inferredActualScore ?? null,
+        partial: meta?.partial ?? false,
+      };
+    })
     .reverse();
 
   const retroReports: RetroReportLike[] = (retroSourceRows as any[])

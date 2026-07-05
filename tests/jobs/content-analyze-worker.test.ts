@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { runPreprocess, runAIAnalysis } from '@/jobs/workers/content-analyze-worker';
+import { runPreprocess, runAIAnalysis, extractDimScore } from '@/jobs/workers/content-analyze-worker';
 import { RetentionResponseSchema } from '@/lib/llm/prompts/retention';
 
 vi.mock('@/lib/redis', () => ({ redis: {} }));
@@ -170,5 +170,94 @@ describe('runAIAnalysis (fail-soft)', () => {
     expect(result.report.overallScore).toBeNull();
     expect(result.report.partial).toBe(false);
     expect(result.report.availableDimensions).toEqual(['retention']);
+  });
+
+  it('synthesize 抛错时 computeFallbackScore 用 hook.rating + retention.severity + cover.feedback.rating 加权算出分', async () => {
+    // hook 3, retention 干净 = 100, cover evaluate rating 4 → 应该有分
+    // titleCaption generate mode → skip
+    const fakeLLM = {
+      async callStructured(opts: any) {
+        const sys = opts.systemPrompt as string;
+        if (sys.includes('综合最多 4 个维度')) throw new Error('synthesize down');
+        if (opts.responseSchema === RetentionResponseSchema) {
+          return { result: { riskPoints: [], overallSummary: 'ok' }, usage: { model: 'gpt-4o', promptTokens: 100, completionTokens: 50, estCostUSD: 0.001 } };
+        }
+        if (sys.match(/前 3 秒钩子/)) {
+          return { result: { rating: 3, summary: '', suggestions: [], keyObservations: [] }, usage: { model: 'gpt-4o', promptTokens: 100, completionTokens: 50, estCostUSD: 0.001 } };
+        }
+        if (sys.match(/评价或生成视频的标题/)) {
+          return { result: { mode: 'generate', generatedTitles: ['t1'], generatedCaptions: ['c1'] }, usage: { model: 'gpt-4o', promptTokens: 100, completionTokens: 50, estCostUSD: 0.001 } };
+        }
+        // cover
+        return { result: { mode: 'evaluate', feedback: { rating: 4, issues: [], suggestions: [] } }, usage: { model: 'gpt-4o', promptTokens: 100, completionTokens: 50, estCostUSD: 0.001 } };
+      },
+    } as any;
+
+    const fsp = await import('fs/promises');
+    vi.spyOn(fsp, 'readdir').mockResolvedValue(['frame_0001.jpg'] as any);
+
+    const result = await runAIAnalysis(baseInput, { visionLLM: fakeLLM, textLLM: fakeLLM, synthesizeLLM: fakeLLM });
+    // hook=60 (w=.3), retention=100 (w=.3), cover=80 (w=.2), titleCaption generate → skip
+    // totalWeight = .3+.3+.2 = .8;  score = (18 + 30 + 16) / .8 = 64/.8 = 80
+    expect(result.report.overallScore).toBe(80);
+    expect(result.report.partial).toBe(true);
+  });
+});
+
+describe('extractDimScore', () => {
+  it('hook: rating * 20', () => {
+    expect(extractDimScore('hook', { rating: 5 })).toBe(100);
+    expect(extractDimScore('hook', { rating: 1 })).toBe(20);
+  });
+
+  it('hook: 无 rating → null', () => {
+    expect(extractDimScore('hook', { summary: 'x' })).toBeNull();
+    expect(extractDimScore('hook', null)).toBeNull();
+  });
+
+  it('retention: 无 risk → 100', () => {
+    expect(extractDimScore('retention', { riskPoints: [] })).toBe(100);
+  });
+
+  it('retention: penalty 累加, clamp 0', () => {
+    expect(
+      extractDimScore('retention', {
+        riskPoints: [{ severity: 'high' }, { severity: 'medium' }, { severity: 'low' }],
+      }),
+    ).toBe(60); // 100 - 25 - 10 - 5
+    expect(
+      extractDimScore('retention', {
+        riskPoints: Array(10).fill({ severity: 'high' }),
+      }),
+    ).toBe(0);
+  });
+
+  it('titleCaption evaluate: avg of available ratings * 20', () => {
+    expect(
+      extractDimScore('titleCaption', {
+        mode: 'evaluate',
+        titleFeedback: { rating: 4 },
+        captionFeedback: { rating: 2 },
+      }),
+    ).toBe(60);
+    expect(
+      extractDimScore('titleCaption', {
+        mode: 'evaluate',
+        titleFeedback: { rating: 5 },
+      }),
+    ).toBe(100);
+  });
+
+  it('titleCaption evaluate 无 rating → null; generate mode → null', () => {
+    expect(extractDimScore('titleCaption', { mode: 'evaluate' })).toBeNull();
+    expect(extractDimScore('titleCaption', { mode: 'generate', generatedTitles: [] })).toBeNull();
+  });
+
+  it('cover evaluate: feedback.rating * 20', () => {
+    expect(extractDimScore('cover', { mode: 'evaluate', feedback: { rating: 3 } })).toBe(60);
+  });
+
+  it('cover generate → null', () => {
+    expect(extractDimScore('cover', { mode: 'generate', candidates: [], recommendedIdx: 0 })).toBeNull();
   });
 });

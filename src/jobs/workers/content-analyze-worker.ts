@@ -299,7 +299,65 @@ export async function runAIAnalysis(input: AIAnalysisInput, deps: AIAnalysisDeps
   };
 }
 
-/** synthesize LLM 本身失败时的兜底: 用维度 report 里的子分数按权重合成。 缺项归一化。 */
+/**
+ * synthesize LLM 本身失败时的兜底: 用每个维度的原生字段推 0-100 分。
+ *
+ * 之前 (P3-18 提交) 读 `dim.overallScore` — 但 4 个维度 schema 都没有这个字段,
+ * 所以 fallback 永远返回 null, "部分完成兜底" 彻底是死码。 xhigh review 抓到。
+ *
+ * 各维度的真实评分字段 (见 lib/llm/prompts/*.ts):
+ *  - hook:         `rating` 1-5           → *20 → 20-100
+ *  - retention:    riskPoints[].severity   → 100 - Σ penalty (high=25/med=10/low=5) clamp 0
+ *  - titleCaption: mode='evaluate' 才有 title/captionFeedback.rating (avg 可用者)
+ *                  mode='generate' 时无用户草稿可评, 返回 null (skip 权重)
+ *  - cover:        mode='evaluate'.feedback.rating 1-5 → *20
+ *                  mode='generate' 时 skip
+ */
+export function extractDimScore(
+  dim: 'hook' | 'retention' | 'titleCaption' | 'cover',
+  r: unknown,
+): number | null {
+  if (!r || typeof r !== 'object') return null;
+  const obj = r as Record<string, unknown>;
+
+  if (dim === 'hook') {
+    const rating = obj.rating;
+    return typeof rating === 'number' ? rating * 20 : null;
+  }
+
+  if (dim === 'retention') {
+    const risks = obj.riskPoints;
+    if (!Array.isArray(risks)) return null;
+    let penalty = 0;
+    for (const rp of risks) {
+      const sev = (rp as { severity?: string })?.severity;
+      if (sev === 'high') penalty += 25;
+      else if (sev === 'medium') penalty += 10;
+      else if (sev === 'low') penalty += 5;
+    }
+    return Math.max(0, 100 - penalty);
+  }
+
+  if (dim === 'titleCaption') {
+    if (obj.mode !== 'evaluate') return null;
+    const ratings: number[] = [];
+    const t = (obj.titleFeedback as { rating?: unknown } | undefined)?.rating;
+    const c = (obj.captionFeedback as { rating?: unknown } | undefined)?.rating;
+    if (typeof t === 'number') ratings.push(t);
+    if (typeof c === 'number') ratings.push(c);
+    if (ratings.length === 0) return null;
+    return (ratings.reduce((a, b) => a + b, 0) / ratings.length) * 20;
+  }
+
+  if (dim === 'cover') {
+    if (obj.mode !== 'evaluate') return null;
+    const rating = (obj.feedback as { rating?: unknown } | undefined)?.rating;
+    return typeof rating === 'number' ? rating * 20 : null;
+  }
+
+  return null;
+}
+
 function computeFallbackScore(
   results: {
     hook: unknown;
@@ -309,14 +367,9 @@ function computeFallbackScore(
   },
   okDims: (keyof typeof results)[],
 ): number | null {
-  const dimScore = (r: unknown): number | null => {
-    if (!r || typeof r !== 'object') return null;
-    const s = (r as { overallScore?: unknown }).overallScore;
-    return typeof s === 'number' ? s : null;
-  };
   const scores: Array<[keyof typeof results, number]> = [];
   for (const d of okDims) {
-    const s = dimScore(results[d]);
+    const s = extractDimScore(d, results[d]);
     if (s !== null) scores.push([d, s]);
   }
   if (scores.length === 0) return null;

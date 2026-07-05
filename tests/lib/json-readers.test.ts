@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   readAnalysisReport,
   readOverallScore,
+  readOverallScoreWithMeta,
   readPredictedPlaysRange,
   readRetroReport,
   readScriptDraftOutput,
@@ -27,6 +28,28 @@ describe('readOverallScore', () => {
     expect(readOverallScore({})).toBeNull();
     expect(readOverallScore(null)).toBeNull();
     expect(readOverallScore({ overallScore: 'high' })).toBeNull();
+  });
+  it('partial=true → null (严格 comparable 场景排除 partial)', () => {
+    expect(readOverallScore({ overallScore: 60, partial: true })).toBeNull();
+    expect(readOverallScore({ overallScore: 60, partial: false })).toBe(60);
+    // partial 缺省 → 视为非 partial
+    expect(readOverallScore({ overallScore: 60 })).toBe(60);
+  });
+});
+
+describe('readOverallScoreWithMeta', () => {
+  it('partial=true 时仍返回 score + partial 标位', () => {
+    expect(readOverallScoreWithMeta({ overallScore: 60, partial: true })).toEqual({
+      score: 60,
+      partial: true,
+    });
+  });
+  it('partial 缺省 → partial=false', () => {
+    expect(readOverallScoreWithMeta({ overallScore: 80 })).toEqual({ score: 80, partial: false });
+  });
+  it('无 score → null', () => {
+    expect(readOverallScoreWithMeta({ partial: true })).toBeNull();
+    expect(readOverallScoreWithMeta(null)).toBeNull();
   });
 });
 
