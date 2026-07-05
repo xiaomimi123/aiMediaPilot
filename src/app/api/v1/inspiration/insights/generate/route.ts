@@ -67,9 +67,11 @@ export async function POST(req: Request) {
         videos: videos.map((v) => ({
           title: v.title,
           authorName: v.authorName,
-          playCount: v.playCount ? Number(v.playCount) : null,
-          likeCount: v.likeCount ? Number(v.likeCount) : null,
-          commentCount: v.commentCount ? Number(v.commentCount) : null,
+          // BigInt truthy check 会把 0n 折成 null. 0 播放是合法数据 (刚发或无观看),
+          // != null 保住零语义 — LLM 才能区分 "无数据" 与 "确认为 0"。
+          playCount: v.playCount != null ? Number(v.playCount) : null,
+          likeCount: v.likeCount != null ? Number(v.likeCount) : null,
+          commentCount: v.commentCount != null ? Number(v.commentCount) : null,
           duration: v.duration,
           userNote: v.userNote,
         })),

@@ -2,7 +2,7 @@ import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { detectInspirationSource, type InspirationPlatform } from '@/lib/inspiration/url-parser';
-import { resolveDouyinShortLink } from '@/lib/inspiration/short-link-resolver';
+import { resolveDouyinShortLink, resolveXhsShortLink } from '@/lib/inspiration/short-link-resolver';
 import { fetchPublicVideo } from '@/lib/inspiration/public-video-adapter';
 
 function bigOrNull(n: number | undefined): bigint | null {
@@ -54,6 +54,16 @@ export async function POST(req: Request) {
     }
     externalId = resolved.awemeId;
     canonicalUrl = `https://www.douyin.com/video/${resolved.awemeId}`;
+  }
+
+  // XHS 短链 → 同样先 resolve 拿真 noteId, 避免 xhslink 与 explore/<hex> 被存 2 行
+  if (platform === 'xiaohongshu' && source.isShortLink) {
+    const resolved = await resolveXhsShortLink(source.canonicalUrl);
+    if (!resolved) {
+      return fail('小红书短链解析失败, 请尝试粘完整 xiaohongshu.com/explore/xxx URL', 400);
+    }
+    externalId = resolved.noteId;
+    canonicalUrl = `https://www.xiaohongshu.com/explore/${resolved.noteId}`;
   }
 
   const user = await getOrCreateDefaultUser();

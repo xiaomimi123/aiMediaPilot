@@ -2,15 +2,9 @@ import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { retroQueue } from '@/jobs/queue';
+import { parseLooseBeijingTime } from '@/lib/douyin/parse-time';
 
 const AWEME_RE = /^\d{8,30}$/;
-
-function parseLooseTime(input: string): Date | null {
-  if (!input) return null;
-  const iso = input.replace(' ', 'T') + ':00';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
 
 export async function POST(
   req: Request,
@@ -51,7 +45,7 @@ export async function POST(
   }
 
   const postedAt = typeof body.postedAt === 'string' ? body.postedAt : '';
-  const publishedAt = parseLooseTime(postedAt) ?? new Date();
+  const publishedAt = parseLooseBeijingTime(postedAt) ?? new Date();
 
   try {
     await prisma.contentAnalysis.update({

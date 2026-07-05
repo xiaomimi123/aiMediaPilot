@@ -2,15 +2,9 @@ import { prisma } from '@/lib/prisma';
 import { retroQueue } from '@/jobs/queue';
 import { runDouyinListAdapter } from './list';
 import { bigramDice, filenameBasename } from './fuzzy';
+import { parseLooseBeijingTime } from './parse-time';
 
 const MATCH_THRESHOLD = 0.8;
-
-function parseLooseTime(input: string): Date | null {
-  if (!input) return null;
-  const iso = input.replace(' ', 'T') + ':00';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
 
 export interface AutoSyncStats {
   itemCount: number;
@@ -58,7 +52,7 @@ export async function runAutoSync(userId: string): Promise<AutoSyncStats> {
         data: {
           douyinAwemeId: item.awemeId,
           douyinUrl: `https://www.douyin.com/video/${item.awemeId}`,
-          publishedAt: parseLooseTime(item.postedAt) ?? new Date(),
+          publishedAt: parseLooseBeijingTime(item.postedAt) ?? new Date(),
           retroStatus: 'SCHEDULED',
         },
       });
