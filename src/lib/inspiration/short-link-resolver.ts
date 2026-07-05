@@ -6,7 +6,12 @@
  * xhslink.com typically redirects to https://www.xiaohongshu.com/explore/<24-hex>...
  */
 
-const AWEME_ID_RE = /(\d{15,25})/;
+// Douyin 规范 URL 里的 aweme_id — 只在明确 douyin/iesdouyin 路径下匹配, 避免误抓无关 tracking id
+const DOUYIN_URL_AWEME_ID_RE =
+  /(?:douyin\.com\/video\/|iesdouyin\.com\/share\/(?:video|note)\/)(\d{15,25})/i;
+// Douyin HTML/JSON 里 aweme_id 常见 key 组合 — 显式白名单, 不再兜底裸 15-25 位数字
+const DOUYIN_HTML_AWEME_ID_RE =
+  /(?:"aweme_id"|"awemeId"|"item_id"|data-aweme-id)\s*[:="]+\s*"?(\d{15,25})"?/i;
 const XHS_NOTE_ID_RE = /xiaohongshu\.com\/(?:explore|discovery\/item)\/([a-f0-9]{20,32})/i;
 
 export interface ResolvedShortLink {
@@ -33,18 +38,21 @@ export async function resolveDouyinShortLink(shortUrl: string): Promise<Resolved
       signal: AbortSignal.timeout(15_000),
     });
 
-    // After redirects, res.url is the final destination
+    // After redirects, res.url is the final destination.
+    // 只匹配 douyin 规范路径下的 id, 不再裸 15-25 位数字 (tracking / analytics id 会污染)
     const finalUrl = res.url;
-    const m = finalUrl.match(AWEME_ID_RE);
+    const m = finalUrl.match(DOUYIN_URL_AWEME_ID_RE);
     if (m) {
       return { awemeId: m[1], finalUrl };
     }
 
     // Some 抖音 short links return HTML with the canonical URL embedded.
-    // As a fallback, scan response body for aweme_id pattern in window._ROUTER_DATA or similar.
+    // Fallback 顺序: (1) 显式 aweme_id/awemeId key, (2) HTML 里嵌的规范 URL。
+    // 之前兜底走裸 AWEME_ID_RE 已移除 — 会把无关 15-25 位数字当 id 返回。
     try {
       const text = await res.text();
-      const m2 = text.match(/"aweme_id"\s*:\s*"?(\d{15,25})"?/) ?? text.match(AWEME_ID_RE);
+      const m2 =
+        text.match(DOUYIN_HTML_AWEME_ID_RE) ?? text.match(DOUYIN_URL_AWEME_ID_RE);
       if (m2) return { awemeId: m2[1], finalUrl };
     } catch {
       // body read failed, continue to return null

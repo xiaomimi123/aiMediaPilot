@@ -96,4 +96,18 @@ describe('resolveBaseline', () => {
     expect(result?.value).toBe(500);
     expect(prismaMock.user.update).not.toHaveBeenCalled();
   });
+
+  it('retro median = 0 → null (与 onboarding 分支 <=0 视为无 baseline 一致, 不覆盖历史值)', async () => {
+    // 之前会返回 { value: 0, source: 'retro-median' } 并写回 baselinePlays=0,
+    // 让 formula 出 predicted=0-0. 而且覆盖了可能已存在的历史 baseline。
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: 'u1', baselinePlays: 800n });
+    prismaMock.actualMetric.findMany.mockResolvedValueOnce([
+      { plays: 0n },
+      { plays: 0n },
+      { plays: 0n },
+    ]);
+    const result = await resolveBaseline('u1');
+    expect(result).toBeNull();
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
 });

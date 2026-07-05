@@ -10,15 +10,20 @@ import {
   Sparkles,
   X,
   Plus,
+  UserCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { APP_NAME } from '@/lib/constants';
 
+// /accounts (cookie/session 绑定) 和 /settings (AI provider key 管理) 是账号回收 &
+// 自动 retro-sync 的唯一入口, IA 迁移时误删过, 现在恢复以避免"入口消失"。
+// /settings 用顶层, 页面内已经包含 baseline 子路由跳转。
 const NAV = [
   { href: '/agent', label: '智能体', icon: Wand2 },
   { href: '/content', label: '我的作品', icon: Library },
   { href: '/dashboard', label: '数据', icon: BarChart3 },
-  { href: '/settings/baseline', label: '设置', icon: Settings },
+  { href: '/accounts', label: '账号', icon: UserCircle },
+  { href: '/settings', label: '设置', icon: Settings },
 ];
 
 interface Props {

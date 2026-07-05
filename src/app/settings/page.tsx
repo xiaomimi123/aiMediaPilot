@@ -111,6 +111,15 @@ export default function SettingsPage() {
         <p className="text-sm text-muted-foreground">配置 AI 文本服务的 API Key</p>
       </div>
 
+      <div className="flex gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
+        <a href="/settings/baseline" className="font-medium text-primary hover:underline">
+          → 播放量基准 (Baseline)
+        </a>
+        <span className="text-muted-foreground">
+          L1 预测的锚点, ≥ 3 条 retro 后自动被 median 覆盖
+        </span>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>添加 / 更新 AI 配置</CardTitle>
