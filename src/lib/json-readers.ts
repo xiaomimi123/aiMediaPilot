@@ -45,6 +45,20 @@ export function readOverallScore(json: unknown): number | null {
   return typeof r?.overallScore === 'number' ? r.overallScore : null;
 }
 
+/**
+ * 从 Analysis.report 里抽 hook 维度的 0-100 分, 用于发前 checklist 的
+ * "低分强制重写钩子" 保护。
+ * hook schema 有 `rating` 1-5, 折算 rating*20 → 20-100。
+ *
+ * 之前 preflight/[id]/page.tsx:115 读 `report.hook.score`, 但 schema 从未
+ * 有 `score` 字段 → 永远 null → needsHookRewrite(null) 永远 false → 保护死码。
+ */
+export function readHookScore(json: unknown): number | null {
+  const report = json as { hook?: { rating?: unknown } } | null | undefined;
+  const rating = report?.hook?.rating;
+  return typeof rating === 'number' ? rating * 20 : null;
+}
+
 /** 允许 partial 的读取。 用于 trend 之类需要展示"哪怕不完整也画出来"的场景, 返回 score + partial 标位。 */
 export function readOverallScoreWithMeta(
   json: unknown,

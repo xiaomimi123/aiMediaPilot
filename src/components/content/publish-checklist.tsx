@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import {
   emptyChecklist,
+  isEmptyChecklist,
   isReady,
   needsHookRewrite,
   type PublishChecklistState,
@@ -85,8 +86,16 @@ export function PublishChecklist({ analysisId, niche, platform = 'douyin', hookS
   }, [state.finalTitle, niche, platform]);
 
   // Auto-save (debounce 500ms)
+  // 之前 `state === emptyChecklist()` 是引用相等 → 永远 false → 每次挂载都 PUT 空 state,
+  // 会覆盖并发的服务端已保存 checklist (SSE 拉回来的完成态)。
+  // 现在: ref 只跳首个 mount 的 effect 触发; 兜底 deep-check 若无 initial + state 深等空, 也 skip。
+  const isFirstAutoSaveRef = useRef(true);
   useEffect(() => {
-    if (!initial && state === emptyChecklist()) return; // skip initial render
+    if (isFirstAutoSaveRef.current) {
+      isFirstAutoSaveRef.current = false;
+      return;
+    }
+    if (!initial && isEmptyChecklist(state)) return;
     const timer = setTimeout(() => {
       void persist();
     }, 500);

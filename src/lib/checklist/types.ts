@@ -24,6 +24,25 @@ export function emptyChecklist(): PublishChecklistState {
   };
 }
 
+/**
+ * 深比较判空 — publish-checklist auto-save guard 用。
+ * 之前的 `state === emptyChecklist()` 用引用相等, 永远 false, guard 从未生效,
+ * 每次挂载都 PUT 空 state 覆盖服务端已保存的 checklist。
+ */
+export function isEmptyChecklist(s: PublishChecklistState): boolean {
+  return (
+    !s.reviewedHook &&
+    !s.reviewedRetention &&
+    !s.reviewedTitleCaption &&
+    !s.reviewedCover &&
+    s.finalTitle === '' &&
+    s.finalCoverNote === '' &&
+    s.actionItemsAdopted.length === 0 &&
+    !s.rewrittenHook &&
+    !s.completedAt
+  );
+}
+
 export interface ReadyInput {
   state: PublishChecklistState;
   hookScore: number | null;

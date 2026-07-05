@@ -9,6 +9,7 @@ import { PredictionCard } from '@/components/content/prediction-card';
 import { PublishChecklist } from '@/components/content/publish-checklist';
 import type { PublishChecklistState } from '@/lib/checklist/types';
 import type { PredictedPlaysRange } from '@/lib/prediction/types';
+import { readHookScore } from '@/lib/json-readers';
 
 // Prisma Json 字段 — 运行时由各 zod schema 保证形状, 这里用 Record<string, unknown> 替代 any,
 // 保留 TS noUncheckedAccess 检查, 在向下游组件传时再 cast 到具体类型.
@@ -112,7 +113,7 @@ export default function PreflightDetailPage() {
         <PublishChecklist
           analysisId={data.id}
           niche={(data.report.niche as string | undefined) || 'ai-knowledge'}
-          hookScore={(data.report.hook as { score?: number } | undefined)?.score ?? null}
+          hookScore={readHookScore(data.report)}
           topActionItems={(data.report.topActionItems ?? []) as string[]}
           initial={data.publishChecklist}
         />

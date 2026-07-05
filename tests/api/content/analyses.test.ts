@@ -1,10 +1,14 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
+const scriptDraftUpdateManyMock = vi.hoisted(() => vi.fn(async () => ({ count: 1 })));
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     contentAnalysis: {
       create: vi.fn(async (args: any) => ({ ...args.data, id: 'a1', createdAt: new Date() })),
       findMany: vi.fn(async () => [{ id: 'a1', status: 'COMPLETED', createdAt: new Date(), videoFilename: 'x.mp4', report: { overallScore: 80 } }]),
+    },
+    scriptDraft: {
+      updateMany: scriptDraftUpdateManyMock,
     },
   },
 }));
@@ -43,6 +47,25 @@ describe('POST /api/v1/content/analyses', () => {
 
   it('happy path 入库 + 入队', async () => {
     const res = await POST(makeMultipart(1024));
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.data.analysisId).toBe('a1');
+  });
+
+  it('fromScript 链接必须带 userId scope (updateMany where.userId)', async () => {
+    scriptDraftUpdateManyMock.mockClear();
+    scriptDraftUpdateManyMock.mockResolvedValueOnce({ count: 1 });
+    await POST(makeMultipart(1024, 'video/mp4', { fromScript: 's1' }));
+    expect(scriptDraftUpdateManyMock).toHaveBeenCalledWith({
+      where: { id: 's1', userId: 'u1' },
+      data: { analysisId: 'a1' },
+    });
+  });
+
+  it('fromScript 属于他人 → updateMany count=0, 不阻断上传', async () => {
+    scriptDraftUpdateManyMock.mockClear();
+    scriptDraftUpdateManyMock.mockResolvedValueOnce({ count: 0 });
+    const res = await POST(makeMultipart(1024, 'video/mp4', { fromScript: 'stolen-id' }));
     const json = await res.json();
     expect(json.success).toBe(true);
     expect(json.data.analysisId).toBe('a1');

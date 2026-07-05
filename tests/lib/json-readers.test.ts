@@ -7,6 +7,7 @@ import {
   readRetroReport,
   readScriptDraftOutput,
   readInspirationInsight,
+  readHookScore,
 } from '@/lib/json-readers';
 
 describe('readAnalysisReport', () => {
@@ -102,6 +103,23 @@ describe('readScriptDraftOutput', () => {
   it('null / string → null', () => {
     expect(readScriptDraftOutput(null)).toBeNull();
     expect(readScriptDraftOutput('string')).toBeNull();
+  });
+});
+
+describe('readHookScore', () => {
+  it('hook.rating * 20', () => {
+    expect(readHookScore({ hook: { rating: 5 } })).toBe(100);
+    expect(readHookScore({ hook: { rating: 3 } })).toBe(60);
+    expect(readHookScore({ hook: { rating: 1 } })).toBe(20);
+  });
+  it('之前的错读 `.score` 现在也 null — 老 payload 不误判', () => {
+    expect(readHookScore({ hook: { score: 70 } })).toBeNull();
+  });
+  it('无 hook / rating 非数字 → null', () => {
+    expect(readHookScore({})).toBeNull();
+    expect(readHookScore({ hook: {} })).toBeNull();
+    expect(readHookScore({ hook: { rating: 'high' } })).toBeNull();
+    expect(readHookScore(null)).toBeNull();
   });
 });
 

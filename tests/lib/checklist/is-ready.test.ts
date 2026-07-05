@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyChecklist, isReady, needsHookRewrite } from '@/lib/checklist/types';
+import { emptyChecklist, isEmptyChecklist, isReady, needsHookRewrite } from '@/lib/checklist/types';
 import type { PublishChecklistState } from '@/lib/checklist/types';
 
 function fullCompleted(): PublishChecklistState {
@@ -60,5 +60,33 @@ describe('needsHookRewrite', () => {
   });
   it('0 → true', () => {
     expect(needsHookRewrite(0)).toBe(true);
+  });
+});
+
+describe('isEmptyChecklist', () => {
+  it('emptyChecklist() → true', () => {
+    expect(isEmptyChecklist(emptyChecklist())).toBe(true);
+  });
+  it('两次 emptyChecklist() 深等 (回归旧 === 引用相等 bug)', () => {
+    const a = emptyChecklist();
+    const b = emptyChecklist();
+    expect(a === b).toBe(false); // 引用不同
+    expect(isEmptyChecklist(a) && isEmptyChecklist(b)).toBe(true);
+  });
+  it('用户勾了 reviewedHook → false', () => {
+    const s = { ...emptyChecklist(), reviewedHook: true };
+    expect(isEmptyChecklist(s)).toBe(false);
+  });
+  it('finalTitle 非空 → false', () => {
+    const s = { ...emptyChecklist(), finalTitle: '我的' };
+    expect(isEmptyChecklist(s)).toBe(false);
+  });
+  it('actionItemsAdopted 非空 → false', () => {
+    const s = { ...emptyChecklist(), actionItemsAdopted: [0] };
+    expect(isEmptyChecklist(s)).toBe(false);
+  });
+  it('rewrittenHook / completedAt 也算非空', () => {
+    expect(isEmptyChecklist({ ...emptyChecklist(), rewrittenHook: 'x' })).toBe(false);
+    expect(isEmptyChecklist({ ...emptyChecklist(), completedAt: '2026-07-05' })).toBe(false);
   });
 });

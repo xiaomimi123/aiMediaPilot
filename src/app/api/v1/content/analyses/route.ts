@@ -94,13 +94,21 @@ export async function POST(req: NextRequest | Request) {
   });
 
   // K2: link incoming ScriptDraft (if upload form passed fromScript), 失败不阻断
+  // 必须限定 userId, 之前只按 id 更新会让任何 draft.analysisId 被外部 id 劫持
+  // (stale form / multi-user / mis-copied id)。 updateMany 命中 0 行就是静默不改。
   const fromScript = (form.get('fromScript') as string | null)?.trim();
   if (fromScript) {
     try {
-      await prisma.scriptDraft.update({
-        where: { id: fromScript },
+      const linked = await prisma.scriptDraft.updateMany({
+        where: { id: fromScript, userId: user.id },
         data: { analysisId: analysis.id },
       });
+      if (linked.count === 0) {
+        console.warn('[POST analyses] fromScript not owned by user, skipped', {
+          fromScript,
+          userId: user.id,
+        });
+      }
     } catch (err) {
       console.error('[POST analyses] fromScript link failed', err);
     }
