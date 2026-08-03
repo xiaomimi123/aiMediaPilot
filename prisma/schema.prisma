@@ -34,6 +34,7 @@ model User {
   scriptDrafts        ScriptDraft[]
   inspirationVideos   InspirationVideo[]
   inspirationInsights InspirationInsight[]
+  topicIdeas          TopicIdea[]
 }
 
 // Sub-project G: 灵感视频库 — 用户精选爆款 + AI 总结共性
@@ -83,13 +84,47 @@ model ScriptDraft {
   output    Json
   picked    Json? // D1: 用户选定要发的版本 (titleIdx / hookIdx / reviewed sections)
   createdAt DateTime @default(now())
+  archivedAt DateTime? // 放弃的内容移出看板, 不删数据
 
   // K2: 链到具体被用于哪条 analysis (NULL = 还没拍/还没分析)
   analysisId String?
   analysis   ContentAnalysis? @relation(fields: [analysisId], references: [id], onDelete: SetNull)
 
+  distributions Distribution[]
+
   @@index([userId, createdAt])
   @@index([analysisId])
+}
+
+// 工作台: 选题池 (spec §2.2)
+model TopicIdea {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  title         String
+  note          String?
+  source        String   // 'discover' | 'inspiration' | 'manual'
+  status        String   @default("POOL") // 'POOL' | 'ADOPTED' | 'DISCARDED'
+  scriptDraftId String? // 采纳后链到草稿
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId, status, createdAt])
+}
+
+// 工作台: 分发登记 (spec §2.3)。抖音主阵地发布仍走 ContentAnalysis.douyinUrl,
+// 这里管其他平台搬运登记; platform 是代码注册表 key (src/lib/pipeline/platforms.ts), 非 enum。
+model Distribution {
+  id            String      @id @default(cuid())
+  scriptDraftId String
+  scriptDraft   ScriptDraft @relation(fields: [scriptDraftId], references: [id], onDelete: Cascade)
+  platform      String
+  url           String
+  publishedAt   DateTime    @default(now())
+  note          String?
+  createdAt     DateTime    @default(now())
+
+  @@index([scriptDraftId])
 }
 
 model AIConfig {
