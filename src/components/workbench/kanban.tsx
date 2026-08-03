@@ -20,7 +20,7 @@ export function Kanban({ data, onChanged }: { data: WorkbenchData; onChanged: ()
       {COLUMNS.map(({ id, key, title }) => (
         <section key={id} id={id} className="w-64 shrink-0 space-y-2">
           <h3 className="text-sm font-semibold">
-            {title} <span className="text-muted-foreground">{data.columns[key].length}</span>
+            {title} <span className="text-muted-foreground">{data.counts[key]}</span>
           </h3>
           {data.columns[key].length === 0 && (
             <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">空</p>
@@ -37,30 +37,49 @@ export function Kanban({ data, onChanged }: { data: WorkbenchData; onChanged: ()
 function TopicPoolColumn({ topics, onChanged }: { topics: TopicCard[]; onChanged: () => void }) {
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const add = async () => {
     if (!title.trim() || busy) return;
     setBusy(true);
+    setError(null);
     try {
-      await fetch('/api/v1/topics', {
+      const res = await fetch('/api/v1/topics', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ title: title.trim(), source: 'manual' }),
       });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        setError(json.message ?? '添加失败');
+        return;
+      }
       setTitle('');
       onChanged();
+    } catch {
+      setError('添加失败');
     } finally {
       setBusy(false);
     }
   };
 
   const discard = async (id: string) => {
-    await fetch(`/api/v1/topics/${id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ status: 'DISCARDED' }),
-    });
-    onChanged();
+    setError(null);
+    try {
+      const res = await fetch(`/api/v1/topics/${id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ status: 'DISCARDED' }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        setError(json.message ?? '丢弃失败');
+        return;
+      }
+      onChanged();
+    } catch {
+      setError('丢弃失败');
+    }
   };
 
   return (
@@ -80,6 +99,10 @@ function TopicPoolColumn({ topics, onChanged }: { topics: TopicCard[]; onChanged
           +
         </button>
       </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      {topics.length === 0 && (
+        <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">空</p>
+      )}
       {topics.map((t) => (
         <div key={t.id} className="rounded-lg border bg-card p-3 text-sm shadow-sm">
           <div className="line-clamp-2 font-medium">{t.title}</div>
