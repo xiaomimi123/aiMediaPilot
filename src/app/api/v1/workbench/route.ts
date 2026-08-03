@@ -101,6 +101,9 @@ export async function GET() {
 
   const byStage = (s: PipelineStage) => cards.filter((c) => c.stage === s);
   const retroedAll = byStage('RETROED');
+  const retroedRecent = [...retroedAll].sort(
+    (a, b) => new Date(b.stageSince).getTime() - new Date(a.stageSince).getTime(),
+  );
 
   const data: WorkbenchData = {
     counts: {
@@ -117,7 +120,7 @@ export async function GET() {
       ready: byStage('READY'),
       shot: byStage('SHOT'),
       published: byStage('PUBLISHED'),
-      retroed: retroedAll.slice(0, RETROED_TAKE), // 只显示最近若干条 (spec §3.2)
+      retroed: retroedRecent.slice(0, RETROED_TAKE), // 只显示最近若干条 (spec §3.2) — 按 stageSince 排序
     },
   };
   return ok(data);

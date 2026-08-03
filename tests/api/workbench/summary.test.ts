@@ -118,4 +118,32 @@ describe('GET /api/v1/workbench', () => {
     expect(card.distributionCount).toBe(2);
     expect(card.distributionPlatforms).toEqual(['bilibili', 'youtube']);
   });
+
+  it('RETROED 列按 stageSince 降序排列 → 最近的优先', async () => {
+    prismaMock.scriptDraft.findMany.mockResolvedValueOnce([
+      draft({
+        id: 'older', picked: {}, analysisId: 'an_older',
+        analysis: {
+          id: 'an_older', publishedAt: new Date('2026-08-01T00:00:00Z'),
+          retroStatus: 'COMPLETED', createdAt: new Date('2026-08-01T00:00:00Z'),
+        },
+      }),
+    ]);
+    prismaMock.contentAnalysis.findMany.mockResolvedValueOnce([
+      {
+        id: 'an_newer', draftTitle: null, videoFilename: 'newer.mp4',
+        publishedAt: new Date('2026-08-02T00:00:00Z'),
+        retroStatus: 'COMPLETED', createdAt: new Date('2026-08-02T00:00:00Z'),
+      },
+    ]);
+    const res = await GET();
+    const json = await res.json();
+    // counts.retroed 显示全部
+    expect(json.data.counts.retroed).toBe(2);
+    // columns.retroed 按 stageSince 降序 → 较新的 (orphan) 应在前
+    expect(json.data.columns.retroed[0].id).toBe('an_newer');
+    expect(json.data.columns.retroed[0].kind).toBe('analysis');
+    expect(json.data.columns.retroed[1].id).toBe('older');
+    expect(json.data.columns.retroed[1].kind).toBe('script');
+  });
 });
