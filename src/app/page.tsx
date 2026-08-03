@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Cockpit } from '@/components/workbench/cockpit';
+import { Kanban } from '@/components/workbench/kanban';
 import type { WorkbenchData } from '@/lib/pipeline/types';
 import type { DashboardSummary } from '@/lib/dashboard/types';
 
@@ -31,8 +32,7 @@ export default function WorkbenchPage() {
   return (
     <div className="space-y-6 p-4 md:p-6">
       <Cockpit data={data} summary={summary} />
-      {/* Task 8 在这里挂 <Kanban data={data} onChanged={reload} /> */}
-      <div />
+      <Kanban data={data} onChanged={reload} />
     </div>
   );
 }
