@@ -5,6 +5,7 @@ import { ScriptForm } from '@/components/content/script-form';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { readInspirationInsight } from '@/lib/json-readers';
+import { PoolButton } from '@/components/workbench/pool-button';
 
 const HAS_SEEN_DISCOVER_COOKIE = 'has_seen_discover';
 
@@ -169,14 +170,26 @@ export default async function AgentPage() {
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {recommended.map((t, i) => (
-              <Link
+              <div
                 key={i}
-                href={`/agent?topic=${encodeURIComponent(t.title)}&platform=douyin${latest ? `&inspirationId=${latest.id}` : ''}`}
-                className="rounded-full bg-white px-3 py-1 text-xs text-blue-900 shadow-sm transition-shadow hover:shadow-md"
-                title={t.rationale}
+                className="flex items-center gap-1 rounded-full bg-white py-1 pl-3 pr-1.5 shadow-sm transition-shadow hover:shadow-md"
               >
-                {t.title}
-              </Link>
+                <Link
+                  href={`/agent?topic=${encodeURIComponent(t.title)}&platform=douyin${latest ? `&inspirationId=${latest.id}` : ''}`}
+                  className="text-xs text-blue-900 hover:underline"
+                  title={t.rationale}
+                >
+                  {t.title}
+                </Link>
+                <PoolButton
+                  title={t.title}
+                  note={t.rationale}
+                  source="inspiration"
+                  variant="ghost"
+                  size="sm"
+                  className="h-5 px-1.5 text-[10px] text-blue-700 hover:bg-blue-100 hover:text-blue-900"
+                />
+              </div>
             ))}
           </div>
         </div>

@@ -8,6 +8,7 @@ import { Sparkles } from 'lucide-react';
 import { KNOWN_NICHES } from '@/lib/llm/prompts';
 import { cn } from '@/lib/utils';
 import { CONTENT_PLATFORMS, CONTENT_PLATFORM_EMOJI, CONTENT_PLATFORM_LABEL, type ContentPlatform } from '@/lib/platform';
+import { PoolButton } from '@/components/workbench/pool-button';
 
 interface DiscoveredTopic {
   title: string;
@@ -257,13 +258,18 @@ export default function DiscoverPage() {
 
                     <p className="text-xs text-muted-foreground">{t.rationale}</p>
 
-                    <div className="pt-1">
+                    <div className="flex items-center gap-2 pt-1">
                       <a
                         href={generateHref}
                         className="inline-block rounded-md bg-brand-gradient px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-opacity hover:opacity-90"
                       >
                         用这个生成脚本 →
                       </a>
+                      <PoolButton
+                        title={t.title}
+                        note={`${t.hookLine}\n${t.rationale}`}
+                        source="discover"
+                      />
                     </div>
                   </CardContent>
                 </Card>
