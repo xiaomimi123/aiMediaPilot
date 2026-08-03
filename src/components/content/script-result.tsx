@@ -23,6 +23,7 @@ interface Props {
   readonly?: boolean;
   draftId?: string;
   initialPicked?: PickedState | null;
+  ideaId?: string;
 }
 
 const PLATFORM_LABEL: Record<Platform, string> = {
@@ -354,7 +355,7 @@ function GongzhonghaoView({ data }: { data: ArticleScriptResponse }) {
   );
 }
 
-export function ScriptResult({ platform, result, topic, niche, onRegenerate, readonly, draftId, initialPicked }: Props) {
+export function ScriptResult({ platform, result, topic, niche, onRegenerate, readonly, draftId, initialPicked, ideaId }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -372,6 +373,14 @@ export function ScriptResult({ platform, result, topic, niche, onRegenerate, rea
       if (!json.success) {
         setSaveError(json.message);
       } else {
+        if (ideaId) {
+          // 选题采纳登记失败不阻塞保存流程
+          await fetch(`/api/v1/topics/${ideaId}`, {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ status: 'ADOPTED', scriptDraftId: json.data.id }),
+          }).catch(() => {});
+        }
         router.push(`/content/script/${json.data.id}`);
       }
     } catch (e) {

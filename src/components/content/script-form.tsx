@@ -51,6 +51,7 @@ export function ScriptForm() {
   const [inspirationStyle, setInspirationStyle] = useState<InspirationStylePreview | null>(null);
 
   const effectiveNiche = niche === '__custom' ? customNiche.trim() : niche;
+  const ideaId = searchParams?.get('ideaId') ?? undefined;
 
   // Prefill from inspiration → /agent loop (?topic=X&platform=Y&niche=Z&inspirationId=ID)
   useEffect(() => {
@@ -268,6 +269,7 @@ export function ScriptForm() {
           topic={topic.trim()}
           niche={effectiveNiche}
           onRegenerate={handleGenerate}
+          ideaId={ideaId}
         />
       )}
     </div>
