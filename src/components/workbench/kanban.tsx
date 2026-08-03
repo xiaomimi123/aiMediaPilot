@@ -26,7 +26,7 @@ export function Kanban({ data, onChanged }: { data: WorkbenchData; onChanged: ()
             <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">空</p>
           )}
           {data.columns[key].map((c) => (
-            <ContentCardView key={`${c.kind}-${c.id}`} card={c} />
+            <ContentCardView key={`${c.kind}-${c.id}`} card={c} onChanged={onChanged} />
           ))}
         </section>
       ))}

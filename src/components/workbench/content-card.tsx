@@ -1,20 +1,28 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
 import type { ContentCard } from '@/lib/pipeline/types';
 import { distributionPlatformMeta } from '@/lib/pipeline/platforms';
 import { cn } from '@/lib/utils';
+import { DistributionModal } from './distribution-modal';
 
 function daysSince(iso: string): number {
   return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000));
 }
 
-export function ContentCardView({ card }: { card: ContentCard }) {
+const DISTRIBUTABLE_STAGES = ['SHOT', 'PUBLISHED', 'RETROED'];
+
+export function ContentCardView({ card, onChanged }: { card: ContentCard; onChanged?: () => void }) {
+  const [modalOpen, setModalOpen] = useState(false);
   const days = daysSince(card.stageSince);
+  const showDistributeButton = card.kind === 'script' && DISTRIBUTABLE_STAGES.includes(card.stage);
+
   return (
-    <Link
-      href={card.detailUrl}
-      className="block rounded-lg border bg-card p-3 text-sm shadow-sm transition-shadow hover:shadow-md"
-    >
-      <div className="line-clamp-2 font-medium">{card.title}</div>
+    <div className="block rounded-lg border bg-card p-3 text-sm shadow-sm transition-shadow hover:shadow-md">
+      <Link href={card.detailUrl} className="line-clamp-2 block font-medium">
+        {card.title}
+      </Link>
       <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
         <span>{distributionPlatformMeta(card.platform).label}</span>
         {card.kind === 'analysis' && <span className="rounded bg-muted px-1">视频分析</span>}
@@ -37,6 +45,17 @@ export function ContentCardView({ card }: { card: ContentCard }) {
           })}
         </div>
       )}
-    </Link>
+      {showDistributeButton && (
+        <button
+          onClick={() => setModalOpen(true)}
+          className="mt-1.5 text-xs text-muted-foreground underline hover:text-foreground"
+        >
+          + 登记分发
+        </button>
+      )}
+      {modalOpen && (
+        <DistributionModal scriptId={card.id} onDone={() => onChanged?.()} onClose={() => setModalOpen(false)} />
+      )}
+    </div>
   );
 }

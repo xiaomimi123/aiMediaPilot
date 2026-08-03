@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { ScriptResult, type Platform } from '@/components/content/script-result';
+import { DistributionSection } from '@/components/workbench/distribution-section';
 
 export default async function ScriptDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
@@ -29,6 +30,7 @@ export default async function ScriptDetailPage(props: { params: Promise<{ id: st
         draftId={draft.id}
         initialPicked={draft.picked as never}
       />
+      <DistributionSection scriptId={draft.id} />
     </div>
   );
 }
