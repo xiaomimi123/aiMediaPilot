@@ -91,7 +91,10 @@ function TopicPoolColumn({ topics, onChanged }: { topics: TopicCard[]; onChanged
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && add()}
+          onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return;
+            if (e.key === 'Enter') add();
+          }}
           placeholder="快速添加选题…"
           className="w-full rounded-lg border bg-background px-2 py-1.5 text-xs"
         />

@@ -84,7 +84,7 @@
 新首页 (`src/app/page.tsx`), 替换原来的引导页, 不再 redirect 到 `/dashboard`:
 
 - **上半屏「今日驾驶舱」** (`src/components/workbench/cockpit.tsx`): 六格阶段计数 (选题池 / 草稿 / 定稿待拍 / 已拍待发 / 已发布 / 已复盘, 可点击跳看板列) + 右侧最近 7 天数据摘要 (复用 `/api/v1/dashboard/summary`, 不新写聚合) + 「抓灵感」快捷入口 → `/agent/discover`。
-- **下半屏「内容管线看板」** (`src/components/workbench/kanban.tsx`): 六列, 选题池 → 草稿 → 定稿待拍 → 已拍待发 → 已发布 → 已复盘。 每条内容一张卡: 标题 / 平台徽标 / 分发数 / 停留天数; 已发布列显示复盘倒计时 (T+N 天)。 **不做拖拽** —— 状态由真实动作驱动 (选版本→定稿、传视频→已拍、登记链接→已发布), 拖拽会制造假状态。 已复盘列按 `stageSince` 只显示最近 10 条, 归档 (`archivedAt` 非空) 的卡不进看板。
+- **下半屏「内容管线看板」** (`src/components/workbench/kanban.tsx`): 六列, 选题池 → 草稿 → 定稿待拍 → 已拍待发 → 已发布 → 已复盘。 每条内容一张卡: 标题 / 平台徽标 / 分发数 / 停留天数; 已发布列显示复盘倒计时 (T+N 天)。 **不做拖拽** —— 状态由真实动作驱动 (选版本→定稿、传视频→已拍、登记链接→已发布), 拖拽会制造假状态。 已复盘列按 `stageSince` 只显示最近 10 条, 归档 (`archivedAt` 非空) 的卡不进看板。script 卡任何阶段都有「归档」按钮 (`PATCH /api/v1/scripts/[id]` `{ archived }`), 放弃的内容移出看板但不删数据, 可反悔 (再传 `archived: false`)。
 - 数据来自单一聚合 API `GET /api/v1/workbench` (drafts + analyses + distributions 三表查询拼装, 避免 N+1)。
 
 数据模型与阶段派生规则见 §3.5。
@@ -140,7 +140,7 @@
 
 ## 4. Roadmap — 分阶段实施 (Phase A-C 已完成)
 
-不一次性 5 天大重构,分小步走,每步可发布。 **这是第一次 pivot (小白向导) 时定的 roadmap; Phase A-C 已完成, D 未做, E 仍是未来事项。** 工作台重定位 (第二次 pivot) 是独立的后续 spec, 见 `docs/superpowers/specs/2026-08-03-workbench-repositioning-design.md`, 其自身的 5 个 Task 均已完成 (数据层 → 工作台首页 → 交互流 → 本文档)。
+不一次性 5 天大重构,分小步走,每步可发布。 **这是第一次 pivot (小白向导) 时定的 roadmap; Phase A-C 已完成, D 未做, E 仍是未来事项。** 工作台重定位 (第二次 pivot) 是独立的后续 spec, 见 `docs/superpowers/specs/2026-08-03-workbench-repositioning-design.md`, 其自身的 12 个 Task 均已完成 (数据层 → 工作台首页 → 交互流 → 本文档)。
 
 ### ✅ **Phase A: Script 多平台化** — 已完成
 

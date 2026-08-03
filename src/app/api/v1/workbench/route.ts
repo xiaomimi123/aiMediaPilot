@@ -58,10 +58,10 @@ export async function GET() {
       (acc, x) => (acc && acc > x.publishedAt ? acc : x.publishedAt),
       null,
     );
-    const publishedAt = d.analysis?.publishedAt ?? latestDist;
+    const stageSincePublishedAt = d.analysis?.publishedAt ?? latestDist;
     const stageSince =
       stage === 'PUBLISHED' || stage === 'RETROED'
-        ? publishedAt ?? d.createdAt
+        ? stageSincePublishedAt ?? d.createdAt
         : stage === 'SHOT'
           ? d.analysis?.createdAt ?? d.createdAt
           : d.createdAt;
@@ -74,7 +74,9 @@ export async function GET() {
       stageSince: stageSince.toISOString(),
       distributionCount: d.distributions.length,
       distributionPlatforms: [...new Set(d.distributions.map((x) => x.platform))],
-      retroCountdownDays: stage === 'PUBLISHED' ? retroCountdown(publishedAt) : null,
+      // 只有走 retro 管线的 analysis.publishedAt 才显示复盘倒计时 (spec §2.3) —
+      // 仅靠 Distribution 登记的发布不参与 retro, 不能借用 latestDist 兜底
+      retroCountdownDays: stage === 'PUBLISHED' ? retroCountdown(d.analysis?.publishedAt ?? null) : null,
       detailUrl: `/content/script/${d.id}`,
     });
   }

@@ -117,6 +117,8 @@ describe('GET /api/v1/workbench', () => {
     const card = json.data.columns.published[0];
     expect(card.distributionCount).toBe(2);
     expect(card.distributionPlatforms).toEqual(['bilibili', 'youtube']);
+    // 仅靠 Distribution 发布的内容不参与 retro 管线 (spec §2.3), 不应显示假复盘倒计时
+    expect(card.retroCountdownDays).toBeNull();
   });
 
   it('RETROED 列按 stageSince 降序排列 → 最近的优先', async () => {

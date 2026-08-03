@@ -18,6 +18,20 @@ export function ContentCardView({ card, onChanged }: { card: ContentCard; onChan
   const days = daysSince(card.stageSince);
   const showDistributeButton = card.kind === 'script' && DISTRIBUTABLE_STAGES.includes(card.stage);
 
+  const archive = async () => {
+    try {
+      const res = await fetch(`/api/v1/scripts/${card.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ archived: true }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) onChanged?.();
+    } catch {
+      // 失败静默, 与现有模式一致
+    }
+  };
+
   return (
     <div className="block rounded-lg border bg-card p-3 text-sm shadow-sm transition-shadow hover:shadow-md">
       <Link href={card.detailUrl} className="line-clamp-2 block font-medium">
@@ -51,6 +65,14 @@ export function ContentCardView({ card, onChanged }: { card: ContentCard; onChan
           className="mt-1.5 text-xs text-muted-foreground underline hover:text-foreground"
         >
           + 登记分发
+        </button>
+      )}
+      {card.kind === 'script' && (
+        <button
+          onClick={archive}
+          className="mt-1.5 ml-2 text-xs text-muted-foreground underline hover:text-foreground"
+        >
+          归档
         </button>
       )}
       {modalOpen && (

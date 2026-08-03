@@ -14,7 +14,7 @@ export default function WorkbenchPage() {
   const reload = useCallback(() => {
     fetch('/api/v1/workbench')
       .then((r) => r.json())
-      .then((j) => (j.success ? setData(j.data) : setError(j.error ?? '加载失败')))
+      .then((j) => (j.success ? setData(j.data) : setError(j.message ?? '加载失败')))
       .catch(() => setError('加载失败'));
   }, []);
 

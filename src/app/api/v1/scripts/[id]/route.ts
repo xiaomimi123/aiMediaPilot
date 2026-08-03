@@ -19,6 +19,27 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   });
 }
 
+export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
+  let body: { archived?: unknown };
+  try {
+    body = await req.json();
+  } catch {
+    return fail('请求体不是合法 JSON', 400);
+  }
+  if (typeof body.archived !== 'boolean') return fail('archived 必须是布尔值', 400);
+
+  const user = await getOrCreateDefaultUser();
+  const draft = await prisma.scriptDraft.findUnique({ where: { id }, select: { userId: true } });
+  if (!draft || draft.userId !== user.id) return fail('脚本不存在', 404);
+
+  await prisma.scriptDraft.update({
+    where: { id },
+    data: { archivedAt: body.archived ? new Date() : null },
+  });
+  return ok({ id });
+}
+
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const user = await getOrCreateDefaultUser();
