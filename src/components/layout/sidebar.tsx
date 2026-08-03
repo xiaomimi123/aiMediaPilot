@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  Home,
   Wand2,
   Library,
   BarChart3,
@@ -18,9 +19,11 @@ import { APP_NAME } from '@/lib/constants';
 // /accounts (cookie/session 绑定) 和 /settings (AI provider key 管理) 是账号回收 &
 // 自动 retro-sync 的唯一入口, IA 迁移时误删过, 现在恢复以避免"入口消失"。
 // /settings 用顶层, 页面内已经包含 baseline 子路由跳转。
+// / 现在是工作台首页 (驾驶舱 + Kanban), 不再 redirect 到 /dashboard。
 const NAV = [
-  { href: '/agent', label: '智能体', icon: Wand2 },
-  { href: '/content', label: '我的作品', icon: Library },
+  { href: '/', label: '工作台', icon: Home },
+  { href: '/agent', label: '创作', icon: Wand2 },
+  { href: '/content', label: '内容库', icon: Library },
   { href: '/dashboard', label: '数据', icon: BarChart3 },
   { href: '/accounts', label: '账号', icon: UserCircle },
   { href: '/settings', label: '设置', icon: Settings },
@@ -61,7 +64,7 @@ export function Sidebar({ open = false, onClose }: Props) {
           </div>
           <div className="flex flex-1 flex-col">
             <div className="text-base font-semibold leading-tight">{APP_NAME}</div>
-            <div className="mt-1 text-xs text-muted-foreground">单用户 MVP</div>
+            <div className="mt-1 text-xs text-muted-foreground">自媒体工作台</div>
           </div>
           <button
             type="button"
@@ -76,7 +79,10 @@ export function Sidebar({ open = false, onClose }: Props) {
         {/* Nav */}
         <nav className="flex-1 space-y-1 p-3">
           {NAV.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || pathname?.startsWith(href + '/');
+            const active =
+              href === '/'
+                ? pathname === '/'
+                : pathname === href || pathname?.startsWith(href + '/');
             return (
               <Link
                 key={href}
