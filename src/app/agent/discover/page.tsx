@@ -52,10 +52,6 @@ export default function DiscoverPage() {
   const effectiveNiche = niche === '__custom' ? customNiche.trim() : niche;
 
   useEffect(() => {
-    // 标记用户已看过 discover 页 — /agent 首页据此不再展示 "👋 第一次来" 引导
-    // Max-age 30 天。 SameSite=Lax 保证同源跳转都能带上。 单用户 MVP 无 CSRF 顾虑。
-    document.cookie = 'has_seen_discover=1; path=/; max-age=2592000; SameSite=Lax';
-
     fetch('/api/v1/user/default-niche')
       .then((r) => r.json())
       .then((j) => {
