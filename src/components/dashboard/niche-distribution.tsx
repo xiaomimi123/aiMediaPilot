@@ -33,7 +33,7 @@ export function NicheDistribution({ rows }: { rows: NicheRow[] }) {
             </table>
             {hasDashRow && (
               <div className="text-[11px] text-muted-foreground">
-                平均分 "—" = 该 niche 下暂无 4 维全通过的分析 (partial 已排除以保 comparable)
+                平均分 &ldquo;—&rdquo; = 该 niche 下暂无 4 维全通过的分析 (partial 已排除以保 comparable)
               </div>
             )}
           </>
