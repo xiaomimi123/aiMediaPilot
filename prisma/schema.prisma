@@ -24,27 +24,27 @@ model User {
   // Auto-sync (Sub-project D): 最近一次成功 cron tick 的时间戳
   lastAutoSyncAt DateTime?
 
-  aiConfigs           AIConfig[]
-  imageGenConfigs     ImageGenConfig[]
-  accounts            PlatformAccount[]
-  contents            Content[]
-  schedules           PublishTask[]
-  competitors         Competitor[]
-  contentAnalyses     ContentAnalysis[]
-  scriptDrafts        ScriptDraft[]
-  inspirationVideos   InspirationVideo[]
-  inspirationInsights InspirationInsight[]
-  topicIdeas          TopicIdea[]
-  cockpitContents     CockpitContent[]
-  cockpitInspirations CockpitInspiration[]
-  cockpitStageEvents  CockpitStageEvent[]
-  cockpitReviewDays   CockpitReviewDay[]
-  cockpitLiveSessions CockpitLiveSession[]
+  aiConfigs                  AIConfig[]
+  imageGenConfigs            ImageGenConfig[]
+  accounts                   PlatformAccount[]
+  contents                   Content[]
+  schedules                  PublishTask[]
+  competitors                Competitor[]
+  contentAnalyses            ContentAnalysis[]
+  scriptDrafts               ScriptDraft[]
+  inspirationVideos          InspirationVideo[]
+  inspirationInsights        InspirationInsight[]
+  topicIdeas                 TopicIdea[]
+  cockpitContents            CockpitContent[]
+  cockpitInspirations        CockpitInspiration[]
+  cockpitStageEvents         CockpitStageEvent[]
+  cockpitReviewDays          CockpitReviewDay[]
+  cockpitLiveSessions        CockpitLiveSession[]
   cockpitScheduleObjectTypes CockpitScheduleObjectType[]
-  cockpitScheduleObjects CockpitScheduleObject[]
-  cockpitGoalCycles   CockpitGoalCycle[]
-  cockpitInsightRules CockpitInsightRule[]
-  cockpitPrefs        CockpitPrefs?
+  cockpitScheduleObjects     CockpitScheduleObject[]
+  cockpitGoalCycles          CockpitGoalCycle[]
+  cockpitInsightRules        CockpitInsightRule[]
+  cockpitPrefs               CockpitPrefs?
 }
 
 // Sub-project G: 灵感视频库 — 用户精选爆款 + AI 总结共性
@@ -85,15 +85,15 @@ model InspirationInsight {
 }
 
 model ScriptDraft {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  topic     String
-  niche     String
-  platform  String   @default("douyin") // 'douyin' | 'xiaohongshu' | 'gongzhonghao'
-  output    Json
-  picked    Json? // D1: 用户选定要发的版本 (titleIdx / hookIdx / reviewed sections)
-  createdAt DateTime @default(now())
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  topic      String
+  niche      String
+  platform   String    @default("douyin") // 'douyin' | 'xiaohongshu' | 'gongzhonghao'
+  output     Json
+  picked     Json? // D1: 用户选定要发的版本 (titleIdx / hookIdx / reviewed sections)
+  createdAt  DateTime  @default(now())
   archivedAt DateTime? // 放弃的内容移出看板, 不删数据
 
   // K2: 链到具体被用于哪条 analysis (NULL = 还没拍/还没分析)
@@ -113,7 +113,7 @@ model TopicIdea {
   user          User     @relation(fields: [userId], references: [id])
   title         String
   note          String?
-  source        String   // 'discover' | 'inspiration' | 'manual'
+  source        String // 'discover' | 'inspiration' | 'manual'
   status        String   @default("POOL") // 'POOL' | 'ADOPTED' | 'DISCARDED'
   scriptDraftId String? // 采纳后链到草稿
   createdAt     DateTime @default(now())
@@ -662,31 +662,32 @@ model ActualMetric {
 // FollowerSnapshot 不建表：workspace GET 时从 AccountMetric 派生（爬虫已每日写入），PUT 忽略该字段。
 
 model CockpitContent {
-  id                String   @id // 客户端 crypto.randomUUID()
+  id                String  @id // 客户端 crypto.randomUUID()
   userId            String
   title             String
-  idea              String   @default("")
-  contentType       String   @default("")
-  tier              String   @default("B") // A | B | C
-  stage             String   @default("inbox") // inbox|topic|script|recording|editing|publishing|review|archived
-  publicationStatus String   @default("draft") // draft|scheduled|published
-  priority          String   @default("normal")
-  tags              Json     @default("[]")
-  publishedAt       String   @default("") // cockpit 用 ISO date 字符串, 保持原样
-  xhsLink           String   @default("")
-  coverCopy         String   @default("")
-  publishCopy       String   @default("")
+  idea              String  @default("")
+  contentType       String  @default("")
+  tier              String  @default("B") // A | B | C
+  stage             String  @default("inbox") // inbox|topic|script|recording|editing|publishing|review|archived
+  publicationStatus String  @default("draft") // draft|scheduled|published
+  priority          String  @default("normal")
+  tags              Json    @default("[]")
+  publishedAt       String  @default("") // cockpit 用 ISO date 字符串, 保持原样
+  xhsLink           String  @default("")
+  coverCopy         String  @default("")
+  publishCopy       String  @default("")
   topic             Json // TopicCard
   script            Json // ScriptDraft 骨架
-  recordingNotes    String   @default("")
-  editingNotes      String   @default("")
+  recordingNotes    String  @default("")
+  editingNotes      String  @default("")
   metrics           Json // MetricsSnapshot
   review            Json // Review
-  scriptDraftId     String?  // → ScriptDraft (AI 稿)
-  analysisId        String?  // → ContentAnalysis (L1/复盘链)
+  scriptDraftId     String? // → ScriptDraft (AI 稿)
+  analysisId        String? // → ContentAnalysis (L1/复盘链)
   createdAt         String
   updatedAt         String
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, stage])
   @@index([scriptDraftId])
   @@index([analysisId])
@@ -700,6 +701,7 @@ model CockpitInspiration {
   createdAt           String
   updatedAt           String
   user                User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
 }
 
@@ -712,6 +714,7 @@ model CockpitStageEvent {
   rank        Int
   completedAt String @default("")
   user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, plannedDate])
   @@index([contentId])
 }
@@ -723,6 +726,7 @@ model CockpitReviewDay {
   note        String @default("")
   createdAt   String
   user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
 }
 
@@ -738,6 +742,7 @@ model CockpitLiveSession {
   createdAt   String
   updatedAt   String
   user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
 }
 
@@ -751,6 +756,7 @@ model CockpitScheduleObjectType {
   archived    Boolean @default(false)
   createdAt   String
   user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
 }
 
@@ -766,6 +772,7 @@ model CockpitScheduleObject {
   createdAt   String
   updatedAt   String
   user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
 }
 
@@ -784,6 +791,7 @@ model CockpitGoalCycle {
   qualityThreshold Float  @default(0)
   qualityTarget    Int    @default(0)
   user             User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, status])
 }
 
@@ -795,6 +803,7 @@ model CockpitInsightRule {
   active          Boolean @default(true)
   createdAt       String
   user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
 }
 

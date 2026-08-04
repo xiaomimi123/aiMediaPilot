@@ -13,10 +13,18 @@
  *  - StageEvent.completedAt / Review.completedAt → 完整 ISO 时间戳 (或空字符串代表未完成)
  *  - ContentItem.createdAt/updatedAt、InspirationCard.createdAt/updatedAt → 完整 ISO 时间戳
  *    (未被任何比较函数按纯日期解析, 沿用来源记录的精确时间)
+ *
+ * publishedAt/capturedAt 这两个"日期部分"字段用 dateISOInShanghai (Asia/Shanghai 取
+ * 年月日) 而非 UTC slice — 与运行时写入方 (Cockpit.tsx 里的 todayISO()/dateISOInShanghai)
+ * 保持同一约定, 避免 UTC+8 用户在午夜前后跑迁移脚本时错位一天 (Task 14 review 修复)。
+ * StageEvent.plannedDate 由 <input type="date"> 直接写入原始值, 与本文件的日期换算无关,
+ * 这里的 isoDateOnly 仅用于 backfillStageEvents 从源时间戳"派生"计划日期, 保留 UTC slice
+ * 即可 (补的是历史占位日期, 不追求与某个运行时写入约定对齐)。
  */
 import { randomUUID } from "crypto";
 import { deriveStage, type PipelineStage } from "@/lib/pipeline/stage";
 import { readScriptDraftOutput, readRetroReport } from "@/lib/json-readers";
+import { dateISOInShanghai } from "@/lib/cockpit/calculations";
 import {
   SCHEDULABLE_STAGES,
   type ContentItem,
@@ -215,7 +223,7 @@ export function mapDraftToCockpit(
 
   const publishedAt =
     (pipelineStage === "PUBLISHED" || pipelineStage === "RETROED") && analysis?.publishedAt
-      ? isoDateOnly(analysis.publishedAt)
+      ? dateISOInShanghai(analysis.publishedAt)
       : "";
 
   const metrics =
@@ -226,7 +234,7 @@ export function mapDraftToCockpit(
           saves: Number(latestMetric.collects),
           comments: Number(latestMetric.comments),
           followerGain: 0,
-          capturedAt: isoDateOnly(latestMetric.snapshotAt),
+          capturedAt: dateISOInShanghai(latestMetric.snapshotAt),
         }
       : blankMetrics();
 

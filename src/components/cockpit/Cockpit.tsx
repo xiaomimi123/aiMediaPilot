@@ -505,8 +505,6 @@ export default function Cockpit() {
   const [pipelineQuery, setPipelineQuery] = useState("");
   const [pipelineType, setPipelineType] = useState("全部类型");
   const [toast, setToast] = useState("");
-  const [aiResult, setAiResult] = useState<{ title: string; mode: "direct" | "prompt"; prompt: string; result?: { summary: string; signals: string[]; risks: string[]; nextActions: string[] } } | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
   const workspaceTitle = dashboardTitle(state.profile);
 
   useEffect(() => {
@@ -979,24 +977,10 @@ export default function Cockpit() {
     setToast(item.review.completedAt ? "复盘已更新" : "复盘已保存，内容进入已复盘");
   }
 
-  async function analyze(kind: "topic" | "script" | "review" | "goal", payload: unknown, title: string) {
-    setAiLoading(true);
-    setAiResult(null);
-    try {
-      const response = await fetch("/api/ai/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, payload }) });
-      const data = await response.json();
-      setAiResult({ title, mode: data.mode === "direct" ? "direct" : "prompt", prompt: data.prompt, result: data.result });
-    } catch {
-      setAiResult({ title, mode: "prompt", prompt: `请帮我分析以下${title}：\n\n${JSON.stringify(payload, null, 2)}` });
-    } finally {
-      setAiLoading(false);
-    }
-  }
-
-  async function copyText(text: string) {
-    await navigator.clipboard.writeText(text);
-    setToast("已复制到剪贴板");
-  }
+  // 注：原 creator-cockpit 有 analyze()/copyText()/AiModal 调 /api/ai/analyze 做「AI 体检 /
+  // AI 质检」，该路由本项目未移植（AI 写作走 /agent，见 content-drawer.tsx 的
+  // “用 AI 写脚本”入口）。这两个函数及其状态随对应按钮一起在 Task 14 移除，避免点击后
+  // fetch 404 → 静默降级成一段「请手动分析」的提示词，属于名不副实的死功能。
 
   function exportData() {
     const next = { ...state, lastBackupAt: new Date().toISOString() };
@@ -1075,10 +1059,9 @@ export default function Cockpit() {
 
       <nav className="mobile-nav" aria-label="移动端导航">{nav.map((item) => <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => setView(item.id)}><Icon name={item.icon} /><span>{item.label}</span></button>)}</nav>
       {showCreateContent ? <CreateContentModal inspirationCards={state.inspirationCards} close={() => setShowCreateContent(false)} createBlank={createBlankContent} createFromInspiration={createContentFromInspiration} openInspirationPool={() => { setShowCreateContent(false); setView("inspirations"); }} /> : null}
-      {selected ? <ContentDrawer item={selected} initialTab={selectedTab} stageEvents={state.stageEvents} stageColors={state.stageColors} contentTypes={state.contentTypes} close={() => setSelectedId(null)} update={(patch) => updateContent(selected.id, patch)} changeStage={(stage) => setState((prev) => transitionContentStage(prev, selected.id, stage, date))} setStageStatus={(stage, completed) => setStageStatus(selected.id, stage, completed)} schedule={(stage, plannedDate) => planStage(selected.id, stage, plannedDate)} unschedule={(stage) => clearStagePlan(selected.id, stage)} remove={() => deleteContent(selected)} markPublished={() => markPublished(selected)} unmarkPublished={() => unmarkPublished(selected)} saveReview={() => saveReview(selected)} analyze={(kind, payload, title) => analyze(kind, payload, title)} aiLoading={aiLoading} ruleDeposited={Boolean(selected.review.learnedRule.trim() && state.insightRules.some((rule) => rule.sourceContentId === selected.id && rule.text === selected.review.learnedRule.trim()))} addRule={(text) => { const normalized = text.trim(); if (!normalized) return; setState((prev) => { const existing = prev.insightRules.find((rule) => rule.sourceContentId === selected.id && rule.text === normalized); if (existing) return { ...prev, insightRules: prev.insightRules.map((rule) => rule.id === existing.id ? { ...rule, active: true } : rule) }; const rule: InsightRule = { id: crypto.randomUUID(), text: normalized, sourceContentId: selected.id, createdAt: todayISO(), active: true }; return { ...prev, insightRules: [rule, ...prev.insightRules] }; }); setToast("已沉淀为内容规则"); }} /> : null}
+      {selected ? <ContentDrawer item={selected} initialTab={selectedTab} stageEvents={state.stageEvents} stageColors={state.stageColors} contentTypes={state.contentTypes} close={() => setSelectedId(null)} update={(patch) => updateContent(selected.id, patch)} changeStage={(stage) => setState((prev) => transitionContentStage(prev, selected.id, stage, date))} setStageStatus={(stage, completed) => setStageStatus(selected.id, stage, completed)} schedule={(stage, plannedDate) => planStage(selected.id, stage, plannedDate)} unschedule={(stage) => clearStagePlan(selected.id, stage)} remove={() => deleteContent(selected)} markPublished={() => markPublished(selected)} unmarkPublished={() => unmarkPublished(selected)} saveReview={() => saveReview(selected)} ruleDeposited={Boolean(selected.review.learnedRule.trim() && state.insightRules.some((rule) => rule.sourceContentId === selected.id && rule.text === selected.review.learnedRule.trim()))} addRule={(text) => { const normalized = text.trim(); if (!normalized) return; setState((prev) => { const existing = prev.insightRules.find((rule) => rule.sourceContentId === selected.id && rule.text === normalized); if (existing) return { ...prev, insightRules: prev.insightRules.map((rule) => rule.id === existing.id ? { ...rule, active: true } : rule) }; const rule: InsightRule = { id: crypto.randomUUID(), text: normalized, sourceContentId: selected.id, createdAt: todayISO(), active: true }; return { ...prev, insightRules: [rule, ...prev.insightRules] }; }); setToast("已沉淀为内容规则"); }} /> : null}
       {showStageColors ? <StageColorModal colors={state.stageColors} close={() => setShowStageColors(false)} update={(stage, color) => setState((prev) => ({ ...prev, stageColors: { ...prev.stageColors, [stage]: color.toUpperCase() } }))} reset={() => setState((prev) => ({ ...prev, stageColors: { ...DEFAULT_STAGE_COLORS } }))} /> : null}
       {showVersionHistory ? <VersionHistoryModal close={() => setShowVersionHistory(false)} exportData={exportData} /> : null}
-      {aiResult ? <AiModal result={aiResult} close={() => setAiResult(null)} copy={copyText} /> : null}
       {showOnboarding ? <Onboarding start={startWorkspace} /> : null}
       {toast ? <div className="toast" role="status">{toast}</div> : null}
     </div>
@@ -1137,8 +1120,4 @@ function StageColorModal({ colors, close, update, reset }: {
       <footer><button className="text-button" onClick={reset}>恢复默认配色</button><button className="primary-button" onClick={close}>完成</button></footer>
     </section>
   </div>;
-}
-
-function AiModal({ result, close, copy }: { result: { title: string; mode: "direct" | "prompt"; prompt: string; result?: { summary: string; signals: string[]; risks: string[]; nextActions: string[] } }; close: () => void; copy: (text: string) => void }) {
-  return <div className="modal-backdrop"><div className="ai-modal"><header><div><span className="eyebrow">AI ASSISTANT</span><h2>{result.title}</h2></div><button className="close-button" onClick={close}>×</button></header>{result.mode === "direct" && result.result ? <div className="ai-output"><div className="ai-summary"><Icon name="spark" /><p>{result.result.summary}</p></div><div className="ai-columns"><div><h3>关键信号</h3>{result.result.signals.map((item) => <p key={item}>· {item}</p>)}</div><div><h3>风险</h3>{result.result.risks.map((item) => <p key={item}>· {item}</p>)}</div></div><div><h3>下一步动作</h3><ol>{result.result.nextActions.map((item) => <li key={item}>{item}</li>)}</ol></div></div> : <div className="prompt-output"><p>当前没有可用的 API 密钥，已整理好完整上下文。复制后交给 Codex 或 ChatGPT 即可。</p><textarea readOnly value={result.prompt} /><button className="primary-button" onClick={() => copy(result.prompt)}>复制完整提示词</button></div>}<footer><button className="text-button" onClick={() => copy(result.prompt)}>复制原始提示词</button><button className="secondary-button" onClick={close}>关闭</button></footer></div></div>;
 }

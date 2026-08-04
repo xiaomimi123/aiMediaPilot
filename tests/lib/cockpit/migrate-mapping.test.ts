@@ -91,6 +91,16 @@ describe("mapDraftToCockpit — deriveStage 分支映射", () => {
     expect(content.metrics.capturedAt).toBe("2026-07-10");
   });
 
+  it("publishedAt/capturedAt 按 Asia/Shanghai (UTC+8) 取日期部分, 而非 UTC — 跨零点用例", () => {
+    // 20:00 UTC == 次日 04:00 Shanghai, 若仍用 UTC slice 会得到 07-08 (差一天)。
+    const d = draft({ picked: { titleIdx: 0, hookIdx: 0, reviewed: {} } });
+    const a = analysis({ publishedAt: new Date("2026-07-08T20:00:00.000Z") });
+    const m = metric({ snapshotAt: new Date("2026-07-08T20:00:00.000Z") });
+    const { content } = mapDraftToCockpit(d, a, 0, m);
+    expect(content.publishedAt).toBe("2026-07-09");
+    expect(content.metrics.capturedAt).toBe("2026-07-09");
+  });
+
   it("PUBLISHED via distributionCount>0 (无 analysis.publishedAt) 同样落 review/published", () => {
     const d = draft({ picked: { titleIdx: 0, hookIdx: 0, reviewed: {} } });
     const a = analysis();

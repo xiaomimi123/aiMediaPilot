@@ -21,14 +21,15 @@ export const NAV_ITEMS: ReadonlyArray<SidebarNavItem> = [
 ];
 
 // 站外落地页：创作 / 数据 / 账号 / 设置。内容库 (/content) 即将被 Pipeline 取代，不挂入新壳。
-const EXTERNAL_NAV_ITEMS: ReadonlyArray<{ href: string; label: string; emoji: string }> = [
+// 导出给 external-shell.tsx 的移动端导航复用，避免重复定义。
+export const EXTERNAL_NAV_ITEMS: ReadonlyArray<{ href: string; label: string; emoji: string }> = [
   { href: "/agent", label: "创作", emoji: "🪄" },
   { href: "/dashboard", label: "数据", emoji: "📊" },
   { href: "/accounts", label: "账号", emoji: "👤" },
   { href: "/settings", label: "设置", emoji: "⚙️" },
 ];
 
-function isExternalActive(pathname: string | null, href: string): boolean {
+export function isExternalActive(pathname: string | null, href: string): boolean {
   if (!pathname) return false;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
