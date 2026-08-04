@@ -35,6 +35,16 @@ model User {
   inspirationVideos   InspirationVideo[]
   inspirationInsights InspirationInsight[]
   topicIdeas          TopicIdea[]
+  cockpitContents     CockpitContent[]
+  cockpitInspirations CockpitInspiration[]
+  cockpitStageEvents  CockpitStageEvent[]
+  cockpitReviewDays   CockpitReviewDay[]
+  cockpitLiveSessions CockpitLiveSession[]
+  cockpitScheduleObjectTypes CockpitScheduleObjectType[]
+  cockpitScheduleObjects CockpitScheduleObject[]
+  cockpitGoalCycles   CockpitGoalCycle[]
+  cockpitInsightRules CockpitInsightRule[]
+  cockpitPrefs        CockpitPrefs?
 }
 
 // Sub-project G: 灵感视频库 — 用户精选爆款 + AI 总结共性
@@ -645,4 +655,159 @@ model ActualMetric {
   createdAt DateTime @default(now())
 
   @@index([analysisId, snapshotAt])
+}
+
+// ============ Creator Cockpit (2026-08-04 整体移植, spec: docs/superpowers/specs/2026-08-04-cockpit-adoption-design.md) ============
+// 设计说明：日期字段沿用 cockpit 的 ISO 字符串而非 DateTime——纯函数用字符串比较日期（如 `plannedDate < today`），改类型会破坏零改动原则。
+// FollowerSnapshot 不建表：workspace GET 时从 AccountMetric 派生（爬虫已每日写入），PUT 忽略该字段。
+
+model CockpitContent {
+  id                String   @id // 客户端 crypto.randomUUID()
+  userId            String
+  title             String
+  idea              String   @default("")
+  contentType       String   @default("")
+  tier              String   @default("B") // A | B | C
+  stage             String   @default("inbox") // inbox|topic|script|recording|editing|publishing|review|archived
+  publicationStatus String   @default("draft") // draft|scheduled|published
+  priority          String   @default("normal")
+  tags              Json     @default("[]")
+  publishedAt       String   @default("") // cockpit 用 ISO date 字符串, 保持原样
+  xhsLink           String   @default("")
+  coverCopy         String   @default("")
+  publishCopy       String   @default("")
+  topic             Json // TopicCard
+  script            Json // ScriptDraft 骨架
+  recordingNotes    String   @default("")
+  editingNotes      String   @default("")
+  metrics           Json // MetricsSnapshot
+  review            Json // Review
+  scriptDraftId     String?  // → ScriptDraft (AI 稿)
+  analysisId        String?  // → ContentAnalysis (L1/复盘链)
+  createdAt         String
+  updatedAt         String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, stage])
+  @@index([scriptDraftId])
+  @@index([analysisId])
+}
+
+model CockpitInspiration {
+  id                  String @id
+  userId              String
+  text                String
+  convertedContentIds Json   @default("[]")
+  createdAt           String
+  updatedAt           String
+  user                User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+model CockpitStageEvent {
+  id          String @id
+  userId      String
+  contentId   String
+  stage       String
+  plannedDate String
+  rank        Int
+  completedAt String @default("")
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, plannedDate])
+  @@index([contentId])
+}
+
+model CockpitReviewDay {
+  id          String @id
+  userId      String
+  plannedDate String
+  note        String @default("")
+  createdAt   String
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+model CockpitLiveSession {
+  id          String @id
+  userId      String
+  title       String
+  plannedDate String
+  startTime   String @default("")
+  endTime     String @default("")
+  platform    String @default("")
+  content     String @default("")
+  createdAt   String
+  updatedAt   String
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+model CockpitScheduleObjectType {
+  id          String  @id
+  userId      String
+  kind        String // review|live|custom
+  name        String
+  description String  @default("")
+  color       String
+  archived    Boolean @default(false)
+  createdAt   String
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+model CockpitScheduleObject {
+  id          String @id
+  userId      String
+  typeId      String
+  title       String
+  plannedDate String
+  startTime   String @default("")
+  endTime     String @default("")
+  details     String @default("")
+  createdAt   String
+  updatedAt   String
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+model CockpitGoalCycle {
+  id               String @id
+  userId           String
+  objective        String @default("")
+  startDate        String
+  endDate          String
+  status           String @default("active") // active|archived
+  outputTarget     Int    @default(0)
+  quotas           Json   @default("[]")
+  followerStart    Int    @default(0)
+  followerTarget   Int    @default(0)
+  qualityMetric    String @default("views")
+  qualityThreshold Float  @default(0)
+  qualityTarget    Int    @default(0)
+  user             User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, status])
+}
+
+model CockpitInsightRule {
+  id              String  @id
+  userId          String
+  text            String
+  sourceContentId String?
+  active          Boolean @default(true)
+  createdAt       String
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+model CockpitPrefs {
+  userId          String   @id
+  designStyle     String   @default("editorial")
+  navigationOrder Json     @default("[]")
+  profile         Json // CreatorProfile
+  pageTitles      Json // PageTitles
+  stageColors     Json // Record<ContentStage,string>
+  contentTypes    Json     @default("[]")
+  setupComplete   Boolean  @default(false)
+  lastBackupAt    String   @default("")
+  updatedAt       DateTime @updatedAt // 冲突检测用, 服务端时间
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
