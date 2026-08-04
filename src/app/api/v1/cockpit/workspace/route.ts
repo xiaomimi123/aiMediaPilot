@@ -1,7 +1,7 @@
 import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { loadWorkspaceFromDb, saveWorkspaceToDb } from '@/lib/cockpit/server-store';
-import { loadExtras } from '@/lib/cockpit/extras'; // Task 13 前先返回 { predictions: {} } 的占位实现
+import { loadExtras } from '@/lib/cockpit/extras';
 
 export async function GET() {
   try {

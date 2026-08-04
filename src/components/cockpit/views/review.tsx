@@ -2,14 +2,17 @@
 
 import { DEFAULT_PAGE_TITLES, type ContentItem, type WorkspaceState } from "@/lib/cockpit/model";
 import { formatMetric, percent } from "@/lib/cockpit/calculations";
+import { getExtras } from "@/lib/cockpit/storage";
 import { EditablePageTitle, Empty, StarRating, date, shiftDate } from "../shared";
 
 function ReviewContentList({ items, reviewed, open }: { items: ContentItem[]; reviewed: boolean; open: (id: string) => void }) {
   if (!items.length) return <Empty title={reviewed ? "还没有已复盘内容" : "目前没有待复盘内容"} body={reviewed ? "完成第一篇内容复盘后，会沉淀到这里。" : "内容发布后，会自动进入待复盘区域。"} />;
+  const { predictions } = getExtras();
   return <div className="review-ledger-list">{items.map((item) => {
     const reviewDue = item.publishedAt ? shiftDate(item.publishedAt, 3) : "";
     const overdue = !reviewed && Boolean(reviewDue && reviewDue <= date);
-    return <button key={item.id} className="review-ledger-row" onClick={() => open(item.id)}><div className="review-ledger-content"><div><strong>{item.title}</strong><span className={`review-status-pill ${reviewed ? "completed" : overdue ? "overdue" : "pending"}`}>{reviewed ? "已复盘" : overdue ? "已到 T+3" : "待复盘"}</span></div><small>{item.contentType} · {item.tier}档 · 发布于 {item.publishedAt}</small></div><div className="review-ledger-metrics"><span><strong>{formatMetric(item.metrics.views)}</strong>播放</span><span><strong>{formatMetric(item.metrics.likes)}</strong>点赞</span><span><strong>{formatMetric(item.metrics.saves)}</strong>收藏</span><span><strong>+{formatMetric(item.metrics.followerGain)}</strong>涨粉</span><small>{item.metrics.capturedAt ? `${item.metrics.capturedAt.slice(5)} 快照` : "待录入数据快照"}</small></div><div className="review-ledger-judgment"><StarRating value={item.review.rating} compact /><p>{item.review.analysis || (reviewed ? "已保存复盘，暂未填写分析" : "点击进入，完成星级评价和复盘分析")}</p>{reviewed && item.review.completedAt ? <small>保存于 {item.review.completedAt.slice(0, 10)}</small> : null}</div><span className="review-ledger-arrow">→</span></button>;
+    const prediction = predictions[item.id];
+    return <button key={item.id} className="review-ledger-row" onClick={() => open(item.id)}><div className="review-ledger-content"><div><strong>{item.title}</strong><span className={`review-status-pill ${reviewed ? "completed" : overdue ? "overdue" : "pending"}`}>{reviewed ? "已复盘" : overdue ? "已到 T+3" : "待复盘"}</span></div><small>{item.contentType} · {item.tier}档 · 发布于 {item.publishedAt}</small></div><div className="review-ledger-metrics"><span><strong>{formatMetric(item.metrics.views)}</strong>播放</span><span><strong>{formatMetric(item.metrics.likes)}</strong>点赞</span><span><strong>{formatMetric(item.metrics.saves)}</strong>收藏</span><span><strong>+{formatMetric(item.metrics.followerGain)}</strong>涨粉</span><small>{item.metrics.capturedAt ? `${item.metrics.capturedAt.slice(5)} 快照` : "待录入数据快照"}</small>{prediction ? <small className="review-ledger-prediction">预测 {formatMetric(prediction.lower)}–{formatMetric(prediction.upper)} · 实际 {prediction.actualPlays === null ? "—" : formatMetric(prediction.actualPlays)}</small> : null}</div><div className="review-ledger-judgment"><StarRating value={item.review.rating} compact /><p>{item.review.analysis || (reviewed ? "已保存复盘，暂未填写分析" : "点击进入，完成星级评价和复盘分析")}</p>{reviewed && item.review.completedAt ? <small>保存于 {item.review.completedAt.slice(0, 10)}</small> : null}</div><span className="review-ledger-arrow">→</span></button>;
   })}</div>;
 }
 
