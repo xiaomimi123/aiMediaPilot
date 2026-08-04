@@ -8,7 +8,7 @@ import {
   startOfWeekISO,
 } from '@/lib/cockpit/calculations';
 import { DEFAULT_CREATOR_PROFILE, DEFAULT_DESIGN_STYLE, DEFAULT_NAVIGATION_ORDER, DEFAULT_PAGE_TITLES, DEFAULT_SCHEDULE_OBJECT_TYPES, DEFAULT_STAGE_COLORS, type ContentItem, type GoalCycle, type LiveSession, type ScheduleObject, type ScheduleObjectType, type StageEvent, type WorkspaceState } from '@/lib/cockpit/model';
-import { migrateWorkspace } from '@/lib/cockpit/storage';
+import { migrateWorkspace } from '@/lib/cockpit/migrations';
 import {
   addReviewDay,
   archiveScheduleObjectType,

@@ -23,83 +23,6 @@ import {
   DEFAULT_STAGE_COLORS,
 } from "./model";
 
-const DB_NAME = "creator-cockpit";
-const DB_VERSION = 1;
-const STORE_NAME = "workspace";
-const WORKSPACE_KEY = "primary";
-
-function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-export async function loadWorkspace(): Promise<WorkspaceState | null> {
-  if (typeof indexedDB === "undefined") return null;
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, "readonly");
-    const request = transaction.objectStore(STORE_NAME).get(WORKSPACE_KEY);
-    request.onsuccess = () => {
-      resolve(migrateWorkspace(request.result));
-    };
-    request.onerror = () => reject(request.error);
-    transaction.oncomplete = () => db.close();
-  });
-}
-
-export async function saveWorkspace(state: WorkspaceState) {
-  if (typeof indexedDB === "undefined") return;
-  const db = await openDB();
-  return new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, "readwrite");
-    transaction.objectStore(STORE_NAME).put(state, WORKSPACE_KEY);
-    transaction.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    transaction.onerror = () => reject(transaction.error);
-  });
-}
-
-export async function clearWorkspace() {
-  if (typeof indexedDB === "undefined") return;
-  const db = await openDB();
-  return new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, "readwrite");
-    transaction.objectStore(STORE_NAME).delete(WORKSPACE_KEY);
-    transaction.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    transaction.onerror = () => reject(transaction.error);
-  });
-}
-
-export function validateImport(value: unknown): value is WorkspaceState {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as {
-    schemaVersion?: number;
-    contents?: unknown;
-    followerSnapshots?: unknown;
-    contentTypes?: unknown;
-    goal?: unknown;
-  };
-  return (
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16].includes(candidate.schemaVersion ?? 0) &&
-    Array.isArray(candidate.contents) &&
-    Array.isArray(candidate.followerSnapshots) &&
-    Array.isArray(candidate.contentTypes) &&
-    Boolean(candidate.goal)
-  );
-}
-
 type LegacyReview = Partial<ContentItem["review"]> & {
   diagnosis?: "选题" | "表达" | "包装" | "执行" | "未判断";
   audienceSignal?: string;
@@ -137,6 +60,24 @@ type LegacyWorkspace = Omit<WorkspaceState, "schemaVersion" | "designStyle" | "n
   weeklyPlans?: unknown[];
   monthlyReviews?: unknown[];
 };
+
+function validateImport(value: unknown): value is WorkspaceState {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as {
+    schemaVersion?: number;
+    contents?: unknown;
+    followerSnapshots?: unknown;
+    contentTypes?: unknown;
+    goal?: unknown;
+  };
+  return (
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16].includes(candidate.schemaVersion ?? 0) &&
+    Array.isArray(candidate.contents) &&
+    Array.isArray(candidate.followerSnapshots) &&
+    Array.isArray(candidate.contentTypes) &&
+    Boolean(candidate.goal)
+  );
+}
 
 function normalizeStageColors(value: unknown): Record<ContentStage, string> {
   const candidate = value && typeof value === "object" ? value as Partial<Record<ContentStage, unknown>> : {};
@@ -509,29 +450,5 @@ export function migrateWorkspace(value: unknown): WorkspaceState | null {
     followerSnapshots: legacy.followerSnapshots ?? [],
     insightRules: legacy.insightRules ?? [],
     contentTypes: legacy.contentTypes ?? [],
-  };
-}
-
-export function mergeWorkspace(current: WorkspaceState, incoming: WorkspaceState): WorkspaceState {
-  const mergeById = <T extends { id: string }>(left: T[], right: T[]) => {
-    const map = new Map(left.map((item) => [item.id, item]));
-    right.forEach((item) => map.set(item.id, item));
-    return Array.from(map.values());
-  };
-  return {
-    ...current,
-    schemaVersion: 16,
-    inspirationCards: mergeById(current.inspirationCards, incoming.inspirationCards),
-    contents: mergeById(current.contents, incoming.contents),
-    stageEvents: mergeById(current.stageEvents, incoming.stageEvents),
-    reviewDays: mergeById(current.reviewDays, incoming.reviewDays),
-    liveSessions: mergeById(current.liveSessions, incoming.liveSessions),
-    scheduleObjectTypes: mergeById(current.scheduleObjectTypes, incoming.scheduleObjectTypes),
-    scheduleObjects: mergeById(current.scheduleObjects, incoming.scheduleObjects),
-    stageColors: normalizeStageColors({ ...current.stageColors, ...incoming.stageColors }),
-    goalHistory: mergeById(current.goalHistory ?? [], incoming.goalHistory ?? []),
-    followerSnapshots: mergeById(current.followerSnapshots, incoming.followerSnapshots),
-    insightRules: mergeById(current.insightRules, incoming.insightRules),
-    contentTypes: Array.from(new Set([...current.contentTypes, ...incoming.contentTypes])),
   };
 }
