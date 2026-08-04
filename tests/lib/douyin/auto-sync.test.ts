@@ -10,6 +10,9 @@ const prismaMock = vi.hoisted(() => ({
     findFirst: vi.fn(),
     update: vi.fn(),
   },
+  cockpitContent: {
+    updateMany: vi.fn(),
+  },
   user: { update: vi.fn() },
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
@@ -28,6 +31,7 @@ beforeEach(() => {
   prismaMock.contentAnalysis.findMany.mockResolvedValue([]);
   prismaMock.contentAnalysis.findFirst.mockResolvedValue(null);
   prismaMock.contentAnalysis.update.mockResolvedValue({});
+  prismaMock.cockpitContent.updateMany.mockResolvedValue({ count: 0 });
   prismaMock.user.update.mockResolvedValue({});
   queueMock.add.mockResolvedValue({});
 });
@@ -62,6 +66,31 @@ describe('runAutoSync', () => {
     expect(prismaMock.user.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'user1' } }),
     );
+    expect(prismaMock.cockpitContent.updateMany).toHaveBeenCalledWith({
+      where: {
+        analysisId: 'a1',
+        userId: 'user1',
+        stage: { in: ['recording', 'editing', 'publishing'] },
+      },
+      data: expect.objectContaining({
+        publicationStatus: 'published',
+        publishedAt: '2026-06-10',
+        stage: 'review',
+      }),
+    });
+  });
+
+  it('cockpit 回填 updateMany 抛错 → 不阻断主流程 (matchedCount 仍 1)', async () => {
+    prismaMock.cockpitContent.updateMany.mockRejectedValueOnce(new Error('db down'));
+    (runDouyinListAdapter as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      { awemeId: '7234567890', postedAt: '2026-06-10 14:30', plays: '8.5w', desc: 'AI 工具排行榜 Top 10' },
+    ]);
+    prismaMock.contentAnalysis.findMany.mockResolvedValueOnce([
+      { id: 'a1', videoFilename: 'x.mp4', draftTitle: 'AI 工具排行榜 Top 10' },
+    ]);
+    const stats = await runAutoSync('user1');
+    expect(stats.matchedCount).toBe(1);
+    expect(prismaMock.user.update).toHaveBeenCalled();
   });
 
   it('低分跳过 → matchedCount=0, skippedLowConfidence=1', async () => {
@@ -75,6 +104,7 @@ describe('runAutoSync', () => {
     expect(stats.matchedCount).toBe(0);
     expect(stats.skippedLowConfidence).toBe(1);
     expect(prismaMock.contentAnalysis.update).not.toHaveBeenCalled();
+    expect(prismaMock.cockpitContent.updateMany).not.toHaveBeenCalled();
   });
 
   it('已匹配 aweme 全局 skip → skippedAlreadyMatched=1', async () => {
@@ -85,6 +115,7 @@ describe('runAutoSync', () => {
     const stats = await runAutoSync('user1');
     expect(stats.skippedAlreadyMatched).toBe(1);
     expect(stats.matchedCount).toBe(0);
+    expect(prismaMock.cockpitContent.updateMany).not.toHaveBeenCalled();
   });
 
   it('draftTitle=null 走 videoFilename basename fallback', async () => {

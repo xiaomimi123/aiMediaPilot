@@ -10,6 +10,11 @@ const prismaMock = vi.hoisted(() => ({
     updateMany: vi.fn(async () => ({ count: 1 })),
   },
   actualMetric: { create: vi.fn(async (args: any) => ({ id: 'm1', ...args.data })) },
+  cockpitContent: {
+    findFirst: vi.fn(),
+    update: vi.fn(),
+    updateMany: vi.fn(),
+  },
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
@@ -42,12 +47,16 @@ beforeEach(() => {
   delete process.env.DEEPSEEK_API_KEY;  // 强制走 OpenAI 路径,避免 dev .env 影响测试
   prismaMock.contentAnalysis.findUnique.mockResolvedValue({
     id: 'a1',
+    userId: 'user1',
     douyinAwemeId: '7234567890',
     publishedAt: new Date(Date.now() - 3 * 86400000),
     retroStatus: 'SCHEDULED',
     report: { hook: { rating: 3 }, retention: { riskPoints: [] }, titleCaption: { mode: 'evaluate' }, cover: { mode: 'generate' } },
     llmUsage: { total: { promptTokens: 1000, completionTokens: 100, estCostUSD: 0.01, model: 'aggregate' }, byCall: [] },
   });
+  prismaMock.cockpitContent.findFirst.mockResolvedValue(null);
+  prismaMock.cockpitContent.update.mockResolvedValue({});
+  prismaMock.cockpitContent.updateMany.mockResolvedValue({ count: 0 });
   llmCallMock.mockResolvedValue({
     result: {
       schemaVersion: 1, niche: 'ai-knowledge',
@@ -74,6 +83,59 @@ describe('runRetroPipeline', () => {
         data: expect.objectContaining({ retroStatus: 'COMPLETED' }),
       })
     );
+  });
+
+  it('关联 cockpit content 存在 → metrics 回填 (保留 followerGain) + retroStatus COMPLETED 后 stage=review → archived', async () => {
+    prismaMock.cockpitContent.findFirst.mockResolvedValueOnce({
+      id: 'c1',
+      metrics: { views: 0, likes: 0, saves: 0, comments: 0, followerGain: 42, capturedAt: '' },
+    });
+    await runRetroPipeline('a1');
+    expect(prismaMock.cockpitContent.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { analysisId: 'a1', userId: 'user1' } }),
+    );
+    expect(prismaMock.cockpitContent.update).toHaveBeenCalledWith({
+      where: { id: 'c1' },
+      data: expect.objectContaining({
+        metrics: expect.objectContaining({
+          views: 12345,
+          likes: 1234,
+          saves: 123,
+          comments: 234,
+          followerGain: 42,
+        }),
+      }),
+    });
+    expect(prismaMock.cockpitContent.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { analysisId: 'a1', userId: 'user1', stage: 'review' },
+        data: expect.objectContaining({ stage: 'archived' }),
+      }),
+    );
+  });
+
+  it('无关联 cockpit content (findFirst 返回 null) → 不调 cockpitContent.update (metrics 回填跳过)', async () => {
+    await runRetroPipeline('a1');
+    expect(prismaMock.cockpitContent.update).not.toHaveBeenCalled();
+  });
+
+  it('cockpit metrics 回填 findFirst 抛错 → 不阻断主流程 (ActualMetric/最终 updateMany 仍执行)', async () => {
+    prismaMock.cockpitContent.findFirst.mockRejectedValueOnce(new Error('db down'));
+    await runRetroPipeline('a1');
+    expect(prismaMock.actualMetric.create).toHaveBeenCalled();
+    expect(prismaMock.contentAnalysis.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ retroStatus: 'COMPLETED' }) }),
+    );
+  });
+
+  it('最终 updateMany count=0 (被 CANCELLED race 抢先) → 不触发 cockpit 归档', async () => {
+    prismaMock.contentAnalysis.updateMany.mockResolvedValueOnce({ count: 0 });
+    prismaMock.cockpitContent.findFirst.mockResolvedValueOnce({
+      id: 'c1',
+      metrics: { views: 0, likes: 0, saves: 0, comments: 0, followerGain: 0, capturedAt: '' },
+    });
+    await runRetroPipeline('a1');
+    expect(prismaMock.cockpitContent.updateMany).not.toHaveBeenCalled();
   });
 
   it('cookie 失效 → retroStatus=FAILED, 不调 adapter', async () => {

@@ -8,6 +8,7 @@ import { parseReportMd } from '@/lib/douyin/report-parser';
 import { type IVisionLLM, type TokenUsage } from '@/lib/llm/vision';
 import { getDeepSeekTextLLM, getOpenAIVisionLLM } from '@/lib/llm/clients';
 import { RETRO_GAP, type RetroGapResponse } from '@/lib/llm/prompts';
+import { todayISO } from '@/lib/cockpit/calculations';
 import type { RetroStatus } from '@prisma/client';
 
 type JobData = { analysisId: string };
@@ -63,10 +64,11 @@ export async function runRetroPipeline(analysisId: string): Promise<void> {
 
   // 阶段 4: 落 ActualMetric
   const daysAfterPublish = (Date.now() - analysis.publishedAt!.getTime()) / 86400000;
+  const snapshotAt = new Date();
   await prisma.actualMetric.create({
     data: {
       analysisId,
-      snapshotAt: new Date(),
+      snapshotAt,
       daysAfterPublish,
       plays: parsed.plays,
       likes: parsed.likes,
@@ -83,6 +85,34 @@ export async function runRetroPipeline(analysisId: string): Promise<void> {
       rawReportPath: reportPath,
     },
   });
+
+  // 阶段 4.5: 回填关联 cockpit content 的 metrics (fail-soft, 不阻塞主流程)
+  try {
+    const linked = await prisma.cockpitContent.findFirst({
+      where: { analysisId, userId: analysis.userId },
+      select: { id: true, metrics: true },
+    });
+    if (linked) {
+      const existing = (linked.metrics as { followerGain?: number } | null) ?? {};
+      const followerGain = typeof existing.followerGain === 'number' ? existing.followerGain : 0;
+      await prisma.cockpitContent.update({
+        where: { id: linked.id },
+        data: {
+          metrics: {
+            views: Number(parsed.plays),
+            likes: Number(parsed.likes),
+            saves: Number(parsed.collects),
+            comments: Number(parsed.comments),
+            followerGain,
+            capturedAt: snapshotAt.toISOString(),
+          } as any,
+          updatedAt: todayISO(),
+        },
+      });
+    }
+  } catch (e) {
+    console.warn('[cockpit-backfill]', e);
+  }
 
   // 阶段 5: AI 落差总结 (fail-soft)
   let retroReport: RetroGapResponse | null = null;
@@ -112,7 +142,7 @@ export async function runRetroPipeline(analysisId: string): Promise<void> {
 
   // 阶段 6: 落最终 (cancel race 保护 + llmUsage 累加)
   const newLlmUsage = llmUsageDelta ? mergeLlmUsage(analysis.llmUsage, llmUsageDelta) : analysis.llmUsage;
-  await prisma.contentAnalysis.updateMany({
+  const finalUpdate = await prisma.contentAnalysis.updateMany({
     where: { id: analysisId, retroStatus: { not: 'CANCELLED' } },
     data: {
       retroStatus: 'COMPLETED',
@@ -121,6 +151,18 @@ export async function runRetroPipeline(analysisId: string): Promise<void> {
       llmUsage: newLlmUsage as any,
     },
   });
+
+  // 阶段 6.5: retroStatus 真正落地为 COMPLETED 后, 关联 cockpit content 归档 (fail-soft)
+  if (finalUpdate.count > 0) {
+    try {
+      await prisma.cockpitContent.updateMany({
+        where: { analysisId, userId: analysis.userId, stage: 'review' },
+        data: { stage: 'archived', updatedAt: todayISO() },
+      });
+    } catch (e) {
+      console.warn('[cockpit-backfill]', e);
+    }
+  }
 }
 
 async function handleRetro(job: Job<JobData>) {

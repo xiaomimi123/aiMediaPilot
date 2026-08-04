@@ -3,6 +3,7 @@ import { retroQueue } from '@/jobs/queue';
 import { runDouyinListAdapter } from './list';
 import { bigramDice, filenameBasename } from './fuzzy';
 import { parseLooseBeijingTime } from './parse-time';
+import { dateISOInShanghai, todayISO } from '@/lib/cockpit/calculations';
 
 const MATCH_THRESHOLD = 0.8;
 
@@ -47,15 +48,36 @@ export async function runAutoSync(userId: string): Promise<AutoSyncStats> {
     const best = scored[0];
 
     if (best && best.score >= MATCH_THRESHOLD) {
+      const publishedAt = parseLooseBeijingTime(item.postedAt) ?? new Date();
       await prisma.contentAnalysis.update({
         where: { id: best.analysisId },
         data: {
           douyinAwemeId: item.awemeId,
           douyinUrl: `https://www.douyin.com/video/${item.awemeId}`,
-          publishedAt: parseLooseBeijingTime(item.postedAt) ?? new Date(),
+          publishedAt,
           retroStatus: 'SCHEDULED',
         },
       });
+
+      // 回填关联的 cockpit content(若存在且仍处于制作阶段)— best-effort, 不阻塞主流程
+      try {
+        await prisma.cockpitContent.updateMany({
+          where: {
+            analysisId: best.analysisId,
+            userId,
+            stage: { in: ['recording', 'editing', 'publishing'] },
+          },
+          data: {
+            publicationStatus: 'published',
+            publishedAt: dateISOInShanghai(publishedAt),
+            stage: 'review',
+            updatedAt: todayISO(),
+          },
+        });
+      } catch (e) {
+        console.warn('[cockpit-backfill]', e);
+      }
+
       await retroQueue.add(
         'retro',
         { analysisId: best.analysisId },
