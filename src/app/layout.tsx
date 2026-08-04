@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { MainLayout } from '@/components/layout/main-layout';
 import { APP_NAME } from '@/lib/constants';
 import './globals.css';
+import './cockpit.css';
 
 export const metadata: Metadata = {
   title: APP_NAME,

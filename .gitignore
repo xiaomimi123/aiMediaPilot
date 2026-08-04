@@ -15,3 +15,4 @@ prisma/migrations/dev.db*
 *.tsbuildinfo
 # Phase 3: user video uploads (analyzed content)
 uploads/
+vendor/
