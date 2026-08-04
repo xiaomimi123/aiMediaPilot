@@ -1,0 +1,234 @@
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import type { WorkspaceState } from '@/lib/cockpit/model';
+
+vi.mock('@/lib/user', () => ({
+  getOrCreateDefaultUser: vi.fn(async () => ({ id: 'user1' })),
+}));
+
+const prismaMock = vi.hoisted(() => ({
+  cockpitPrefs: { findUnique: vi.fn(), upsert: vi.fn() },
+  cockpitContent: { findMany: vi.fn(), deleteMany: vi.fn(), upsert: vi.fn() },
+  cockpitInspiration: { findMany: vi.fn(), deleteMany: vi.fn(), upsert: vi.fn() },
+  cockpitStageEvent: { findMany: vi.fn(), deleteMany: vi.fn(), upsert: vi.fn() },
+  cockpitReviewDay: { findMany: vi.fn(), deleteMany: vi.fn(), upsert: vi.fn() },
+  cockpitLiveSession: { findMany: vi.fn(), deleteMany: vi.fn(), upsert: vi.fn() },
+  cockpitScheduleObjectType: { findMany: vi.fn(), deleteMany: vi.fn(), upsert: vi.fn() },
+  cockpitScheduleObject: { findMany: vi.fn(), deleteMany: vi.fn(), upsert: vi.fn() },
+  cockpitGoalCycle: { findMany: vi.fn(), deleteMany: vi.fn(), upsert: vi.fn() },
+  cockpitInsightRule: { findMany: vi.fn(), deleteMany: vi.fn(), upsert: vi.fn() },
+  accountMetric: { findMany: vi.fn() },
+  $transaction: vi.fn(),
+}));
+vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
+
+import { GET, PUT } from '@/app/api/v1/cockpit/workspace/route';
+
+function req(body: unknown): Request {
+  return new Request('http://t/api/v1/cockpit/workspace', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+function emptyState(overrides: Partial<WorkspaceState> = {}): WorkspaceState {
+  return {
+    schemaVersion: 16,
+    designStyle: 'editorial',
+    navigationOrder: ['inspirations', 'momentum', 'schedule', 'pipeline', 'goals', 'review'],
+    profile: {
+      creatorName: '测试创作者',
+      dashboardTitle: '测试工作台',
+      primaryPlatform: '小红书',
+      contentFocus: '测试',
+    },
+    pageTitles: {
+      inspirations: 'a', today: 'b', week: 'c', schedule: 'd',
+      pipeline: 'e', goals: 'f', review: 'g', settings: 'h',
+    },
+    inspirationCards: [],
+    contents: [],
+    stageEvents: [],
+    reviewDays: [],
+    liveSessions: [],
+    scheduleObjectTypes: [],
+    scheduleObjects: [],
+    stageColors: {
+      inbox: '#1', topic: '#2', script: '#3', recording: '#4',
+      editing: '#5', publishing: '#6', review: '#7', archived: '#8',
+    },
+    goal: {
+      id: 'goal-default', objective: '', startDate: '', endDate: '', status: 'active',
+      outputTarget: 0, quotas: [], followerStart: 0, followerTarget: 0,
+      qualityMetric: 'views', qualityThreshold: 0, qualityTarget: 0,
+    },
+    goalHistory: [],
+    followerSnapshots: [],
+    insightRules: [],
+    contentTypes: [],
+    setupComplete: false,
+    lastBackupAt: '',
+    ...overrides,
+  };
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  // 默认空库
+  prismaMock.cockpitPrefs.findUnique.mockResolvedValue(null);
+  prismaMock.cockpitContent.findMany.mockResolvedValue([]);
+  prismaMock.cockpitInspiration.findMany.mockResolvedValue([]);
+  prismaMock.cockpitStageEvent.findMany.mockResolvedValue([]);
+  prismaMock.cockpitReviewDay.findMany.mockResolvedValue([]);
+  prismaMock.cockpitLiveSession.findMany.mockResolvedValue([]);
+  prismaMock.cockpitScheduleObjectType.findMany.mockResolvedValue([]);
+  prismaMock.cockpitScheduleObject.findMany.mockResolvedValue([]);
+  prismaMock.cockpitGoalCycle.findMany.mockResolvedValue([]);
+  prismaMock.cockpitInsightRule.findMany.mockResolvedValue([]);
+  prismaMock.accountMetric.findMany.mockResolvedValue([]);
+  // $transaction 默认直接把 prismaMock 自身当 tx 传给回调
+  prismaMock.$transaction.mockImplementation((cb: (tx: typeof prismaMock) => unknown) => cb(prismaMock));
+});
+
+describe('GET /api/v1/cockpit/workspace', () => {
+  it('空库 → 返回默认 state (schemaVersion 16, goal-default) + extras', async () => {
+    const res = await GET();
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.data.state.schemaVersion).toBe(16);
+    expect(json.data.state.goal.id).toBe('goal-default');
+    expect(json.data.state.followerSnapshots).toEqual([]);
+    expect(json.data.extras).toEqual({ predictions: {} });
+    expect(json.data.rev).toBe('1970-01-01T00:00:00.000Z');
+  });
+
+  it('followerSnapshots 来自 accountMetric mock', async () => {
+    prismaMock.accountMetric.findMany.mockResolvedValue([
+      { id: 'am1', date: new Date('2026-08-01T00:00:00.000Z'), followerCount: 123 },
+    ]);
+    const res = await GET();
+    const json = await res.json();
+    expect(json.data.state.followerSnapshots).toEqual([
+      { id: 'am1', date: '2026-08-01', followers: 123 },
+    ]);
+  });
+
+  it('异常 → 500', async () => {
+    prismaMock.cockpitPrefs.findUnique.mockRejectedValueOnce(new Error('db down'));
+    const res = await GET();
+    expect(res.status).toBe(500);
+    const json = await res.json();
+    expect(json.message).toContain('加载失败');
+  });
+});
+
+describe('PUT /api/v1/cockpit/workspace', () => {
+  it('缺少 state 或 rev → 400', async () => {
+    const res = await PUT(req({ rev: 'x' }));
+    expect(res.status).toBe(400);
+  });
+
+  it('rev 不匹配 → 409, 不写任何表', async () => {
+    prismaMock.cockpitPrefs.findUnique.mockResolvedValue({
+      userId: 'user1', updatedAt: new Date('2026-08-01T00:00:00.000Z'),
+    });
+    const res = await PUT(req({ state: emptyState(), rev: '2026-07-01T00:00:00.000Z' }));
+    expect(res.status).toBe(409);
+    const json = await res.json();
+    expect(json.message).toBe('conflict');
+    expect(prismaMock.cockpitPrefs.upsert).not.toHaveBeenCalled();
+    expect(prismaMock.cockpitContent.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('首次保存(无已有 prefs 行) → 跳过冲突检测, 正常写入', async () => {
+    prismaMock.cockpitPrefs.findUnique.mockResolvedValue(null);
+    prismaMock.cockpitPrefs.upsert.mockResolvedValue({
+      userId: 'user1', updatedAt: new Date('2026-08-04T00:00:00.000Z'),
+    });
+    const res = await PUT(req({ state: emptyState(), rev: 'anything-ignored' }));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.data.rev).toBe('2026-08-04T00:00:00.000Z');
+  });
+
+  it('正常保存: 各表按预期 deleteMany + upsert, contents 不带 scriptDraftId/analysisId', async () => {
+    prismaMock.cockpitPrefs.findUnique.mockResolvedValue({
+      userId: 'user1', updatedAt: new Date('2026-08-01T00:00:00.000Z'),
+    });
+    prismaMock.cockpitPrefs.upsert.mockResolvedValue({
+      userId: 'user1', updatedAt: new Date('2026-08-04T00:00:00.000Z'),
+    });
+
+    const state = emptyState({
+      inspirationCards: [{
+        id: 'insp1', text: '灵感', createdAt: 'c', updatedAt: 'u', convertedContentIds: [],
+      }],
+      contents: [{
+        id: 'content1', title: 'T', idea: 'I', contentType: 'ct', tier: 'A', stage: 'inbox',
+        publicationStatus: 'draft', priority: 'normal', tags: [], createdAt: 'c', updatedAt: 'u',
+        publishedAt: '', xhsLink: '', coverCopy: '', publishCopy: '',
+        topic: {
+          audience: '', painPoint: '', pointOfView: '', commonAngle: '', contrastAngle: '',
+          assets: '', minimumProduction: '',
+          score: { audience: 0, pain: 0, scene: 0, demonstrable: 0, distribution: 0, efficiency: 0 },
+        },
+        script: { headline: '', hook: '', conclusion: '', body: '', example: '', ending: '' },
+        recordingNotes: '', editingNotes: '',
+        metrics: { views: 0, likes: 0, saves: 0, comments: 0, followerGain: 0, capturedAt: '' },
+        review: { rating: 0, analysis: '', learnedRule: '', completedAt: '' },
+      }],
+      goal: {
+        id: 'goal-active', objective: 'o', startDate: 's', endDate: 'e', status: 'active',
+        outputTarget: 1, quotas: [], followerStart: 0, followerTarget: 0,
+        qualityMetric: 'views', qualityThreshold: 0, qualityTarget: 0,
+      },
+      goalHistory: [{
+        id: 'goal-archived', objective: 'old', startDate: 's', endDate: 'e', status: 'archived',
+        outputTarget: 1, quotas: [], followerStart: 0, followerTarget: 0,
+        qualityMetric: 'views', qualityThreshold: 0, qualityTarget: 0,
+      }],
+      followerSnapshots: [{ id: 'fs1', date: '2026-08-01', followers: 1 }],
+    });
+
+    const res = await PUT(req({ state, rev: '2026-08-01T00:00:00.000Z' }));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.data.rev).toBe('2026-08-04T00:00:00.000Z');
+
+    // inspirationCards
+    expect(prismaMock.cockpitInspiration.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'user1', id: { notIn: ['insp1'] } },
+    });
+    expect(prismaMock.cockpitInspiration.upsert).toHaveBeenCalledTimes(1);
+
+    // contents — 空表也要 deleteMany；且 upsert data 不含 scriptDraftId/analysisId
+    expect(prismaMock.cockpitContent.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'user1', id: { notIn: ['content1'] } },
+    });
+    expect(prismaMock.cockpitContent.upsert).toHaveBeenCalledTimes(1);
+    const contentUpsertArgs = prismaMock.cockpitContent.upsert.mock.calls[0][0];
+    expect(contentUpsertArgs.update).not.toHaveProperty('scriptDraftId');
+    expect(contentUpsertArgs.update).not.toHaveProperty('analysisId');
+    expect(contentUpsertArgs.create).not.toHaveProperty('scriptDraftId');
+    expect(contentUpsertArgs.create).not.toHaveProperty('analysisId');
+
+    // 空表 (stageEvents 等) 仍然要 deleteMany, 且不 upsert
+    expect(prismaMock.cockpitStageEvent.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'user1', id: { notIn: [] } },
+    });
+    expect(prismaMock.cockpitStageEvent.upsert).not.toHaveBeenCalled();
+
+    // goal + goalHistory 合并写入 CockpitGoalCycle
+    expect(prismaMock.cockpitGoalCycle.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'user1', id: { notIn: ['goal-active', 'goal-archived'] } },
+    });
+    expect(prismaMock.cockpitGoalCycle.upsert).toHaveBeenCalledTimes(2);
+
+    // followerSnapshots 派生数据, 不落库
+    expect(prismaMock.accountMetric.findMany).not.toHaveBeenCalled();
+
+    // prefs upsert 最终发生
+    expect(prismaMock.cockpitPrefs.upsert).toHaveBeenCalledTimes(1);
+  });
+});
