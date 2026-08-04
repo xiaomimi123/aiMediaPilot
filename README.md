@@ -247,6 +247,18 @@ npx prisma db push   # 同步 + regenerate client
 
 dev server 和 worker 都缓存 prisma client。 schema 改后必须重启它们才能用新字段。
 
+### 存量数据迁移到工作台 (Cockpit)
+
+```bash
+npx tsx scripts/migrate-cockpit.ts          # dry-run (默认): 只打印映射清单+汇总, 不写库
+npx tsx scripts/migrate-cockpit.ts --apply  # 人工确认 dry-run 输出无误后再写库
+```
+
+把老表 (`ScriptDraft`/`ContentAnalysis`/`ActualMetric`/`TopicIdea`/`InspirationVideo`) 一次性映射进
+`CockpitContent`/`CockpitStageEvent`/`CockpitInspiration`。阶段判定复用 `deriveStage`
+(`src/lib/pipeline/stage.ts`)，纯映射函数见 `src/lib/cockpit/migrate-mapping.ts`。`--apply` 会先检查
+目标用户名下 `CockpitContent` 是否已有数据，非空直接中止（防重复迁移）；旧表全程只读，不删不改。
+
 ---
 
 ## 7. 目录结构 (重要文件)
