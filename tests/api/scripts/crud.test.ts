@@ -12,6 +12,10 @@ const prismaMock = vi.hoisted(() => ({
     delete: vi.fn(),
     update: vi.fn(),
   },
+  cockpitContent: {
+    findUnique: vi.fn(),
+    update: vi.fn(),
+  },
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
@@ -52,6 +56,8 @@ beforeEach(() => {
   prismaMock.scriptDraft.findUnique.mockResolvedValue(null);
   prismaMock.scriptDraft.delete.mockResolvedValue({});
   prismaMock.scriptDraft.update.mockResolvedValue({});
+  prismaMock.cockpitContent.findUnique.mockResolvedValue(null);
+  prismaMock.cockpitContent.update.mockResolvedValue({});
 });
 
 describe('Scripts CRUD', () => {
@@ -72,6 +78,46 @@ describe('Scripts CRUD', () => {
         }),
       }),
     );
+  });
+
+  it('POST 带 cockpitContentId (归属自己) → cockpitContent.update 被调用', async () => {
+    prismaMock.cockpitContent.findUnique.mockResolvedValueOnce({ id: 'c1', userId: 'user1' });
+    const res = await savePOST(
+      reqJSON('http://t/api/v1/scripts', 'POST', {
+        topic: '主题一',
+        niche: 'ai-knowledge',
+        output: validOutput,
+        cockpitContentId: 'c1',
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(prismaMock.cockpitContent.update).toHaveBeenCalledWith({
+      where: { id: 'c1' },
+      data: { scriptDraftId: 'draft1' },
+    });
+  });
+
+  it('POST 带 cockpitContentId 但归属别人 → 忽略, 不调用 update', async () => {
+    prismaMock.cockpitContent.findUnique.mockResolvedValueOnce({ id: 'c1', userId: 'other-user' });
+    const res = await savePOST(
+      reqJSON('http://t/api/v1/scripts', 'POST', {
+        topic: '主题一',
+        niche: 'ai-knowledge',
+        output: validOutput,
+        cockpitContentId: 'c1',
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(prismaMock.cockpitContent.update).not.toHaveBeenCalled();
+  });
+
+  it('POST 不带 cockpitContentId → 不调用 cockpitContent.update', async () => {
+    const res = await savePOST(
+      reqJSON('http://t/api/v1/scripts', 'POST', { topic: '主题一', niche: 'ai-knowledge', output: validOutput }),
+    );
+    expect(res.status).toBe(200);
+    expect(prismaMock.cockpitContent.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.cockpitContent.update).not.toHaveBeenCalled();
   });
 
   it('GET list → 数组, scope userId', async () => {

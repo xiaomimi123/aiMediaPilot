@@ -1,6 +1,8 @@
+import { randomUUID } from 'crypto';
 import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
+import { todayISO } from '@/lib/cockpit/calculations';
 import type { PickedState } from '@/lib/script-picked/types';
 
 function parsePicked(input: unknown): PickedState | null {
@@ -44,6 +46,36 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
       where: { id },
       data: { picked: picked as any },
     });
+
+    // 定稿(picked)推进关联 cockpit content 阶段 — 仅当当前 stage 为 'script' 时,
+    // 语义同 setContentStageCompletion；失败不阻塞定稿本身
+    try {
+      const content = await prisma.cockpitContent.findFirst({
+        where: { scriptDraftId: id, userId: user.id },
+        select: { id: true, stage: true },
+      });
+      if (content && content.stage === 'script') {
+        const today = todayISO();
+        await prisma.cockpitContent.update({
+          where: { id: content.id },
+          data: { stage: 'recording', updatedAt: today },
+        });
+        await prisma.cockpitStageEvent.create({
+          data: {
+            id: randomUUID(),
+            userId: user.id,
+            contentId: content.id,
+            stage: 'script',
+            plannedDate: today,
+            rank: 0,
+            completedAt: new Date().toISOString(),
+          },
+        });
+      }
+    } catch (e) {
+      console.warn('[PUT scripts/picked] cockpit stage advance failed', e);
+    }
+
     return ok({ saved: true });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

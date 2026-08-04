@@ -16,7 +16,7 @@ const SCHEMA_BY_PLATFORM: Record<ContentPlatform, typeof DouyinScriptResponseSch
 };
 
 export async function POST(req: Request) {
-  let body: { topic?: unknown; niche?: unknown; platform?: unknown; output?: unknown };
+  let body: { topic?: unknown; niche?: unknown; platform?: unknown; output?: unknown; cockpitContentId?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -26,6 +26,7 @@ export async function POST(req: Request) {
   const topic = typeof body.topic === 'string' ? body.topic.trim() : '';
   const niche = normalizeNiche(typeof body.niche === 'string' ? body.niche : '');
   const platform: ContentPlatform = isContentPlatform(body.platform) ? body.platform : 'douyin';
+  const cockpitContentId = typeof body.cockpitContentId === 'string' ? body.cockpitContentId.trim() : '';
   if (!topic || !niche) return fail('topic 和 niche 必填', 400);
 
   const parsed = SCHEMA_BY_PLATFORM[platform].safeParse(body.output);
@@ -37,6 +38,25 @@ export async function POST(req: Request) {
       data: { userId: user.id, topic, niche, platform, output: parsed.data as any },
       select: { id: true },
     });
+
+    if (cockpitContentId) {
+      // best-effort cockpit linkage — 归属校验/写入失败都不阻塞脚本保存
+      try {
+        const content = await prisma.cockpitContent.findUnique({
+          where: { id: cockpitContentId },
+          select: { id: true, userId: true },
+        });
+        if (content && content.userId === user.id) {
+          await prisma.cockpitContent.update({
+            where: { id: cockpitContentId },
+            data: { scriptDraftId: draft.id },
+          });
+        }
+      } catch (e) {
+        console.warn('[POST scripts] cockpit linkage failed', e);
+      }
+    }
+
     return ok({ id: draft.id });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

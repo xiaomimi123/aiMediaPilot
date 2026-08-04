@@ -52,6 +52,7 @@ export function ScriptForm() {
 
   const effectiveNiche = niche === '__custom' ? customNiche.trim() : niche;
   const ideaId = searchParams?.get('ideaId') ?? undefined;
+  const cockpitId = searchParams?.get('cockpitId') ?? undefined;
 
   // Prefill from inspiration → /agent loop (?topic=X&platform=Y&niche=Z&inspirationId=ID)
   useEffect(() => {
@@ -270,6 +271,7 @@ export function ScriptForm() {
           niche={effectiveNiche}
           onRegenerate={handleGenerate}
           ideaId={ideaId}
+          cockpitId={cockpitId}
         />
       )}
     </div>

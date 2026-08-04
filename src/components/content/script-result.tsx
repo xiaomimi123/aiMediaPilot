@@ -24,6 +24,7 @@ interface Props {
   draftId?: string;
   initialPicked?: PickedState | null;
   ideaId?: string;
+  cockpitId?: string;
 }
 
 const PLATFORM_LABEL: Record<Platform, string> = {
@@ -355,7 +356,7 @@ function GongzhonghaoView({ data }: { data: ArticleScriptResponse }) {
   );
 }
 
-export function ScriptResult({ platform, result, topic, niche, onRegenerate, readonly, draftId, initialPicked, ideaId }: Props) {
+export function ScriptResult({ platform, result, topic, niche, onRegenerate, readonly, draftId, initialPicked, ideaId, cockpitId }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -367,7 +368,13 @@ export function ScriptResult({ platform, result, topic, niche, onRegenerate, rea
       const res = await fetch('/api/v1/scripts', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ topic, niche, platform, output: result }),
+        body: JSON.stringify({
+          topic,
+          niche,
+          platform,
+          output: result,
+          ...(cockpitId ? { cockpitContentId: cockpitId } : {}),
+        }),
       });
       const json = await res.json();
       if (!json.success) {
