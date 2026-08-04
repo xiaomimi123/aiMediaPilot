@@ -1,11 +1,15 @@
 'use client';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 import { Sidebar } from './sidebar';
 import { Header } from './header';
 
 export function MainLayout({ children }: { children: ReactNode }) {
   const [navOpen, setNavOpen] = useState(false);
+  const pathname = usePathname();
+
+  if (pathname === '/') return <>{children}</>;
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">
