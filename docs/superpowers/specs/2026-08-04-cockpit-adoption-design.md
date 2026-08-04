@@ -111,3 +111,13 @@ cockpit 侧栏接管全站, 最终导航:
 - 不搬 cockpit 的 AI analyze 路由与提示词降级 (我们的 AI 更强)。
 - 不做多用户 / auth (沿用现状, `userId` 隔离留在 schema 层)。
 - 不做旧看板与新 Pipeline 的并存过渡期。
+
+## 9. 实际实施结论 (Task 14 回写, 与本 spec 的偏差)
+
+14 个 Task 全部完成后, 与本 spec 的显式偏差记录如下 (均为"更简", 不影响功能覆盖):
+
+1. **`FollowerSnapshot` 未建表** — §2 表格把它列为与 cockpit `FollowerSnapshot` 类型对应的 Prisma 模型, 实际未建。 `GET /api/v1/cockpit/workspace` 时直接从既有 `AccountMetric` (爬虫每日写入) 派生出 `FollowerSnapshot[]` 返回给前端, `PUT` 忽略该字段不写库。 §4.3 "由爬虫 `AccountMetric` 每日自动生成 `FollowerSnapshot`" 的准确含义是"读时派生", 不是"写时落表"——数据来源没变, 只是省掉一张纯衍生数据的表, 避免和 `AccountMetric` 双写不同步。
+2. **备份/导入导出 UI 已裁** — §8 原计划就不搬 IndexedDB 存储层与 JSON 备份导入导出, 实施与计划一致: 数据库本身就是持久化底座, "设置" 里原本的导入导出 JSON 界面没有移植; 版本记录 (`VersionHistoryModal`) 里查看/导出历史版本的能力保留。
+3. **`storage.ts` 只移植了 `migrateWorkspace` 纯函数** — §1 "只替换存储层" 的实际拆分: vendor 原 `app/lib/storage.ts` (537 行, IndexedDB 读写 + 老版本 workspace 升级) 里, 只有 `migrateWorkspace` (老 workspace 字段形状升级的纯函数) 被搬到 `src/lib/cockpit/migrations.ts`; IndexedDB 读写部分整体不搬, 替换成本项目自己写的 `src/lib/cockpit/storage.ts` (`loadWorkspace`/`saveWorkspace`, 走 `GET/PUT /api/v1/cockpit/workspace`, 带 `rev` 做 409 冲突检测)。
+4. **`/content` 子路由保留** — §3 "删除: ... 内容库列表页 (`/content`) 被 Pipeline 视图取代" 准确范围是列表页 `src/app/content/page.tsx`; 三个子路由 `/content/preflight`(视频分析)、`/content/script`(脚本详情+分发登记)、`/content/retro-sync`(半自动复盘) 均保留, 未挂入侧栏导航, 但仍是 `/agent` 与既有创作闭环内部跳转的落点, 直接访问路径不变。
+5. **补充: AI 体检/AI 质检按钮移除** (Task 14 code review 发现的收尾项, 非计划内偏差) — §8 已明确"不搬 cockpit 的 AI analyze 路由", 但视图层移植时 (Task 6/7) 遗留了两个调用 `/api/ai/analyze` 的按钮 (「AI 体检」「AI 质检」), 该路由确实没有移植, 点击会 fetch 404 后静默降级成一段"请手动分析"的提示词 —— 功能上不报错但名不副实。 Task 14 一并移除这两个按钮 (及其专用的 `analyze`/`aiLoading`/`AiModal`/`copyText` 状态与组件), 保留「用 AI 写脚本」跳 `/agent` 的入口 (这是本项目真实可用的 AI 写作能力)。

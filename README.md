@@ -2,7 +2,7 @@
 
 > AI 自媒体工作台 — 自用创作闭环: 选题灵感 → 写稿改稿 → 拍摄/发布追踪 → 数据复盘。 主阵地抖音, 其他平台 (B站/YouTube/推特/小红书/公众号/快手/微博) 走分发登记。 设计预留 SaaS 扩展空间 (`userId` 隔离已在 schema, 未接 auth/计费)。
 
-**当前状态:** 单用户 MVP。 经历两次定位调整: "个人视频分析工具" → "小白向导式智能体" → **"自用自媒体工作台"** (2026-08-03, 详见 `docs/superpowers/specs/2026-08-03-workbench-repositioning-design.md`)。 本文档已按工作台定位更新, §3 为当前实际 IA。
+**当前状态:** 单用户 MVP。 经历三次定位调整: "个人视频分析工具" → "小白向导式智能体" → "自用自媒体工作台" → **"Creator Cockpit 整体移植"** (2026-08-04, 详见 `docs/superpowers/specs/2026-08-04-cockpit-adoption-design.md`)。 首页 `/` 与全站外壳已换成移植自开源项目 [creator-cockpit](https://github.com/AverrryHu/creator-cockpit) 的纸质编辑部风格操作台; 本文档 §3 为当前实际 IA。
 
 ---
 
@@ -62,53 +62,55 @@
 
 ---
 
-## 3. 当前 IA (工作台重定位后)
+## 3. 当前 IA (Creator Cockpit 全面接管)
 
-### Sidebar (6 项)
+首页 `/` 与全站外壳已替换为移植自开源项目 [creator-cockpit](https://github.com/AverrryHu/creator-cockpit) 的纸质编辑部风格操作台 (详见 `docs/superpowers/specs/2026-08-04-cockpit-adoption-design.md`)。 旧工作台看板/内容库列表页/旧侧栏已删除。
+
+### Sidebar
+
+侧栏 (`src/components/cockpit/sidebar.tsx`) 两段式, 全站统一:
 
 ```
-🏠 工作台   → /            [驾驶舱 + 管线看板, 首页]
-🪄 创作     → /agent       [向导 + discover + inspiration 归入]
-📚 内容库   → /content     [脚本 + 分析统一列表]
-📊 数据     → /dashboard   [现有 7 widget Dashboard]
-👤 账号     → /accounts    [抖音账号绑定 / auto-sync 回收入口]
-⚙️ 设置     → /settings    [/settings/baseline + AI provider key]
+灵感池 / 今日推进 / 档期规划 / Pipeline / 大目标 / 复盘实验室   ← Cockpit 六视图, 在 / 内切换 (可拖拽排序)
+                                                              站外页面挂入壳时渲染成 /?view=<id> 静态链接
+──────
+🪄 创作 → /agent   📊 数据 → /dashboard   👤 账号 → /accounts   ⚙️ 设置 → /settings   ← 现有页面挂入壳内
 ```
 
-底部 CTA: **+ 新内容** → `/agent`。
+### `/` — Cockpit 驾驶舱 (首页)
 
-> spec §3.1 原方案是 5 项 (无 `/accounts`)。 实际多保留了 `/accounts` —— 它是抖音账号绑定和 auto-sync 复盘的唯一入口, IA 迁移时误删过一次, 现在显式保留避免"入口消失"。
+`src/app/page.tsx` 只 `dynamic import` 一个客户端组件 `Cockpit.tsx` (`ssr:false`), 内部按 `view` state 切换六个视图 (`src/components/cockpit/views/*.tsx`: inspirations / momentum / schedule / pipeline / goals / review), 均是原样移植的纯 UI + 交互逻辑 (`src/lib/cockpit/{model,workflow,schedule,calculations}.ts` 与其测试一并搬运, 逻辑零改动)。 首次进入 (workspace 为空) 走 onboarding; 支持明暗主题 + 5 套设计风格切换, 侧栏可拖拽排序、可折叠; <820px 时侧栏收起, 换成底部 `.mobile-nav`。
 
-### `/` 工作台首页 (驾驶舱 + 看板)
+### `/agent` `/dashboard` `/accounts` `/settings` — 挂入 Cockpit 外壳
 
-新首页 (`src/app/page.tsx`), 替换原来的引导页, 不再 redirect 到 `/dashboard`:
+根布局 (`src/components/layout/main-layout.tsx`) 按路径判断: 非 `/` 时用 `ExternalShell` (`src/components/cockpit/external-shell.tsx`) 包一层, 复用同一个 `Sidebar`(`mode="external"`) + `.main-area` 容器 + 移动端 `.mobile-nav`, 主题/风格从 cockpit 写入的 localStorage 同步。 四个页面自身功能不变 (创作向导 / Dashboard / 账号绑定 / 设置), 见 §3.5。
 
-- **上半屏「今日驾驶舱」** (`src/components/workbench/cockpit.tsx`): 六格阶段计数 (选题池 / 草稿 / 定稿待拍 / 已拍待发 / 已发布 / 已复盘, 可点击跳看板列) + 右侧最近 7 天数据摘要 (复用 `/api/v1/dashboard/summary`, 不新写聚合) + 「抓灵感」快捷入口 → `/agent/discover`。
-- **下半屏「内容管线看板」** (`src/components/workbench/kanban.tsx`): 六列, 选题池 → 草稿 → 定稿待拍 → 已拍待发 → 已发布 → 已复盘。 每条内容一张卡: 标题 / 平台徽标 / 分发数 / 停留天数; 已发布列显示复盘倒计时 (T+N 天)。 **不做拖拽** —— 状态由真实动作驱动 (选版本→定稿、传视频→已拍、登记链接→已发布), 拖拽会制造假状态。 已复盘列按 `stageSince` 只显示最近 10 条, 归档 (`archivedAt` 非空) 的卡不进看板。script 卡任何阶段都有「归档」按钮 (`PATCH /api/v1/scripts/[id]` `{ archived }`), 放弃的内容移出看板但不删数据, 可反悔 (再传 `archived: false`)。
-- 数据来自单一聚合 API `GET /api/v1/workbench` (drafts + analyses + distributions 三表查询拼装, 避免 N+1)。
+### `/content` 的变化
 
-数据模型与阶段派生规则见 §3.5。
+- 列表页 (`src/app/content/page.tsx`) 已删除, 由 Cockpit **Pipeline** 视图 (`/?view=pipeline`) 取代。
+- 子路由保留: `/content/preflight`(视频分析 Phase 1/L1)、`/content/script`(AI 脚本生成详情页, 含分发登记)、`/content/retro-sync`(半自动复盘) —— 未挂进侧栏导航, 但仍是 `/agent` 生成脚本、发布登记、复盘流程内部跳转的落点, 照常可直接访问。
 
-### `/agent` 创作向导
+### Cockpit 数据层
 
-选平台 → 选垂类 → 输 topic → 生成 platform-ready 内容。 面向小白的三步教学卡和"第一次来"新手引导 (含 `has_seen_discover` cookie 逻辑) 已在工作台重定位中移除, 压缩成一行副标题 —— 自用工作台不需要教学。 灵感推荐区 (最近一次 inspiration insight 的 topic) 与「一键入选题池」按钮保留。
+- **10 张 Prisma 表**: `CockpitContent` / `CockpitInspiration` / `CockpitStageEvent` / `CockpitReviewDay` / `CockpitLiveSession` / `CockpitScheduleObjectType` / `CockpitScheduleObject` / `CockpitGoalCycle` / `CockpitInsightRule` / `CockpitPrefs`, 字段形状与 vendor `model.ts` 的 TS 类型一一对应, 保证移植过来的纯函数直接可用。 `FollowerSnapshot` **不建表**: `GET /api/v1/cockpit/workspace` 时从既有的 `AccountMetric` (爬虫每日写入) 实时派生, `PUT` 忽略该字段。
+- `GET/PUT /api/v1/cockpit/workspace`: GET 组装整个 `WorkspaceState` 返回; PUT 提交整个 `WorkspaceState` + 加载时拿到的 `rev`, 服务端 diff 落库, 若 `rev` 与当前不一致 (双标签页并发保存) 返回 **409**, 前端弹冲突提示, 不做自动合并 (单用户场景接受 last-write-wins + 显式提示, 不做 CRDT 之类的方案)。
+- 前端存储适配器 `src/lib/cockpit/storage.ts` (`loadWorkspace`/`saveWorkspace`) 替换掉原版的 IndexedDB 读写, 是移植时唯一改动的一层; `src/lib/cockpit/migrations.ts` 只搬运了 vendor `storage.ts` 里 `migrateWorkspace` 这一个纯函数 (老版本 workspace 字段升级), 其余 IndexedDB 相关代码没有移植。
+- 强能力集成点: **AI 写稿** (内容抽屉脚本 tab「用 AI 写脚本」跳 `/agent`, 保存定稿自动把关联 `CockpitContent` 的 script 阶段推进完成) · **爬虫指标回填** (auto-sync 命中已发视频写入播放/点赞/收藏/评论快照) · **粉丝快照** (`AccountMetric` 派生 `FollowerSnapshot` 喂 `calculateGoalHealth`) · **L1 预测对比** (复盘实验室展示预测区间 vs 实际播放, 结论可沉淀为 `InsightRule`)。
+- 备份/导入导出 UI 未移植 —— 数据库本身就是持久化底座, 版本记录 (`版本记录` 弹窗) 里仍保留历史版本可查看/导出, 但没有单独的「导入导出 JSON」界面 (原版基于 IndexedDB 需要这个, 我们不需要)。
 
-输出渲染按 platform 切换:
-- 抖音 → ScriptResult (hooks / beats / titles / cover)
-- 小红书 → XHSResult (titles / coverText / intro / body / tags / shotIdeas)
-- 公众号 → ArticleResult (titles / abstract / outline / body / cta)
+存量数据一次性迁移到 Cockpit 表见 §6; 老流水线 (`ScriptDraft`/`TopicIdea`/`Distribution`) 的阶段派生规则见 §3.5, 迁移脚本复用同一套判定。
 
-### `/content` 内容库
+### `vendor/creator-cockpit/`
 
-合并脚本列表 + 分析列表为统一列表 + 类型 badge (`src/app/content/page.tsx`), 已落地 (不是 tab 切换)。
+移植源码的只读参考副本, 固定在 commit `197d49b93ff42d80211c1d832d1f8fa8db7c6660` ([AverrryHu/creator-cockpit](https://github.com/AverrryHu/creator-cockpit), MIT License, Copyright (c) 2026 Avery)。 `tsconfig.json` 显式 `exclude` 了 `vendor`, 不参与构建也不会被任何 `src/` 代码 `import` —— 纯粹留作逐行对照 (排查移植差异、日后想再搬一部分东西时的对照源), 不需要跟随其上游更新。
 
 ### `/accounts` `/dashboard` `/settings`
 
-功能不变, 见 §2 / §5 目录结构。
+功能不变, 见 §2 / §7 目录结构。
 
-### 3.5 数据模型: 管线阶段派生 + 工作台新模型
+### 3.5 数据模型: 管线阶段派生 (支撑 `/agent` `/content` 子路由与迁移脚本)
 
-`ScriptDraft` 是管线看板的基本单元。 **阶段不落库, 按现有数据实时派生**, 判定唯一入口是纯函数 `deriveStage` (`src/lib/pipeline/stage.ts`), UI / API 不内联复制规则, 避免双写不一致:
+`ScriptDraft` 是老流水线的基本单元 (曾经是已删除的工作台看板的数据源, 现在是 `/content/script` 详情页和一次性迁移脚本的数据源)。 **阶段不落库, 按现有数据实时派生**, 判定唯一入口是纯函数 `deriveStage` (`src/lib/pipeline/stage.ts`), UI / API / 迁移脚本都调用它, 不内联复制规则, 避免双写不一致:
 
 | 阶段 | 判定规则 |
 |---|---|
@@ -124,23 +126,23 @@
 
 - **`TopicIdea`** (选题池): `title` / `note` / `source` (`discover` | `inspiration` | `manual`) / `status` (`POOL` | `ADOPTED` | `DISCARDED`) / `scriptDraftId` (采纳后回链)。
 - **`Distribution`** (分发登记): `scriptDraftId` + `platform` (代码注册表 key, 非 DB enum, 见 `src/lib/pipeline/platforms.ts`) + `url` + `publishedAt` + `note`。 抖音主阵地发布仍走 `ContentAnalysis.publishedAt` (喂 L1 预测 / retro 管线); `Distribution` 管其他平台的搬运登记, 未走视频分析直接发布的内容也可用 `platform='douyin'` 的 `Distribution` 兜底登记 (不参与 retro)。
-- **`ScriptDraft.archivedAt`** (`DateTime?`): 放弃的内容移出看板, 不删数据。
+- **`ScriptDraft.archivedAt`** (`DateTime?`): 放弃的内容标记归档, 不删数据。 字段与 `PATCH /api/v1/scripts/[id] { archived }` 路由仍在, 但触发它的「归档」按钮曾挂在已删除的旧工作台看板卡片上 —— 目前没有 UI 入口调用, 相当于遗留能力, 未来若做类似操作可直接复用这条路由。
 
 分发平台注册表 (`src/lib/pipeline/platforms.ts`, 加新平台 = 加一行, 不改 DB schema): 抖音 / B站 / YouTube / X-推特 / 小红书 / 公众号 / 快手 / 微博 (共 8 个)。 与 `src/lib/platform.ts` 的采集端 `Platform` enum、创作端 `ContentPlatform` 是两套独立命名空间 —— 这里管"内容搬运到了哪"。
 
-新 API: `POST/GET /api/v1/topics`、`PATCH /api/v1/topics/[id]`、`POST/GET /api/v1/scripts/[id]/distributions`、`DELETE /api/v1/distributions/[id]`、`GET /api/v1/workbench`。
+API: `POST/GET /api/v1/topics`、`PATCH /api/v1/topics/[id]`、`POST/GET /api/v1/scripts/[id]/distributions`、`DELETE /api/v1/distributions/[id]`。 (旧工作台看板专用的 `GET /api/v1/workbench` 聚合接口已随看板一起删除。)
 
 ### 关键交互流
 
-1. **选题入池**: discover / 灵感页每条推荐 topic 有「+ 入选题池」按钮 (`PoolButton`, 重复入池返回 409); 驾驶舱可手动添加。 看板选题池列卡片点「开写」→ 带 `topic` + `ideaId` 跳 `/agent?topic=&ideaId=` → 保存脚本自动 `PATCH` 该选题为 `ADOPTED` 并写入 `scriptDraftId`。
-2. **分发登记**: script 详情页 + 分发登记弹窗, 选平台 (注册表 key) + 贴 URL → 写一条 `Distribution` 记录, 卡片显示「已分发 N 平台」徽标。
-3. **复盘闭环**: 现有 retro / auto-sync 不动; 看板已发布列显示复盘倒计时, 复盘完成后卡片自动流入「已复盘」列。
+1. **选题入池**: discover / 灵感页每条推荐 topic 有「+ 入选题池」按钮 (`PoolButton`, 重复入池返回 409)。 从 `/agent?topic=&ideaId=` 进入写稿 (`ideaId` 预填 + 保存脚本自动 `PATCH` 该选题为 `ADOPTED` 并写入 `scriptDraftId`) 这条链路仍在, 只是不再挂在已删除的旧看板卡片「开写」按钮上。
+2. **分发登记**: script 详情页 (`/content/script/[id]`) + 分发登记弹窗, 选平台 (注册表 key) + 贴 URL → 写一条 `Distribution` 记录, 显示「已分发 N 平台」徽标。
+3. **复盘闭环**: 现有 retro / auto-sync 不动; Cockpit 复盘实验室视图承接「待复盘 / 复盘倒计时」的展示职责 (原来在旧看板已发布列)。
 
 ---
 
 ## 4. Roadmap — 分阶段实施 (Phase A-C 已完成)
 
-不一次性 5 天大重构,分小步走,每步可发布。 **这是第一次 pivot (小白向导) 时定的 roadmap; Phase A-C 已完成, D 未做, E 仍是未来事项。** 工作台重定位 (第二次 pivot) 是独立的后续 spec, 见 `docs/superpowers/specs/2026-08-03-workbench-repositioning-design.md`, 其自身的 12 个 Task 均已完成 (数据层 → 工作台首页 → 交互流 → 本文档)。
+不一次性 5 天大重构,分小步走,每步可发布。 **这是第一次 pivot (小白向导) 时定的 roadmap; Phase A-C 已完成, D 未做, E 仍是未来事项。** 工作台重定位 (第二次 pivot) 是独立的后续 spec, 见 `docs/superpowers/specs/2026-08-03-workbench-repositioning-design.md`, 其自身的 12 个 Task 均已完成 (数据层 → 工作台首页 → 交互流 → 本文档)。 Creator Cockpit 整体移植 (第三次 pivot, 见 `docs/superpowers/specs/2026-08-04-cockpit-adoption-design.md`) 又是独立的后续 spec, 14 个 Task 均已完成 —— 替换了第二次 pivot 引入的工作台首页/看板/侧栏 (§3 为当前实际 IA), Phase A-C 的产物 (脚本多平台生成、`/content` 子路由) 保留不受影响。
 
 ### ✅ **Phase A: Script 多平台化** — 已完成
 
@@ -199,7 +201,7 @@
 
 ### 测试覆盖
 
-- 241 tests 大多是 API 单测 + 纯函数 + mock prisma
+- 520 tests 大多是 API 单测 + 纯函数 + mock prisma (含 Cockpit `model/workflow/schedule/calculations`/迁移映射的原版测试)
 - UI 一律走手动 E2E (是有意识的取舍)
 - Worker 集成测试缺 (auto-sync-worker, content-analyze-worker)
 
@@ -231,7 +233,7 @@ npm run worker:dev   # BullMQ workers (analyze / retro / auto-sync)
 
 ```bash
 npm run typecheck    # tsc --noEmit
-npm test             # vitest, 241 tests across 38 files
+npm test             # vitest, 520 tests across 63 files (含 Cockpit 纯逻辑层原版测试)
 npm test -- <filter> # 跑某个 file
 ```
 
@@ -247,7 +249,7 @@ npx prisma db push   # 同步 + regenerate client
 
 dev server 和 worker 都缓存 prisma client。 schema 改后必须重启它们才能用新字段。
 
-### 存量数据迁移到工作台 (Cockpit)
+### 存量数据迁移到 Cockpit (一次性)
 
 ```bash
 npx tsx scripts/migrate-cockpit.ts          # dry-run (默认): 只打印映射清单+汇总, 不写库
@@ -258,6 +260,8 @@ npx tsx scripts/migrate-cockpit.ts --apply  # 人工确认 dry-run 输出无误�
 `CockpitContent`/`CockpitStageEvent`/`CockpitInspiration`。阶段判定复用 `deriveStage`
 (`src/lib/pipeline/stage.ts`)，纯映射函数见 `src/lib/cockpit/migrate-mapping.ts`。`--apply` 会先检查
 目标用户名下 `CockpitContent` 是否已有数据，非空直接中止（防重复迁移）；旧表全程只读，不删不改。
+`publishedAt`/`metrics.capturedAt` 这两个"日期部分"字段按 `Asia/Shanghai` (UTC+8) 取年月日
+(`dateISOInShanghai`)，与运行时写入方约定一致，避免 UTC 午夜前后跑迁移脚本时日期错位一天。
 
 ---
 
@@ -266,38 +270,51 @@ npx tsx scripts/migrate-cockpit.ts --apply  # 人工确认 dry-run 输出无误�
 ```
 src/
 ├── app/
-│   ├── page.tsx                  # `/` 工作台首页 (驾驶舱 + 看板)
-│   ├── dashboard/                # 数据看板 (Phase 3 + B + L)
-│   ├── agent/                    # 创作向导 + discover + inspiration + patterns
+│   ├── page.tsx                  # `/` — 只 dynamic import Cockpit.tsx (ssr:false)
+│   ├── cockpit.css                # 全站纸质编辑部风格 (主题变量 + 5 套 design style + mobile-nav)
+│   ├── layout.tsx                 # 根布局, 套 MainLayout
+│   ├── dashboard/                 # 数据看板 (Phase 3 + B + L), 挂 ExternalShell
+│   ├── agent/                     # 创作向导 + discover + inspiration + patterns, 挂 ExternalShell
 │   ├── content/
-│   │   ├── preflight/            # 视频分析 (Phase 1, L1)
-│   │   ├── script/                # 脚本生成 (E)
-│   │   └── retro-sync/           # 抖音半自动复盘 (C)
-│   ├── accounts/                 # 账号绑定
-│   ├── settings/baseline/        # 设置 (A)
-│   └── api/v1/                   # 所有 API routes (含 topics/ distributions/ workbench/)
+│   │   ├── preflight/             # 视频分析 (Phase 1, L1) — 列表页已删, 子路由保留
+│   │   ├── script/                # 脚本生成详情页 (E) + 分发登记
+│   │   └── retro-sync/            # 抖音半自动复盘 (C)
+│   ├── accounts/                  # 账号绑定, 挂 ExternalShell
+│   ├── settings/baseline/         # 设置 (A), 挂 ExternalShell
+│   └── api/v1/                    # 所有 API routes (含 topics/ distributions/ cockpit/workspace/)
 ├── components/
-│   ├── content/                  # script-form, script-result, publish-checklist, prediction-card, etc
-│   ├── workbench/                # cockpit, kanban, pool-button, 分发登记弹窗
-│   ├── dashboard/                # 8 widgets
-│   ├── settings/                 # baseline-form
-│   └── layout/                   # sidebar (6 nav), header, main-layout
+│   ├── cockpit/                   # Creator Cockpit 移植主体
+│   │   ├── Cockpit.tsx             # 顶层组件: state + view 路由 + 拖拽/主题/onboarding
+│   │   ├── views/                 # 六视图: inspirations/momentum/schedule/pipeline/goals/review
+│   │   ├── sidebar.tsx             # 全站共用侧栏 (cockpit 模式 + external 模式)
+│   │   ├── external-shell.tsx      # 站外页面外壳 (侧栏 + mobile-nav + 主题同步)
+│   │   ├── content-drawer.tsx      # 内容详情抽屉
+│   │   ├── onboarding.tsx / shared.tsx
+│   ├── content/                   # script-form, script-result, publish-checklist, prediction-card, 分发登记弹窗 etc
+│   ├── dashboard/                 # 8 widgets
+│   ├── settings/                  # baseline-form
+│   └── layout/                    # main-layout.tsx (按路径决定是否套 ExternalShell)
 ├── lib/
-│   ├── llm/                      # DeepSeekTextLLM + OpenAIVisionLLM + prompts/
-│   ├── pipeline/                 # deriveStage 纯函数 + platforms.ts 分发平台注册表
-│   ├── prediction/               # L1 formula + baseline
-│   ├── dashboard/                # aggregate + calibration + prediction-accuracy
-│   ├── douyin/                   # cheat-on-content adapter + fuzzy + auto-sync
-│   ├── checklist/                # J types + isReady
+│   ├── cockpit/                   # model/workflow/schedule/calculations (纯函数, 零改动移植) + storage.ts(API 适配器) + migrations.ts(migrateWorkspace) + migrate-mapping.ts(存量数据映射)
+│   ├── llm/                       # DeepSeekTextLLM + OpenAIVisionLLM + prompts/
+│   ├── pipeline/                  # deriveStage 纯函数 + platforms.ts 分发平台注册表
+│   ├── prediction/                # L1 formula + baseline
+│   ├── dashboard/                 # aggregate + calibration + prediction-accuracy
+│   ├── douyin/                    # cheat-on-content adapter + fuzzy + auto-sync
+│   ├── checklist/                 # J types + isReady
 │   └── prisma.ts
 ├── jobs/
-│   ├── queue.ts                  # 5 BullMQ queues
-│   └── workers/                  # 4 workers (bind, analyze, retro, auto-sync)
+│   ├── queue.ts                   # 5 BullMQ queues
+│   └── workers/                   # 4 workers (bind, analyze, retro, auto-sync)
+scripts/
+└── migrate-cockpit.ts             # 存量数据 → Cockpit 表, dry-run 默认 / --apply 写库
 prisma/
-└── schema.prisma                 # User / ContentAnalysis / ActualMetric / ScriptDraft / TopicIdea / Distribution 等
+└── schema.prisma                  # User / ContentAnalysis / ActualMetric / ScriptDraft / TopicIdea / Distribution / Cockpit* (10 张) 等
+vendor/
+└── creator-cockpit/                # 移植源固定副本 (pinned 197d49b, MIT), tsconfig 排除, 不参与构建, 只读参考
 docs/superpowers/
-├── specs/                        # 每个 sub-project 的 design spec
-└── plans/                        # 每个 sub-project 的 task plan
+├── specs/                         # 每个 sub-project 的 design spec
+└── plans/                         # 每个 sub-project 的 task plan
 ```
 
 ---
@@ -315,17 +332,22 @@ docs/superpowers/
 | Stitch 风格 (蓝紫渐变) | 用户自己拿 AI 设计稿确认的, 不是我猜 |
 | 管线阶段不落库, 按数据派生 (`deriveStage`) | 避免状态与真实数据 (picked/analysis/distribution) 双写不一致 |
 | 分发平台用代码注册表非 DB enum | 加平台 = 加一行代码, 不用改 schema / migration |
-| 工作台看板不做拖拽 | 状态由真实动作驱动 (选版本/传视频/登记链接), 拖拽会制造假状态 |
+| 工作台看板不做拖拽 (历史决策, 该看板已被 Cockpit Pipeline 视图取代) | 状态由真实动作驱动 (选版本/传视频/登记链接), 拖拽会制造假状态 |
+| Creator Cockpit 整体移植 (UI + 交互逻辑复制) 而非照抄视觉重新实现 | 用户认可其纸质编辑部风格与操作台交互逻辑; 移植省去重新设计+踩坑成本, 用 Prisma 换掉 IndexedDB 接入已有数据库 |
+| Cockpit 纯逻辑层零改动复制, 只换存储层 | `model/workflow/schedule/calculations.ts` 是「输入 state → 输出新 state」纯函数, 与存储解耦, 换存储不动逻辑风险最低 |
+| FollowerSnapshot 不建表, GET 时从 AccountMetric 派生 | 爬虫已经每日写 AccountMetric, 建独立表是重复数据, 派生更简单且不会不同步 |
+| 不搬 IndexedDB 备份/导入导出 UI | 数据库本身就是持久化底座, 这套 UI 是原版应对"无后端"环境的权宜设计, 我们不需要 |
 
 ---
 
 ## 9. 下一步
 
-Phase A-C 与工作台重定位 (Task 1-12) 均已完成。 尚未做的:
+Phase A-C、工作台重定位 (Task 1-12) 与 Creator Cockpit 整体移植 (Task 1-14) 均已完成。 尚未做的:
 
 1. **Phase D** — checklist 按平台拆分发布前检查项 (`src/lib/checklist/types.ts` 目前仍单一 schema)
 2. **Phase E / SaaS 准备** — NextAuth 登录 + userId 中间件严格 scope + 计费, 本期范围外
-3. **本地真用一段时间** — 用 default-user 走完整创作闭环 (选题池→开写→拍→登记分发→复盘), 找工作台实际使用中的痛点
+3. **本地真用一段时间** — 用 default-user 走完整 Cockpit 闭环 (灵感→转内容→档期拖拽→今日勾选→阶段推进→发布登记→复盘录入), 找实际使用中的痛点
+4. **人工走查 Task 14 未自动化验证项** — onboarding 冷启动、拖拽排期、双标签页 409 提示、明暗/5 风格切换、375px 移动端视觉 (见 `.superpowers/sdd/2026-08-04-cockpit-adoption/task-14-report.md`)
 
 ---
 
@@ -341,4 +363,5 @@ Phase A-C 与工作台重定位 (Task 1-12) 均已完成。 尚未做的:
 - `docs/superpowers/specs/2026-06-16-auto-sync-design.md` (D)
 - `docs/superpowers/specs/2026-06-17-script-generate-design.md` (E)
 - `docs/superpowers/specs/2026-08-03-workbench-repositioning-design.md` (工作台重定位, 第二次 pivot, Task 1-12)
+- `docs/superpowers/specs/2026-08-04-cockpit-adoption-design.md` (Creator Cockpit 整体移植, 第三次 pivot, Task 1-14)
 (Plan files in `docs/superpowers/plans/` 对应每个 spec)
