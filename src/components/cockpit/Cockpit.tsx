@@ -3,6 +3,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type DragEvent,
 } from "react";
@@ -53,7 +54,7 @@ import {
   saveLiveSession as saveLiveSessionInWorkspace,
   moveScheduleObject as moveScheduleObjectInWorkspace,
 } from "@/lib/cockpit/schedule";
-import { loadWorkspace, saveWorkspace } from "@/lib/cockpit/storage";
+import { ConflictError, loadWorkspace, saveWorkspace } from "@/lib/cockpit/storage";
 import { completeContentReview, deleteContentFromWorkspace } from "@/lib/cockpit/workspace";
 import {
   canScheduleStage,
@@ -505,13 +506,19 @@ export default function Cockpit() {
   const [pipelineQuery, setPipelineQuery] = useState("");
   const [pipelineType, setPipelineType] = useState("全部类型");
   const [toast, setToast] = useState("");
+  const [conflicted, setConflicted] = useState(false);
   const workspaceTitle = dashboardTitle(state.profile);
+  // 记录首次从服务端加载成功的 state 对象引用 — 加载后 setState(stored) 会触发一次
+  // 自动保存 effect, 但那次保存的内容跟服务端刚给的一模一样 (echo), 纯粹白白占用一次
+  // PUT、拉长并发窗口。只要 state 还是这个引用本身 (没被用户或任何逻辑改过), 就跳过。
+  const loadedStateRef = useRef<WorkspaceState | null>(null);
 
   useEffect(() => {
     loadWorkspace()
       .then((stored) => {
         if (stored) {
           if (stored.designStyle !== "editorial") setTheme("light");
+          loadedStateRef.current = stored;
           setState(stored);
         }
         else setShowOnboarding(true);
@@ -549,10 +556,21 @@ export default function Cockpit() {
   }, [state.designStyle]);
 
   useEffect(() => {
-    if (!hydrated || showOnboarding) return;
-    const timer = window.setTimeout(() => saveWorkspace(state).catch(() => setToast("自动保存失败，请先导出备份。")), 250);
+    if (!hydrated || showOnboarding || conflicted) return;
+    if (state === loadedStateRef.current) return; // 跳过刚加载完那次的 echo-save
+    const timer = window.setTimeout(() => {
+      saveWorkspace(state).catch((err) => {
+        if (err instanceof ConflictError) {
+          // 服务端 rev 已失效: 别处已经保存过, 这份状态已经过期。永久停止本页后续
+          // 保存 (再存只会 409 或用旧状态覆盖别人的新写入), 引导用户刷新拿最新数据。
+          setConflicted(true);
+          return;
+        }
+        setToast("自动保存失败，请检查网络后重试。");
+      });
+    }, 250);
     return () => window.clearTimeout(timer);
-  }, [state, hydrated, showOnboarding]);
+  }, [state, hydrated, showOnboarding, conflicted]);
 
   useEffect(() => {
     if (!toast) return;
@@ -1064,6 +1082,12 @@ export default function Cockpit() {
       {showVersionHistory ? <VersionHistoryModal close={() => setShowVersionHistory(false)} exportData={exportData} /> : null}
       {showOnboarding ? <Onboarding start={startWorkspace} /> : null}
       {toast ? <div className="toast" role="status">{toast}</div> : null}
+      {conflicted ? (
+        <div className="conflict-banner" role="alert">
+          <span>数据已在其他标签页更新，此页面已停止保存 — 请刷新页面</span>
+          <button onClick={() => window.location.reload()}>刷新</button>
+        </div>
+      ) : null}
     </div>
   );
 }

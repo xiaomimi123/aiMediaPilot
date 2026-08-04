@@ -175,7 +175,21 @@ function printPlan(plan: Awaited<ReturnType<typeof loadPlan>>) {
   console.log(`InspirationCard 总计: ${plan.inspirations.length} 条`);
 }
 
-async function applyPlan(userId: string, plan: Awaited<ReturnType<typeof loadPlan>>) {
+export async function applyPlan(userId: string, plan: Awaited<ReturnType<typeof loadPlan>>) {
+  // onboarding 顺序守卫: 迁移脚本走的是逐条 create, 完全跳过 saveWorkspaceToDb 的
+  // compare-and-set — 但如果用户还没在 `/` 走完 onboarding (没有 CockpitPrefs 行,
+  // 或者 setupComplete 仍是 false), 页面此刻手里握着的是"空白开始"的全量 state。
+  // 一旦迁移先写完库、用户后续在页面上随手一动触发自动保存, 那次全量保存会把刚迁移
+  // 进去的数据整个 delete-then-upsert 覆盖成空 — 静默丢光迁移结果。所以必须先确认
+  // onboarding 已经跑完、CockpitPrefs 行已存在且 setupComplete=true, 才允许写库。
+  const prefs = await prisma.cockpitPrefs.findFirst({ where: { userId } });
+  if (!prefs || !prefs.setupComplete) {
+    console.error(`\n[中止] userId=${userId} 尚未完成 onboarding (CockpitPrefs ${prefs ? "setupComplete=false" : "不存在"})。`);
+    console.error("请先在 `/` 完成 onboarding 再执行迁移, 否则空白开始的全量保存会清空迁移数据。");
+    process.exitCode = 1;
+    return;
+  }
+
   const existing = await prisma.cockpitContent.count({ where: { userId } });
   if (existing > 0) {
     console.error(
@@ -264,11 +278,16 @@ async function main() {
   await applyPlan(user.id, plan);
 }
 
-main()
-  .catch((err) => {
-    console.error(err);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+// 只有直接执行本脚本时才跑 main() — 单测需要 import 这个文件来拿 applyPlan/loadPlan
+// 等纯函数, 用 vitest 自动设置的 VITEST 环境变量避免 import 本文件时把真的迁移流程
+// (真连 DB、真读写) 也顺带跑一遍。
+if (!process.env.VITEST) {
+  main()
+    .catch((err) => {
+      console.error(err);
+      process.exitCode = 1;
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}

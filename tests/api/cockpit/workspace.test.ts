@@ -6,7 +6,7 @@ vi.mock('@/lib/user', () => ({
 }));
 
 const prismaMock = vi.hoisted(() => ({
-  cockpitPrefs: { findUnique: vi.fn(), upsert: vi.fn() },
+  cockpitPrefs: { findUnique: vi.fn(), upsert: vi.fn(), updateMany: vi.fn() },
   cockpitContent: { findMany: vi.fn(), deleteMany: vi.fn(), upsert: vi.fn() },
   cockpitInspiration: { findMany: vi.fn(), deleteMany: vi.fn(), upsert: vi.fn() },
   cockpitStageEvent: { findMany: vi.fn(), deleteMany: vi.fn(), upsert: vi.fn() },
@@ -86,6 +86,8 @@ beforeEach(() => {
   prismaMock.cockpitGoalCycle.findMany.mockResolvedValue([]);
   prismaMock.cockpitInsightRule.findMany.mockResolvedValue([]);
   prismaMock.accountMetric.findMany.mockResolvedValue([]);
+  // CAS claim: 默认没抢到行 (count 0)，各测试按需覆盖
+  prismaMock.cockpitPrefs.updateMany.mockResolvedValue({ count: 0 });
   // $transaction 默认直接把 prismaMock 自身当 tx 传给回调
   prismaMock.$transaction.mockImplementation((cb: (tx: typeof prismaMock) => unknown) => cb(prismaMock));
 });
@@ -152,10 +154,33 @@ describe('PUT /api/v1/cockpit/workspace', () => {
     expect(json.data.rev).toBe('2026-08-04T00:00:00.000Z');
   });
 
+  it('并发: 同一个 rev 连续 PUT 两次 → 第一次 CAS 抢到行 200, 第二次抢不到行 409 (compare-and-set)', async () => {
+    prismaMock.cockpitPrefs.updateMany
+      .mockResolvedValueOnce({ count: 1 }) // 第一次: updateMany 原子抢到行
+      .mockResolvedValueOnce({ count: 0 }); // 第二次: 行的 updatedAt 已被第一次改变, 抢不到
+    prismaMock.cockpitPrefs.upsert.mockResolvedValueOnce({
+      userId: 'user1', updatedAt: new Date('2026-08-04T00:00:00.000Z'),
+    });
+    // 第二次 count===0 时需要区分"首次保存"与"真冲突": findUnique 返回已存在的行 → 判定冲突
+    prismaMock.cockpitPrefs.findUnique.mockResolvedValueOnce({
+      userId: 'user1', updatedAt: new Date('2026-08-04T00:00:00.000Z'),
+    });
+
+    const rev = '2026-08-01T00:00:00.000Z';
+    const first = await PUT(req({ state: emptyState(), rev }));
+    expect(first.status).toBe(200);
+
+    const second = await PUT(req({ state: emptyState(), rev }));
+    expect(second.status).toBe(409);
+    // 抢不到行的一方不应该继续写任何实体表
+    expect(prismaMock.cockpitContent.deleteMany).toHaveBeenCalledTimes(1);
+  });
+
   it('正常保存: 各表按预期 deleteMany + upsert, contents 不带 scriptDraftId/analysisId', async () => {
     prismaMock.cockpitPrefs.findUnique.mockResolvedValue({
       userId: 'user1', updatedAt: new Date('2026-08-01T00:00:00.000Z'),
     });
+    prismaMock.cockpitPrefs.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.cockpitPrefs.upsert.mockResolvedValue({
       userId: 'user1', updatedAt: new Date('2026-08-04T00:00:00.000Z'),
     });

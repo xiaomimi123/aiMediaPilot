@@ -3,6 +3,7 @@ import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { todayISO } from '@/lib/cockpit/calculations';
+import { bumpCockpitRev } from '@/lib/cockpit/server-store';
 import type { PickedState } from '@/lib/script-picked/types';
 
 function parsePicked(input: unknown): PickedState | null {
@@ -71,6 +72,10 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
             completedAt: new Date().toISOString(),
           },
         });
+        // 钩子直接写了 CockpitContent/CockpitStageEvent, 不经过 saveWorkspaceToDb —
+        // 敲一下 prefs.updatedAt, 让打开的标签页 rev 失效, 下次整页保存走 409 重新加载,
+        // 而不是静默用旧状态覆盖掉这里刚推进的 stage。
+        await bumpCockpitRev(user.id);
       }
     } catch (e) {
       console.warn('[PUT scripts/picked] cockpit stage advance failed', e);

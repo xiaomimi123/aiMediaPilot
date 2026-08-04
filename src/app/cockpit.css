@@ -1130,6 +1130,10 @@ textarea { resize: vertical; }
 .onboarding-options em { margin-top: auto; color: #e49a7c; font-size: 9px; font-style: normal; }
 .onboarding > small { display: block; margin-top: 14px; color: #7f7f75; font-size: 8px; }
 .toast { position: fixed; right: 25px; bottom: 25px; z-index: 120; padding: 11px 15px; border-radius: 9px; background: var(--inverse-surface); color: var(--inverse-ink); box-shadow: var(--shadow); font-size: 10px; animation: toastIn .2s ease; } @keyframes toastIn { from { transform: translateY(8px); opacity: 0; } }
+/* 并发冲突横幅: 复用 .toast 的定位/阴影, 但不淡出、常驻直到用户刷新页面。 */
+.conflict-banner { position: fixed; left: 50%; bottom: 25px; transform: translateX(-50%); z-index: 130; display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-radius: 9px; background: var(--clay); color: var(--inverse-ink); box-shadow: var(--shadow); font-size: 11px; animation: toastIn .2s ease; }
+.conflict-banner button { flex-shrink: 0; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--inverse-ink); background: transparent; color: var(--inverse-ink); font-size: 10px; cursor: pointer; }
+.conflict-banner button:hover { background: var(--inverse-ink); color: var(--clay); }
 
 html[data-theme="dark"] .editable-page-title input:hover,
 html[data-theme="dark"] .candidate-group,

@@ -15,6 +15,7 @@ const prismaMock = vi.hoisted(() => ({
     update: vi.fn(),
     updateMany: vi.fn(),
   },
+  $executeRaw: vi.fn(),
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
@@ -57,6 +58,7 @@ beforeEach(() => {
   prismaMock.cockpitContent.findFirst.mockResolvedValue(null);
   prismaMock.cockpitContent.update.mockResolvedValue({});
   prismaMock.cockpitContent.updateMany.mockResolvedValue({ count: 0 });
+  prismaMock.$executeRaw.mockResolvedValue(undefined);
   llmCallMock.mockResolvedValue({
     result: {
       schemaVersion: 1, niche: 'ai-knowledge',
@@ -112,23 +114,30 @@ describe('runRetroPipeline', () => {
         data: expect.objectContaining({ stage: 'archived' }),
       }),
     );
+    // 阶段 4.5 (metrics 回填) + 阶段 6.5 (归档) 两次钩子写入都要各自 bump 一次 prefs.updatedAt
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(2);
+    expect(prismaMock.$executeRaw.mock.calls[0]).toContain('user1');
   });
 
-  it('无关联 cockpit content (findFirst 返回 null) → 不调 cockpitContent.update (metrics 回填跳过)', async () => {
+  it('无关联 cockpit content (findFirst 返回 null) → 不调 cockpitContent.update (metrics 回填跳过), 但阶段 6.5 归档仍 bump', async () => {
     await runRetroPipeline('a1');
     expect(prismaMock.cockpitContent.update).not.toHaveBeenCalled();
+    // 阶段 4.5 无关联内容跳过、不 bump；阶段 6.5 (finalUpdate.count>0 默认 mock) 仍照常写入并 bump 一次
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1);
   });
 
-  it('cockpit metrics 回填 findFirst 抛错 → 不阻断主流程 (ActualMetric/最终 updateMany 仍执行)', async () => {
+  it('cockpit metrics 回填 findFirst 抛错 → 不阻断主流程 (ActualMetric/最终 updateMany 仍执行), 阶段 4.5 不 bump', async () => {
     prismaMock.cockpitContent.findFirst.mockRejectedValueOnce(new Error('db down'));
     await runRetroPipeline('a1');
     expect(prismaMock.actualMetric.create).toHaveBeenCalled();
     expect(prismaMock.contentAnalysis.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ retroStatus: 'COMPLETED' }) }),
     );
+    // 阶段 4.5 因 findFirst 抛错被 catch, 不 bump；阶段 6.5 仍照常写入并 bump 一次
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1);
   });
 
-  it('最终 updateMany count=0 (被 CANCELLED race 抢先) → 不触发 cockpit 归档', async () => {
+  it('最终 updateMany count=0 (被 CANCELLED race 抢先) → 不触发 cockpit 归档, 也不为归档 bump (阶段 4.5 仍 bump 一次)', async () => {
     prismaMock.contentAnalysis.updateMany.mockResolvedValueOnce({ count: 0 });
     prismaMock.cockpitContent.findFirst.mockResolvedValueOnce({
       id: 'c1',
@@ -136,6 +145,7 @@ describe('runRetroPipeline', () => {
     });
     await runRetroPipeline('a1');
     expect(prismaMock.cockpitContent.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1);
   });
 
   it('cookie 失效 → retroStatus=FAILED, 不调 adapter', async () => {

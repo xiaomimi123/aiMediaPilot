@@ -16,6 +16,7 @@ const prismaMock = vi.hoisted(() => ({
   cockpitStageEvent: {
     create: vi.fn(),
   },
+  $executeRaw: vi.fn(),
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
@@ -38,6 +39,7 @@ beforeEach(() => {
   prismaMock.cockpitContent.findFirst.mockResolvedValue(null);
   prismaMock.cockpitContent.update.mockResolvedValue({});
   prismaMock.cockpitStageEvent.create.mockResolvedValue({});
+  prismaMock.$executeRaw.mockResolvedValue(undefined);
 });
 
 describe('PUT /api/v1/scripts/[id]/picked', () => {
@@ -104,20 +106,25 @@ describe('PUT /api/v1/scripts/[id]/picked', () => {
         completedAt: expect.any(String),
       }),
     });
+    // 钩子写了 cockpit content/stage event → 必须敲一下 prefs.updatedAt (bumpCockpitRev)
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(prismaMock.$executeRaw.mock.calls[0]).toContain('user1');
   });
 
-  it('关联 cockpit content 但 stage !== script → 不推进', async () => {
+  it('关联 cockpit content 但 stage !== script → 不推进, 也不 bump rev', async () => {
     prismaMock.cockpitContent.findFirst.mockResolvedValueOnce({ id: 'content1', stage: 'recording' });
     const res = await PUT(reqJSON({ reviewed: {} }), ctx);
     expect(res.status).toBe(200);
     expect(prismaMock.cockpitContent.update).not.toHaveBeenCalled();
     expect(prismaMock.cockpitStageEvent.create).not.toHaveBeenCalled();
+    expect(prismaMock.$executeRaw).not.toHaveBeenCalled();
   });
 
-  it('没有关联的 cockpit content → 不推进, 定稿本身仍成功', async () => {
+  it('没有关联的 cockpit content → 不推进, 定稿本身仍成功, 也不 bump rev', async () => {
     const res = await PUT(reqJSON({ reviewed: {} }), ctx);
     expect(res.status).toBe(200);
     expect(prismaMock.cockpitContent.update).not.toHaveBeenCalled();
     expect(prismaMock.cockpitStageEvent.create).not.toHaveBeenCalled();
+    expect(prismaMock.$executeRaw).not.toHaveBeenCalled();
   });
 });

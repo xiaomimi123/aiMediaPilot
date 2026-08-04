@@ -14,6 +14,7 @@ const prismaMock = vi.hoisted(() => ({
     updateMany: vi.fn(),
   },
   user: { update: vi.fn() },
+  $executeRaw: vi.fn(),
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
@@ -33,6 +34,7 @@ beforeEach(() => {
   prismaMock.contentAnalysis.update.mockResolvedValue({});
   prismaMock.cockpitContent.updateMany.mockResolvedValue({ count: 0 });
   prismaMock.user.update.mockResolvedValue({});
+  prismaMock.$executeRaw.mockResolvedValue(undefined);
   queueMock.add.mockResolvedValue({});
 });
 
@@ -78,9 +80,12 @@ describe('runAutoSync', () => {
         stage: 'review',
       }),
     });
+    // cockpit 回填成功 → 必须敲一下 prefs.updatedAt (bumpCockpitRev)
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(prismaMock.$executeRaw.mock.calls[0]).toContain('user1');
   });
 
-  it('cockpit 回填 updateMany 抛错 → 不阻断主流程 (matchedCount 仍 1)', async () => {
+  it('cockpit 回填 updateMany 抛错 → 不阻断主流程 (matchedCount 仍 1), 也不 bump rev', async () => {
     prismaMock.cockpitContent.updateMany.mockRejectedValueOnce(new Error('db down'));
     (runDouyinListAdapter as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
       { awemeId: '7234567890', postedAt: '2026-06-10 14:30', plays: '8.5w', desc: 'AI 工具排行榜 Top 10' },
@@ -91,6 +96,7 @@ describe('runAutoSync', () => {
     const stats = await runAutoSync('user1');
     expect(stats.matchedCount).toBe(1);
     expect(prismaMock.user.update).toHaveBeenCalled();
+    expect(prismaMock.$executeRaw).not.toHaveBeenCalled();
   });
 
   it('低分跳过 → matchedCount=0, skippedLowConfidence=1', async () => {

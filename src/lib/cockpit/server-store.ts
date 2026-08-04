@@ -30,9 +30,9 @@ export async function loadWorkspaceFromDb(userId: string) {
       prisma.cockpitGoalCycle.findMany({ where: { userId } }),
       prisma.cockpitInsightRule.findMany({ where: { userId } }),
       prisma.accountMetric.findMany({
-        where: { account: { userId } }, orderBy: { date: 'asc' }, take: 400,
+        where: { account: { userId } }, orderBy: { date: 'desc' }, take: 400,
         select: { id: true, date: true, followerCount: true },
-      }),
+      }).then((rows) => rows.reverse()),
     ]);
   const active = goals.find((g) => g.status === 'active');
   const state: WorkspaceState = {
@@ -81,9 +81,18 @@ type SaveResult = { ok: true; rev: string } | { ok: false; conflict: true };
  * 全量同步 userId 的整棵 WorkspaceState 到 DB — 每张实体表都是
  * "以客户端传来的 id 集合为准" 的 delete-then-upsert, 在一个事务内完成。
  *
- * 冲突检测: 若 CockpitPrefs 行已存在且其 updatedAt !== baseRev, 说明服务端在
- * 客户端上次加载之后已被别处更新过 — 直接拒绝这次整体写入, 不做任何改动。
- * 首次保存 (onboarding 之后, 还没有 CockpitPrefs 行) 跳过冲突检测。
+ * 冲突检测 (compare-and-set): 事务内第一条语句就是
+ * `updateMany({ where: { userId, updatedAt: baseRev }, ... })` — 这是一条原子的
+ * UPDATE ... WHERE, 数据库会对匹配行加锁; 两个并发事务用同一个 baseRev 竞争时,
+ * 后提交的那个在它执行到这条 updateMany 时, 行的 updatedAt 已经被前者改变,
+ * WHERE 不再匹配 → count === 0, 从而被判定为冲突、整体回滚, 不会出现
+ * "先 findUnique 判断通过, 再各自 delete-then-upsert" 的 check-then-write 竞态
+ * (两者都通过检查后, 后写入的一方会用自己的全量状态覆盖/抹掉先写入的一方的行)。
+ *
+ * count === 0 时需要区分两种情况:
+ *   - CockpitPrefs 行已存在 (别处已更新过) → 真冲突, 拒绝
+ *   - CockpitPrefs 行还不存在 (onboarding 后的首次保存) → updateMany 本来就是
+ *     no-op, 不代表冲突, 继续走下面的写入 (最后 upsert 会 create 这一行)
  */
 export async function saveWorkspaceToDb(
   userId: string,
@@ -91,9 +100,16 @@ export async function saveWorkspaceToDb(
   baseRev: string,
 ): Promise<SaveResult> {
   return prisma.$transaction(async (tx) => {
-    const existingPrefs = await tx.cockpitPrefs.findUnique({ where: { userId } });
-    if (existingPrefs && existingPrefs.updatedAt.toISOString() !== baseRev) {
-      return { ok: false, conflict: true } as const;
+    const claimed = await tx.cockpitPrefs.updateMany({
+      where: { userId, updatedAt: new Date(baseRev) },
+      data: { setupComplete: state.setupComplete },
+    });
+    if (claimed.count === 0) {
+      const existingPrefs = await tx.cockpitPrefs.findUnique({ where: { userId } });
+      if (existingPrefs) {
+        return { ok: false, conflict: true } as const;
+      }
+      // 首次保存: 没有 prefs 行, 上面的 updateMany 天然是 no-op, 继续往下走。
     }
 
     // ---- inspirationCards → CockpitInspiration ----
@@ -315,4 +331,22 @@ export async function saveWorkspaceToDb(
 
     return { ok: true, rev: newPrefs.updatedAt.toISOString() } as const;
   });
+}
+
+/**
+ * 集成钩子 (picked 定稿 / auto-sync 回填 / retro 复盘回填) 直接写 CockpitContent /
+ * CockpitStageEvent, 不经过 saveWorkspaceToDb — 但客户端标签页手里的 rev 只认
+ * CockpitPrefs.updatedAt。若钩子写完不触碰 prefs, 打开的标签页会一直以为自己的
+ * rev 仍然新鲜, 下一次整页保存 (全量 delete-then-upsert) 就会用旧状态把钩子刚写
+ * 的内容覆盖掉 — 静默丢钩子写入。
+ *
+ * 因此每个钩子在自己的 cockpit 写入成功后调用本函数"敲一下" prefs.updatedAt,
+ * 让在线标签页的 rev 失效、下次保存走 409 → 客户端重新加载最新状态。
+ * 只碰 updatedAt, 不碰任何业务字段 (故用 $executeRaw 而不是 update/updateMany
+ * data:{} — Prisma 要求 data 至少一个字段, 而业务字段真值我们并不想改)。
+ * 用户还没有 CockpitPrefs 行 (没做过 onboarding) 时是 no-op, 符合钩子 fail-soft
+ * 语义, 调用方应放在自己已有的 try/catch 里。
+ */
+export async function bumpCockpitRev(userId: string): Promise<void> {
+  await prisma.$executeRaw`UPDATE "CockpitPrefs" SET "updatedAt" = NOW() WHERE "userId" = ${userId}`;
 }

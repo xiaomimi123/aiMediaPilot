@@ -9,6 +9,7 @@ import { type IVisionLLM, type TokenUsage } from '@/lib/llm/vision';
 import { getDeepSeekTextLLM, getOpenAIVisionLLM } from '@/lib/llm/clients';
 import { RETRO_GAP, type RetroGapResponse } from '@/lib/llm/prompts';
 import { todayISO } from '@/lib/cockpit/calculations';
+import { bumpCockpitRev } from '@/lib/cockpit/server-store';
 import type { RetroStatus } from '@prisma/client';
 
 type JobData = { analysisId: string };
@@ -109,6 +110,8 @@ export async function runRetroPipeline(analysisId: string): Promise<void> {
           updatedAt: todayISO(),
         },
       });
+      // 敲一下 prefs.updatedAt, 让打开的标签页 rev 失效, 避免下次整页保存覆盖此回填
+      await bumpCockpitRev(analysis.userId);
     }
   } catch (e) {
     console.warn('[cockpit-backfill]', e);
@@ -159,6 +162,8 @@ export async function runRetroPipeline(analysisId: string): Promise<void> {
         where: { analysisId, userId: analysis.userId, stage: 'review' },
         data: { stage: 'archived', updatedAt: todayISO() },
       });
+      // 敲一下 prefs.updatedAt, 让打开的标签页 rev 失效, 避免下次整页保存覆盖此归档
+      await bumpCockpitRev(analysis.userId);
     } catch (e) {
       console.warn('[cockpit-backfill]', e);
     }

@@ -4,6 +4,7 @@ import { runDouyinListAdapter } from './list';
 import { bigramDice, filenameBasename } from './fuzzy';
 import { parseLooseBeijingTime } from './parse-time';
 import { dateISOInShanghai, todayISO } from '@/lib/cockpit/calculations';
+import { bumpCockpitRev } from '@/lib/cockpit/server-store';
 
 const MATCH_THRESHOLD = 0.8;
 
@@ -74,6 +75,8 @@ export async function runAutoSync(userId: string): Promise<AutoSyncStats> {
             updatedAt: todayISO(),
           },
         });
+        // 敲一下 prefs.updatedAt, 让打开的标签页 rev 失效, 避免下次整页保存覆盖此回填
+        await bumpCockpitRev(userId);
       } catch (e) {
         console.warn('[cockpit-backfill]', e);
       }

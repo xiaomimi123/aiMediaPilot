@@ -262,6 +262,9 @@ npx tsx scripts/migrate-cockpit.ts --apply  # 人工确认 dry-run 输出无误�
 目标用户名下 `CockpitContent` 是否已有数据，非空直接中止（防重复迁移）；旧表全程只读，不删不改。
 `publishedAt`/`metrics.capturedAt` 这两个"日期部分"字段按 `Asia/Shanghai` (UTC+8) 取年月日
 (`dateISOInShanghai`)，与运行时写入方约定一致，避免 UTC 午夜前后跑迁移脚本时日期错位一天。
+**必须先在 `/` 完成一次 onboarding（`CockpitPrefs.setupComplete=true`）再执行 `--apply`**——迁移脚本
+不经过全量保存的 compare-and-set，若 onboarding 未完成就先写库，页面之后触发的第一次自动保存会用
+"空白开始"的全量状态把刚迁移进去的数据整个覆盖清空；`--apply` 会检测该顺序并主动中止。
 
 ---
 
