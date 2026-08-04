@@ -4,7 +4,7 @@ import { ScriptForm } from '@/components/content/script-form';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { readInspirationInsight } from '@/lib/json-readers';
-import { PoolButton } from '@/components/workbench/pool-button';
+import { PoolButton } from '@/components/content/pool-button';
 
 export const dynamic = 'force-dynamic';
 

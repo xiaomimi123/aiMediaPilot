@@ -8,7 +8,7 @@ import { Sparkles } from 'lucide-react';
 import { KNOWN_NICHES } from '@/lib/llm/prompts';
 import { cn } from '@/lib/utils';
 import { CONTENT_PLATFORMS, CONTENT_PLATFORM_EMOJI, CONTENT_PLATFORM_LABEL, type ContentPlatform } from '@/lib/platform';
-import { PoolButton } from '@/components/workbench/pool-button';
+import { PoolButton } from '@/components/content/pool-button';
 
 interface DiscoveredTopic {
   title: string;
