@@ -6,10 +6,10 @@ import {
   useState,
   type DragEvent,
 } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   calculateGoalHealth,
   currentFollowers,
-  percent,
   publishedWithin,
   todayISO,
 } from "@/lib/cockpit/calculations";
@@ -70,7 +70,8 @@ import {
   toggleStageEvent,
   transitionContentStage,
 } from "@/lib/cockpit/workflow";
-import { EditablePageTitle, Icon, ProgressBar, creatorMark, dashboardTitle, date, normalizeGoalQuotas, shiftDate } from "./shared";
+import { EditablePageTitle, Icon, creatorMark, dashboardTitle, date, normalizeGoalQuotas, shiftDate } from "./shared";
+import { NAV_ITEMS, Sidebar } from "./sidebar";
 import { InspirationPoolView } from "./views/inspirations";
 import { DayView, WeekOverview, type DailyStageEntry } from "./views/momentum";
 import { ScheduleView } from "./views/schedule";
@@ -85,14 +86,6 @@ type NavView = NavigationItemId | "settings";
 type ColorTheme = "light" | "dark";
 
 const APP_VERSION = "1.5.0";
-const NAV_ITEMS: ReadonlyArray<{ id: NavigationItemId; label: string; icon: string }> = [
-  { id: "inspirations", label: "灵感池", icon: "inspiration" },
-  { id: "momentum", label: "推进", icon: "momentum" },
-  { id: "schedule", label: "档期规划", icon: "schedule" },
-  { id: "pipeline", label: "内容总览", icon: "pipeline" },
-  { id: "goals", label: "大目标", icon: "goals" },
-  { id: "review", label: "复盘实验室", icon: "review" },
-];
 const VERSION_HISTORY = [
   {
     version: "1.5.0",
@@ -486,11 +479,19 @@ function createBlankState(): WorkspaceState {
   };
 }
 
+function initialViewFromSearchParams(searchParams: URLSearchParams): NavView {
+  const requested = searchParams.get("view");
+  return requested && (DEFAULT_NAVIGATION_ORDER as string[]).includes(requested)
+    ? (requested as NavigationItemId)
+    : "momentum";
+}
+
 export default function Cockpit() {
+  const searchParams = useSearchParams();
   const [state, setState] = useState<WorkspaceState>(() => createDemoState());
   const [hydrated, setHydrated] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [view, setView] = useState<NavView>("momentum");
+  const [view, setView] = useState<NavView>(() => initialViewFromSearchParams(searchParams));
   const [momentumPeriod, setMomentumPeriod] = useState<"today" | "week">("today");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [theme, setTheme] = useState<ColorTheme | null>(null);
@@ -611,6 +612,7 @@ export default function Cockpit() {
 
   function reorderNavigation(sourceId: NavigationItemId, targetId: NavigationItemId) {
     if (sourceId === targetId) return;
+    if (!state.navigationOrder.includes(sourceId)) return;
     setState((prev) => {
       const sourceIndex = prev.navigationOrder.indexOf(sourceId);
       const targetIndex = prev.navigationOrder.indexOf(targetId);
@@ -1022,63 +1024,30 @@ export default function Cockpit() {
 
   return (
     <div className={sidebarCollapsed ? "cockpit-shell sidebar-collapsed" : "cockpit-shell"}>
-      <aside className="sidebar">
-        <button
-          className="sidebar-toggle"
-          onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
-          aria-label={sidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}
-          title={sidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}
-        ><span aria-hidden="true">{sidebarCollapsed ? "›" : "‹"}</span></button>
-        <button className="brand" onClick={() => { setView("momentum"); setMomentumPeriod("today"); }} aria-label="返回今日 Todo">
-          <span className="brand-mark">{creatorMark(state.profile)}</span><span><strong>{workspaceTitle}</strong><small>{state.profile.primaryPlatform}{state.profile.contentFocus ? ` · ${state.profile.contentFocus}` : ""}</small></span>
-        </button>
-        <nav aria-label="主导航">
-          <div className="nav-section-label">工作台</div>
-          {nav.map((item) => <button
-            key={item.id}
-            draggable
-            className={`nav-item${view === item.id ? " active" : ""}${draggedNavId === item.id ? " dragging" : ""}${navDropTarget === item.id && draggedNavId !== item.id ? " drop-target" : ""}`}
-            onClick={() => setView(item.id)}
-            onDragStart={(event) => {
-              event.dataTransfer.effectAllowed = "move";
-              event.dataTransfer.setData("text/plain", item.id);
-              setDraggedNavId(item.id);
-            }}
-            onDragOver={(event) => {
-              event.preventDefault();
-              event.dataTransfer.dropEffect = "move";
-              setNavDropTarget(item.id);
-            }}
-            onDrop={(event) => {
-              event.preventDefault();
-              const sourceId = (event.dataTransfer.getData("text/plain") || draggedNavId) as NavigationItemId;
-              if (state.navigationOrder.includes(sourceId)) reorderNavigation(sourceId, item.id);
-              setDraggedNavId(null);
-              setNavDropTarget(null);
-            }}
-            onDragEnd={() => {
-              setDraggedNavId(null);
-              setNavDropTarget(null);
-            }}
-            onKeyDown={(event) => {
-              if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
-              event.preventDefault();
-              moveNavigationBy(item.id, event.key === "ArrowUp" ? -1 : 1);
-            }}
-            aria-label={`${item.label}，可拖动调整顺序`}
-            title={sidebarCollapsed ? item.label : "拖动调整顺序；Alt + ↑/↓ 也可移动"}
-          ><Icon name={item.icon} /><span>{item.label}</span>{item.id === "review" && reviewDue.length > 0 ? <em>{reviewDue.length}</em> : null}<span className="nav-drag-handle" aria-hidden="true">⠿</span></button>)}
-        </nav>
-        <div className="sidebar-bottom">
-          <button className={view === "settings" ? "nav-item active" : "nav-item"} onClick={() => setView("settings")} aria-label="设置与备份" title={sidebarCollapsed ? "设置与备份" : undefined}><Icon name="settings" /><span>设置与备份</span></button>
-          <div className="quarter-mini"><div><span>当前目标进度</span><strong>{percent(health.timeProgress)}</strong></div><ProgressBar value={health.timeProgress} /><small>{health.weeksRemaining} 周后结束 · 本机自动保存</small></div>
-          <button className="version-entry" onClick={() => setShowVersionHistory(true)} aria-label={`当前版本 ${APP_VERSION}，查看版本记录`} title={sidebarCollapsed ? `v${APP_VERSION}` : undefined}>
-            <Icon name="version" />
-            <span><small>当前版本</small><strong>v{APP_VERSION}</strong></span>
-            <em>版本记录</em>
-          </button>
-        </div>
-      </aside>
+      <Sidebar
+        mode="cockpit"
+        collapsed={sidebarCollapsed}
+        onToggleCollapsed={() => setSidebarCollapsed((collapsed) => !collapsed)}
+        brandTitle={workspaceTitle}
+        brandMark={creatorMark(state.profile)}
+        brandSubtitle={`${state.profile.primaryPlatform}${state.profile.contentFocus ? ` · ${state.profile.contentFocus}` : ""}`}
+        onBrandClick={() => { setView("momentum"); setMomentumPeriod("today"); }}
+        navItems={nav}
+        activeView={view}
+        onSelectView={setView}
+        onSelectSettings={() => setView("settings")}
+        reviewDueCount={reviewDue.length}
+        draggedNavId={draggedNavId}
+        navDropTarget={navDropTarget}
+        setDraggedNavId={setDraggedNavId}
+        setNavDropTarget={setNavDropTarget}
+        reorderNavigation={reorderNavigation}
+        moveNavigationBy={moveNavigationBy}
+        timeProgress={health.timeProgress}
+        weeksRemaining={health.weeksRemaining}
+        appVersion={APP_VERSION}
+        onOpenVersionHistory={() => setShowVersionHistory(true)}
+      />
 
       <main className="main-area">
         <header className="topbar">
