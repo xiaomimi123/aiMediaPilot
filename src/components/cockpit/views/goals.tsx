@@ -12,6 +12,7 @@ import {
 } from "@/lib/cockpit/model";
 import { calculateGoalHealth, currentFollowers, formatMetric, percent } from "@/lib/cockpit/calculations";
 import { EditablePageTitle, ProgressBar, date } from "../shared";
+import { PerformancePanel } from "../analytics/performance-panel";
 
 export function GoalsView({ state, pageTitle, updateTitle, health, followers, published, updateGoal, setState }: { state: WorkspaceState; pageTitle: string; updateTitle: (value: string) => void; health: ReturnType<typeof calculateGoalHealth>; followers: number; published: ContentItem[]; updateGoal: (patch: Partial<GoalCycle>) => void; setState: React.Dispatch<React.SetStateAction<WorkspaceState>> }) {
   const [showConfig, setShowConfig] = useState(false);
@@ -137,6 +138,8 @@ export function GoalsView({ state, pageTitle, updateTitle, health, followers, pu
         <aside><span>快照记录（折线图原始数据）</span><strong>{snapshots.length}</strong><small>次更新</small><div>{[...snapshots].reverse().map((item) => <button key={item.id} className={editingSnapshotId === item.id ? "snapshot-record active" : "snapshot-record"} onClick={() => editSnapshot(item)} aria-label={`修改 ${item.date} 的粉丝快照`}><span>{item.date.slice(5)}</span><strong>{formatMetric(item.followers)}</strong><em>编辑</em></button>)}</div></aside>
       </div>
     </section>
+
+    <PerformancePanel />
 
     <section className="panel content-analytics-panel">
       <header><div><span className="eyebrow">PUBLISHED CONTENT</span><h2>内容指标</h2><p>只统计当前阶段时间范围内已经发布的内容。</p></div><strong>{published.length}<small> 条已发布</small></strong></header>

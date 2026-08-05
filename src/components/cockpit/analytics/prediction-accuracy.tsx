@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { formatPlays } from '@/lib/prediction/formula';
 import type { PredictionAccuracySummary, PredictionAccuracyEntry } from '@/lib/dashboard/types';
@@ -24,12 +23,11 @@ const VERDICT_BADGE: Record<
 
 export function PredictionAccuracy({ data }: { data: PredictionAccuracySummary }) {
   return (
-    <Card>
-      <CardContent className="space-y-4 pt-6">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold">🎯 L1 预测精度</h3>
-          <div className="text-xs text-muted-foreground">基于 {data.totalSamples} 条复盘</div>
-        </div>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-[var(--ink)]">🎯 L1 预测精度</h3>
+        <div className="text-xs text-[var(--muted)]">基于 {data.totalSamples} 条复盘</div>
+      </div>
 
         <div className="grid grid-cols-3 gap-2">
           <Stat emoji="✓" label="准" count={data.inRangeCount} cls="bg-green-100 text-green-900" />
@@ -41,7 +39,7 @@ export function PredictionAccuracy({ data }: { data: PredictionAccuracySummary }
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b text-xs text-muted-foreground">
+              <tr className="border-b border-[var(--line)] text-xs text-[var(--muted)]">
                 <th className="py-2 text-left">视频</th>
                 <th className="py-2 text-right">预测</th>
                 <th className="py-2 text-right">实际</th>
@@ -52,9 +50,9 @@ export function PredictionAccuracy({ data }: { data: PredictionAccuracySummary }
               {data.recent.map((row) => {
                 const badge = VERDICT_BADGE[row.verdict];
                 return (
-                  <tr key={row.id} className="border-b">
+                  <tr key={row.id} className="border-b border-[var(--line)]">
                     <td className="py-2">
-                      <Link href={`/content/preflight/${row.id}`} className="truncate hover:text-primary">
+                      <Link href={`/content/preflight/${row.id}`} className="truncate hover:text-[var(--clay)]">
                         {row.videoFilename}
                       </Link>
                     </td>
@@ -79,25 +77,24 @@ export function PredictionAccuracy({ data }: { data: PredictionAccuracySummary }
           {data.recent.map((row) => {
             const badge = VERDICT_BADGE[row.verdict];
             return (
-              <div key={row.id} className="rounded-md border p-3 text-sm">
+              <div key={row.id} className="rounded-md border border-[var(--line)] p-3 text-sm">
                 <div className="flex items-start justify-between gap-2">
-                  <Link href={`/content/preflight/${row.id}`} className="flex-1 truncate font-medium hover:text-primary">
+                  <Link href={`/content/preflight/${row.id}`} className="flex-1 truncate font-medium hover:text-[var(--clay)]">
                     {row.videoFilename}
                   </Link>
                   <span className={cn('rounded px-2 py-0.5 text-xs font-semibold whitespace-nowrap', badge.cls)}>
                     {badge.label(row.deltaPct)}
                   </span>
                 </div>
-                <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                  <div>预: <span className="font-medium tabular-nums text-foreground">{formatPlays(row.lower)} - {formatPlays(row.upper)}</span></div>
-                  <div>实: <span className="font-medium tabular-nums text-foreground">{formatPlays(row.actual)}</span></div>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-[var(--muted)]">
+                  <div>预: <span className="font-medium tabular-nums text-[var(--ink)]">{formatPlays(row.lower)} - {formatPlays(row.upper)}</span></div>
+                  <div>实: <span className="font-medium tabular-nums text-[var(--ink)]">{formatPlays(row.actual)}</span></div>
                 </div>
               </div>
             );
           })}
         </div>
-      </CardContent>
-    </Card>
+      </div>
   );
 }
 

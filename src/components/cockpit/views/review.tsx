@@ -4,6 +4,7 @@ import { DEFAULT_PAGE_TITLES, type ContentItem, type WorkspaceState } from "@/li
 import { formatMetric, percent } from "@/lib/cockpit/calculations";
 import { getExtras } from "@/lib/cockpit/storage";
 import { EditablePageTitle, Empty, StarRating, date, shiftDate } from "../shared";
+import { PredictionPanel } from "../analytics/prediction-panel";
 
 function ReviewContentList({ items, reviewed, open }: { items: ContentItem[]; reviewed: boolean; open: (id: string) => void }) {
   if (!items.length) return <Empty title={reviewed ? "还没有已复盘内容" : "目前没有待复盘内容"} body={reviewed ? "完成第一篇内容复盘后，会沉淀到这里。" : "内容发布后，会自动进入待复盘区域。"} />;
@@ -28,5 +29,6 @@ export function ReviewView({ state, pageTitle, updateTitle, open, setState }: { 
     <div className="review-kpi-grid"><article className="panel"><span>发布样本</span><strong>{published.length}</strong><small>全部已发布内容</small></article><article className="panel pending"><span>待复盘</span><strong>{pending.length}</strong><small>{overdue ? `其中 ${overdue} 条已到 T+3` : "当前没有逾期复盘"}</small></article><article className="panel"><span>已复盘</span><strong>{reviewed.length}</strong><small>完成定型的内容</small></article><article className="panel"><span>复盘完成率</span><strong>{percent(completionRate)}</strong><small>{reviewed.length} / {published.length || 0} 条</small></article><article className="panel rating"><span>平均星级</span><strong>{averageRating ? averageRating.toFixed(1) : "—"}<em>/ 5</em></strong><small>统计有星级的已复盘内容</small></article></div>
     <div className="review-section-grid"><div className="panel review-ledger-panel pending-reviews"><div className="panel-heading"><div><span className="eyebrow">TO REVIEW</span><h2>待复盘</h2><p>发布即进入这里，优先处理已经到 T+3 的内容。</p></div><span className="count-label">{pending.length} 条</span></div><ReviewContentList items={pending} reviewed={false} open={open} /></div><div className="panel review-ledger-panel completed-reviews"><div className="panel-heading"><div><span className="eyebrow">REVIEWED</span><h2>已复盘</h2><p>已经完成定型评价与分析，可随时打开更新。</p></div><span className="count-label">{reviewed.length} 条</span></div><ReviewContentList items={reviewed} reviewed open={open} /></div></div>
     <div className="panel rules-panel"><div className="panel-heading"><div><span className="eyebrow">PLAYBOOK</span><h2>已沉淀的内容规则</h2></div><span>{state.insightRules.filter((item) => item.active).length} 条启用</span></div><div className="rule-grid">{state.insightRules.map((rule) => <article key={rule.id} className={rule.active ? "rule-card" : "rule-card inactive"}><span>判断 #{rule.id.slice(-2)}</span><p>{rule.text}</p><button onClick={() => setState((prev) => ({ ...prev, insightRules: prev.insightRules.map((item) => item.id === rule.id ? { ...item, active: !item.active } : item) }))}>{rule.active ? "停用" : "重新启用"}</button></article>)}</div></div>
+    <PredictionPanel />
   </section>;
 }

@@ -909,6 +909,12 @@ textarea { resize: vertical; }
 .rule-card { padding: 15px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); }.rule-card.inactive { opacity: .5; }
 .rule-card > span { color: var(--clay); font-size: 8px; letter-spacing: .1em; }.rule-card p { min-height: 44px; margin: 8px 0; font-family: "Songti SC", serif; font-size: 12px; line-height: 1.6; }.rule-card button { padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 8px; }
 
+.prediction-panel, .performance-panel { overflow: hidden; margin-top: 16px; }
+.panel-fetch-error { display: block; margin-top: 16px; color: var(--muted); font-size: 9px; }
+.prediction-panel-body { display: flex; flex-direction: column; gap: 20px; padding: 4px 22px 22px; }
+.performance-panel-body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding: 4px 22px 22px; }
+@media (max-width: 820px) { .performance-panel-body { grid-template-columns: 1fr; } }
+
 .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
 .settings-card { display: flex; gap: 17px; min-height: 210px; padding: 22px; }.settings-card.wide { grid-column: 1 / -1; min-height: auto; }.settings-icon { display: grid; width: 40px; height: 40px; place-items: center; flex: 0 0 auto; border-radius: 10px; background: var(--surface-soft); color: var(--clay); font-family: Georgia, serif; font-size: 19px; }.settings-card > div:last-child { flex: 1; }.settings-card h2 { margin: 2px 0 7px; font-family: "Songti SC", serif; font-size: 18px; }.settings-card p { max-width: 550px; margin: 0 0 16px; color: var(--muted); font-size: 10px; line-height: 1.65; }.settings-card small { display: block; margin-top: 12px; color: var(--muted); font-size: 8px; line-height: 1.7; }
 .appearance-settings-card { overflow: hidden; }
