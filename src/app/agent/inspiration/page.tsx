@@ -160,7 +160,7 @@ export default function InspirationPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">📚 灵感视频库</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-sm text-[var(--muted)]">
           抖音自动抓 (粘 URL/分享文本); 小红书 / 公众号 手动填标题。 选 ≥ 2 条让 AI 总结共性。
         </p>
       </div>
@@ -181,12 +181,12 @@ export default function InspirationPage() {
               className={cn(
                 '-mb-px border-b-2 px-3 py-2 text-sm transition-colors',
                 active
-                  ? 'border-primary font-medium text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground',
+                  ? 'border-[var(--clay)] font-medium text-[var(--ink)]'
+                  : 'border-transparent text-[var(--muted)] hover:text-[var(--ink)]',
               )}
             >
               {t.label}
-              <span className="ml-1 text-xs text-muted-foreground">({t.count})</span>
+              <span className="ml-1 text-xs text-[var(--muted)]">({t.count})</span>
             </button>
           );
         })}
@@ -205,13 +205,13 @@ export default function InspirationPage() {
           <Sparkles className="mr-1 h-4 w-4" />
           {generating ? '分析中...' : `🧠 让 AI 总结这 ${selected.size || 0} 条共性`}
         </Button>
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
           <span>按 niche:</span>
           <select
             value={niche}
             onChange={(e) => setNiche(e.target.value)}
             disabled={generating}
-            className="rounded border border-border bg-background px-2 py-1 text-xs"
+            className="rounded border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs"
           >
             {KNOWN_NICHES.map((n) => (
               <option key={n.key} value={n.key}>
@@ -234,27 +234,27 @@ export default function InspirationPage() {
 
       {/* 批量操作条 — 只在有视频时显示 */}
       {filteredItems.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/30 px-3 py-2 text-xs">
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2 text-xs">
           <button
             type="button"
             onClick={toggleSelectAllVisible}
-            className="font-medium text-foreground hover:underline"
+            className="font-medium text-[var(--ink)] hover:underline"
           >
             {allVisibleSelected ? '☑️ 反选当前页' : '☐ 全选当前页'}
           </button>
-          <span className="text-muted-foreground">·</span>
-          <span className="text-muted-foreground">已选 {selected.size} 条</span>
+          <span className="text-[var(--muted)]">·</span>
+          <span className="text-[var(--muted)]">已选 {selected.size} 条</span>
           {selected.size > 0 && (
             <>
-              <span className="text-muted-foreground">·</span>
+              <span className="text-[var(--muted)]">·</span>
               <button
                 type="button"
                 onClick={() => setSelected(new Set())}
-                className="text-muted-foreground hover:underline"
+                className="text-[var(--muted)] hover:underline"
               >
                 清空选择
               </button>
-              <span className="text-muted-foreground">·</span>
+              <span className="text-[var(--muted)]">·</span>
               <button
                 type="button"
                 onClick={handleBulkDelete}
@@ -285,17 +285,17 @@ export default function InspirationPage() {
         <button
           type="button"
           onClick={() => setInsightCollapsed(false)}
-          className="flex w-full items-center justify-between rounded-lg border-2 border-purple-300 bg-purple-50/40 px-4 py-2.5 text-left text-sm transition-colors hover:bg-purple-50"
+          className="flex w-full items-center justify-between rounded-lg border-2 border-[var(--clay)]/30 bg-[var(--clay-soft)]/40 px-4 py-2.5 text-left text-sm transition-colors hover:bg-[var(--clay-soft)]"
         >
-          <span className="font-medium text-purple-900">
+          <span className="font-medium text-[#8f3f28]">
             🧠 上次 AI 总结已折叠 — 点击展开
           </span>
-          <span className="text-xs text-muted-foreground">展开 ↓</span>
+          <span className="text-xs text-[var(--muted)]">展开 ↓</span>
         </button>
       )}
 
       {history.length > 0 && (
-        <Card>
+        <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
           <CardContent className="pt-6">
             <button
               type="button"
@@ -305,7 +305,7 @@ export default function InspirationPage() {
               <span className="text-sm font-medium">
                 📜 历史总结 ({history.length} 条)
               </span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-[var(--muted)]">
                 {showHistory ? '收起 ↑' : '展开 ↓'}
               </span>
             </button>
@@ -314,7 +314,7 @@ export default function InspirationPage() {
                 {history.map((h) => (
                   <li key={h.id} className="rounded-lg border p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-xs text-[var(--muted)]">
                         {new Date(h.generatedAt).toLocaleString('zh-CN')} · 基于{' '}
                         {Array.isArray(h.videoIds) ? h.videoIds.length : 0} 条视频
                       </span>
@@ -324,12 +324,12 @@ export default function InspirationPage() {
                           setInsight({ id: h.id, output: h.output });
                           setInsightCollapsed(false);
                         }}
-                        className="text-xs text-blue-600 hover:underline"
+                        className="text-xs text-[var(--clay)] hover:underline"
                       >
                         查看完整 →
                       </button>
                     </div>
-                    <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
+                    <p className="mt-2 line-clamp-2 text-sm text-[var(--muted)]">
                       {h.output.summary}
                     </p>
                     {h.output.recommendedTopics?.length > 0 && (
@@ -338,7 +338,7 @@ export default function InspirationPage() {
                           <a
                             key={i}
                             href={`/content/script/new?topic=${encodeURIComponent(t.title)}&platform=douyin&inspirationId=${h.id}`}
-                            className="rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-900 hover:bg-purple-200"
+                            className="rounded bg-[var(--clay-soft)] px-2 py-0.5 text-xs text-[#984629] hover:bg-[#ead0c2]"
                           >
                             {t.title}
                           </a>
@@ -354,14 +354,14 @@ export default function InspirationPage() {
       )}
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">加载中...</p>
+        <p className="text-sm text-[var(--muted)]">加载中...</p>
       ) : items.length === 0 ? (
-        <Card className="border-dashed">
+        <Card className="border-dashed border-[var(--line-dark)] bg-[var(--panel-bg)]">
           <CardContent className="space-y-4 pt-8 pb-8 text-center">
             <p className="text-3xl">📥</p>
             <div className="space-y-1">
               <p className="text-base font-semibold">收第一条灵感视频</p>
-              <p className="mx-auto max-w-md text-sm text-muted-foreground">
+              <p className="mx-auto max-w-md text-sm text-[var(--muted)]">
                 打开抖音 → 点分享 → 复制链接,直接粘到这里 (~30s 自动抓数据)。 小红书 / 公众号也支持
                 (手动填标题)。
               </p>
@@ -370,14 +370,14 @@ export default function InspirationPage() {
               <Plus className="mr-1 h-4 w-4" />
               添加第一条
             </Button>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-[var(--muted)]">
               提示: 至少 2 条同类型视频才能调用 AI 总结
             </p>
           </CardContent>
         </Card>
       ) : filteredItems.length === 0 ? (
-        <Card>
-          <CardContent className="space-y-2 pt-6 text-center text-sm text-muted-foreground">
+        <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
+          <CardContent className="space-y-2 pt-6 text-center text-sm text-[var(--muted)]">
             当前平台下还没有视频
           </CardContent>
         </Card>
@@ -389,8 +389,8 @@ export default function InspirationPage() {
               <Card
                 key={v.id}
                 className={cn(
-                  'cursor-pointer transition-all',
-                  isSelected ? 'border-2 border-blue-500 shadow-md' : 'hover:shadow-sm',
+                  'cursor-pointer border-[var(--line)] bg-[var(--panel-bg)] transition-all',
+                  isSelected ? 'border-2 border-[var(--clay)] shadow-md' : 'hover:shadow-sm',
                 )}
                 onClick={() => toggleSelected(v.id)}
               >
@@ -399,7 +399,7 @@ export default function InspirationPage() {
                     <span
                       className={cn(
                         'mt-0.5 h-5 w-5 shrink-0 rounded border-2 flex items-center justify-center text-xs',
-                        isSelected ? 'border-blue-600 bg-blue-600 text-white' : 'border-border',
+                        isSelected ? 'border-[var(--clay)] bg-[var(--clay)] text-white' : 'border-[var(--line)]',
                       )}
                     >
                       {isSelected && '✓'}
@@ -411,26 +411,26 @@ export default function InspirationPage() {
                         e.stopPropagation();
                         void handleDelete(v.id);
                       }}
-                      className="text-muted-foreground hover:text-destructive"
+                      className="text-[var(--muted)] hover:text-destructive"
                       aria-label="删除"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">
+                  <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
+                    <span className="rounded bg-[var(--surface-soft)] px-1.5 py-0.5 text-[10px]">
                       {PLATFORM_LABEL[v.platform] ?? v.platform}
                     </span>
                     {v.authorName && <span>@{v.authorName}</span>}
                   </div>
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground tabular-nums">
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--muted)] tabular-nums">
                     <span>▶ {formatPlays(v.playCount)}</span>
                     <span>♥ {formatPlays(v.likeCount)}</span>
                     <span>💬 {formatPlays(v.commentCount)}</span>
                     {v.duration && <span>⏱ {v.duration}s</span>}
                   </div>
                   {v.userNote && (
-                    <p className="rounded bg-muted px-2 py-1 text-xs text-muted-foreground">
+                    <p className="rounded bg-[var(--surface-soft)] px-2 py-1 text-xs text-[var(--muted)]">
                       📝 {v.userNote}
                     </p>
                   )}
@@ -439,7 +439,7 @@ export default function InspirationPage() {
                     target="_blank"
                     rel="noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="block text-xs text-blue-600 hover:underline"
+                    className="block text-xs text-[var(--clay)] hover:underline"
                   >
                     原视频 →
                   </a>

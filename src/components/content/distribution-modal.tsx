@@ -38,7 +38,7 @@ export function DistributionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="w-full max-w-md space-y-4 rounded-xl bg-card p-5" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md space-y-4 rounded-xl border border-[var(--line)] bg-[var(--panel-bg)] p-5" onClick={(e) => e.stopPropagation()}>
         <h3 className="font-semibold">登记分发</h3>
         <div className="flex flex-wrap gap-2">
           {DISTRIBUTION_PLATFORMS.map((p) => (
@@ -47,7 +47,7 @@ export function DistributionModal({
               onClick={() => setPlatform(p.key)}
               className={cn(
                 'rounded-lg border px-3 py-1.5 text-sm',
-                platform === p.key ? 'border-transparent bg-brand-gradient text-white' : 'hover:bg-accent',
+                platform === p.key ? 'border-[#d6b6a8] bg-[var(--clay-soft)] text-[#8f3f28]' : 'hover:bg-[var(--hover-bg)]',
               )}
             >
               {p.label}
@@ -58,7 +58,7 @@ export function DistributionModal({
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="粘贴发布链接 https://…"
-          className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm"
         />
         {error && <p className="text-xs text-destructive">{error}</p>}
         <div className="flex justify-end gap-2">

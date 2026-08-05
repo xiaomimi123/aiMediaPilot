@@ -51,26 +51,26 @@ export default function PreflightListPage() {
     return () => clearInterval(t);
   }, []);
 
-  if (rows === null) return <p className="text-sm text-muted-foreground">加载中...</p>;
+  if (rows === null) return <p className="text-sm text-[var(--muted)]">加载中...</p>;
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">内容预诊断</h1>
-          <p className="mt-1 text-sm text-muted-foreground">上传视频 → AI 4 维度评估 + L1 预测 + retro 复盘。</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">上传视频 → AI 4 维度评估 + L1 预测 + retro 复盘。</p>
         </div>
         <Link href="/content/preflight/new"><Button variant="brand">+ 新分析</Button></Link>
       </div>
       {rows.length === 0 && (
-        <div className="rounded-lg border bg-muted/30 p-12 text-center">
-          <p className="text-sm text-muted-foreground">还没有分析。点 [+ 新分析] 上传第一个视频。</p>
+        <div className="rounded-lg border border-[var(--line)] bg-[var(--surface-soft)] p-12 text-center">
+          <p className="text-sm text-[var(--muted)]">还没有分析。点 [+ 新分析] 上传第一个视频。</p>
         </div>
       )}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {rows.map((r) => (
           <Link key={r.id} href={`/content/preflight/${r.id}`}>
-            <Card className="cursor-pointer transition-shadow hover:shadow-md">
+            <Card className="cursor-pointer border-[var(--line)] bg-[var(--panel-bg)] transition-shadow hover:shadow-md">
               <CardContent className="space-y-2 pt-6">
                 <div className="flex items-center justify-between">
                   <div className="truncate font-semibold">📹 {r.videoFilename}</div>
@@ -78,7 +78,7 @@ export default function PreflightListPage() {
                     {STATUS_LABEL[r.status] ?? r.status}
                   </Badge>
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-xs text-[var(--muted)]">
                   {formatTimeAgo(r.createdAt)} · {r.videoDurationSec ? `${Math.round(r.videoDurationSec)} 秒` : ''}
                   {r.estCostUSD !== null ? ` · 烧 $${r.estCostUSD.toFixed(3)}` : ''}
                 </div>
@@ -86,12 +86,12 @@ export default function PreflightListPage() {
                   <div className="text-sm">
                     overallScore <span className="font-semibold">{r.overallScore}/100</span>
                     {r.topActionItems.length > 0 && (
-                      <span className="text-muted-foreground"> · Top: {r.topActionItems.slice(0, 2).join('、')}</span>
+                      <span className="text-[var(--muted)]"> · Top: {r.topActionItems.slice(0, 2).join('、')}</span>
                     )}
                   </div>
                 )}
                 {(r.status === 'PREPROCESSING' || r.status === 'ANALYZING') && r.progress?.label && (
-                  <div className="text-sm text-muted-foreground">{r.progress.label}</div>
+                  <div className="text-sm text-[var(--muted)]">{r.progress.label}</div>
                 )}
               </CardContent>
             </Card>

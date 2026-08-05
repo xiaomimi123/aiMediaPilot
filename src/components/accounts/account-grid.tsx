@@ -14,7 +14,7 @@ export function AccountGrid() {
     });
   }, []);
 
-  if (accounts === null) return <p className="text-sm text-muted-foreground">加载中...</p>;
+  if (accounts === null) return <p className="text-sm text-[var(--muted)]">加载中...</p>;
   if (accounts.length === 0) return <EmptyState />;
 
   return (

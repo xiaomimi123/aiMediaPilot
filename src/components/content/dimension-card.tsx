@@ -20,7 +20,7 @@ export function DimensionCard({
   error?: string;
 }) {
   return (
-    <Card className={cn(error && 'border-destructive/40')}>
+    <Card className={cn('border-[var(--line)] bg-[var(--panel-bg)]', error && 'border-destructive/40')}>
       <CardContent className="space-y-2 pt-6">
         <div className="flex items-center justify-between">
           <div className="font-semibold">{emoji} {title}</div>

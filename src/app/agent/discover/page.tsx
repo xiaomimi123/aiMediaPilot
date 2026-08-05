@@ -132,14 +132,14 @@ export default function DiscoverPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">🎯 AI 主题发现</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <h1 className="text-2xl font-semibold text-[var(--ink)]">🎯 AI 主题发现</h1>
+        <p className="mt-1 text-sm text-[var(--muted)]">
           没有选题灵感? 系统基于你的 niche + 已写过的 topic, 一次给你 5-20 个**可立刻上手**的选题候选,
           每条带钩子草稿 + 流量理由 + 难度估计。 一键跳生成脚本.
         </p>
       </div>
 
-      <Card>
+      <Card className="border-[var(--line)] bg-[var(--panel-bg)] shadow-[var(--shadow)]">
         <CardContent className="space-y-4 pt-6">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <div className="space-y-1">
@@ -148,7 +148,7 @@ export default function DiscoverPage() {
                 value={niche}
                 onChange={(e) => setNiche(e.target.value)}
                 disabled={loading}
-                className="w-full rounded-md border border-border bg-background p-2 text-sm"
+                className="w-full rounded-md border border-[var(--line)] bg-[var(--surface)] p-2 text-sm"
               >
                 {KNOWN_NICHES.map((n) => (
                   <option key={n.key} value={n.key}>
@@ -173,7 +173,7 @@ export default function DiscoverPage() {
                 value={count}
                 onChange={(e) => setCount(Number(e.target.value))}
                 disabled={loading}
-                className="w-full rounded-md border border-border bg-background p-2 text-sm"
+                className="w-full rounded-md border border-[var(--line)] bg-[var(--surface)] p-2 text-sm"
               >
                 <option value={5}>5 个</option>
                 <option value={8}>8 个</option>
@@ -196,8 +196,8 @@ export default function DiscoverPage() {
                       className={cn(
                         'flex-1 rounded-md border px-2 py-1.5 text-xs transition-colors',
                         active
-                          ? 'border-transparent bg-brand-gradient text-white'
-                          : 'border-border hover:bg-accent',
+                          ? 'border-[var(--clay)] bg-[var(--clay-soft)] text-[#984629]'
+                          : 'border-[var(--line)] hover:bg-[var(--hover-bg)]',
                       )}
                     >
                       {p.emoji} {p.label}
@@ -214,7 +214,7 @@ export default function DiscoverPage() {
               <span
                 className={cn(
                   'text-[10px] tabular-nums',
-                  extraHint.length > 200 ? 'text-destructive' : 'text-muted-foreground',
+                  extraHint.length > 200 ? 'text-destructive' : 'text-[var(--muted)]',
                 )}
               >
                 {extraHint.length}/200
@@ -242,11 +242,11 @@ export default function DiscoverPage() {
 
       {result && (
         <div className="space-y-4">
-          <Card className="border-purple-200 bg-purple-50/30">
+          <Card className="border-[var(--clay)]/30 bg-[var(--clay-soft)]/30">
             <CardContent className="space-y-2 pt-5">
-              <p className="text-sm font-medium text-purple-900">📋 本批整体方向</p>
-              <p className="text-sm">{result.summary}</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm font-medium text-[#8f3f28]">📋 本批整体方向</p>
+              <p className="text-sm text-[var(--ink)]">{result.summary}</p>
+              <p className="text-xs text-[var(--muted)]">
                 niche: {result.niche} · 生成于{' '}
                 {new Date(result.generatedAt).toLocaleString('zh-CN')}
                 {result.dedupSampleSize > 0 && ` · 已跟你最近 ${result.dedupSampleSize} 条脚本去重`}
@@ -260,10 +260,10 @@ export default function DiscoverPage() {
               const saved = Boolean(savedIndices[i]);
               const saving = Boolean(savingIndices[i]);
               return (
-                <Card key={i} className="transition-shadow hover:shadow-md">
+                <Card key={i} className="border-[var(--line)] bg-[var(--panel-bg)] transition-shadow hover:shadow-md">
                   <CardContent className="space-y-2.5 pt-5">
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className="flex-1 text-sm font-semibold leading-snug">
+                      <h3 className="flex-1 text-sm font-semibold leading-snug text-[var(--ink)]">
                         {i + 1}. {t.title}
                       </h3>
                       <span className={cn('shrink-0 rounded px-2 py-0.5 text-[10px] font-medium', diff.cls)}>
@@ -275,7 +275,7 @@ export default function DiscoverPage() {
                       <span className="rounded bg-blue-100 px-1.5 py-0.5 text-blue-900">
                         🪝 {t.hookType}
                       </span>
-                      <span className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground">
+                      <span className="rounded bg-[var(--surface-soft)] px-1.5 py-0.5 text-[var(--muted)]">
                         👥 {t.targetAudience}
                       </span>
                     </div>
@@ -285,14 +285,14 @@ export default function DiscoverPage() {
                       {t.hookLine}
                     </div>
 
-                    <p className="text-xs text-muted-foreground">{t.rationale}</p>
+                    <p className="text-xs text-[var(--muted)]">{t.rationale}</p>
 
                     <div className="flex items-center gap-2 pt-1">
                       <button
                         type="button"
                         onClick={() => handleSaveToPool(i, t)}
                         disabled={saved || saving}
-                        className="inline-block rounded-md bg-brand-gradient px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-block rounded-md border border-[#d6b6a8] bg-[var(--clay-soft)] px-3 py-1.5 text-xs font-medium text-[#8f3f28] shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {saved ? '已存入 ✓' : saving ? '存入中…' : '存入灵感池'}
                       </button>

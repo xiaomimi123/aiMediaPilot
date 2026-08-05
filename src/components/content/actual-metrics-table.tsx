@@ -24,7 +24,7 @@ function formatBig(v: string | number): string {
 export function ActualMetricsTable({ metric }: { metric: Metric }) {
   return (
     <div className="space-y-2">
-      <div className="text-xs text-muted-foreground">
+      <div className="text-xs text-[var(--muted)]">
         T+{metric.daysAfterPublish.toFixed(1)} 天采集 · {new Date(metric.snapshotAt).toLocaleString()}
       </div>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -43,8 +43,8 @@ export function ActualMetricsTable({ metric }: { metric: Metric }) {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md bg-muted p-3">
-      <div className="text-xs text-muted-foreground">{label}</div>
+    <div className="rounded-md bg-[var(--surface-soft)] p-3">
+      <div className="text-xs text-[var(--muted)]">{label}</div>
       <div className="text-lg font-semibold">{value}</div>
     </div>
   );

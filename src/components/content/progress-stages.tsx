@@ -32,7 +32,7 @@ export function ProgressStages({
               'rounded-full px-3 py-1',
               isFailed ? 'bg-destructive/10 text-destructive' :
               i < idx ? 'bg-primary/20 text-primary' :
-              i === idx ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+              i === idx ? 'bg-primary text-primary-foreground' : 'bg-[var(--surface-soft)] text-[var(--muted)]'
             )}
           >
             {s.label}
@@ -41,7 +41,7 @@ export function ProgressStages({
       </div>
       <Progress value={pct} />
       {progress?.label && !isFailed && (
-        <div className="text-xs text-muted-foreground">{progress.label}</div>
+        <div className="text-xs text-[var(--muted)]">{progress.label}</div>
       )}
       {errorMessage && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{errorMessage}</div>}
     </div>

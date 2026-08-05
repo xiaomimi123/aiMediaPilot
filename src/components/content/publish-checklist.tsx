@@ -139,7 +139,7 @@ export function PublishChecklist({ analysisId, niche, platform = 'douyin', hookS
           <h3 className="font-semibold">
             {ready ? '✅ 可以发了' : '📋 发前 checklist'}
           </h3>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-[var(--muted)]">
             {saving ? '保存中...' : initial?.completedAt ? '上次保存成功' : ''}
           </span>
         </div>
@@ -174,24 +174,24 @@ export function PublishChecklist({ analysisId, niche, platform = 'douyin', hookS
             placeholder="发抖音时实际用的标题"
           />
           {titleFeedbackLoading && (
-            <p className="text-xs text-muted-foreground">🤖 AI 评估中...</p>
+            <p className="text-xs text-[var(--muted)]">🤖 AI 评估中...</p>
           )}
           {titleFeedbackError && (
             <p className="text-xs text-destructive">评估失败: {titleFeedbackError}</p>
           )}
           {titleFeedback && !titleFeedbackLoading && (
-            <div className="mt-2 rounded-md border border-blue-200 bg-blue-50/50 p-3 text-xs space-y-1.5">
+            <div className="mt-2 rounded-md border border-[var(--line)] bg-[var(--surface-soft)] p-3 text-xs space-y-1.5">
               <div className="flex items-center gap-2">
                 <span className={cn('rounded px-2 py-0.5 font-semibold', titleFeedback.lengthVerdict === 'good' ? 'bg-green-100 text-green-900' : 'bg-amber-100 text-amber-900')}>
                   {titleFeedback.lengthVerdict === 'good' ? '✓ 字数合适' : titleFeedback.lengthVerdict === 'short' ? '⚠ 太短' : '⚠ 太长'}
                 </span>
-                <span className="text-muted-foreground">综合 {titleFeedback.overallScore}/100</span>
+                <span className="text-[var(--muted)]">综合 {titleFeedback.overallScore}/100</span>
                 {titleFeedback.hookTypes.length > 0 && (
-                  <span className="text-muted-foreground">钩子: {titleFeedback.hookTypes.join(' · ')}</span>
+                  <span className="text-[var(--muted)]">钩子: {titleFeedback.hookTypes.join(' · ')}</span>
                 )}
               </div>
               {titleFeedback.suggestions.length > 0 && (
-                <ul className="ml-4 list-disc space-y-0.5 text-muted-foreground">
+                <ul className="ml-4 list-disc space-y-0.5 text-[var(--muted)]">
                   {titleFeedback.suggestions.map((s, i) => (
                     <li key={i}>{s}</li>
                   ))}
@@ -228,7 +228,7 @@ export function PublishChecklist({ analysisId, niche, platform = 'douyin', hookS
         <div className="space-y-2">
           <Label>至少采纳 1 条 AI 建议</Label>
           {topActionItems.length === 0 ? (
-            <p className="text-xs text-muted-foreground">(此 analysis 无 topActionItems)</p>
+            <p className="text-xs text-[var(--muted)]">(此 analysis 无 topActionItems)</p>
           ) : (
             <ul className="space-y-1.5">
               {topActionItems.map((item, idx) => (
@@ -240,13 +240,13 @@ export function PublishChecklist({ analysisId, niche, platform = 'douyin', hookS
                       'mt-0.5 h-5 w-5 shrink-0 rounded border-2 flex items-center justify-center transition-colors',
                       state.actionItemsAdopted.includes(idx)
                         ? 'border-green-600 bg-green-600 text-white'
-                        : 'border-border bg-background',
+                        : 'border-[var(--line)] bg-[var(--surface)]',
                     )}
                     aria-label={`采纳建议 ${idx + 1}`}
                   >
                     {state.actionItemsAdopted.includes(idx) && '✓'}
                   </button>
-                  <span className={cn('text-sm', state.actionItemsAdopted.includes(idx) && 'line-through text-muted-foreground')}>
+                  <span className={cn('text-sm', state.actionItemsAdopted.includes(idx) && 'line-through text-[var(--muted)]')}>
                     {item}
                   </span>
                 </li>
@@ -276,17 +276,17 @@ function CheckRow({ checked, label, onToggle }: { checked: boolean; label: strin
     <button
       type="button"
       onClick={onToggle}
-      className="flex w-full items-center gap-3 rounded-md p-1 text-left hover:bg-accent/50"
+      className="flex w-full items-center gap-3 rounded-md p-1 text-left hover:bg-[var(--hover-bg)]"
     >
       <span
         className={cn(
           'h-5 w-5 shrink-0 rounded border-2 flex items-center justify-center transition-colors',
-          checked ? 'border-green-600 bg-green-600 text-white' : 'border-border bg-background',
+          checked ? 'border-green-600 bg-green-600 text-white' : 'border-[var(--line)] bg-[var(--surface)]',
         )}
       >
         {checked && '✓'}
       </span>
-      <span className={cn('text-sm', checked && 'text-muted-foreground line-through')}>{label}</span>
+      <span className={cn('text-sm', checked && 'text-[var(--muted)] line-through')}>{label}</span>
     </button>
   );
 }

@@ -14,12 +14,12 @@ export function ReportView({ analysisId, report, coverCandidateCount }: { analys
   return (
     <div className="space-y-6">
       {/* 综合分 + topActions */}
-      <div className="rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 p-6">
+      <div className="rounded-xl border border-[var(--line)] bg-[var(--panel-bg)] p-6">
         <div className="flex items-center gap-6">
           {report.overallScore !== null && (
             <div className="text-center">
               <div className="text-4xl font-bold">{report.overallScore}</div>
-              <div className="text-xs text-muted-foreground">/100</div>
+              <div className="text-xs text-[var(--muted)]">/100</div>
             </div>
           )}
           <div className="flex-1">
@@ -40,7 +40,7 @@ export function ReportView({ analysisId, report, coverCandidateCount }: { analys
           <p className="text-sm">{report.hook?.summary}</p>
           {(report.hook?.suggestions ?? []).length > 0 && (
             <>
-              <div className="mt-2 text-xs font-semibold text-muted-foreground">建议:</div>
+              <div className="mt-2 text-xs font-semibold text-[var(--muted)]">建议:</div>
               <ul className="list-disc space-y-1 pl-4 text-sm">
                 {(report.hook?.suggestions ?? []).map((s, i) => <li key={i}>{s}</li>)}
               </ul>
@@ -56,8 +56,8 @@ export function ReportView({ analysisId, report, coverCandidateCount }: { analys
           {(report.retention?.riskPoints ?? []).length > 0 && (
             <div className="mt-2 space-y-1 text-sm">
               {(report.retention?.riskPoints ?? []).map((r, i) => (
-                <div key={i} className="rounded-md bg-muted/50 p-2 text-xs">
-                  <span className={r.severity === 'high' ? 'text-destructive' : r.severity === 'medium' ? 'text-amber-600' : 'text-muted-foreground'}>
+                <div key={i} className="rounded-md bg-[var(--surface-soft)] p-2 text-xs">
+                  <span className={r.severity === 'high' ? 'text-destructive' : r.severity === 'medium' ? 'text-amber-600' : 'text-[var(--muted)]'}>
                     [{r.startSec.toFixed(1)}-{r.endSec.toFixed(1)}s · {r.severity}]
                   </span>{' '}
                   {r.reason} → <em>{r.suggestion}</em>
@@ -71,11 +71,11 @@ export function ReportView({ analysisId, report, coverCandidateCount }: { analys
           {report.titleCaption?.mode === 'generate' && (
             <div className="space-y-2 text-sm">
               <div>
-                <div className="text-xs font-semibold text-muted-foreground">AI 生成的标题候选:</div>
+                <div className="text-xs font-semibold text-[var(--muted)]">AI 生成的标题候选:</div>
                 <ul className="list-disc pl-4">{(report.titleCaption.generatedTitles ?? []).map((t: string, i: number) => <li key={i}>{t}</li>)}</ul>
               </div>
               <div>
-                <div className="text-xs font-semibold text-muted-foreground">AI 生成的文案候选:</div>
+                <div className="text-xs font-semibold text-[var(--muted)]">AI 生成的文案候选:</div>
                 <ul className="list-disc pl-4">{(report.titleCaption.generatedCaptions ?? []).map((c: string, i: number) => <li key={i}>{c}</li>)}</ul>
               </div>
             </div>
@@ -84,15 +84,15 @@ export function ReportView({ analysisId, report, coverCandidateCount }: { analys
             <div className="space-y-2 text-sm">
               {report.titleCaption.titleFeedback && (
                 <div>
-                  <div className="text-xs font-semibold text-muted-foreground">标题评价 (★{report.titleCaption.titleFeedback.rating}):</div>
+                  <div className="text-xs font-semibold text-[var(--muted)]">标题评价 (★{report.titleCaption.titleFeedback.rating}):</div>
                   <ul className="list-disc pl-4">{report.titleCaption.titleFeedback.issues.map((s: string, i: number) => <li key={i}>{s}</li>)}</ul>
-                  <div className="mt-1 text-xs font-semibold text-muted-foreground">重写候选:</div>
+                  <div className="mt-1 text-xs font-semibold text-[var(--muted)]">重写候选:</div>
                   <ul className="list-disc pl-4">{report.titleCaption.titleFeedback.rewrites.map((s: string, i: number) => <li key={i}>{s}</li>)}</ul>
                 </div>
               )}
               {report.titleCaption.captionFeedback && (
                 <div>
-                  <div className="text-xs font-semibold text-muted-foreground">文案评价 (★{report.titleCaption.captionFeedback.rating}):</div>
+                  <div className="text-xs font-semibold text-[var(--muted)]">文案评价 (★{report.titleCaption.captionFeedback.rating}):</div>
                   <ul className="list-disc pl-4">{report.titleCaption.captionFeedback.issues.map((s: string, i: number) => <li key={i}>{s}</li>)}</ul>
                 </div>
               )}
@@ -105,7 +105,7 @@ export function ReportView({ analysisId, report, coverCandidateCount }: { analys
             <>
               <div className="text-sm">评分 ★{report.cover.feedback.rating}</div>
               <ul className="list-disc pl-4 text-sm">{report.cover.feedback.issues.map((s: string, i: number) => <li key={i}>{s}</li>)}</ul>
-              <div className="mt-1 text-xs font-semibold text-muted-foreground">建议:</div>
+              <div className="mt-1 text-xs font-semibold text-[var(--muted)]">建议:</div>
               <ul className="list-disc pl-4 text-sm">{report.cover.feedback.suggestions.map((s: string, i: number) => <li key={i}>{s}</li>)}</ul>
             </>
           )}

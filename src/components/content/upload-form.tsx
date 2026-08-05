@@ -87,7 +87,7 @@ export function UploadForm({ needsBaselineOnboarding = false }: { needsBaselineO
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-[var(--muted)]">
         没准备稿子?{' '}
         <Link
           href="/content/script/new"
@@ -97,22 +97,22 @@ export function UploadForm({ needsBaselineOnboarding = false }: { needsBaselineO
         </Link>
       </p>
 
-      <Card>
+      <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
         <CardContent className="space-y-4 pt-6">
           <div
-            className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-muted/30 p-12 text-center cursor-pointer"
+            className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-[var(--line-dark)] bg-[var(--surface-soft)] p-12 text-center cursor-pointer"
             onClick={() => videoInputRef.current?.click()}
           >
             <div className="text-3xl">📹</div>
             {videoFile ? (
               <>
                 <div className="font-medium">{videoFile.name}</div>
-                <div className="text-xs text-muted-foreground">{(videoFile.size / 1024 / 1024).toFixed(1)} MB · 点击重选</div>
+                <div className="text-xs text-[var(--muted)]">{(videoFile.size / 1024 / 1024).toFixed(1)} MB · 点击重选</div>
               </>
             ) : (
               <>
                 <div className="font-medium">拖拽视频或点击选择</div>
-                <div className="text-xs text-muted-foreground">mp4 / mov / webm · ≤ 500MB · ≤ 15 分钟</div>
+                <div className="text-xs text-[var(--muted)]">mp4 / mov / webm · ≤ 500MB · ≤ 15 分钟</div>
               </>
             )}
             <input
@@ -126,7 +126,7 @@ export function UploadForm({ needsBaselineOnboarding = false }: { needsBaselineO
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
         <CardContent className="space-y-4 pt-6">
           <div className="space-y-1">
             <Label>标题草稿 (留空 AI 生成 3 个候选)</Label>
@@ -137,7 +137,7 @@ export function UploadForm({ needsBaselineOnboarding = false }: { needsBaselineO
             <textarea
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
-              className="min-h-20 w-full rounded-md border border-border bg-background p-2 text-sm"
+              className="min-h-20 w-full rounded-md border border-[var(--line)] bg-[var(--surface)] p-2 text-sm"
               placeholder="..."
             />
           </div>
@@ -148,7 +148,7 @@ export function UploadForm({ needsBaselineOnboarding = false }: { needsBaselineO
               accept="image/jpeg,image/png,image/webp"
               onChange={(e) => setCoverFile(e.target.files?.[0] ?? null)}
             />
-            {coverFile && <p className="text-xs text-muted-foreground">已选: {coverFile.name}</p>}
+            {coverFile && <p className="text-xs text-[var(--muted)]">已选: {coverFile.name}</p>}
           </div>
           <div className="space-y-1">
             <Label>内容垂类</Label>
@@ -159,7 +159,7 @@ export function UploadForm({ needsBaselineOnboarding = false }: { needsBaselineO
                 setNiche(v);
                 if (v !== '__custom') localStorage.setItem('mediapilot:lastNiche', v);
               }}
-              className="w-full rounded-md border border-border bg-background p-2 text-sm"
+              className="w-full rounded-md border border-[var(--line)] bg-[var(--surface)] p-2 text-sm"
             >
               {KNOWN_NICHES.map((n) => (
                 <option key={n.key} value={n.key}>{n.label}</option>
@@ -178,13 +178,13 @@ export function UploadForm({ needsBaselineOnboarding = false }: { needsBaselineO
       </Card>
 
       {needsBaselineOnboarding && (
-        <Card>
+        <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
           <CardContent className="space-y-2 pt-6">
             <div className="rounded-md border-2 border-dashed border-amber-300 bg-amber-50 p-3">
               <Label htmlFor="baselinePlays" className="text-sm font-medium">
                 🎯 一次性设置: 你最近 10 条视频平均多少播放?
               </Label>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-xs text-[var(--muted)]">
                 用于校准 L1 预测。 不填的话短期内不出预测, 等 3 条复盘后会从实测数据自动算出。
               </p>
               <Input

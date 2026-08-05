@@ -67,7 +67,7 @@ export function PickPanel({ draftId, platform, titles, hooks, initial }: Props) 
           <h3 className="font-semibold">
             {ready ? '✅ 准备好复制走了' : `📋 发布前选定 (${checked}/${total})`}
           </h3>
-          <span className="text-xs text-muted-foreground">{saving ? '保存中...' : ''}</span>
+          <span className="text-xs text-[var(--muted)]">{saving ? '保存中...' : ''}</span>
         </div>
 
         {/* Title chooser */}
@@ -83,17 +83,17 @@ export function PickPanel({ draftId, platform, titles, hooks, initial }: Props) 
                   'flex w-full items-start gap-2 rounded-md border p-2 text-left text-sm transition-colors',
                   state.titleIdx === i
                     ? 'border-green-500 bg-green-50'
-                    : 'border-border hover:bg-accent',
+                    : 'border-[var(--line)] hover:bg-[var(--hover-bg)]',
                 )}
               >
                 <span
                   className={cn(
                     'mt-0.5 h-4 w-4 shrink-0 rounded-full border-2',
-                    state.titleIdx === i ? 'border-green-600 bg-green-600' : 'border-border',
+                    state.titleIdx === i ? 'border-green-600 bg-green-600' : 'border-[var(--line)]',
                   )}
                 />
                 <span>
-                  <span className="font-mono text-xs text-muted-foreground">候选 {i + 1}</span>{' '}
+                  <span className="font-mono text-xs text-[var(--muted)]">候选 {i + 1}</span>{' '}
                   {t.text}
                 </span>
               </button>
@@ -115,17 +115,17 @@ export function PickPanel({ draftId, platform, titles, hooks, initial }: Props) 
                     'flex w-full items-start gap-2 rounded-md border p-2 text-left text-sm transition-colors',
                     state.hookIdx === i
                       ? 'border-green-500 bg-green-50'
-                      : 'border-border hover:bg-accent',
+                      : 'border-[var(--line)] hover:bg-[var(--hover-bg)]',
                   )}
                 >
                   <span
                     className={cn(
                       'mt-0.5 h-4 w-4 shrink-0 rounded-full border-2',
-                      state.hookIdx === i ? 'border-green-600 bg-green-600' : 'border-border',
+                      state.hookIdx === i ? 'border-green-600 bg-green-600' : 'border-[var(--line)]',
                     )}
                   />
                   <span>
-                    <span className="font-mono text-xs text-muted-foreground">候选 {i + 1}</span>{' '}
+                    <span className="font-mono text-xs text-[var(--muted)]">候选 {i + 1}</span>{' '}
                     &ldquo;{h.text}&rdquo;
                   </span>
                 </button>
@@ -147,19 +147,19 @@ export function PickPanel({ draftId, platform, titles, hooks, initial }: Props) 
                   reviewed: { ...s.reviewed, [key]: !s.reviewed[key] },
                 }))
               }
-              className="flex w-full items-center gap-3 rounded-md p-1.5 text-left hover:bg-accent/50"
+              className="flex w-full items-center gap-3 rounded-md p-1.5 text-left hover:bg-[var(--hover-bg)]"
             >
               <span
                 className={cn(
                   'h-5 w-5 shrink-0 rounded border-2 flex items-center justify-center text-xs transition-colors',
                   state.reviewed[key]
                     ? 'border-green-600 bg-green-600 text-white'
-                    : 'border-border bg-background',
+                    : 'border-[var(--line)] bg-[var(--surface)]',
                 )}
               >
                 {state.reviewed[key] ? '✓' : ''}
               </span>
-              <span className={cn('text-sm', state.reviewed[key] && 'text-muted-foreground line-through')}>
+              <span className={cn('text-sm', state.reviewed[key] && 'text-[var(--muted)] line-through')}>
                 {SECTION_LABELS[key] ?? key} 已准备
               </span>
             </button>

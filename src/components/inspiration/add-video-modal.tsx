@@ -86,14 +86,14 @@ export function AddVideoModal({ onClose, onAdded }: Props) {
         if (e.target === e.currentTarget && !saving) onClose();
       }}
     >
-      <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto border-[var(--line)] bg-[var(--panel-bg)]">
         <CardContent className="space-y-4 pt-6">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold">添加灵感视频</h3>
+            <h3 className="font-semibold text-[var(--ink)]">添加灵感视频</h3>
             <button
               type="button"
               onClick={onClose}
-              className="text-muted-foreground hover:text-foreground"
+              className="text-[var(--muted)] hover:text-[var(--ink)]"
               aria-label="关闭 (Esc)"
             >
               <X className="h-4 w-4" />
@@ -110,7 +110,7 @@ export function AddVideoModal({ onClose, onAdded }: Props) {
               disabled={saving}
               autoFocus
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-[var(--muted)]">
               {detected.platform === 'douyin' && '🎬 抖音 — 系统会自动抓数据'}
               {detected.platform === 'xiaohongshu' && '📕 小红书 — 无 crawler, 请手动填标题'}
               {detected.platform === 'gongzhonghao' && '📰 公众号 — 无 crawler, 请手动填标题'}

@@ -50,10 +50,10 @@ export function RetroSection({ analysis, onChanged }: { analysis: AnalysisV2; on
 
       {/* 状态: SCHEDULED */}
       {analysis.retroStatus === 'SCHEDULED' && (
-        <div className="space-y-3 rounded-lg border bg-card p-4">
+        <div className="space-y-3 rounded-lg border border-[var(--line)] bg-[var(--panel-bg)] p-4">
           <div className="text-sm">✓ 已关联: <a href={analysis.douyinUrl!} target="_blank" rel="noreferrer" className="text-primary underline">{analysis.douyinUrl}</a></div>
           {scheduledAt && (
-            <div className="text-sm text-muted-foreground">
+            <div className="text-sm text-[var(--muted)]">
               ⏰ 计划于 {scheduledAt.toLocaleString()} 自动拉取
             </div>
           )}
@@ -66,14 +66,14 @@ export function RetroSection({ analysis, onChanged }: { analysis: AnalysisV2; on
 
       {/* 状态: RUNNING */}
       {analysis.retroStatus === 'RUNNING' && (
-        <div className="rounded-lg border bg-card p-4">
+        <div className="rounded-lg border border-[var(--line)] bg-[var(--panel-bg)] p-4">
           <div className="text-sm">🔄 正在拉取真实数据... (创作者中心 → 视频详情)</div>
         </div>
       )}
 
       {/* 状态: FAILED */}
       {analysis.retroStatus === 'FAILED' && (
-        <div className="space-y-3 rounded-lg border border-destructive/40 bg-card p-4">
+        <div className="space-y-3 rounded-lg border border-destructive/40 bg-[var(--panel-bg)] p-4">
           <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
             ✗ 拉取失败: {analysis.retroErrorMessage ?? '未知错误'}
           </div>

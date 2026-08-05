@@ -23,7 +23,7 @@ const ACCURACY_COLOR: Record<Accuracy, string> = {
   'on-target': 'text-green-600',
   'over-estimated': 'text-amber-600',
   'under-estimated': 'text-amber-600',
-  'unknown': 'text-muted-foreground',
+  'unknown': 'text-[var(--muted)]',
 };
 
 export function RetroGapView({ report }: { report: RetroReport }) {
@@ -48,11 +48,11 @@ export function RetroGapView({ report }: { report: RetroReport }) {
           <p className="mt-1 text-sm">{report.coverGap.takeaway}</p>
         </DimensionCard>
       </div>
-      <div className="rounded-lg bg-muted p-3 text-sm">
+      <div className="rounded-lg bg-[var(--surface-soft)] p-3 text-sm">
         <div className="font-semibold">📌 综合</div>
         <p className="mt-1">{report.overallTakeaway}</p>
         {report.predictedOverallScore !== null && report.inferredActualScore !== null && (
-          <p className="mt-1 text-muted-foreground">
+          <p className="mt-1 text-[var(--muted)]">
             预判综合 {report.predictedOverallScore}/100,实测推算 {report.inferredActualScore}/100
           </p>
         )}

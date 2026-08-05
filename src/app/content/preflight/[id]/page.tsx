@@ -59,7 +59,7 @@ export default function PreflightDetailPage() {
     return () => es.close();
   }, [params?.id]);
 
-  if (!data) return <p className="text-sm text-muted-foreground">加载中...</p>;
+  if (!data) return <p className="text-sm text-[var(--muted)]">加载中...</p>;
 
   const handleCancel = async () => {
     await fetch(`/api/v1/content/analyses/${data.id}/cancel`, { method: 'POST' });
@@ -80,13 +80,13 @@ export default function PreflightDetailPage() {
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">📹 {data.videoFilename}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-sm text-[var(--muted)]">
           时长 {Math.round(data.videoDurationSec)} 秒
           {cost !== undefined ? ` · 烧 $${cost.toFixed(3)}` : ''}
           {data.retryCount > 0 ? ` · 已重试 ${data.retryCount} 次` : ''}
         </p>
         {data.fromScript && (
-          <p className="mt-2 text-xs text-muted-foreground">
+          <p className="mt-2 text-xs text-[var(--muted)]">
             📜 来自脚本:{' '}
             <a href={`/content/script/${data.fromScript.id}`} className="hover:text-primary underline-offset-2 hover:underline">
               {data.fromScript.topic}

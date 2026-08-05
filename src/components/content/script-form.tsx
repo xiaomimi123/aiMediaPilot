@@ -134,10 +134,10 @@ export function ScriptForm() {
   return (
     <div className="space-y-4">
       {inspirationStyle && (
-        <Card className="border-purple-200 bg-purple-50/40">
+        <Card className="border-[var(--clay)]/30 bg-[var(--clay-soft)]/40">
           <CardContent className="space-y-2 pt-5">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-purple-900">🪞 借鉴自这次灵感总结</p>
+              <p className="text-sm font-medium text-[#8f3f28]">🪞 借鉴自这次灵感总结</p>
               <button
                 type="button"
                 onClick={() => {
@@ -151,7 +151,7 @@ export function ScriptForm() {
                     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
                   }
                 }}
-                className="text-xs text-purple-700 hover:underline"
+                className="text-xs text-[#8f3f28] hover:underline"
               >
                 取消借鉴
               </button>
@@ -159,9 +159,9 @@ export function ScriptForm() {
             <div className="space-y-1 text-xs">
               {inspirationStyle.hookTypes.length > 0 && (
                 <p>
-                  <span className="text-muted-foreground">钩子: </span>
+                  <span className="text-[var(--muted)]">钩子: </span>
                   {inspirationStyle.hookTypes.slice(0, 3).map((h, i) => (
-                    <span key={i} className="mr-1 rounded bg-white px-1.5 py-0.5 text-purple-900">
+                    <span key={i} className="mr-1 rounded bg-white px-1.5 py-0.5 text-[#984629]">
                       {h}
                     </span>
                   ))}
@@ -169,9 +169,9 @@ export function ScriptForm() {
               )}
               {inspirationStyle.titlePatterns.length > 0 && (
                 <p>
-                  <span className="text-muted-foreground">标题模式: </span>
+                  <span className="text-[var(--muted)]">标题模式: </span>
                   {inspirationStyle.titlePatterns.slice(0, 3).map((t, i) => (
-                    <span key={i} className="mr-1 rounded bg-white px-1.5 py-0.5 text-purple-900">
+                    <span key={i} className="mr-1 rounded bg-white px-1.5 py-0.5 text-[#984629]">
                       {t}
                     </span>
                   ))}
@@ -179,8 +179,8 @@ export function ScriptForm() {
               )}
               {inspirationStyle.durationInsight && (
                 <p>
-                  <span className="text-muted-foreground">时长: </span>
-                  <span className="rounded bg-white px-1.5 py-0.5 text-purple-900">
+                  <span className="text-[var(--muted)]">时长: </span>
+                  <span className="rounded bg-white px-1.5 py-0.5 text-[#984629]">
                     {inspirationStyle.durationInsight}
                   </span>
                 </p>
@@ -190,7 +190,7 @@ export function ScriptForm() {
         </Card>
       )}
 
-      <Card>
+      <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
         <CardContent className="space-y-4 pt-6">
           <div className="space-y-2">
             <Label>选择平台</Label>
@@ -206,14 +206,14 @@ export function ScriptForm() {
                     className={cn(
                       'flex items-start gap-3 rounded-lg border-2 p-3 text-left transition-colors',
                       active
-                        ? 'border-transparent bg-brand-gradient text-white shadow-sm'
-                        : 'border-border bg-card hover:bg-accent',
+                        ? 'border-[#d6b6a8] bg-[var(--clay-soft)] text-[#8f3f28] shadow-sm'
+                        : 'border-[var(--line)] bg-[var(--panel-bg)] hover:bg-[var(--hover-bg)]',
                     )}
                   >
                     <span className="text-2xl">{p.emoji}</span>
                     <span className="flex-1">
                       <span className="block font-semibold">{p.label}</span>
-                      <span className={cn('block text-xs', active ? 'text-white/85' : 'text-muted-foreground')}>{p.sub}</span>
+                      <span className={cn('block text-xs', active ? 'text-[#8f3f28]/80' : 'text-[var(--muted)]')}>{p.sub}</span>
                     </span>
                   </button>
                 );
@@ -236,7 +236,7 @@ export function ScriptForm() {
             <select
               value={niche}
               onChange={(e) => setNiche(e.target.value)}
-              className="w-full rounded-md border border-border bg-background p-2 text-sm"
+              className="w-full rounded-md border border-[var(--line)] bg-[var(--surface)] p-2 text-sm"
               disabled={loading}
             >
               {KNOWN_NICHES.map((n) => (

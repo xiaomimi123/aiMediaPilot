@@ -49,7 +49,7 @@ function renderMatchCell(
     );
   }
   if (unmatched.length === 0) {
-    return <span className="text-xs text-muted-foreground">无未匹配分析</span>;
+    return <span className="text-xs text-[var(--muted)]">无未匹配分析</span>;
   }
   return (
     <div className="space-y-1">
@@ -61,7 +61,7 @@ function renderMatchCell(
             [awemeId]: { ...state, selectedAnalysisId: e.target.value },
           }))
         }
-        className="w-full rounded border border-border bg-background p-1 text-xs"
+        className="w-full rounded border border-[var(--line)] bg-[var(--surface)] p-1 text-xs"
         disabled={state.status === 'matching'}
       >
         {unmatched.map((a) => (
@@ -157,10 +157,10 @@ export function RetroSyncTable({ unmatched }: { unmatched: UnmatchedAnalysis[] }
 
   if (unmatched.length === 0 && !items) {
     return (
-      <Card>
+      <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
         <CardContent className="space-y-2 pt-6">
           <p className="text-sm">无未匹配的分析。</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-[var(--muted)]">
             所有 COMPLETED 分析都已匹配抖音视频, 无需同步。 上传新分析后再来。
           </p>
         </CardContent>
@@ -175,7 +175,7 @@ export function RetroSyncTable({ unmatched }: { unmatched: UnmatchedAnalysis[] }
           {loading ? '加载中...' : '🔄 刷新抖音列表'}
         </Button>
         {lastFetchAt && (
-          <div className="text-xs text-muted-foreground">
+          <div className="text-xs text-[var(--muted)]">
             最后刷新: {lastFetchAt} · {items?.length ?? 0} 条
           </div>
         )}
@@ -188,19 +188,19 @@ export function RetroSyncTable({ unmatched }: { unmatched: UnmatchedAnalysis[] }
       )}
 
       {items === null && !bannerError && (
-        <p className="text-sm text-muted-foreground">点 &ldquo;刷新抖音列表&rdquo; 拉取近期 20 条视频。</p>
+        <p className="text-sm text-[var(--muted)]">点 &ldquo;刷新抖音列表&rdquo; 拉取近期 20 条视频。</p>
       )}
 
-      {items?.length === 0 && <p className="text-sm text-muted-foreground">无最近视频。</p>}
+      {items?.length === 0 && <p className="text-sm text-[var(--muted)]">无最近视频。</p>}
 
       {items && items.length > 0 && (
         <>
           {/* Desktop: 5-col table */}
-          <Card className="hidden md:block">
+          <Card className="hidden md:block border-[var(--line)] bg-[var(--panel-bg)]">
             <CardContent className="pt-6">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b text-xs text-muted-foreground">
+                  <tr className="border-b text-xs text-[var(--muted)]">
                     <th className="py-2 text-left">aweme</th>
                     <th className="py-2 text-left">发布</th>
                     <th className="py-2 text-right">播放</th>
@@ -235,16 +235,16 @@ export function RetroSyncTable({ unmatched }: { unmatched: UnmatchedAnalysis[] }
               const state =
                 rowState[item.awemeId] ?? { selectedAnalysisId: unmatched[0]?.id ?? '', status: 'idle' };
               return (
-                <Card key={item.awemeId}>
+                <Card key={item.awemeId} className="border-[var(--line)] bg-[var(--panel-bg)]">
                   <CardContent className="space-y-3 pt-4 text-sm">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <p className="font-medium truncate">{item.desc || '—'}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
+                        <p className="mt-1 text-xs text-[var(--muted)]">
                           <span className="font-mono">{item.awemeId.slice(0, 10)}...</span> · {item.postedAt}
                         </p>
                       </div>
-                      <span className="rounded bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums whitespace-nowrap">
+                      <span className="rounded bg-[var(--surface-soft)] px-2 py-0.5 text-xs font-semibold tabular-nums whitespace-nowrap">
                         {item.plays}
                       </span>
                     </div>

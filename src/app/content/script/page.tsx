@@ -27,7 +27,7 @@ export default async function ScriptListPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">我的脚本</h1>
-          <p className="mt-1 text-sm text-muted-foreground">保存的 AI 生成脚本,可直接开新分析。</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">保存的 AI 生成脚本,可直接开新分析。</p>
         </div>
         <Link href="/content/script/new">
           <Button variant="brand">✏️ 写新脚本 →</Button>
@@ -35,9 +35,9 @@ export default async function ScriptListPage() {
       </div>
 
       {items.length === 0 ? (
-        <Card>
+        <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
           <CardContent className="space-y-2 pt-6 text-center">
-            <p className="text-sm text-muted-foreground">你还没保存过脚本。</p>
+            <p className="text-sm text-[var(--muted)]">你还没保存过脚本。</p>
             <Link href="/content/script/new">
               <Button size="sm" variant="outline">
                 写第一个 →
@@ -46,11 +46,11 @@ export default async function ScriptListPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
           <CardContent className="pt-6">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-xs text-muted-foreground">
+                <tr className="border-b text-xs text-[var(--muted)]">
                   <th className="py-2 text-left">平台</th>
                   <th className="py-2 text-left">主题</th>
                   <th className="py-2 text-left">垂类</th>
@@ -60,7 +60,7 @@ export default async function ScriptListPage() {
               </thead>
               <tbody>
                 {items.map((it) => {
-                  const badge = PLATFORM_BADGE[it.platform] ?? { label: it.platform, cls: 'bg-muted' };
+                  const badge = PLATFORM_BADGE[it.platform] ?? { label: it.platform, cls: 'bg-[var(--surface-soft)]' };
                   return (
                     <tr key={it.id} className="border-b">
                       <td className="py-2">
@@ -73,7 +73,7 @@ export default async function ScriptListPage() {
                           {it.topic}
                         </Link>
                       </td>
-                      <td className="py-2 text-xs text-muted-foreground">
+                      <td className="py-2 text-xs text-[var(--muted)]">
                         {NICHE_LABEL_MAP.get(it.niche) ?? it.niche}
                       </td>
                       <td className="py-2 text-xs">
@@ -85,10 +85,10 @@ export default async function ScriptListPage() {
                             ✓ 已用
                           </Link>
                         ) : (
-                          <span className="text-muted-foreground">草稿</span>
+                          <span className="text-[var(--muted)]">草稿</span>
                         )}
                       </td>
-                      <td className="py-2 text-right text-xs text-muted-foreground tabular-nums">
+                      <td className="py-2 text-right text-xs text-[var(--muted)] tabular-nums">
                         {new Date(it.createdAt).toLocaleString()}
                       </td>
                     </tr>

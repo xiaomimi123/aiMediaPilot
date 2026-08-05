@@ -10,14 +10,14 @@ interface Props {
 
 export function InsightPanel({ data, insightId, onClose }: Props) {
   return (
-    <Card className="border-2 border-purple-300 bg-purple-50/30">
+    <Card className="border-2 border-[var(--clay)]/30 bg-[var(--clay-soft)]/30">
       <CardContent className="space-y-4 pt-6">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold">🧠 AI 总结的共性 + 推荐 topic</h3>
+          <h3 className="font-semibold text-[var(--ink)]">🧠 AI 总结的共性 + 推荐 topic</h3>
           <button
             type="button"
             onClick={onClose}
-            className="text-muted-foreground hover:text-foreground"
+            className="text-[var(--muted)] hover:text-[var(--ink)]"
             aria-label="折叠总结"
           >
             <X className="h-4 w-4" />
@@ -35,7 +35,7 @@ export function InsightPanel({ data, insightId, onClose }: Props) {
         <Section title="🪝 钩子类型分布">
           <div className="flex flex-wrap gap-1.5">
             {data.hookTypes.map((h, i) => (
-              <span key={i} className="rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-900">
+              <span key={i} className="rounded bg-[var(--clay-soft)] px-2 py-0.5 text-xs text-[#984629]">
                 {h}
               </span>
             ))}
@@ -65,11 +65,11 @@ export function InsightPanel({ data, insightId, onClose }: Props) {
                     <p className="font-medium">
                       {i + 1}. {t.title}
                     </p>
-                    <p className="mt-1 text-xs text-muted-foreground">{t.rationale}</p>
+                    <p className="mt-1 text-xs text-[var(--muted)]">{t.rationale}</p>
                   </div>
                   <a
                     href={`/content/script/new?topic=${encodeURIComponent(t.title)}&platform=douyin${insightId ? `&inspirationId=${insightId}` : ''}`}
-                    className="shrink-0 rounded-md bg-brand-gradient px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-opacity hover:opacity-90"
+                    className="shrink-0 rounded-md border border-[#d6b6a8] bg-[var(--clay-soft)] px-3 py-1.5 text-xs font-medium text-[#8f3f28] shadow-sm transition-opacity hover:opacity-90"
                   >
                     用这个生成 →
                   </a>
@@ -90,7 +90,7 @@ export function InsightPanel({ data, insightId, onClose }: Props) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <h4 className="text-sm font-semibold text-muted-foreground">{title}</h4>
+      <h4 className="text-sm font-semibold text-[var(--muted)]">{title}</h4>
       {children}
     </div>
   );

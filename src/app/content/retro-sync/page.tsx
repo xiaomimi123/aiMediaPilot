@@ -25,11 +25,11 @@ export default async function RetroSyncPage() {
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">抖音同步</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-sm text-[var(--muted)]">
           把发布的抖音视频对应到 MediaPilot 分析, 立即跑复盘。
         </p>
         {freshUser?.lastAutoSyncAt && (
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-xs text-[var(--muted)]">
             最后自动同步: {new Date(freshUser.lastAutoSyncAt).toLocaleString()}
           </p>
         )}

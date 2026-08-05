@@ -124,14 +124,14 @@ export default async function PatternsPage() {
         <div>
           <h1 className="text-2xl font-semibold">📈 我的内容规律</h1>
         </div>
-        <Card>
+        <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
           <CardContent className="space-y-3 pt-6 text-center">
             <p className="text-base">需要 ≥ 3 条脚本才能看出规律</p>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-[var(--muted)]">
               你当前已生成 {stats.total} 条脚本。 多用 [智能体] 写几条,这里会自动聚合你的标题字数 /
               偏好钩子 / niche 分布等规律,并跟灵感库对照。
             </p>
-            <Link href="/content/script/new" className="text-sm text-blue-600 hover:underline">
+            <Link href="/content/script/new" className="text-sm text-[var(--clay)] hover:underline">
               去写脚本 →
             </Link>
           </CardContent>
@@ -144,7 +144,7 @@ export default async function PatternsPage() {
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">📈 我的内容规律</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-sm text-[var(--muted)]">
           基于你最近 {stats.total} 条脚本的聚合规律。 看出风格趋势,跟灵感库对照差距。
         </p>
       </div>
@@ -159,7 +159,7 @@ export default async function PatternsPage() {
 
       {/* 平台 + niche */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Card>
+        <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
           <CardContent className="space-y-2 pt-6">
             <h3 className="text-sm font-semibold">📊 平台分布</h3>
             {Object.entries(stats.byPlatform).map(([p, n]) => {
@@ -167,13 +167,13 @@ export default async function PatternsPage() {
               return (
                 <div key={p} className="flex items-center gap-2 text-sm">
                   <span className="w-20 shrink-0">{PLATFORM_LABEL[p] ?? p}</span>
-                  <div className="flex-1 rounded-full bg-muted">
+                  <div className="flex-1 rounded-full bg-[var(--surface-soft)]">
                     <div
-                      className="h-2 rounded-full bg-brand-gradient"
+                      className="h-2 rounded-full bg-[var(--clay)]"
                       style={{ width: `${pct}%` }}
                     />
                   </div>
-                  <span className="w-16 text-right text-xs tabular-nums text-muted-foreground">
+                  <span className="w-16 text-right text-xs tabular-nums text-[var(--muted)]">
                     {n} · {pct}%
                   </span>
                 </div>
@@ -182,16 +182,16 @@ export default async function PatternsPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
           <CardContent className="space-y-2 pt-6">
             <h3 className="text-sm font-semibold">🏷️ Niche 分布 (top 5)</h3>
             {stats.byNiche.length === 0 ? (
-              <p className="text-xs text-muted-foreground">—</p>
+              <p className="text-xs text-[var(--muted)]">—</p>
             ) : (
               stats.byNiche.map(({ niche, count }) => (
                 <div key={niche} className="flex items-center justify-between text-sm">
                   <span className="truncate">{niche}</span>
-                  <span className="ml-2 shrink-0 text-xs text-muted-foreground">× {count}</span>
+                  <span className="ml-2 shrink-0 text-xs text-[var(--muted)]">× {count}</span>
                 </div>
               ))
             )}
@@ -201,11 +201,11 @@ export default async function PatternsPage() {
 
       {/* 钩子 + 标题长度 */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Card>
+        <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
           <CardContent className="space-y-2 pt-6">
             <h3 className="text-sm font-semibold">🎣 你常用的钩子类型 (top 5)</h3>
             {stats.hookTypes.length === 0 ? (
-              <p className="text-xs text-muted-foreground">脚本中暂无 hookType 字段</p>
+              <p className="text-xs text-[var(--muted)]">脚本中暂无 hookType 字段</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
                 {stats.hookTypes.map(({ type, count }) => (
@@ -221,17 +221,17 @@ export default async function PatternsPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
           <CardContent className="space-y-2 pt-6">
             <h3 className="text-sm font-semibold">✍️ 标题字数</h3>
             {stats.titleLenAvg === null ? (
-              <p className="text-xs text-muted-foreground">脚本输出中暂无 titles 字段</p>
+              <p className="text-xs text-[var(--muted)]">脚本输出中暂无 titles 字段</p>
             ) : (
               <>
                 <p className="text-2xl font-semibold tabular-nums">
-                  {stats.titleLenAvg.toFixed(1)} <span className="text-base text-muted-foreground">字 / 标题</span>
+                  {stats.titleLenAvg.toFixed(1)} <span className="text-base text-[var(--muted)]">字 / 标题</span>
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-[var(--muted)]">
                   汇总所有脚本的所有候选标题
                 </p>
               </>
@@ -242,18 +242,18 @@ export default async function PatternsPage() {
 
       {/* 跟灵感库对照 */}
       {latest && (
-        <Card className="border-purple-200 bg-purple-50/30">
+        <Card className="border-[var(--clay)]/30 bg-[var(--clay-soft)]/30">
           <CardContent className="space-y-3 pt-6">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">🪞 跟灵感库对照</h3>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-[var(--muted)]">
                 总结于 {new Date(latest.generatedAt).toLocaleDateString('zh-CN')}
               </span>
             </div>
 
             {latest.hookTypes.length > 0 && (
               <div>
-                <p className="text-xs text-muted-foreground">灵感库主流钩子</p>
+                <p className="text-xs text-[var(--muted)]">灵感库主流钩子</p>
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   {latest.hookTypes.slice(0, 5).map((h, i) => {
                     const overlap = stats.hookTypes.some((own) => isHookTypeOverlap(own.type, h));
@@ -261,7 +261,7 @@ export default async function PatternsPage() {
                       <span
                         key={i}
                         className={`rounded px-2 py-0.5 text-xs ${
-                          overlap ? 'bg-green-100 text-green-900' : 'bg-purple-100 text-purple-900'
+                          overlap ? 'bg-green-100 text-green-900' : 'bg-[var(--clay-soft)] text-[#984629]'
                         }`}
                         title={overlap ? '你也常用' : '你还没用过 — 可尝试'}
                       >
@@ -275,12 +275,12 @@ export default async function PatternsPage() {
 
             {latest.titlePatterns.length > 0 && (
               <div>
-                <p className="text-xs text-muted-foreground">灵感库标题模式</p>
+                <p className="text-xs text-[var(--muted)]">灵感库标题模式</p>
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   {latest.titlePatterns.slice(0, 5).map((t, i) => (
                     <span
                       key={i}
-                      className="rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-900"
+                      className="rounded bg-[var(--clay-soft)] px-2 py-0.5 text-xs text-[#984629]"
                     >
                       {t}
                     </span>
@@ -291,14 +291,14 @@ export default async function PatternsPage() {
 
             {latest.durationInsight && (
               <p className="text-xs">
-                <span className="text-muted-foreground">灵感库时长规律: </span>
+                <span className="text-[var(--muted)]">灵感库时长规律: </span>
                 {latest.durationInsight}
               </p>
             )}
 
             <Link
               href="/agent/inspiration"
-              className="inline-block text-xs text-blue-600 hover:underline"
+              className="inline-block text-xs text-[var(--clay)] hover:underline"
             >
               查看完整灵感总结 →
             </Link>
@@ -311,12 +311,12 @@ export default async function PatternsPage() {
 
 function StatCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <Card>
+    <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
       <CardContent className="pt-5">
-        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="text-xs text-[var(--muted)]">{label}</p>
         <p className="mt-1 text-2xl font-semibold tabular-nums">
           {value}
-          {hint && <span className="ml-1 text-sm font-normal text-muted-foreground">{hint}</span>}
+          {hint && <span className="ml-1 text-sm font-normal text-[var(--muted)]">{hint}</span>}
         </p>
       </CardContent>
     </Card>
