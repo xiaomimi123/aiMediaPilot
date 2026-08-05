@@ -110,9 +110,9 @@ async function aggregate(): Promise<{ stats: ScriptStats; latest: LatestInsight 
 }
 
 const PLATFORM_LABEL: Record<string, string> = {
-  douyin: '🎬 抖音',
-  xiaohongshu: '📕 小红书',
-  gongzhonghao: '📰 公众号',
+  douyin: '抖音',
+  xiaohongshu: '小红书',
+  gongzhonghao: '公众号',
 };
 
 export default async function PatternsPage() {
@@ -122,7 +122,7 @@ export default async function PatternsPage() {
     return (
       <div className="mx-auto max-w-3xl space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold">📈 我的内容规律</h1>
+          <h1 className="text-2xl font-semibold">我的内容规律</h1>
         </div>
         <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
           <CardContent className="space-y-3 pt-6 text-center">
@@ -143,7 +143,7 @@ export default async function PatternsPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">📈 我的内容规律</h1>
+        <h1 className="text-2xl font-semibold">我的内容规律</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
           基于你最近 {stats.total} 条脚本的聚合规律。 看出风格趋势,跟灵感库对照差距。
         </p>
@@ -161,7 +161,7 @@ export default async function PatternsPage() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
           <CardContent className="space-y-2 pt-6">
-            <h3 className="text-sm font-semibold">📊 平台分布</h3>
+            <h3 className="text-sm font-semibold">平台分布</h3>
             {Object.entries(stats.byPlatform).map(([p, n]) => {
               const pct = Math.round((n / stats.total) * 100);
               return (
@@ -184,7 +184,7 @@ export default async function PatternsPage() {
 
         <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
           <CardContent className="space-y-2 pt-6">
-            <h3 className="text-sm font-semibold">🏷️ Niche 分布 (top 5)</h3>
+            <h3 className="text-sm font-semibold">Niche 分布 (top 5)</h3>
             {stats.byNiche.length === 0 ? (
               <p className="text-xs text-[var(--muted)]">—</p>
             ) : (
@@ -203,7 +203,7 @@ export default async function PatternsPage() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
           <CardContent className="space-y-2 pt-6">
-            <h3 className="text-sm font-semibold">🎣 你常用的钩子类型 (top 5)</h3>
+            <h3 className="text-sm font-semibold">你常用的钩子类型 (top 5)</h3>
             {stats.hookTypes.length === 0 ? (
               <p className="text-xs text-[var(--muted)]">脚本中暂无 hookType 字段</p>
             ) : (
@@ -223,7 +223,7 @@ export default async function PatternsPage() {
 
         <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
           <CardContent className="space-y-2 pt-6">
-            <h3 className="text-sm font-semibold">✍️ 标题字数</h3>
+            <h3 className="text-sm font-semibold">标题字数</h3>
             {stats.titleLenAvg === null ? (
               <p className="text-xs text-[var(--muted)]">脚本输出中暂无 titles 字段</p>
             ) : (
@@ -245,7 +245,7 @@ export default async function PatternsPage() {
         <Card className="border-[var(--clay)]/30 bg-[var(--clay-soft)]/30">
           <CardContent className="space-y-3 pt-6">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">🪞 跟灵感库对照</h3>
+              <h3 className="text-sm font-semibold">跟灵感库对照</h3>
               <span className="text-xs text-[var(--muted)]">
                 总结于 {new Date(latest.generatedAt).toLocaleDateString('zh-CN')}
               </span>

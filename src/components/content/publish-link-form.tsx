@@ -48,7 +48,7 @@ export function PublishLinkForm({
 
   return (
     <div className="space-y-3 rounded-lg border border-[var(--line)] bg-[var(--panel-bg)] p-4">
-      <div className="text-sm font-semibold">📤 已发布到抖音?</div>
+      <div className="text-sm font-semibold">已发布到抖音?</div>
       <div className="space-y-1">
         <Label>抖音视频链接</Label>
         <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://www.douyin.com/video/..." />

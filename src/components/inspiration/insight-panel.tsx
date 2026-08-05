@@ -13,7 +13,7 @@ export function InsightPanel({ data, insightId, onClose }: Props) {
     <Card className="border-2 border-[var(--clay)]/30 bg-[var(--clay-soft)]/30">
       <CardContent className="space-y-4 pt-6">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-[var(--ink)]">🧠 AI 总结的共性 + 推荐 topic</h3>
+          <h3 className="font-semibold text-[var(--ink)]">AI 总结的共性 + 推荐 topic</h3>
           <button
             type="button"
             onClick={onClose}
@@ -24,7 +24,7 @@ export function InsightPanel({ data, insightId, onClose }: Props) {
           </button>
         </div>
 
-        <Section title="📝 标题模式">
+        <Section title="标题模式">
           <ul className="ml-4 list-disc space-y-1 text-sm">
             {data.titlePatterns.map((p, i) => (
               <li key={i}>{p}</li>
@@ -32,7 +32,7 @@ export function InsightPanel({ data, insightId, onClose }: Props) {
           </ul>
         </Section>
 
-        <Section title="🪝 钩子类型分布">
+        <Section title="钩子类型分布">
           <div className="flex flex-wrap gap-1.5">
             {data.hookTypes.map((h, i) => (
               <span key={i} className="rounded bg-[var(--clay-soft)] px-2 py-0.5 text-xs text-[#984629]">
@@ -46,7 +46,7 @@ export function InsightPanel({ data, insightId, onClose }: Props) {
           <p className="text-sm">{data.durationInsight}</p>
         </Section>
 
-        <Section title="📂 主题聚类">
+        <Section title="主题聚类">
           <div className="flex flex-wrap gap-1.5">
             {data.topicClusters.map((t, i) => (
               <span key={i} className="rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-900">
@@ -56,7 +56,7 @@ export function InsightPanel({ data, insightId, onClose }: Props) {
           </div>
         </Section>
 
-        <Section title="🚀 推荐你下一步可做的 topic">
+        <Section title="推荐你下一步可做的 topic">
           <ol className="space-y-3 text-sm">
             {data.recommendedTopics.map((t, i) => (
               <li key={i} className="border-b pb-2">
@@ -79,7 +79,7 @@ export function InsightPanel({ data, insightId, onClose }: Props) {
           </ol>
         </Section>
 
-        <Section title="📋 总结">
+        <Section title="总结">
           <p className="whitespace-pre-wrap text-sm">{data.summary}</p>
         </Section>
       </CardContent>

@@ -111,9 +111,9 @@ export function AddVideoModal({ onClose, onAdded }: Props) {
               autoFocus
             />
             <p className="text-xs text-[var(--muted)]">
-              {detected.platform === 'douyin' && '🎬 抖音 — 系统会自动抓数据'}
-              {detected.platform === 'xiaohongshu' && '📕 小红书 — 无 crawler, 请手动填标题'}
-              {detected.platform === 'gongzhonghao' && '📰 公众号 — 无 crawler, 请手动填标题'}
+              {detected.platform === 'douyin' && '抖音 — 系统会自动抓数据'}
+              {detected.platform === 'xiaohongshu' && '小红书 — 无 crawler, 请手动填标题'}
+              {detected.platform === 'gongzhonghao' && '公众号 — 无 crawler, 请手动填标题'}
               {detected.platform === null && '支持抖音 / 小红书 / 公众号 URL 或分享文本'}
             </p>
           </div>
@@ -133,8 +133,8 @@ export function AddVideoModal({ onClose, onAdded }: Props) {
             <div className="space-y-3 rounded-md border border-amber-300 bg-amber-50 p-3">
               <p className="text-xs text-amber-900">
                 {forceManual
-                  ? `${detected.platform === 'xiaohongshu' ? '📕 小红书' : '📰 公众号'} 无 crawler, 请手动填:`
-                  : '⚠️ 自动抓取没拿到数据, 请手动填:'}
+                  ? `${detected.platform === 'xiaohongshu' ? '小红书' : '公众号'} 无 crawler, 请手动填:`
+                  : '⚠ 自动抓取没拿到数据, 请手动填:'}
               </p>
               <div className="space-y-1">
                 <Label htmlFor="m-title">标题 (必填)</Label>

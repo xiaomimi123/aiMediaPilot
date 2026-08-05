@@ -79,7 +79,7 @@ export default function PreflightDetailPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">📹 {data.videoFilename}</h1>
+        <h1 className="text-2xl font-semibold">{data.videoFilename}</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
           时长 {Math.round(data.videoDurationSec)} 秒
           {cost !== undefined ? ` · 烧 $${cost.toFixed(3)}` : ''}
@@ -87,7 +87,7 @@ export default function PreflightDetailPage() {
         </p>
         {data.fromScript && (
           <p className="mt-2 text-xs text-[var(--muted)]">
-            📜 来自脚本:{' '}
+            来自脚本:{' '}
             <a href={`/content/script/${data.fromScript.id}`} className="hover:text-primary underline-offset-2 hover:underline">
               {data.fromScript.topic}
             </a>

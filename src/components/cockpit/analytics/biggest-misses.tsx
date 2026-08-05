@@ -4,7 +4,7 @@ import type { BiggestMiss } from '@/lib/dashboard/types';
 export function BiggestMisses({ items }: { items: BiggestMiss[] }) {
   return (
     <div className="space-y-2">
-        <h3 className="font-semibold text-[var(--ink)]">📉 Top 失误 (过度乐观)</h3>
+        <h3 className="font-semibold text-[var(--ink)]">Top 失误 (过度乐观)</h3>
         {items.length === 0 ? (
           <div className="py-6 text-center text-sm text-[var(--muted)]">
             还没有失误数据 — 需要 ≥ 1 条复盘

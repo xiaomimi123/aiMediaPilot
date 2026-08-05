@@ -28,9 +28,9 @@ interface Props {
 }
 
 const PLATFORM_LABEL: Record<Platform, string> = {
-  douyin: '🎬 抖音脚本',
-  xiaohongshu: '📕 小红书笔记',
-  gongzhonghao: '📰 公众号文章',
+  douyin: '抖音脚本',
+  xiaohongshu: '小红书笔记',
+  gongzhonghao: '公众号文章',
 };
 
 function CopyButton({ text }: { text: string }) {
@@ -45,7 +45,7 @@ function CopyButton({ text }: { text: string }) {
       }}
       className="text-xs text-[var(--muted)] hover:text-primary"
     >
-      {copied ? '✓ 已复制' : '📋 复制'}
+      {copied ? '✓ 已复制' : '复制'}
     </button>
   );
 }
@@ -72,7 +72,7 @@ function UseScriptCard({ result, niche, draftId }: { result: DouyinScriptRespons
   return (
     <Card className="border-amber-300 bg-amber-50/40">
       <CardContent className="space-y-3 pt-6">
-        <h3 className="font-semibold">✏️ 用此脚本开新分析</h3>
+        <h3 className="font-semibold">用此脚本开新分析</h3>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div className="space-y-1">
             <label className="text-xs text-[var(--muted)]">标题</label>
@@ -116,7 +116,7 @@ function DouyinView({ data }: { data: DouyinScriptResponse }) {
     <>
       <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
         <CardContent className="space-y-3 pt-6">
-          <h3 className="font-semibold">🪝 钩子 (0:00-0:03)</h3>
+          <h3 className="font-semibold">钩子 (0:00-0:03)</h3>
           <ol className="space-y-3 text-sm">
             {data.hooks.map((h, i) => (
               <li key={i} className="border-b pb-2">
@@ -155,7 +155,7 @@ function DouyinView({ data }: { data: DouyinScriptResponse }) {
 
       <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
         <CardContent className="space-y-3 pt-6">
-          <h3 className="font-semibold">📝 标题候选</h3>
+          <h3 className="font-semibold">标题候选</h3>
           <ol className="space-y-3 text-sm">
             {data.titles.map((t, i) => (
               <li key={i} className="border-b pb-2">
@@ -176,7 +176,7 @@ function DouyinView({ data }: { data: DouyinScriptResponse }) {
 
       <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
         <CardContent className="space-y-2 pt-6">
-          <h3 className="font-semibold">🖼 封面建议</h3>
+          <h3 className="font-semibold">封面建议</h3>
           <p className="text-sm">
             <span className="text-[var(--muted)]">文字: </span>
             <b>{data.cover.textOverlay}</b>
@@ -200,7 +200,7 @@ function XHSView({ data }: { data: XHSScriptResponse }) {
     <>
       <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
         <CardContent className="space-y-3 pt-6">
-          <h3 className="font-semibold">📝 标题候选</h3>
+          <h3 className="font-semibold">标题候选</h3>
           <ol className="space-y-3 text-sm">
             {data.titles.map((t, i) => (
               <li key={i} className="border-b pb-2">
@@ -222,7 +222,7 @@ function XHSView({ data }: { data: XHSScriptResponse }) {
       <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
         <CardContent className="space-y-2 pt-6">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-semibold">🖼 封面大字</h3>
+            <h3 className="font-semibold">封面大字</h3>
             <CopyButton text={data.coverText} />
           </div>
           <p className="text-2xl font-bold tracking-tight">{data.coverText}</p>
@@ -232,7 +232,7 @@ function XHSView({ data }: { data: XHSScriptResponse }) {
       <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
         <CardContent className="space-y-2 pt-6">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-semibold">✨ 笔记开头钩子</h3>
+            <h3 className="font-semibold">笔记开头钩子</h3>
             <CopyButton text={data.intro} />
           </div>
           <p className="text-sm whitespace-pre-wrap">{data.intro}</p>
@@ -242,7 +242,7 @@ function XHSView({ data }: { data: XHSScriptResponse }) {
       <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
         <CardContent className="space-y-2 pt-6">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-semibold">📄 正文</h3>
+            <h3 className="font-semibold">正文</h3>
             <CopyButton text={data.body} />
           </div>
           <pre className="whitespace-pre-wrap text-sm font-sans leading-relaxed">{data.body}</pre>
@@ -252,7 +252,7 @@ function XHSView({ data }: { data: XHSScriptResponse }) {
       <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
         <CardContent className="space-y-2 pt-6">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-semibold">🏷 标签</h3>
+            <h3 className="font-semibold">标签</h3>
             <CopyButton text={data.tags.map((t) => `#${t}`).join(' ')} />
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -267,7 +267,7 @@ function XHSView({ data }: { data: XHSScriptResponse }) {
 
       <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
         <CardContent className="space-y-2 pt-6">
-          <h3 className="font-semibold">🎞 配图建议</h3>
+          <h3 className="font-semibold">配图建议</h3>
           <ol className="space-y-2 text-sm">
             {data.shotIdeas.map((s) => (
               <li key={s.idx} className="flex items-start gap-2 border-b pb-2">
@@ -287,7 +287,7 @@ function GongzhonghaoView({ data }: { data: ArticleScriptResponse }) {
     <>
       <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
         <CardContent className="space-y-3 pt-6">
-          <h3 className="font-semibold">📝 标题候选</h3>
+          <h3 className="font-semibold">标题候选</h3>
           <ol className="space-y-3 text-sm">
             {data.titles.map((t, i) => (
               <li key={i} className="border-b pb-2">
@@ -309,7 +309,7 @@ function GongzhonghaoView({ data }: { data: ArticleScriptResponse }) {
       <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
         <CardContent className="space-y-2 pt-6">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-semibold">📄 摘要</h3>
+            <h3 className="font-semibold">摘要</h3>
             <CopyButton text={data.abstract} />
           </div>
           <p className="text-sm">{data.abstract}</p>
@@ -319,7 +319,7 @@ function GongzhonghaoView({ data }: { data: ArticleScriptResponse }) {
       <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
         <CardContent className="space-y-2 pt-6">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-semibold">🗂 大纲</h3>
+            <h3 className="font-semibold">大纲</h3>
             <CopyButton text={data.outline.map((o, i) => `${i + 1}. ${o}`).join('\n')} />
           </div>
           <ol className="space-y-1 text-sm">
@@ -336,7 +336,7 @@ function GongzhonghaoView({ data }: { data: ArticleScriptResponse }) {
       <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
         <CardContent className="space-y-2 pt-6">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-semibold">📑 正文初稿</h3>
+            <h3 className="font-semibold">正文初稿</h3>
             <CopyButton text={data.body} />
           </div>
           <pre className="whitespace-pre-wrap text-sm font-sans leading-relaxed">{data.body}</pre>
@@ -346,7 +346,7 @@ function GongzhonghaoView({ data }: { data: ArticleScriptResponse }) {
       <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
         <CardContent className="space-y-2 pt-6">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-semibold">💬 文末互动</h3>
+            <h3 className="font-semibold">文末互动</h3>
             <CopyButton text={data.cta} />
           </div>
           <p className="text-sm whitespace-pre-wrap">{data.cta}</p>
@@ -414,18 +414,18 @@ export function ScriptResult({ platform, result, topic, niche, onRegenerate, rea
           {!readonly && (
             <>
               <Button onClick={handleSave} disabled={saving} size="sm" variant="brand">
-                {saving ? '保存中...' : '💾 保存'}
+                {saving ? '保存中...' : '保存'}
               </Button>
               {onRegenerate && (
                 <Button onClick={onRegenerate} variant="outline" size="sm">
-                  🔄 再生成
+                  再生成
                 </Button>
               )}
             </>
           )}
           {readonly && draftId && (
             <Button onClick={handleDelete} variant="outline" size="sm">
-              🗑 删除
+              删除
             </Button>
           )}
         </div>

@@ -10,7 +10,6 @@ import { ScriptResult } from './script-result';
 import { cn } from '@/lib/utils';
 import {
   CONTENT_PLATFORMS,
-  CONTENT_PLATFORM_EMOJI,
   CONTENT_PLATFORM_LABEL,
   type ContentPlatform,
 } from '@/lib/platform';
@@ -27,7 +26,6 @@ const PLATFORM_SUB: Record<ContentPlatform, string> = {
 const PLATFORMS = CONTENT_PLATFORMS.map((value) => ({
   value,
   label: CONTENT_PLATFORM_LABEL[value],
-  emoji: CONTENT_PLATFORM_EMOJI[value],
   sub: PLATFORM_SUB[value],
 }));
 
@@ -137,7 +135,7 @@ export function ScriptForm() {
         <Card className="border-[var(--clay)]/30 bg-[var(--clay-soft)]/40">
           <CardContent className="space-y-2 pt-5">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-[#8f3f28]">🪞 借鉴自这次灵感总结</p>
+              <p className="text-sm font-medium text-[#8f3f28]">借鉴自这次灵感总结</p>
               <button
                 type="button"
                 onClick={() => {
@@ -210,7 +208,6 @@ export function ScriptForm() {
                         : 'border-[var(--line)] bg-[var(--panel-bg)] hover:bg-[var(--hover-bg)]',
                     )}
                   >
-                    <span className="text-2xl">{p.emoji}</span>
                     <span className="flex-1">
                       <span className="block font-semibold">{p.label}</span>
                       <span className={cn('block text-xs', active ? 'text-[#8f3f28]/80' : 'text-[var(--muted)]')}>{p.sub}</span>

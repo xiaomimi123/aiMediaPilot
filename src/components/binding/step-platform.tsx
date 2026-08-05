@@ -3,8 +3,8 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
 const PLATFORMS = [
-  { id: 'XIAOHONGSHU' as const, emoji: '🔴', label: '小红书', desc: '图文笔记 · 视频' },
-  { id: 'DOUYIN' as const, emoji: '⚫', label: '抖音', desc: '短视频' },
+  { id: 'XIAOHONGSHU' as const, label: '小红书', desc: '图文笔记 · 视频' },
+  { id: 'DOUYIN' as const, label: '抖音', desc: '短视频' },
 ];
 
 export function StepPlatform({
@@ -24,8 +24,7 @@ export function StepPlatform({
               selected === p.id ? 'border-primary ring-2 ring-primary/20' : 'border-border hover:bg-accent'
             )}
           >
-            <div className="text-3xl">{p.emoji}</div>
-            <div className="mt-2 font-semibold">{p.label}</div>
+            <div className="font-semibold">{p.label}</div>
             <div className="text-sm text-muted-foreground">{p.desc}</div>
           </button>
         ))}

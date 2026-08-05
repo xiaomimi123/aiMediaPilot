@@ -28,7 +28,7 @@ export function RetroSection({ analysis, onChanged }: { analysis: AnalysisV2; on
   if (!analysis.retroStatus || showForm) {
     return (
       <div className="space-y-3">
-        <h2 className="text-xl font-semibold">📊 发后复盘</h2>
+        <h2 className="text-xl font-semibold">发后复盘</h2>
         <PublishLinkForm
           analysisId={analysis.id}
           initialUrl={analysis.douyinUrl}
@@ -46,7 +46,7 @@ export function RetroSection({ analysis, onChanged }: { analysis: AnalysisV2; on
 
   return (
     <div className="space-y-3">
-      <h2 className="text-xl font-semibold">📊 发后复盘</h2>
+      <h2 className="text-xl font-semibold">发后复盘</h2>
 
       {/* 状态: SCHEDULED */}
       {analysis.retroStatus === 'SCHEDULED' && (
@@ -54,7 +54,7 @@ export function RetroSection({ analysis, onChanged }: { analysis: AnalysisV2; on
           <div className="text-sm">✓ 已关联: <a href={analysis.douyinUrl!} target="_blank" rel="noreferrer" className="text-primary underline">{analysis.douyinUrl}</a></div>
           {scheduledAt && (
             <div className="text-sm text-[var(--muted)]">
-              ⏰ 计划于 {scheduledAt.toLocaleString()} 自动拉取
+              计划于 {scheduledAt.toLocaleString()} 自动拉取
             </div>
           )}
           <div className="flex gap-2">
@@ -67,7 +67,7 @@ export function RetroSection({ analysis, onChanged }: { analysis: AnalysisV2; on
       {/* 状态: RUNNING */}
       {analysis.retroStatus === 'RUNNING' && (
         <div className="rounded-lg border border-[var(--line)] bg-[var(--panel-bg)] p-4">
-          <div className="text-sm">🔄 正在拉取真实数据... (创作者中心 → 视频详情)</div>
+          <div className="text-sm">正在拉取真实数据... (创作者中心 → 视频详情)</div>
         </div>
       )}
 

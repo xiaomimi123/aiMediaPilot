@@ -29,7 +29,7 @@ export function DistributionSection({ scriptId }: { scriptId: string }) {
   return (
     <section className="space-y-3 rounded-xl border border-[var(--line)] bg-[var(--panel-bg)] p-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold">📤 分发记录 ({items.length})</h3>
+        <h3 className="font-semibold">分发记录 ({items.length})</h3>
         <Button variant="outline" size="sm" onClick={() => setOpen(true)}>+ 登记分发</Button>
       </div>
       {items.length === 0 && <p className="text-sm text-[var(--muted)]">还没登记分发。发到其他平台后把链接记在这里。</p>}

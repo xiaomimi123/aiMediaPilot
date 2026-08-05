@@ -8,9 +8,9 @@ import { KNOWN_NICHES } from '@/lib/llm/prompts';
 const NICHE_LABEL_MAP = new Map(KNOWN_NICHES.map((n) => [n.key, n.label]));
 
 const PLATFORM_BADGE: Record<string, { label: string; cls: string }> = {
-  douyin: { label: '🎬 抖音', cls: 'bg-blue-100 text-blue-900' },
-  xiaohongshu: { label: '📕 小红书', cls: 'bg-pink-100 text-pink-900' },
-  gongzhonghao: { label: '📰 公众号', cls: 'bg-amber-100 text-amber-900' },
+  douyin: { label: '抖音', cls: 'bg-blue-100 text-blue-900' },
+  xiaohongshu: { label: '小红书', cls: 'bg-pink-100 text-pink-900' },
+  gongzhonghao: { label: '公众号', cls: 'bg-amber-100 text-amber-900' },
 };
 
 export default async function ScriptListPage() {
@@ -30,7 +30,7 @@ export default async function ScriptListPage() {
           <p className="mt-1 text-sm text-[var(--muted)]">保存的 AI 生成脚本,可直接开新分析。</p>
         </div>
         <Link href="/content/script/new">
-          <Button variant="brand">✏️ 写新脚本 →</Button>
+          <Button variant="brand">写新脚本 →</Button>
         </Link>
       </div>
 

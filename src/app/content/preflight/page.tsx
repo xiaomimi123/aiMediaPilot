@@ -73,7 +73,7 @@ export default function PreflightListPage() {
             <Card className="cursor-pointer border-[var(--line)] bg-[var(--panel-bg)] transition-shadow hover:shadow-md">
               <CardContent className="space-y-2 pt-6">
                 <div className="flex items-center justify-between">
-                  <div className="truncate font-semibold">📹 {r.videoFilename}</div>
+                  <div className="truncate font-semibold">{r.videoFilename}</div>
                   <Badge variant={r.status === 'COMPLETED' ? 'success' : r.status === 'FAILED' ? 'destructive' : 'default'}>
                     {STATUS_LABEL[r.status] ?? r.status}
                   </Badge>

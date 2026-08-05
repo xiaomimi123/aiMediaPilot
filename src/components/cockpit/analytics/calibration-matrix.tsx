@@ -1,11 +1,11 @@
 import { cn } from '@/lib/utils';
 import type { CalibrationData, AccuracyVerdict } from '@/lib/dashboard/types';
 
-const DIM_LABELS: Array<{ key: keyof CalibrationData['matrix']; label: string; emoji: string }> = [
-  { key: 'hookGap', label: '钩子', emoji: '🪝' },
-  { key: 'retentionGap', label: '完播', emoji: '⏱' },
-  { key: 'titleCaptionGap', label: '标题/文案', emoji: '📝' },
-  { key: 'coverGap', label: '封面', emoji: '🖼' },
+const DIM_LABELS: Array<{ key: keyof CalibrationData['matrix']; label: string }> = [
+  { key: 'hookGap', label: '钩子' },
+  { key: 'retentionGap', label: '完播' },
+  { key: 'titleCaptionGap', label: '标题/文案' },
+  { key: 'coverGap', label: '封面' },
 ];
 
 function pct(count: number, total: number): string {
@@ -23,7 +23,7 @@ export function CalibrationMatrix({ data }: { data: CalibrationData }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-[var(--ink)]">🎯 AI 预判校准</h3>
+        <h3 className="font-semibold text-[var(--ink)]">AI 预判校准</h3>
         <div className="text-xs text-[var(--muted)]">基于 {data.sampleCount} 条复盘</div>
       </div>
 
@@ -40,11 +40,11 @@ export function CalibrationMatrix({ data }: { data: CalibrationData }) {
               </tr>
             </thead>
             <tbody>
-              {DIM_LABELS.map(({ key, label, emoji }) => {
+              {DIM_LABELS.map(({ key, label }) => {
                 const dist = data.matrix[key];
                 return (
                   <tr key={key} className="border-b border-[var(--line)] text-center">
-                    <td className="py-2 text-left">{emoji} {label}</td>
+                    <td className="py-2 text-left">{label}</td>
                     <td className={cn('py-2', cellClass('on-target', dist.worstBucket === 'on-target'))}>
                       {pct(dist.onTarget, dist.total)} ({dist.onTarget})
                     </td>
@@ -66,11 +66,11 @@ export function CalibrationMatrix({ data }: { data: CalibrationData }) {
 
         {/* Mobile: stacked cards per dim */}
         <div className="space-y-3 md:hidden">
-          {DIM_LABELS.map(({ key, label, emoji }) => {
+          {DIM_LABELS.map(({ key, label }) => {
             const dist = data.matrix[key];
             return (
               <div key={key} className="rounded-md border border-[var(--line)] p-3">
-                <div className="font-medium">{emoji} {label}</div>
+                <div className="font-medium">{label}</div>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
                   <div className={cn('rounded p-2', cellClass('on-target', dist.worstBucket === 'on-target'))}>
                     <div className="text-xs">✓ on-target</div>
@@ -95,7 +95,7 @@ export function CalibrationMatrix({ data }: { data: CalibrationData }) {
         </div>
 
         <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-900">
-          💡 {data.insight}
+          {data.insight}
         </div>
       </div>
   );

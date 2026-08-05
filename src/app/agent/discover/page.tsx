@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Sparkles } from 'lucide-react';
 import { KNOWN_NICHES } from '@/lib/llm/prompts';
 import { cn } from '@/lib/utils';
-import { CONTENT_PLATFORMS, CONTENT_PLATFORM_EMOJI, CONTENT_PLATFORM_LABEL, type ContentPlatform } from '@/lib/platform';
+import { CONTENT_PLATFORMS, CONTENT_PLATFORM_LABEL, type ContentPlatform } from '@/lib/platform';
 
 interface DiscoveredTopic {
   title: string;
@@ -35,7 +35,6 @@ const DIFFICULTY_BADGE: Record<DiscoveredTopic['difficulty'], { label: string; c
 const PLATFORMS = CONTENT_PLATFORMS.map((value) => ({
   value,
   label: CONTENT_PLATFORM_LABEL[value],
-  emoji: CONTENT_PLATFORM_EMOJI[value],
 }));
 
 export default function DiscoverPage() {
@@ -132,7 +131,7 @@ export default function DiscoverPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-[var(--ink)]">🎯 AI 主题发现</h1>
+        <h1 className="text-2xl font-semibold text-[var(--ink)]">AI 主题发现</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
           没有选题灵感? 系统基于你的 niche + 已写过的 topic, 一次给你 5-20 个**可立刻上手**的选题候选,
           每条带钩子草稿 + 流量理由 + 难度估计。 一键跳生成脚本.
@@ -200,7 +199,7 @@ export default function DiscoverPage() {
                           : 'border-[var(--line)] hover:bg-[var(--hover-bg)]',
                       )}
                     >
-                      {p.emoji} {p.label}
+                      {p.label}
                     </button>
                   );
                 })}
@@ -244,7 +243,7 @@ export default function DiscoverPage() {
         <div className="space-y-4">
           <Card className="border-[var(--clay)]/30 bg-[var(--clay-soft)]/30">
             <CardContent className="space-y-2 pt-5">
-              <p className="text-sm font-medium text-[#8f3f28]">📋 本批整体方向</p>
+              <p className="text-sm font-medium text-[#8f3f28]">本批整体方向</p>
               <p className="text-sm text-[var(--ink)]">{result.summary}</p>
               <p className="text-xs text-[var(--muted)]">
                 niche: {result.niche} · 生成于{' '}
@@ -273,10 +272,10 @@ export default function DiscoverPage() {
 
                     <div className="flex flex-wrap gap-1.5 text-[10px]">
                       <span className="rounded bg-blue-100 px-1.5 py-0.5 text-blue-900">
-                        🪝 {t.hookType}
+                        {t.hookType}
                       </span>
                       <span className="rounded bg-[var(--surface-soft)] px-1.5 py-0.5 text-[var(--muted)]">
-                        👥 {t.targetAudience}
+                        {t.targetAudience}
                       </span>
                     </div>
 

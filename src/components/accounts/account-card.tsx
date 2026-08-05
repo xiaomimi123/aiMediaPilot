@@ -16,8 +16,6 @@ type Account = {
   lastSyncAt?: string | null;
 };
 
-const PLATFORM_EMOJI: Record<Account['platform'], string> = { XIAOHONGSHU: '🔴', DOUYIN: '⚫' };
-
 function timeAgo(iso?: string | null): string {
   if (!iso) return '从未同步';
   const diff = Date.now() - new Date(iso).getTime();
@@ -41,7 +39,7 @@ export function AccountCard({ account }: { account: Account }) {
             </>
             : <div className="h-12 w-12 rounded-full bg-[var(--surface-soft)]" />}
           <div className="flex-1">
-            <div className="font-semibold text-[var(--ink)]">{PLATFORM_EMOJI[account.platform]} @{account.nickname}</div>
+            <div className="font-semibold text-[var(--ink)]">@{account.nickname}</div>
             <div className="text-xs text-[var(--muted)]">{account.platformLabel} · {timeAgo(account.lastSyncAt)}</div>
           </div>
           {account.loginStatus === 'EXPIRED' && <Badge variant="destructive">⚠ 重登</Badge>}

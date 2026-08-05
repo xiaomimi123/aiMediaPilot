@@ -159,7 +159,7 @@ export default function InspirationPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">📚 灵感视频库</h1>
+        <h1 className="text-2xl font-semibold">灵感视频库</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
           抖音自动抓 (粘 URL/分享文本); 小红书 / 公众号 手动填标题。 选 ≥ 2 条让 AI 总结共性。
         </p>
@@ -203,7 +203,7 @@ export default function InspirationPage() {
           variant={selected.size >= 2 ? 'brand' : 'outline'}
         >
           <Sparkles className="mr-1 h-4 w-4" />
-          {generating ? '分析中...' : `🧠 让 AI 总结这 ${selected.size || 0} 条共性`}
+          {generating ? '分析中...' : `让 AI 总结这 ${selected.size || 0} 条共性`}
         </Button>
         <div className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
           <span>按 niche:</span>
@@ -240,7 +240,7 @@ export default function InspirationPage() {
             onClick={toggleSelectAllVisible}
             className="font-medium text-[var(--ink)] hover:underline"
           >
-            {allVisibleSelected ? '☑️ 反选当前页' : '☐ 全选当前页'}
+            {allVisibleSelected ? '反选当前页' : '全选当前页'}
           </button>
           <span className="text-[var(--muted)]">·</span>
           <span className="text-[var(--muted)]">已选 {selected.size} 条</span>
@@ -260,7 +260,7 @@ export default function InspirationPage() {
                 onClick={handleBulkDelete}
                 className="text-destructive hover:underline"
               >
-                🗑 删除已选 ({selected.size})
+                删除已选 ({selected.size})
               </button>
             </>
           )}
@@ -288,7 +288,7 @@ export default function InspirationPage() {
           className="flex w-full items-center justify-between rounded-lg border-2 border-[var(--clay)]/30 bg-[var(--clay-soft)]/40 px-4 py-2.5 text-left text-sm transition-colors hover:bg-[var(--clay-soft)]"
         >
           <span className="font-medium text-[#8f3f28]">
-            🧠 上次 AI 总结已折叠 — 点击展开
+            上次 AI 总结已折叠 — 点击展开
           </span>
           <span className="text-xs text-[var(--muted)]">展开 ↓</span>
         </button>
@@ -303,7 +303,7 @@ export default function InspirationPage() {
               className="flex w-full items-center justify-between text-left"
             >
               <span className="text-sm font-medium">
-                📜 历史总结 ({history.length} 条)
+                历史总结 ({history.length} 条)
               </span>
               <span className="text-xs text-[var(--muted)]">
                 {showHistory ? '收起 ↑' : '展开 ↓'}
@@ -358,7 +358,6 @@ export default function InspirationPage() {
       ) : items.length === 0 ? (
         <Card className="border-dashed border-[var(--line-dark)] bg-[var(--panel-bg)]">
           <CardContent className="space-y-4 pt-8 pb-8 text-center">
-            <p className="text-3xl">📥</p>
             <div className="space-y-1">
               <p className="text-base font-semibold">收第一条灵感视频</p>
               <p className="mx-auto max-w-md text-sm text-[var(--muted)]">
@@ -426,12 +425,12 @@ export default function InspirationPage() {
                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--muted)] tabular-nums">
                     <span>▶ {formatPlays(v.playCount)}</span>
                     <span>♥ {formatPlays(v.likeCount)}</span>
-                    <span>💬 {formatPlays(v.commentCount)}</span>
+                    <span>评 {formatPlays(v.commentCount)}</span>
                     {v.duration && <span>⏱ {v.duration}s</span>}
                   </div>
                   {v.userNote && (
                     <p className="rounded bg-[var(--surface-soft)] px-2 py-1 text-xs text-[var(--muted)]">
-                      📝 {v.userNote}
+                      {v.userNote}
                     </p>
                   )}
                   <a

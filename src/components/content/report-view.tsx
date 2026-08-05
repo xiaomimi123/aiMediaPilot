@@ -23,7 +23,7 @@ export function ReportView({ analysisId, report, coverCandidateCount }: { analys
             </div>
           )}
           <div className="flex-1">
-            <div className="mb-2 text-sm font-semibold">🔥 现在去改的:</div>
+            <div className="mb-2 text-sm font-semibold">现在去改的:</div>
             <ol className="list-decimal space-y-1 pl-5 text-sm">
               {report.topActionItems.map((a, i) => <li key={i}>{a}</li>)}
             </ol>
@@ -33,7 +33,7 @@ export function ReportView({ analysisId, report, coverCandidateCount }: { analys
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <DimensionCard
-          emoji="🪝" title="钩子 (前 3 秒)"
+          title="钩子 (前 3 秒)"
           rating={report.hook?.rating}
           error={report.hook?.error}
         >
@@ -49,7 +49,7 @@ export function ReportView({ analysisId, report, coverCandidateCount }: { analys
         </DimensionCard>
 
         <DimensionCard
-          emoji="⏱" title="完播风险"
+          title="完播风险"
           error={report.retention?.error}
         >
           <p className="text-sm">{report.retention?.overallSummary}</p>
@@ -67,7 +67,7 @@ export function ReportView({ analysisId, report, coverCandidateCount }: { analys
           )}
         </DimensionCard>
 
-        <DimensionCard emoji="📝" title="标题 / 文案" error={report.titleCaption?.error}>
+        <DimensionCard title="标题 / 文案" error={report.titleCaption?.error}>
           {report.titleCaption?.mode === 'generate' && (
             <div className="space-y-2 text-sm">
               <div>
@@ -100,7 +100,7 @@ export function ReportView({ analysisId, report, coverCandidateCount }: { analys
           )}
         </DimensionCard>
 
-        <DimensionCard emoji="🖼" title="封面" error={report.cover?.error}>
+        <DimensionCard title="封面" error={report.cover?.error}>
           {report.cover?.mode === 'evaluate' && report.cover.feedback && (
             <>
               <div className="text-sm">评分 ★{report.cover.feedback.rating}</div>

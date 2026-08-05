@@ -54,12 +54,6 @@ export const CONTENT_PLATFORM_LABEL: Record<ContentPlatform, string> = {
   gongzhonghao: '公众号',
 };
 
-export const CONTENT_PLATFORM_EMOJI: Record<ContentPlatform, string> = {
-  douyin: '🎬',
-  xiaohongshu: '📕',
-  gongzhonghao: '📰',
-};
-
 /** unknown → 类型窄化, API 边界统一用它, 别自己 inline 三段 or。 */
 export function isContentPlatform(v: unknown): v is ContentPlatform {
   return v === 'douyin' || v === 'xiaohongshu' || v === 'gongzhonghao';

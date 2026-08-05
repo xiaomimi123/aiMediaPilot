@@ -103,7 +103,6 @@ export function UploadForm({ needsBaselineOnboarding = false }: { needsBaselineO
             className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-[var(--line-dark)] bg-[var(--surface-soft)] p-12 text-center cursor-pointer"
             onClick={() => videoInputRef.current?.click()}
           >
-            <div className="text-3xl">📹</div>
             {videoFile ? (
               <>
                 <div className="font-medium">{videoFile.name}</div>
@@ -182,7 +181,7 @@ export function UploadForm({ needsBaselineOnboarding = false }: { needsBaselineO
           <CardContent className="space-y-2 pt-6">
             <div className="rounded-md border-2 border-dashed border-amber-300 bg-amber-50 p-3">
               <Label htmlFor="baselinePlays" className="text-sm font-medium">
-                🎯 一次性设置: 你最近 10 条视频平均多少播放?
+                一次性设置: 你最近 10 条视频平均多少播放?
               </Label>
               <p className="mt-1 text-xs text-[var(--muted)]">
                 用于校准 L1 预测。 不填的话短期内不出预测, 等 3 条复盘后会从实测数据自动算出。

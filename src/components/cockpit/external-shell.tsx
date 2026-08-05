@@ -13,7 +13,7 @@ const MOBILE_COCKPIT_SHORTCUTS = NAV_ITEMS.filter((item) => item.id === "inspira
 // 二期 T6 起 /agent /dashboard /settings 壳页退役, 桌面侧栏「平台」分组整段移除
 // （/accounts 桌面入口改由 goals 状态条 + settings 卡片承担）。移动端屏幕小,
 // 仍保留一个 /accounts 快捷格子, 否则触屏用户完全够不到账号管理入口。
-const MOBILE_ACCOUNTS_ITEM = { href: "/accounts", label: "账号", emoji: "👤" } as const;
+const MOBILE_ACCOUNTS_ITEM = { href: "/accounts", label: "账号", emoji: "◎" } as const;
 
 /**
  * 站外落地页（/accounts /content 等）的外壳：复用 cockpit 的侧栏

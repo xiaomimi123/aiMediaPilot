@@ -33,7 +33,7 @@ export function PredictionCard({ data }: { data: PredictedPlaysRange | null | un
     return (
       <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
         <CardContent className="space-y-3 pt-6">
-          <h3 className="font-semibold">💡 L1 播放预测暂未生成</h3>
+          <h3 className="font-semibold">L1 播放预测暂未生成</h3>
           <ul className="space-y-1 text-sm text-[var(--muted)]">
             <li>• 设了账号基线 → 上传时立即出预测</li>
             <li>• 没设的话, 等 3 条复盘后会自动从实测数据反算出基线</li>
@@ -51,7 +51,7 @@ export function PredictionCard({ data }: { data: PredictedPlaysRange | null | un
   return (
     <Card>
       <CardContent className="space-y-3 pt-6">
-        <h3 className="font-semibold">📈 预估播放</h3>
+        <h3 className="font-semibold">预估播放</h3>
         <div className="flex items-baseline justify-center gap-3">
           <span className="text-3xl font-bold tabular-nums">{formatPlays(data.lower)}</span>
           <span className="text-[var(--muted)]">—</span>

@@ -25,7 +25,7 @@ export function PredictionAccuracy({ data }: { data: PredictionAccuracySummary }
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-[var(--ink)]">🎯 L1 预测精度</h3>
+        <h3 className="font-semibold text-[var(--ink)]">L1 预测精度</h3>
         <div className="text-xs text-[var(--muted)]">基于 {data.totalSamples} 条复盘</div>
       </div>
 

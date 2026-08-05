@@ -29,27 +29,27 @@ const ACCURACY_COLOR: Record<Accuracy, string> = {
 export function RetroGapView({ report }: { report: RetroReport }) {
   return (
     <div className="space-y-4">
-      <div className="text-sm font-semibold">🎯 AI 落差总结</div>
+      <div className="text-sm font-semibold">AI 落差总结</div>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <DimensionCard emoji="🪝" title={`钩子 (预判 ★${report.hookGap.predictedRating})`}>
+        <DimensionCard title={`钩子 (预判 ★${report.hookGap.predictedRating})`}>
           <div className={`text-xs ${ACCURACY_COLOR[report.hookGap.accuracy]}`}>{ACCURACY_LABEL[report.hookGap.accuracy]}</div>
           <p className="mt-1 text-sm">{report.hookGap.takeaway}</p>
         </DimensionCard>
-        <DimensionCard emoji="⏱" title={`完播 (${report.retentionGap.predictedRiskPoints} 风险点)`}>
+        <DimensionCard title={`完播 (${report.retentionGap.predictedRiskPoints} 风险点)`}>
           <div className={`text-xs ${ACCURACY_COLOR[report.retentionGap.accuracy]}`}>{ACCURACY_LABEL[report.retentionGap.accuracy]}</div>
           <p className="mt-1 text-sm">{report.retentionGap.takeaway}</p>
         </DimensionCard>
-        <DimensionCard emoji="📝" title={`标题文案 (${report.titleCaptionGap.mode})`}>
+        <DimensionCard title={`标题文案 (${report.titleCaptionGap.mode})`}>
           <div className={`text-xs ${ACCURACY_COLOR[report.titleCaptionGap.accuracy]}`}>{ACCURACY_LABEL[report.titleCaptionGap.accuracy]}</div>
           <p className="mt-1 text-sm">{report.titleCaptionGap.takeaway}</p>
         </DimensionCard>
-        <DimensionCard emoji="🖼" title={`封面 (${report.coverGap.mode})`}>
+        <DimensionCard title={`封面 (${report.coverGap.mode})`}>
           <div className={`text-xs ${ACCURACY_COLOR[report.coverGap.accuracy]}`}>{ACCURACY_LABEL[report.coverGap.accuracy]}</div>
           <p className="mt-1 text-sm">{report.coverGap.takeaway}</p>
         </DimensionCard>
       </div>
       <div className="rounded-lg bg-[var(--surface-soft)] p-3 text-sm">
-        <div className="font-semibold">📌 综合</div>
+        <div className="font-semibold">综合</div>
         <p className="mt-1">{report.overallTakeaway}</p>
         {report.predictedOverallScore !== null && report.inferredActualScore !== null && (
           <p className="mt-1 text-[var(--muted)]">

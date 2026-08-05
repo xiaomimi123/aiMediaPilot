@@ -101,7 +101,7 @@ export function BaselineCard({
         当前: <b>{saved ?? "—"}</b>{saved !== null ? " 播放/视频" : ""} ({currentLabel})
       </p>
       {retroMedian !== null ? <p className="baseline-auto-hint">
-        📊 自动计算 (基于 {retroCount} 条复盘 median): <b>{retroMedian}</b>
+        自动计算 (基于 {retroCount} 条复盘 median): <b>{retroMedian}</b>
         <button type="button" className="text-button" onClick={handleUseAuto} disabled={saving}>用自动值</button>
       </p> : null}
       <div className="form-grid">
@@ -124,7 +124,7 @@ export function BaselineCard({
       </div>
       {message ? <p className={message.type === "success" ? "ai-provider-status ok" : "ai-provider-status err"}>{message.text}</p> : null}
       {retroCount >= MIN_RETROS_FOR_MEDIAN ? <p className="baseline-override-hint">
-        💡 ≥{MIN_RETROS_FOR_MEDIAN} 条复盘时, 新分析自动用 retro median, 这里写的值会在下次复盘时被覆盖。
+        ≥{MIN_RETROS_FOR_MEDIAN} 条复盘时, 新分析自动用 retro median, 这里写的值会在下次复盘时被覆盖。
       </p> : null}
     </div>
   </div>;

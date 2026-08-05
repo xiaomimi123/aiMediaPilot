@@ -1,13 +1,13 @@
-import { CONTENT_PLATFORM_EMOJI, CONTENT_PLATFORM_LABEL, type ContentPlatform } from '@/lib/platform';
+import { CONTENT_PLATFORM_LABEL, type ContentPlatform } from '@/lib/platform';
 
 // 兼容既有 UI 消费方 — 内部 alias 到 lib 的单源类型
 export type Platform = ContentPlatform;
 export type PlatformFilter = 'all' | Platform;
 
 export const PLATFORM_LABEL: Record<Platform, string> = {
-  douyin: `${CONTENT_PLATFORM_EMOJI.douyin} ${CONTENT_PLATFORM_LABEL.douyin}`,
-  xiaohongshu: `${CONTENT_PLATFORM_EMOJI.xiaohongshu} ${CONTENT_PLATFORM_LABEL.xiaohongshu}`,
-  gongzhonghao: `${CONTENT_PLATFORM_EMOJI.gongzhonghao} ${CONTENT_PLATFORM_LABEL.gongzhonghao}`,
+  douyin: CONTENT_PLATFORM_LABEL.douyin,
+  xiaohongshu: CONTENT_PLATFORM_LABEL.xiaohongshu,
+  gongzhonghao: CONTENT_PLATFORM_LABEL.gongzhonghao,
 };
 
 export interface VideoItem {

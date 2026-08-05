@@ -11,9 +11,8 @@ function Stars({ rating }: { rating: number }) {
 }
 
 export function DimensionCard({
-  emoji, title, rating, children, error,
+  title, rating, children, error,
 }: {
-  emoji: string;
   title: string;
   rating?: number;
   children?: React.ReactNode;
@@ -23,7 +22,7 @@ export function DimensionCard({
     <Card className={cn('border-[var(--line)] bg-[var(--panel-bg)]', error && 'border-destructive/40')}>
       <CardContent className="space-y-2 pt-6">
         <div className="flex items-center justify-between">
-          <div className="font-semibold">{emoji} {title}</div>
+          <div className="font-semibold">{title}</div>
           {rating !== undefined && <Stars rating={rating} />}
         </div>
         {error ? (

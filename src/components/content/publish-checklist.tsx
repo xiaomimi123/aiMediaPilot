@@ -137,7 +137,7 @@ export function PublishChecklist({ analysisId, niche, platform = 'douyin', hookS
       <CardContent className="space-y-4 pt-6">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold">
-            {ready ? '✅ 可以发了' : '📋 发前 checklist'}
+            {ready ? '✓ 可以发了' : '发前 checklist'}
           </h3>
           <span className="text-xs text-[var(--muted)]">
             {saving ? '保存中...' : initial?.completedAt ? '上次保存成功' : ''}
@@ -174,7 +174,7 @@ export function PublishChecklist({ analysisId, niche, platform = 'douyin', hookS
             placeholder="发抖音时实际用的标题"
           />
           {titleFeedbackLoading && (
-            <p className="text-xs text-[var(--muted)]">🤖 AI 评估中...</p>
+            <p className="text-xs text-[var(--muted)]">AI 评估中...</p>
           )}
           {titleFeedbackError && (
             <p className="text-xs text-destructive">评估失败: {titleFeedbackError}</p>
@@ -214,7 +214,7 @@ export function PublishChecklist({ analysisId, niche, platform = 'douyin', hookS
         {needsHook && (
           <div className="space-y-1 rounded-md border-2 border-red-300 bg-red-50/30 p-3">
             <Label htmlFor="rewrite-hook" className="text-red-800">
-              ⚠️ 钩子 score &lt; 70, 重写钩子文案 (必填)
+              ⚠ 钩子 score &lt; 70, 重写钩子文案 (必填)
             </Label>
             <Input
               id="rewrite-hook"
@@ -263,7 +263,7 @@ export function PublishChecklist({ analysisId, niche, platform = 'douyin', hookS
 
         {ready && (
           <div className="rounded-md bg-green-100 p-3 text-sm text-green-900">
-            ✅ 所有 checklist 已满足 — 可以放心发了
+            ✓ 所有 checklist 已满足 — 可以放心发了
           </div>
         )}
       </CardContent>

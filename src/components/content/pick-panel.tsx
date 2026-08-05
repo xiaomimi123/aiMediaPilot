@@ -65,7 +65,7 @@ export function PickPanel({ draftId, platform, titles, hooks, initial }: Props) 
       <CardContent className="space-y-4 pt-6">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold">
-            {ready ? '✅ 准备好复制走了' : `📋 发布前选定 (${checked}/${total})`}
+            {ready ? '✓ 准备好复制走了' : `发布前选定 (${checked}/${total})`}
           </h3>
           <span className="text-xs text-[var(--muted)]">{saving ? '保存中...' : ''}</span>
         </div>
@@ -170,7 +170,7 @@ export function PickPanel({ draftId, platform, titles, hooks, initial }: Props) 
 
         {ready && (
           <div className="rounded-md bg-green-100 p-3 text-sm text-green-900">
-            ✅ 所有选定就绪 — 复制对应区块去 {PLATFORM_NAME[platform]} 发吧
+            ✓ 所有选定就绪 — 复制对应区块去 {PLATFORM_NAME[platform]} 发吧
           </div>
         )}
       </CardContent>

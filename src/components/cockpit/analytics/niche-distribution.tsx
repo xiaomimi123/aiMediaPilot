@@ -4,7 +4,7 @@ export function NicheDistribution({ rows }: { rows: NicheRow[] }) {
   const hasDashRow = rows.some((r) => r.avgOverallScore === null);
   return (
     <div className="space-y-2">
-        <h3 className="font-semibold text-[var(--ink)]">📂 内容垂类</h3>
+        <h3 className="font-semibold text-[var(--ink)]">内容垂类</h3>
         {rows.length === 0 ? (
           <div className="py-6 text-center text-sm text-[var(--muted)]">无数据</div>
         ) : (

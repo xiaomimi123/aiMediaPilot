@@ -10,7 +10,7 @@ function formatPlays(playsStr: string): string {
 export function TopPerformers({ items }: { items: TopPerformer[] }) {
   return (
     <div className="space-y-2">
-        <h3 className="font-semibold text-[var(--ink)]">🏆 Top 表现</h3>
+        <h3 className="font-semibold text-[var(--ink)]">Top 表现</h3>
         {items.length === 0 ? (
           <div className="py-6 text-center text-sm text-[var(--muted)]">
             还没有复盘数据 — 上传 + 粘贴抖音链接看真实播放
