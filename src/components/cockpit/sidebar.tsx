@@ -2,7 +2,6 @@
 
 import type { DragEvent } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { percent } from "@/lib/cockpit/calculations";
 import type { NavigationItemId } from "@/lib/cockpit/model";
 import { APP_NAME } from "@/lib/constants";
@@ -18,15 +17,6 @@ export const NAV_ITEMS: ReadonlyArray<SidebarNavItem> = [
   { id: "pipeline", label: "内容总览", icon: "pipeline" },
   { id: "goals", label: "大目标", icon: "goals" },
   { id: "review", label: "复盘实验室", icon: "review" },
-];
-
-// 站外落地页：创作 / 数据 / 账号 / 设置。内容库 (/content) 即将被 Pipeline 取代，不挂入新壳。
-// 导出给 external-shell.tsx 的移动端导航复用，避免重复定义。
-export const EXTERNAL_NAV_ITEMS: ReadonlyArray<{ href: string; label: string; emoji: string }> = [
-  { href: "/agent", label: "创作", emoji: "🪄" },
-  { href: "/dashboard", label: "数据", emoji: "📊" },
-  { href: "/accounts", label: "账号", emoji: "👤" },
-  { href: "/settings", label: "设置", emoji: "⚙️" },
 ];
 
 export function isExternalActive(pathname: string | null, href: string): boolean {
@@ -65,12 +55,13 @@ type SidebarProps = CockpitSidebarProps | ExternalSidebarProps;
 
 /**
  * 全站共用侧栏。cockpit 模式：拖拽排序 / 折叠 / 视图内切换，行为与原 Cockpit.tsx 内联实现一致。
- * external 模式（挂在 /agent /dashboard /accounts /settings 等落地页外壳里）：
- * 工作台视图项渲染为回到 `/?view=<id>` 的静态链接，不支持拖拽/折叠；
- * 底部新增 创作/数据/账号/设置 外链分组，两种模式都渲染，按路径高亮当前所在页面。
+ * external 模式（挂在 /accounts /content 等落地页外壳里）：
+ * 工作台视图项渲染为回到 `/?view=<id>` 的静态链接，不支持拖拽/折叠。
+ * 二期 T6 起：/agent /dashboard /settings 壳页退役（redirect 回 cockpit 单页视图），
+ * 底部的「平台」外链分组随之整段移除——/accounts 桌面入口改由 goals 状态条 +
+ * settings 卡片承担（双入口），移动端导航另见 external-shell.tsx。
  */
 export function Sidebar(props: SidebarProps) {
-  const pathname = usePathname();
   const collapsed = props.mode === "cockpit" ? props.collapsed : false;
 
   return (
@@ -145,14 +136,6 @@ export function Sidebar(props: SidebarProps) {
         {props.mode === "cockpit" ? (
           <button className={props.activeView === "settings" ? "nav-item active" : "nav-item"} onClick={props.onSelectSettings} aria-label="设置与备份" title={collapsed ? "设置与备份" : undefined}><Icon name="settings" /><span>设置与备份</span></button>
         ) : null}
-
-        <div className="nav-section-label">平台</div>
-        {EXTERNAL_NAV_ITEMS.map((item) => {
-          const active = isExternalActive(pathname, item.href);
-          return <Link key={item.href} href={item.href} className={active ? "nav-item active" : "nav-item"} title={collapsed ? item.label : undefined}>
-            <span className="icon" aria-hidden="true">{item.emoji}</span><span>{item.label}</span>
-          </Link>;
-        })}
 
         {props.mode === "cockpit" ? (
           <>

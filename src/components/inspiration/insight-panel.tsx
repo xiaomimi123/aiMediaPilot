@@ -68,7 +68,7 @@ export function InsightPanel({ data, insightId, onClose }: Props) {
                     <p className="mt-1 text-xs text-muted-foreground">{t.rationale}</p>
                   </div>
                   <a
-                    href={`/agent?topic=${encodeURIComponent(t.title)}&platform=douyin${insightId ? `&inspirationId=${insightId}` : ''}`}
+                    href={`/content/script/new?topic=${encodeURIComponent(t.title)}&platform=douyin${insightId ? `&inspirationId=${insightId}` : ''}`}
                     className="shrink-0 rounded-md bg-brand-gradient px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-opacity hover:opacity-90"
                   >
                     用这个生成 →

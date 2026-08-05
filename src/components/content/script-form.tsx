@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -40,6 +40,7 @@ interface InspirationStylePreview {
 export function ScriptForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const pathname = usePathname();
   const [platform, setPlatform] = useState<Platform>('douyin');
   const [topic, setTopic] = useState('');
   const [niche, setNiche] = useState<string>('ai-knowledge');
@@ -54,7 +55,7 @@ export function ScriptForm() {
   const ideaId = searchParams?.get('ideaId') ?? undefined;
   const cockpitId = searchParams?.get('cockpitId') ?? undefined;
 
-  // Prefill from inspiration → /agent loop (?topic=X&platform=Y&niche=Z&inspirationId=ID)
+  // Prefill from inspiration → 深度写稿页 loop (?topic=X&platform=Y&niche=Z&inspirationId=ID)
   useEffect(() => {
     if (!searchParams) return;
     const qpTopic = searchParams.get('topic');
@@ -147,7 +148,7 @@ export function ScriptForm() {
                     const next = new URLSearchParams(searchParams.toString());
                     next.delete('inspirationId');
                     const qs = next.toString();
-                    router.replace(qs ? `/agent?${qs}` : '/agent', { scroll: false });
+                    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
                   }
                 }}
                 className="text-xs text-purple-700 hover:underline"
