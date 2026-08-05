@@ -8,4 +8,18 @@ export type CockpitExtras = {
     string,
     { lower: number; upper: number; predicted: number; actualPlays: number | null }
   >;
+  /** 用户绑定的首个平台账号 (无绑定 → null); 二期 T5 状态条 + 手动同步用。 */
+  account: {
+    nickname: string;
+    loginStatus: string;
+    followerCount: number;
+    lastSyncAt: string | null;
+    lastAutoSyncAt: string | null;
+  } | null;
+  /** 设置视图「内容基准」卡: baseline 当前值 + retro median 提示。 */
+  settings: {
+    baselinePlays: string | null;
+    retroMedian: number | null;
+    retroCount: number;
+  };
 };

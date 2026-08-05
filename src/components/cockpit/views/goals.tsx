@@ -11,10 +11,41 @@ import {
   type WorkspaceState,
 } from "@/lib/cockpit/model";
 import { calculateGoalHealth, currentFollowers, formatMetric, percent } from "@/lib/cockpit/calculations";
+import { getExtras } from "@/lib/cockpit/storage";
 import { EditablePageTitle, ProgressBar, date } from "../shared";
 import { PerformancePanel } from "../analytics/performance-panel";
 
-export function GoalsView({ state, pageTitle, updateTitle, health, followers, published, updateGoal, setState }: { state: WorkspaceState; pageTitle: string; updateTitle: (value: string) => void; health: ReturnType<typeof calculateGoalHealth>; followers: number; published: ContentItem[]; updateGoal: (patch: Partial<GoalCycle>) => void; setState: React.Dispatch<React.SetStateAction<WorkspaceState>> }) {
+function formatSyncTime(value: string | null): string {
+  if (!value) return "—";
+  return value.slice(0, 16).replace("T", " ");
+}
+
+function AccountStatusBar({ notify }: { notify: (message: string) => void }) {
+  const { account } = getExtras();
+  const [syncing, setSyncing] = useState(false);
+
+  const triggerSync = async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/v1/douyin/auto-sync/trigger", { method: "POST" });
+      const json = await res.json().catch(() => null);
+      notify(json?.success ? "已提交同步任务，稍后刷新查看最新数据" : (json?.message ?? "同步入队失败"));
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "同步入队失败");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  return <div className="account-status-bar">
+    <span>绑定：{account?.nickname ?? "未绑定"}</span>
+    <span>· 上次同步 {formatSyncTime(account?.lastAutoSyncAt ?? null)}</span>
+    <button type="button" className="text-button" disabled={syncing} onClick={triggerSync}>{syncing ? "同步中…" : "立即同步"}</button>
+    <a className="text-button" href="/accounts">管理账号 →</a>
+  </div>;
+}
+
+export function GoalsView({ state, pageTitle, updateTitle, health, followers, published, updateGoal, setState, notify }: { state: WorkspaceState; pageTitle: string; updateTitle: (value: string) => void; health: ReturnType<typeof calculateGoalHealth>; followers: number; published: ContentItem[]; updateGoal: (patch: Partial<GoalCycle>) => void; setState: React.Dispatch<React.SetStateAction<WorkspaceState>>; notify: (message: string) => void }) {
   const [showConfig, setShowConfig] = useState(false);
   const [snapshotDate, setSnapshotDate] = useState(date);
   const [snapshotFollowers, setSnapshotFollowers] = useState("");
@@ -132,7 +163,7 @@ export function GoalsView({ state, pageTitle, updateTitle, health, followers, pu
     </section>
 
     <section className="panel follower-analytics-panel">
-      <header><div><span className="eyebrow">FOLLOWER GROWTH</span><h2>账号粉丝趋势</h2><p>通过快照记录真实增长过程；点击右侧记录可以修改原始数据。</p></div><div className="snapshot-entry-wrap">{editingSnapshotId ? <span className="snapshot-editing-label">正在修改 {snapshotDate.slice(5)}</span> : null}<div className="snapshot-entry"><label><span>日期</span><input type="date" min={state.goal.startDate} max={state.goal.endDate} value={snapshotDate} onChange={(event) => { setSnapshotDate(event.target.value); setSnapshotError(""); }} /></label><label><span>粉丝数</span><input type="number" min="0" value={snapshotFollowers} onChange={(event) => { setSnapshotFollowers(event.target.value); setSnapshotError(""); }} placeholder={String(followers)} /></label><button className="secondary-button" disabled={!snapshotFollowers} onClick={saveSnapshot}>{editingSnapshotId ? "保存修改" : "录入快照"}</button>{editingSnapshotId ? <button className="text-button snapshot-cancel-button" onClick={resetSnapshotEditor}>取消</button> : null}</div>{snapshotError ? <p className="snapshot-error">{snapshotError}</p> : null}</div></header>
+      <header><div><span className="eyebrow">FOLLOWER GROWTH</span><h2>账号粉丝趋势</h2><p>通过快照记录真实增长过程；点击右侧记录可以修改原始数据。</p><AccountStatusBar notify={notify} /></div><div className="snapshot-entry-wrap">{editingSnapshotId ? <span className="snapshot-editing-label">正在修改 {snapshotDate.slice(5)}</span> : null}<div className="snapshot-entry"><label><span>日期</span><input type="date" min={state.goal.startDate} max={state.goal.endDate} value={snapshotDate} onChange={(event) => { setSnapshotDate(event.target.value); setSnapshotError(""); }} /></label><label><span>粉丝数</span><input type="number" min="0" value={snapshotFollowers} onChange={(event) => { setSnapshotFollowers(event.target.value); setSnapshotError(""); }} placeholder={String(followers)} /></label><button className="secondary-button" disabled={!snapshotFollowers} onClick={saveSnapshot}>{editingSnapshotId ? "保存修改" : "录入快照"}</button>{editingSnapshotId ? <button className="text-button snapshot-cancel-button" onClick={resetSnapshotEditor}>取消</button> : null}</div>{snapshotError ? <p className="snapshot-error">{snapshotError}</p> : null}</div></header>
       <div className="follower-analytics-body">
         <FollowerTrendChart snapshots={snapshots} startDate={state.goal.startDate} endDate={state.goal.endDate} startFollowers={state.goal.followerStart} targetFollowers={state.goal.followerTarget} />
         <aside><span>快照记录（折线图原始数据）</span><strong>{snapshots.length}</strong><small>次更新</small><div>{[...snapshots].reverse().map((item) => <button key={item.id} className={editingSnapshotId === item.id ? "snapshot-record active" : "snapshot-record"} onClick={() => editSnapshot(item)} aria-label={`修改 ${item.date} 的粉丝快照`}><span>{item.date.slice(5)}</span><strong>{formatMetric(item.followers)}</strong><em>编辑</em></button>)}</div></aside>

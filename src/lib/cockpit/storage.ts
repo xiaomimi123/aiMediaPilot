@@ -2,7 +2,11 @@ import type { WorkspaceState } from './model';
 import type { CockpitExtras } from './extras-types';
 
 let rev = '';
-let extras: CockpitExtras = { predictions: {} };
+let extras: CockpitExtras = {
+  predictions: {},
+  account: null,
+  settings: { baselinePlays: null, retroMedian: null, retroCount: 0 },
+};
 
 /** PUT 返回 409 (rev 与服务端 CockpitPrefs.updatedAt 不匹配) 时抛出 — 调用方据此
  * 区分"真的保存失败"和"别处已经改过, 这份状态已经过期"两种情况。 */

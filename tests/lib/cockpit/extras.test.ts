@@ -7,6 +7,15 @@ const prismaMock = vi.hoisted(() => ({
   contentAnalysis: {
     findMany: vi.fn(),
   },
+  platformAccount: {
+    findFirst: vi.fn(),
+  },
+  user: {
+    findUnique: vi.fn(),
+  },
+  actualMetric: {
+    findMany: vi.fn(),
+  },
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
@@ -14,6 +23,9 @@ import { loadExtras } from '@/lib/cockpit/extras';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.platformAccount.findFirst.mockResolvedValue(null);
+  prismaMock.user.findUnique.mockResolvedValue(null);
+  prismaMock.actualMetric.findMany.mockResolvedValue([]);
 });
 
 describe('loadExtras', () => {
@@ -22,7 +34,11 @@ describe('loadExtras', () => {
 
     const result = await loadExtras('user1');
 
-    expect(result).toEqual({ predictions: {} });
+    expect(result).toEqual({
+      predictions: {},
+      account: null,
+      settings: { baselinePlays: null, retroMedian: null, retroCount: 0 },
+    });
     expect(prismaMock.contentAnalysis.findMany).not.toHaveBeenCalled();
   });
 
@@ -75,5 +91,50 @@ describe('loadExtras', () => {
     expect(result.predictions).toEqual({
       'content-1': { predicted: 5000, lower: 3000, upper: 8000, actualPlays: null },
     });
+  });
+
+  it('无绑定账号 → account: null, 不查询 user.lastAutoSyncAt', async () => {
+    prismaMock.cockpitContent.findMany.mockResolvedValue([]);
+    prismaMock.platformAccount.findFirst.mockResolvedValue(null);
+
+    const result = await loadExtras('user1');
+
+    expect(result.account).toBeNull();
+  });
+
+  it('已绑定账号 → account 取 nickname/loginStatus/followerCount/lastSyncAt + user.lastAutoSyncAt', async () => {
+    prismaMock.cockpitContent.findMany.mockResolvedValue([]);
+    prismaMock.platformAccount.findFirst.mockResolvedValue({
+      nickname: '测试号',
+      loginStatus: 'EXPIRED',
+      followerCount: 999,
+      lastSyncAt: new Date('2026-08-01T00:00:00.000Z'),
+    });
+    prismaMock.user.findUnique.mockResolvedValue({
+      lastAutoSyncAt: new Date('2026-08-02T00:00:00.000Z'),
+    });
+
+    const result = await loadExtras('user1');
+
+    expect(result.account).toEqual({
+      nickname: '测试号',
+      loginStatus: 'EXPIRED',
+      followerCount: 999,
+      lastSyncAt: '2026-08-01T00:00:00.000Z',
+      lastAutoSyncAt: '2026-08-02T00:00:00.000Z',
+    });
+    expect(prismaMock.platformAccount.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'user1', isActive: true } }),
+    );
+  });
+
+  it('settings: baselinePlays + retroCount < 3 → retroMedian null', async () => {
+    prismaMock.cockpitContent.findMany.mockResolvedValue([]);
+    prismaMock.user.findUnique.mockResolvedValue({ baselinePlays: 500n });
+    prismaMock.actualMetric.findMany.mockResolvedValue([{ plays: 100n }]);
+
+    const result = await loadExtras('user1');
+
+    expect(result.settings).toEqual({ baselinePlays: '500', retroMedian: null, retroCount: 1 });
   });
 });

@@ -7,7 +7,10 @@ import {
   type DesignStyle,
   type WorkspaceState,
 } from "@/lib/cockpit/model";
+import { getExtras } from "@/lib/cockpit/storage";
 import { EditablePageTitle, creatorMark, dashboardTitle, normalizeGoalQuotas } from "../shared";
+import { AIProviderCard } from "../settings-cards/ai-provider-card";
+import { BaselineCard } from "../settings-cards/baseline-card";
 
 const DESIGN_STYLE_OPTIONS: ReadonlyArray<{
   id: DesignStyle;
@@ -24,6 +27,7 @@ const DESIGN_STYLE_OPTIONS: ReadonlyArray<{
 
 export function SettingsView({ state, pageTitle, updateTitle, updateDesignStyle, setState, onReset }: { state: WorkspaceState; pageTitle: string; updateTitle: (value: string) => void; updateDesignStyle: (designStyle: DesignStyle) => void; setState: React.Dispatch<React.SetStateAction<WorkspaceState>>; onReset: () => void }) {
   const [newType, setNewType] = useState("");
+  const { settings } = getExtras();
   const updateProfile = (patch: Partial<CreatorProfile>) => setState((prev) => ({
     ...prev,
     profile: { ...prev.profile, ...patch },
@@ -91,6 +95,10 @@ export function SettingsView({ state, pageTitle, updateTitle, updateDesignStyle,
       <div className="panel settings-card wide"><div className="settings-icon">#</div><div><h2>内容类型</h2><p>每条内容只能有一个主要类型。类型会用于大目标配额和复盘对比。</p><div className="type-chips">{state.contentTypes.map((type) => <span key={type}>{type}<button aria-label={`删除${type}`} onClick={() => setState((prev) => { const quotas = normalizeGoalQuotas(prev.goal.outputTarget, prev.goal.quotas.filter((item) => item.contentType !== type)); return { ...prev, contentTypes: prev.contentTypes.filter((item) => item !== type), goal: { ...prev.goal, quotas } }; })}>×</button></span>)}</div><div className="add-type"><input value={newType} onChange={(e) => setNewType(e.target.value)} placeholder="添加新的内容类型" /><button onClick={() => { const value = newType.trim(); if (!value || value === "其他" || state.contentTypes.includes(value)) return; setState((prev) => { const quotas = normalizeGoalQuotas(prev.goal.outputTarget, [...prev.goal.quotas, { contentType: value, target: 0 }]); return { ...prev, contentTypes: [...prev.contentTypes, value], goal: { ...prev.goal, quotas } }; }); setNewType(""); }}>添加</button></div></div></div>
       <div className="panel settings-card danger-card"><div className="settings-icon">!</div><div><h2>清空工作台</h2><p>删除当前浏览器中的全部内容与目标数据，保留创作者档案。操作前请先导出备份。</p><button className="danger-button" onClick={onReset}>清空内容与目标</button></div></div>
       <div className="panel settings-card"><div className="settings-icon">✦</div><div><h2>AI 辅助</h2><p>未配置密钥时自动生成提示词；配置后可在看板内直接得到结构化建议。</p><small>服务端变量：OPENAI_API_KEY<br />默认模型：gpt-5.6-luna</small></div></div>
+
+      <AIProviderCard />
+      <BaselineCard baselinePlays={settings.baselinePlays} retroMedian={settings.retroMedian} retroCount={settings.retroCount} />
+      <div className="panel settings-card"><div className="settings-icon">⇄</div><div><h2>账号管理</h2><p>绑定抖音 / 小红书账号、查看登录状态与手动同步，都在独立的账号管理页完成——这里只是第二个入口。</p><a className="text-button" href="/accounts">前往账号管理 →</a></div></div>
     </div>
   </section>;
 }

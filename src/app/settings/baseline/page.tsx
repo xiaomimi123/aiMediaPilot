@@ -1,18 +1,7 @@
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { BaselineForm } from '@/components/settings/baseline-form';
-
-const MIN_RETROS_FOR_MEDIAN = 3;
-
-function median(values: number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 0) {
-    return (sorted[mid - 1] + sorted[mid]) / 2;
-  }
-  return sorted[mid];
-}
+import { computeRetroStats } from '@/lib/settings/baseline-stats';
 
 const SOURCE_LABEL = {
   null: '尚未设置',
@@ -33,11 +22,7 @@ export default async function BaselineSettingsPage() {
     }),
   ]);
 
-  const retroCount = metrics.length;
-  const retroMedian =
-    retroCount >= MIN_RETROS_FOR_MEDIAN
-      ? Math.round(median(metrics.map((m) => Number(m.plays))) ?? 0)
-      : null;
+  const { retroMedian, retroCount } = computeRetroStats(metrics.map((m) => Number(m.plays)));
 
   const initialValue = fresh?.baselinePlays?.toString() ?? null;
   const currentLabel =
