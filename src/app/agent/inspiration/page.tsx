@@ -337,7 +337,7 @@ export default function InspirationPage() {
                         {h.output.recommendedTopics.slice(0, 3).map((t, i) => (
                           <a
                             key={i}
-                            href={`/agent?topic=${encodeURIComponent(t.title)}&platform=douyin&inspirationId=${h.id}`}
+                            href={`/content/script/new?topic=${encodeURIComponent(t.title)}&platform=douyin&inspirationId=${h.id}`}
                             className="rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-900 hover:bg-purple-200"
                           >
                             {t.title}

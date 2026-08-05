@@ -482,6 +482,7 @@ function createBlankState(): WorkspaceState {
 
 function initialViewFromSearchParams(searchParams: URLSearchParams): NavView {
   const requested = searchParams.get("view");
+  if (requested === "settings") return "settings";
   return requested && (DEFAULT_NAVIGATION_ORDER as string[]).includes(requested)
     ? (requested as NavigationItemId)
     : "momentum";

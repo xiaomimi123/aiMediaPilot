@@ -131,7 +131,7 @@ export default async function PatternsPage() {
               你当前已生成 {stats.total} 条脚本。 多用 [智能体] 写几条,这里会自动聚合你的标题字数 /
               偏好钩子 / niche 分布等规律,并跟灵感库对照。
             </p>
-            <Link href="/agent" className="text-sm text-blue-600 hover:underline">
+            <Link href="/content/script/new" className="text-sm text-blue-600 hover:underline">
               去写脚本 →
             </Link>
           </CardContent>

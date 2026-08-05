@@ -11,8 +11,8 @@ const nextConfig = {
     return [
       { source: '/agent', destination: '/?view=pipeline', permanent: false },
       { source: '/dashboard', destination: '/?view=review', permanent: false },
-      { source: '/settings', destination: '/', permanent: false },
-      { source: '/settings/baseline', destination: '/', permanent: false },
+      { source: '/settings', destination: '/?view=settings', permanent: false },
+      { source: '/settings/baseline', destination: '/?view=settings', permanent: false },
     ];
   },
 };

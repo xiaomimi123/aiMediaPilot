@@ -38,7 +38,7 @@ export function PredictionCard({ data }: { data: PredictedPlaysRange | null | un
             <li>• 设了账号基线 → 上传时立即出预测</li>
             <li>• 没设的话, 等 3 条复盘后会自动从实测数据反算出基线</li>
           </ul>
-          <Link href="/settings/baseline">
+          <Link href="/?view=settings">
             <Button size="sm" variant="outline">设置基线 →</Button>
           </Link>
         </CardContent>
@@ -67,7 +67,7 @@ export function PredictionCard({ data }: { data: PredictedPlaysRange | null | un
         </div>
         <div className="text-center text-xs text-muted-foreground">
           基线 {formatPlays(data.basisValue)} ({SOURCE_LABEL[data.basisSource]}) ·{' '}
-          <Link href="/settings/baseline" className="hover:text-primary underline-offset-2 hover:underline">
+          <Link href="/?view=settings" className="hover:text-primary underline-offset-2 hover:underline">
             修改 →
           </Link>
         </div>
