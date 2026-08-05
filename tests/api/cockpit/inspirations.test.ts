@@ -6,6 +6,7 @@ vi.mock('@/lib/user', () => ({
 
 const prismaMock = vi.hoisted(() => ({
   cockpitInspiration: { create: vi.fn() },
+  $transaction: vi.fn(),
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
@@ -34,33 +35,49 @@ beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.cockpitInspiration.create.mockResolvedValue({ id: 'insp1' });
   bumpCockpitRevMock.mockResolvedValue(undefined);
+  // 事务默认直接把 prismaMock 自身当 tx 传给回调 (house pattern, 见 workspace.test.ts)
+  prismaMock.$transaction.mockImplementation((cb: (tx: typeof prismaMock) => unknown) => cb(prismaMock));
 });
 
 describe('POST /api/v1/cockpit/inspirations', () => {
-  it('正常写入 → 200 + id, 并写入 CockpitInspiration + bump rev', async () => {
+  it('正常写入 → 200 + id, 并在同一事务内写入 CockpitInspiration + bump rev', async () => {
     const res = await POST(req({ text: '一条灵感文字' }));
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.success).toBe(true);
-    expect(json.data.id).toBe('insp1');
+    expect(typeof json.data.id).toBe('string');
+    expect(json.data.id.length).toBeGreaterThan(0);
+
+    // create + bump 必须走同一个 $transaction (主写路由不 fail-soft)
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
 
     expect(prismaMock.cockpitInspiration.create).toHaveBeenCalledTimes(1);
     const createArgs = prismaMock.cockpitInspiration.create.mock.calls[0][0];
     expect(createArgs.data).toEqual(
       expect.objectContaining({
+        id: json.data.id,
         userId: 'user1',
         text: '一条灵感文字',
         convertedContentIds: [],
       }),
     );
-    expect(typeof createArgs.data.id).toBe('string');
-    expect(createArgs.data.id.length).toBeGreaterThan(0);
     expect(typeof createArgs.data.createdAt).toBe('string');
     expect(typeof createArgs.data.updatedAt).toBe('string');
 
-    // bump 必须在写入成功之后被调用 — 一阶段教训 I1: 不得跳过
+    // bump 必须在写入成功之后、在 tx 客户端上被调用 — 一阶段教训 I1: 不得跳过
     expect(bumpCockpitRevMock).toHaveBeenCalledTimes(1);
-    expect(bumpCockpitRevMock).toHaveBeenCalledWith('user1');
+    expect(bumpCockpitRevMock).toHaveBeenCalledWith('user1', prismaMock);
+  });
+
+  it('事务内 bumpCockpitRev 抛错 → 500, 不返回成功 (事务语义下主写入随之回滚)', async () => {
+    bumpCockpitRevMock.mockRejectedValueOnce(new Error('bump failed'));
+    const res = await POST(req({ text: '一条灵感文字' }));
+    expect(res.status).toBe(500);
+    const json = await res.json();
+    expect(json.success).toBe(false);
+    // create 在 bump 之前已被调用 (mock 层不模拟真实回滚, 真实 DB 由 $transaction 保证原子性)
+    expect(prismaMock.cockpitInspiration.create).toHaveBeenCalledTimes(1);
+    expect(bumpCockpitRevMock).toHaveBeenCalledTimes(1);
   });
 
   it('text 为空 → 400, 不写库, 不 bump', async () => {

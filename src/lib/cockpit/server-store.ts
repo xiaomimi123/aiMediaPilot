@@ -1,3 +1,4 @@
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import {
   DEFAULT_CREATOR_PROFILE, DEFAULT_DESIGN_STYLE, DEFAULT_NAVIGATION_ORDER,
@@ -346,7 +347,15 @@ export async function saveWorkspaceToDb(
  * data:{} — Prisma 要求 data 至少一个字段, 而业务字段真值我们并不想改)。
  * 用户还没有 CockpitPrefs 行 (没做过 onboarding) 时是 no-op, 符合钩子 fail-soft
  * 语义, 调用方应放在自己已有的 try/catch 里。
+ *
+ * 可选 `client` 参数: 默认用顶层 `prisma`, 但当调用方本身就是"cockpit 写入是主流程"
+ * 的路由 (例如 POST /api/v1/cockpit/inspirations) 时, 传入 `tx` 把这次 bump 纳入
+ * 同一个事务 — 此时 bump 失败必须回滚主写入, 而不是 fail-soft 吞掉 (否则会重新
+ * 打开 I1 的"数据已落库但 rev 未失效"覆盖窗口)。
  */
-export async function bumpCockpitRev(userId: string): Promise<void> {
-  await prisma.$executeRaw`UPDATE "CockpitPrefs" SET "updatedAt" = NOW() WHERE "userId" = ${userId}`;
+export async function bumpCockpitRev(
+  userId: string,
+  client: Prisma.TransactionClient | PrismaClient = prisma,
+): Promise<void> {
+  await client.$executeRaw`UPDATE "CockpitPrefs" SET "updatedAt" = NOW() WHERE "userId" = ${userId}`;
 }
