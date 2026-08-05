@@ -134,7 +134,7 @@ API: `POST/GET /api/v1/topics`、`PATCH /api/v1/topics/[id]`、`POST/GET /api/v1
 
 ### 关键交互流
 
-1. **选题入池**: discover / 灵感页每条推荐 topic 有「+ 入选题池」按钮 (`PoolButton`, 重复入池返回 409)。 从 `/agent?topic=&ideaId=` 进入写稿 (`ideaId` 预填 + 保存脚本自动 `PATCH` 该选题为 `ADOPTED` 并写入 `scriptDraftId`) 这条链路仍在, 只是不再挂在已删除的旧看板卡片「开写」按钮上。
+1. **选题入池**: `/agent` 首页灵感推荐行仍有「+ 入选题池」按钮 (`PoolButton`, 重复入池返回 409)。 从 `/agent?topic=&ideaId=` 进入写稿 (`ideaId` 预填 + 保存脚本自动 `PATCH` 该选题为 `ADOPTED` 并写入 `scriptDraftId`) 这条链路仍在, 只是不再挂在已删除的旧看板卡片「开写」按钮上。`/agent/discover` 页每条主题卡改为「存入灵感池」按钮 (`POST /api/v1/cockpit/inspirations`), 直接写入 Cockpit 灵感墙 (`CockpitInspiration`), 不再经过选题池; Cockpit 灵感墙视图右上角新增「抓灵感 →」跳回 `/agent/discover`。
 2. **分发登记**: script 详情页 (`/content/script/[id]`) + 分发登记弹窗, 选平台 (注册表 key) + 贴 URL → 写一条 `Distribution` 记录, 显示「已分发 N 平台」徽标。
 3. **复盘闭环**: 现有 retro / auto-sync 不动; Cockpit 复盘实验室视图承接「待复盘 / 复盘倒计时」的展示职责 (原来在旧看板已发布列)。
 

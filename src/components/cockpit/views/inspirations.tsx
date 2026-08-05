@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   DEFAULT_PAGE_TITLES,
   type ContentItem,
@@ -47,7 +48,7 @@ export function InspirationPoolView({ state, pageTitle, updateTitle, add, update
         <footer><span>⌘ / Ctrl + Enter 保存</span><button className="primary-button" disabled={!draft.trim()} onClick={save}>存入灵感池</button></footer>
       </section>
       <section className="panel inspiration-wall">
-        <header className="inspiration-wall-heading"><div><span className="eyebrow">IDEA WALL</span><h2>灵感墙</h2><p>最新记录在最前面，决定投入后再转为正式内容。</p></div><span className="inspiration-count">{cards.length}<small> 张卡片</small></span></header>
+        <header className="inspiration-wall-heading"><div><span className="eyebrow">IDEA WALL</span><h2>灵感墙</h2><p>最新记录在最前面，决定投入后再转为正式内容。</p></div><Link href="/agent/discover" className="ai-button small">抓灵感 →</Link><span className="inspiration-count">{cards.length}<small> 张卡片</small></span></header>
         {cards.length ? <div className="inspiration-grid">{cards.map((card, index) => {
           const converted = card.convertedContentIds
             .map((contentId) => state.contents.find((item) => item.id === contentId))

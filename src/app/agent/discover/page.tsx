@@ -8,7 +8,6 @@ import { Sparkles } from 'lucide-react';
 import { KNOWN_NICHES } from '@/lib/llm/prompts';
 import { cn } from '@/lib/utils';
 import { CONTENT_PLATFORMS, CONTENT_PLATFORM_EMOJI, CONTENT_PLATFORM_LABEL, type ContentPlatform } from '@/lib/platform';
-import { PoolButton } from '@/components/content/pool-button';
 
 interface DiscoveredTopic {
   title: string;
@@ -48,6 +47,9 @@ export default function DiscoverPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DiscoveryResult | null>(null);
+  const [savedIndices, setSavedIndices] = useState<Record<number, boolean>>({});
+  const [savingIndices, setSavingIndices] = useState<Record<number, boolean>>({});
+  const [saveErrors, setSaveErrors] = useState<Record<number, string>>({});
 
   const effectiveNiche = niche === '__custom' ? customNiche.trim() : niche;
 
@@ -94,6 +96,36 @@ export default function DiscoverPage() {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveToPool = async (index: number, t: DiscoveredTopic) => {
+    setSaveErrors((prev) => {
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
+    setSavingIndices((prev) => ({ ...prev, [index]: true }));
+    try {
+      const res = await fetch('/api/v1/cockpit/inspirations', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: `${t.title}\n${t.hookLine}\n${t.rationale}` }),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        setSaveErrors((prev) => ({ ...prev, [index]: json.message }));
+      } else {
+        setSavedIndices((prev) => ({ ...prev, [index]: true }));
+      }
+    } catch (e) {
+      setSaveErrors((prev) => ({ ...prev, [index]: e instanceof Error ? e.message : String(e) }));
+    } finally {
+      setSavingIndices((prev) => {
+        const next = { ...prev };
+        delete next[index];
+        return next;
+      });
     }
   };
 
@@ -225,7 +257,8 @@ export default function DiscoverPage() {
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {result.topics.map((t, i) => {
               const diff = DIFFICULTY_BADGE[t.difficulty];
-              const generateHref = `/agent?topic=${encodeURIComponent(t.title)}&platform=${platform}&niche=${encodeURIComponent(result.niche)}`;
+              const saved = Boolean(savedIndices[i]);
+              const saving = Boolean(savingIndices[i]);
               return (
                 <Card key={i} className="transition-shadow hover:shadow-md">
                   <CardContent className="space-y-2.5 pt-5">
@@ -255,18 +288,18 @@ export default function DiscoverPage() {
                     <p className="text-xs text-muted-foreground">{t.rationale}</p>
 
                     <div className="flex items-center gap-2 pt-1">
-                      <a
-                        href={generateHref}
-                        className="inline-block rounded-md bg-brand-gradient px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-opacity hover:opacity-90"
+                      <button
+                        type="button"
+                        onClick={() => handleSaveToPool(i, t)}
+                        disabled={saved || saving}
+                        className="inline-block rounded-md bg-brand-gradient px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        用这个生成脚本 →
-                      </a>
-                      <PoolButton
-                        title={t.title}
-                        note={`${t.hookLine}\n${t.rationale}`}
-                        source="discover"
-                      />
+                        {saved ? '已存入 ✓' : saving ? '存入中…' : '存入灵感池'}
+                      </button>
                     </div>
+                    {saveErrors[i] && (
+                      <p className="text-xs text-destructive">{saveErrors[i]}</p>
+                    )}
                   </CardContent>
                 </Card>
               );
