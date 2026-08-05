@@ -1077,6 +1077,7 @@ textarea { resize: vertical; }
 .schedule-object-type-badge { display: inline-flex; width: fit-content; align-items: center; gap: 7px; padding: 6px 9px; border-radius: 8px; background: color-mix(in srgb, var(--event-color) 10%, var(--surface)); color: var(--event-color); font-size: 9px; font-weight: 750; }
 .schedule-object-type-badge i { width: 7px; height: 7px; border-radius: 50%; background: var(--event-color); }
 .field-error { display: block; margin-top: 5px; color: #ad4f36; font-size: 8px; }
+.field-hint { display: block; margin-top: 5px; color: var(--muted); font-size: 9px; line-height: 1.5; }
 .schedule-type-color-field { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-soft); color: var(--muted); font-size: 9px; }
 .schedule-type-color-field > div { display: flex; align-items: center; gap: 9px; }
 .schedule-type-color-field i { width: 16px; height: 16px; border-radius: 5px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--event-color) 16%, transparent); }
