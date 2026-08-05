@@ -1,4 +1,5 @@
 import type { ScriptDraft } from "@/lib/cockpit/model";
+import type { ContentPlatform } from "@/lib/platform";
 
 /**
  * 三平台生成结果 → 脚本骨架 (ScriptDraft) 映射纯函数。
@@ -10,8 +11,6 @@ import type { ScriptDraft } from "@/lib/cockpit/model";
  *   （不是 `undefined` 值），因为调用方会把返回结果 spread 到已有用户内容上，
  *   一个 `undefined` 的 key 会把用户已写的文本覆盖成 undefined。
  */
-
-type Platform = "douyin" | "xiaohongshu" | "gongzhonghao";
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -165,7 +164,7 @@ function mapGongzhonghao(result: Record<string, unknown>): Partial<ScriptDraft> 
  * @param result 生成响应（未知形状，来自 LLM，可能残缺/畸形）
  * @returns 仅包含成功解析字段的 Partial<ScriptDraft>；缺失/无法解析的字段完全不作为 key 出现。
  */
-export function mapGeneratedToScript(platform: Platform, result: unknown): Partial<ScriptDraft> {
+export function mapGeneratedToScript(platform: ContentPlatform, result: unknown): Partial<ScriptDraft> {
   if (!isPlainObject(result)) {
     return {};
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   DEFAULT_PAGE_TITLES,
   type CreatorProfile,
@@ -97,7 +98,7 @@ export function SettingsView({ state, pageTitle, updateTitle, updateDesignStyle,
 
       <AIProviderCard />
       <BaselineCard baselinePlays={settings.baselinePlays} retroMedian={settings.retroMedian} retroCount={settings.retroCount} />
-      <div className="panel settings-card"><div className="settings-icon">⇄</div><div><h2>账号管理</h2><p>绑定抖音 / 小红书账号、查看登录状态与手动同步，都在独立的账号管理页完成——这里只是第二个入口。</p><a className="text-button" href="/accounts">前往账号管理 →</a></div></div>
+      <div className="panel settings-card"><div className="settings-icon">⇄</div><div><h2>账号管理</h2><p>绑定抖音 / 小红书账号、查看登录状态与手动同步，都在独立的账号管理页完成——这里只是第二个入口。</p><Link className="text-button" href="/accounts">前往账号管理 →</Link></div></div>
     </div>
   </section>;
 }

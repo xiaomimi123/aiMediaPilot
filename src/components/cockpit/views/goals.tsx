@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   DEFAULT_PAGE_TITLES,
   QUALITY_LABELS,
@@ -41,7 +42,7 @@ function AccountStatusBar({ notify }: { notify: (message: string) => void }) {
     <span>绑定：{account?.nickname ?? "未绑定"}</span>
     <span>· 上次同步 {formatSyncTime(account?.lastAutoSyncAt ?? null)}</span>
     <button type="button" className="text-button" disabled={syncing} onClick={triggerSync}>{syncing ? "同步中…" : "立即同步"}</button>
-    <a className="text-button" href="/accounts">管理账号 →</a>
+    <Link className="text-button" href="/accounts">管理账号 →</Link>
   </div>;
 }
 

@@ -4,6 +4,10 @@ import type { DashboardSummary } from '@/lib/dashboard/types';
 /**
  * 单次拉取 /api/v1/dashboard/summary，module-level 缓存 in-flight promise，
  * 避免复盘实验室 (PredictionPanel) 与大目标 (PerformancePanel) 同一会话内挂载时重复请求。
+ *
+ * 只做「并发去重」：同一时刻的多个挂载共享同一个进行中的请求；一旦请求settled
+ * (成功或失败)，缓存立刻清空——不跨会话缓存数据，避免页面长开后数据一直冻结在
+ * 首次拉取的结果上。
  */
 let inFlight: Promise<DashboardSummary> | null = null;
 
@@ -15,9 +19,8 @@ function fetchSummary(): Promise<DashboardSummary> {
         if (j.success) return j.data as DashboardSummary;
         throw new Error(j.message ?? '数据加载失败');
       })
-      .catch((e) => {
-        inFlight = null; // 失败后允许重试
-        throw e;
+      .finally(() => {
+        inFlight = null; // 无论成功或失败, settled 后立刻清空, 下次调用总是拿新数据
       });
   }
   return inFlight;

@@ -38,6 +38,9 @@ export function AIProviderCard() {
       const res = await fetch("/api/v1/ai/config");
       const json = await res.json();
       if (json.success) setConfigs(json.data);
+      else setStatus({ kind: "err", msg: json.message ?? "加载失败" });
+    } catch (err) {
+      setStatus({ kind: "err", msg: err instanceof Error ? err.message : String(err) });
     } finally {
       setLoading(false);
     }
@@ -93,6 +96,8 @@ export function AIProviderCard() {
       } else {
         setStatus({ kind: "err", msg: json.message ?? "测试失败" });
       }
+    } catch (err) {
+      setStatus({ kind: "err", msg: err instanceof Error ? err.message : String(err) });
     } finally {
       setTestingId(null);
     }

@@ -15,6 +15,7 @@ import {
 import { todayISO } from "@/lib/cockpit/calculations";
 import { stageIndex } from "@/lib/cockpit/workflow";
 import { mapGeneratedToScript } from "@/lib/cockpit/script-mapping";
+import { runGenerateScript } from "@/lib/cockpit/generate-flow";
 import { CONTENT_PLATFORMS, CONTENT_PLATFORM_LABEL, type ContentPlatform } from "@/lib/platform";
 import { Badge, Icon, StarRating } from "./shared";
 
@@ -71,7 +72,7 @@ function StageStatusPanel({ item, stageColors, setStageStatus }: {
   </section>;
 }
 
-export function ContentDrawer({ item, initialTab, stageEvents, stageColors, contentTypes, close, update, changeStage, setStageStatus, schedule, unschedule, remove, markPublished, unmarkPublished, saveReview, ruleDeposited, addRule, notify }: { item: ContentItem; initialTab: ContentDrawerTab; stageEvents: StageEvent[]; stageColors: WorkspaceState["stageColors"]; contentTypes: string[]; close: () => void; update: (patch: Partial<ContentItem>) => void; changeStage: (stage: ContentStage) => void; setStageStatus: (stage: WorkStage, completed: boolean) => void; schedule: (stage: WorkStage, plannedDate: string) => void; unschedule: (stage: WorkStage) => void; remove: () => void; markPublished: () => void; unmarkPublished: () => void; saveReview: () => void; ruleDeposited: boolean; addRule: (text: string) => void; notify: (message: string) => void }) {
+export function ContentDrawer({ item, initialTab, stageEvents, stageColors, contentTypes, close, update, mergeScript, changeStage, setStageStatus, schedule, unschedule, remove, markPublished, unmarkPublished, saveReview, ruleDeposited, addRule, notify }: { item: ContentItem; initialTab: ContentDrawerTab; stageEvents: StageEvent[]; stageColors: WorkspaceState["stageColors"]; contentTypes: string[]; close: () => void; update: (patch: Partial<ContentItem>) => void; mergeScript: (id: string, partial: Partial<ContentItem["script"]>) => void; changeStage: (stage: ContentStage) => void; setStageStatus: (stage: WorkStage, completed: boolean) => void; schedule: (stage: WorkStage, plannedDate: string) => void; unschedule: (stage: WorkStage) => void; remove: () => void; markPublished: () => void; unmarkPublished: () => void; saveReview: () => void; ruleDeposited: boolean; addRule: (text: string) => void; notify: (message: string) => void }) {
   const [tab, setTab] = useState<ContentDrawerTab>(initialTab);
   const score = Object.values(item.topic.score).reduce((sum, value) => sum + value, 0);
   const updateTopic = (patch: Partial<ContentItem["topic"]>) => update({ topic: { ...item.topic, ...patch } });
@@ -89,49 +90,36 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
   currentItemIdRef.current = item.id;
   const titleFeedbackTimerRef = useRef<number | null>(null);
   const lastCheckedTitleRef = useRef("");
-  useEffect(() => () => {
-    mountedRef.current = false;
-    if (titleFeedbackTimerRef.current) window.clearTimeout(titleFeedbackTimerRef.current);
+  // StrictMode 下 effect 会模拟 挂载→卸载→重新挂载, 若只在 cleanup 里把
+  // mountedRef 设为 false 而没有对应的重新挂载动作把它设回 true, 这个 ref 在
+  // 重新挂载后会永远停在 false —— 后续任何一次生成都会被 (误判为已卸载而)
+  // 静默丢弃结果。effect 主体负责重新武装, cleanup 负责卸载时置 false。
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (titleFeedbackTimerRef.current) window.clearTimeout(titleFeedbackTimerRef.current);
+    };
   }, []);
 
   async function handleGenerateScript() {
     if (generating) return;
-    const requestedItemId = item.id;
-    setGenerating(true);
-    try {
-      const niche = await resolveDefaultNiche();
-      const genRes = await fetch("/api/v1/scripts/generate", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ topic: item.title, niche, platform: scriptPlatform }),
-      });
-      const genJson = await genRes.json();
-      if (!genJson.success) {
-        notify(genJson.message || "生成失败");
-        return;
-      }
-
-      const { platform: _platform, inspirationApplied: _inspirationApplied, ...output } = genJson.data as Record<string, unknown>;
-      const saveRes = await fetch("/api/v1/scripts", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ topic: item.title, niche, platform: scriptPlatform, output, cockpitContentId: requestedItemId }),
-      });
-      const saveJson = await saveRes.json();
-      if (!saveJson.success) {
-        notify(saveJson.message || "保存失败");
-        return;
-      }
-
-      // 抽屉已关闭或已切换到另一篇内容: 结果静默丢弃, 不回填也不提示
-      if (!mountedRef.current || currentItemIdRef.current !== requestedItemId) return;
-      updateScript(mapGeneratedToScript(scriptPlatform, genJson.data));
-      notify("AI 脚本已生成并回填");
-    } catch (e) {
-      notify(e instanceof Error ? e.message : "生成失败，请稍后重试");
-    } finally {
-      if (mountedRef.current) setGenerating(false);
-    }
+    await runGenerateScript(
+      { itemId: item.id, title: item.title, platform: scriptPlatform },
+      {
+        // 不能直接把裸的 `fetch` 引用传下去: 原生 fetch 依赖 `this === window`
+        // 的隐式绑定, 脱离 window 对象单独调用会抛 "Illegal invocation"。
+        // wrap 成箭头函数, 调用点仍然是 `window.fetch(...)`。
+        fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
+        resolveDefaultNiche,
+        mapGeneratedToScript,
+        mergeScript,
+        notify,
+        setGenerating,
+        isMounted: () => mountedRef.current,
+        isCurrentItem: (id) => currentItemIdRef.current === id,
+      },
+    );
   }
 
   function handleHeadlineBlur() {
@@ -162,7 +150,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
     {/* “AI 体检”按钮（调 /api/ai/analyze）已在 Task 14 移除：该路由未移植，AI 相关能力统一走 /agent。 */}
     {tab === "topic" ? <div className="drawer-section"><div className="section-title-row"><div><span className="eyebrow">TOPIC GATE</span><h3>大纲卡</h3></div></div><StageScheduleField item={item} stage="topic" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{[["目标受众", "audience"], ["具体痛点", "painPoint"], ["一句话观点", "pointOfView"], ["大家通常怎么讲", "commonAngle"], ["我的反差角度", "contrastAngle"], ["可展示素材", "assets"], ["最低成本拍法", "minimumProduction"]].map(([label, key]) => <label key={key} className="field full"><span>{label}</span><textarea value={String(item.topic[key as keyof typeof item.topic] ?? "")} onChange={(e) => updateTopic({ [key]: e.target.value })} /></label>)}<div className="score-card"><div><span>六维总分</span><strong>{score}<small> / 30</small></strong></div><div className="score-grid">{Object.entries({ audience: "受众", pain: "痛点", scene: "场景", demonstrable: "可展示", distribution: "传播", efficiency: "性价比" }).map(([key, label]) => <label key={key}><span>{label}</span><input type="range" min="0" max="5" value={item.topic.score[key as keyof typeof item.topic.score]} onChange={(e) => updateTopic({ score: { ...item.topic.score, [key]: Number(e.target.value) } })} /><strong>{item.topic.score[key as keyof typeof item.topic.score]}</strong></label>)}</div></div></div> : null}
     {/* “AI 质检”按钮（调 /api/ai/analyze）已在 Task 14 移除：该路由未移植；“用 AI 写脚本”自 Task 2 起改为抽屉内就地生成，不再跳转 /agent。 */}
-    {tab === "script" ? <div className="drawer-section"><div className="section-title-row"><div><span className="eyebrow">SCRIPT</span><h3>先搭结构，再改措辞</h3></div><div style={{ display: "flex", gap: 8 }}><select value={scriptPlatform} onChange={(e) => setScriptPlatform(e.target.value as ContentPlatform)} disabled={generating} aria-label="生成平台" style={{ height: 34, borderRadius: 9 }}>{CONTENT_PLATFORMS.map((value) => <option key={value} value={value}>{CONTENT_PLATFORM_LABEL[value]}</option>)}</select><button type="button" className="ai-button small" disabled={generating} onClick={handleGenerateScript}><Icon name="spark" />{generating ? "生成中…" : "用 AI 写脚本"}</button></div></div><StageScheduleField item={item} stage="script" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{[["标题方向", "headline"], ["开头 3 秒", "hook"], ["一句话结论", "conclusion"], ["内容结构", "body"], ["案例 / 演示", "example"], ["结尾行动 / 观点", "ending"]].map(([label, key]) => <label key={key} className="field full"><span>{label}</span><textarea className={key === "body" ? "large" : ""} value={item.script[key as keyof typeof item.script]} onChange={(e) => updateScript({ [key]: e.target.value })} onBlur={key === "headline" ? handleHeadlineBlur : undefined} />{key === "headline" && titleHint ? <small className="field-hint">{titleHint}</small> : null}</label>)}</div> : null}
+    {tab === "script" ? <div className="drawer-section"><div className="section-title-row"><div><span className="eyebrow">SCRIPT</span><h3>先搭结构，再改措辞</h3></div><div style={{ display: "flex", gap: 8 }}><select value={scriptPlatform} onChange={(e) => { setScriptPlatform(e.target.value as ContentPlatform); setTitleHint(""); lastCheckedTitleRef.current = ""; }} disabled={generating} aria-label="生成平台" style={{ height: 34, borderRadius: 9 }}>{CONTENT_PLATFORMS.map((value) => <option key={value} value={value}>{CONTENT_PLATFORM_LABEL[value]}</option>)}</select><button type="button" className="ai-button small" disabled={generating} onClick={handleGenerateScript}><Icon name="spark" />{generating ? "生成中…" : "用 AI 写脚本"}</button></div></div><StageScheduleField item={item} stage="script" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{[["标题方向", "headline"], ["开头 3 秒", "hook"], ["一句话结论", "conclusion"], ["内容结构", "body"], ["案例 / 演示", "example"], ["结尾行动 / 观点", "ending"]].map(([label, key]) => <label key={key} className="field full"><span>{label}</span><textarea className={key === "body" ? "large" : ""} value={item.script[key as keyof typeof item.script]} onChange={(e) => updateScript({ [key]: e.target.value })} onBlur={key === "headline" ? handleHeadlineBlur : undefined} />{key === "headline" && titleHint ? <small className="field-hint">{titleHint}</small> : null}</label>)}</div> : null}
     {tab === "recording" ? <div className="drawer-section"><div className="stage-detail-strip"><span>录制阶段</span><Badge tone="recording" color={stageColors.recording}>录制</Badge><small>完成后进入剪辑</small></div><StageScheduleField item={item} stage="recording" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} /><label className="field full"><span>录制备注</span><textarea className="large" value={item.recordingNotes} onChange={(e) => update({ recordingNotes: e.target.value })} placeholder="记录机位、口播、录屏、演示路径和补拍素材…" /></label><div className="checklist"><strong>录制完成清单</strong>{["机位与画面可用", "收音清晰", "口播或演示路径完整", "必要素材与补拍镜头齐全"].map((text) => <label key={text}><input type="checkbox" />{text}</label>)}</div></div> : null}
     {tab === "editing" ? <div className="drawer-section"><div className="stage-detail-strip"><span>剪辑阶段</span><Badge tone="editing" color={stageColors.editing}>剪辑</Badge><small>完成后进入发布</small></div><StageScheduleField item={item} stage="editing" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} /><label className="field full"><span>剪辑备注</span><textarea className="large" value={item.editingNotes} onChange={(e) => update({ editingNotes: e.target.value })} placeholder="记录结构删改、字幕、包装、素材替换和导出要求…" /></label><div className="checklist"><strong>剪辑完成清单</strong>{["开头 5 秒直接进入场景", "案例或演示重点清楚", "字幕清楚可读", "封面与标题已确认", `${item.tier}档制作投入已控制`].map((text) => <label key={text}><input type="checkbox" />{text}</label>)}</div></div> : null}
     {tab === "publish" ? <div className="drawer-section"><StageScheduleField item={item} stage="publishing" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} label="计划发布日期" /><div className="form-grid"><label className="field"><span>发布状态</span><select value={item.publicationStatus} disabled><option value="draft">未排期</option><option value="scheduled">已排期</option><option value="published">已发布</option></select><small>由发布档期和实际发布记录自动更新。</small></label><label className="field"><span>实际发布时间</span><input type="date" value={item.publishedAt} onChange={(e) => update({ publishedAt: e.target.value })} /></label></div><label className="field full"><span>封面文案</span><input value={item.coverCopy} onChange={(e) => update({ coverCopy: e.target.value })} /></label><label className="field full"><span>发布正文</span><textarea className="large" value={item.publishCopy} onChange={(e) => update({ publishCopy: e.target.value })} /></label><label className="field full"><span>小红书链接</span><input value={item.xhsLink} onChange={(e) => update({ xhsLink: e.target.value })} placeholder="https://www.xiaohongshu.com/..." /></label>{item.publicationStatus !== "published" ? <><button className="primary-button full-button" disabled={!item.publishedAt} onClick={markPublished}>标记为已发布</button>{!item.publishedAt ? <p className="validation-note">先填写实际发布时间，系统才会计入大目标。</p> : null}</> : <div className="published-banner"><span>已发布于 {item.publishedAt} · 已进入待复盘列表</span><button onClick={unmarkPublished}>撤销发布记录</button></div>}</div> : null}

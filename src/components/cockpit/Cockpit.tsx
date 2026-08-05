@@ -610,6 +610,21 @@ export default function Cockpit() {
     }));
   }
 
+  // AI 生成脚本回填专用: 相比 updateContent 直接替换 `script` 整块, 这里对
+  // `script` 做字段级合并 (`{ ...item.script, ...partial }`) 并读取回填时刻
+  // 最新的 `item.script`——而不是抽屉打开/点击生成那一刻捕获的闭包值。
+  // 生成是异步的, 用户很可能在等待期间已经手改了脚本字段 (闭包里的 item 是旧的);
+  // 若在调用点直接 `{ ...item.script, ...patch }` 再整体 update, 会用那份过期
+  // 的 script 覆盖掉用户这段时间的编辑。
+  function mergeScript(id: string, partial: Partial<ContentItem["script"]>) {
+    setState((prev) => ({
+      ...prev,
+      contents: prev.contents.map((item) => item.id === id
+        ? { ...item, script: { ...item.script, ...partial }, updatedAt: todayISO() }
+        : item),
+    }));
+  }
+
   function updatePageTitle(key: PageTitleKey, value: string) {
     setState((prev) => ({ ...prev, pageTitles: { ...prev.pageTitles, [key]: value } }));
   }
@@ -1078,7 +1093,7 @@ export default function Cockpit() {
 
       <nav className="mobile-nav" aria-label="移动端导航">{nav.map((item) => <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => setView(item.id)}><Icon name={item.icon} /><span>{item.label}</span></button>)}</nav>
       {showCreateContent ? <CreateContentModal inspirationCards={state.inspirationCards} close={() => setShowCreateContent(false)} createBlank={createBlankContent} createFromInspiration={createContentFromInspiration} openInspirationPool={() => { setShowCreateContent(false); setView("inspirations"); }} /> : null}
-      {selected ? <ContentDrawer item={selected} initialTab={selectedTab} stageEvents={state.stageEvents} stageColors={state.stageColors} contentTypes={state.contentTypes} close={() => setSelectedId(null)} update={(patch) => updateContent(selected.id, patch)} changeStage={(stage) => setState((prev) => transitionContentStage(prev, selected.id, stage, date))} setStageStatus={(stage, completed) => setStageStatus(selected.id, stage, completed)} schedule={(stage, plannedDate) => planStage(selected.id, stage, plannedDate)} unschedule={(stage) => clearStagePlan(selected.id, stage)} remove={() => deleteContent(selected)} markPublished={() => markPublished(selected)} unmarkPublished={() => unmarkPublished(selected)} saveReview={() => saveReview(selected)} ruleDeposited={Boolean(selected.review.learnedRule.trim() && state.insightRules.some((rule) => rule.sourceContentId === selected.id && rule.text === selected.review.learnedRule.trim()))} addRule={(text) => { const normalized = text.trim(); if (!normalized) return; setState((prev) => { const existing = prev.insightRules.find((rule) => rule.sourceContentId === selected.id && rule.text === normalized); if (existing) return { ...prev, insightRules: prev.insightRules.map((rule) => rule.id === existing.id ? { ...rule, active: true } : rule) }; const rule: InsightRule = { id: crypto.randomUUID(), text: normalized, sourceContentId: selected.id, createdAt: todayISO(), active: true }; return { ...prev, insightRules: [rule, ...prev.insightRules] }; }); setToast("已沉淀为内容规则"); }} notify={setToast} /> : null}
+      {selected ? <ContentDrawer item={selected} initialTab={selectedTab} stageEvents={state.stageEvents} stageColors={state.stageColors} contentTypes={state.contentTypes} close={() => setSelectedId(null)} update={(patch) => updateContent(selected.id, patch)} mergeScript={mergeScript} changeStage={(stage) => setState((prev) => transitionContentStage(prev, selected.id, stage, date))} setStageStatus={(stage, completed) => setStageStatus(selected.id, stage, completed)} schedule={(stage, plannedDate) => planStage(selected.id, stage, plannedDate)} unschedule={(stage) => clearStagePlan(selected.id, stage)} remove={() => deleteContent(selected)} markPublished={() => markPublished(selected)} unmarkPublished={() => unmarkPublished(selected)} saveReview={() => saveReview(selected)} ruleDeposited={Boolean(selected.review.learnedRule.trim() && state.insightRules.some((rule) => rule.sourceContentId === selected.id && rule.text === selected.review.learnedRule.trim()))} addRule={(text) => { const normalized = text.trim(); if (!normalized) return; setState((prev) => { const existing = prev.insightRules.find((rule) => rule.sourceContentId === selected.id && rule.text === normalized); if (existing) return { ...prev, insightRules: prev.insightRules.map((rule) => rule.id === existing.id ? { ...rule, active: true } : rule) }; const rule: InsightRule = { id: crypto.randomUUID(), text: normalized, sourceContentId: selected.id, createdAt: todayISO(), active: true }; return { ...prev, insightRules: [rule, ...prev.insightRules] }; }); setToast("已沉淀为内容规则"); }} notify={setToast} /> : null}
       {showStageColors ? <StageColorModal colors={state.stageColors} close={() => setShowStageColors(false)} update={(stage, color) => setState((prev) => ({ ...prev, stageColors: { ...prev.stageColors, [stage]: color.toUpperCase() } }))} reset={() => setState((prev) => ({ ...prev, stageColors: { ...DEFAULT_STAGE_COLORS } }))} /> : null}
       {showVersionHistory ? <VersionHistoryModal close={() => setShowVersionHistory(false)} exportData={exportData} /> : null}
       {showOnboarding ? <Onboarding start={startWorkspace} /> : null}
