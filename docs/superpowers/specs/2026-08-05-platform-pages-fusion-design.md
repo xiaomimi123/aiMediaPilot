@@ -72,3 +72,38 @@
 2. **B**（数据迁移）：widget 搬移重塑 ×2 视图 + /dashboard 退役
 3. **C+D**（状态条/设置卡/侧栏收编/重塑）：一批完成
 4. **收尾**：redirect 清点、退役清单、README/spec 回写、端到端走查
+
+---
+
+## 实际实施结论（Task 8 回写）
+
+8 个 Task 全部完成（`.superpowers/sdd/2026-08-05-platform-pages-fusion/progress.md` 账本），与本 spec 存在以下已知偏差，逐条记录供后续参考：
+
+### (a) `/api/v1/dashboard/summary` 端点保留，未按原计划退役
+
+Spec 原文（B 节）写"`/api/v1/dashboard/summary` 若仅剩 dashboard 使用则一并退役"。实际实施（T4）中，迁移到复盘实验室「预测与校准」区块与大目标「内容表现」区块的两个新面板（`prediction-panel.tsx`、`performance-panel.tsx`）仍靠 `use-dashboard-summary.ts`（module-level in-flight promise 缓存 hook）请求这同一个端点取数——"仅剩 dashboard 使用"的前提从未成立，因此端点原样保留，未做任何改动。`src/app/dashboard/page.tsx` 本身虽在 T6 被删除，但其消费的聚合逻辑 `src/lib/dashboard/aggregate.ts` 与该 API 路由都活着，现在是二期两个新面板的数据源。
+
+### (b) ScriptForm/ScriptResult + `/content/script/new` 保留为深度写稿入口
+
+Spec A1/A3 描述"抽屉内就地生成"取代 `/agent` 向导，但从未提议删除 `ScriptForm`/`ScriptResult` 组件或 `/content/script/new` 路由。T6 删除 `/agent` 壳页前逐一 grep 了这两个组件的存活消费方：唯一消费方是 `/content/script/new/page.tsx`（ScriptForm）与 `/content/script/[id]/page.tsx`（ScriptResult），均为独立深度写稿入口，按 brief 要求原样保留。二者与抽屉内就地生成是互补关系而非替代关系：抽屉内生成偏「快速起草不出抽屉」，`/content/script/new` 仍是唯一支持完整多区块编辑、以及历史 `?ideaId=` 选题采纳回写链路的入口。
+
+### (c) `/settings` `/settings/baseline` redirect 目的地从 `/` 升级为 `/?view=settings`
+
+T6 第一轮实现按 spec D 节字面（"cockpit 设置无独立 URL，redirect 首页即可"）把两条 redirect 都指向裸 `/`，落地后发现 `Cockpit.tsx` 的 `initialViewFromSearchParams`（`~line 483`）只识别 `DEFAULT_NAVIGATION_ORDER` 里的 6 个可拖拽视图，不认字面量 `"settings"`（尽管 `NavView` 类型允许、侧栏「设置与备份」按钮本就是靠 `setView("settings")` 切过去的）——同时 `src/components/content/prediction-card.tsx` 里两处硬链 `/settings/baseline` 经 307 落到 `/` 后会停在 momentum 视图，形成死链。review round 1 判定这是真实的用户可达性缺口，修复方案：`initialViewFromSearchParams` 补一条 `settings` 分支，`next.config.js` 两条 redirect 目的地都改为 `/?view=settings`，`prediction-card.tsx` 两处链接同步改指。这使得 spec 未明确提及的「settings 视图可通过 URL 直达」成为实际实现的一部分。
+
+### (d) StatsBar/OverallScoreTrend/NextSteps/AccountRecent/QuickCreate 退役清单
+
+Spec B 节明确写"不迁移"的只有 StatsBar / OverallScoreTrend / NextSteps 三项。实际实施（T6）中，旧 `/dashboard` 页面自身还引用了另外两个非 spec 提及的组件——`AccountRecent`、`QuickCreate`（以及 dashboard 专属的 `EmptyState`，与 `accounts/empty-state.tsx` 是两个不同文件）。这三者是页面自身的展示/CTA 组件，不属于"7 个 widget"清单，随页面整体删除时一并处理，删除前 grep 确认其唯一消费方就是被删的 `dashboard/page.tsx` 本身，无其他存活引用，因此安全删除。**实际退役清单是 6 个组件**：`stats-bar.tsx`、`overall-score-trend.tsx`、`next-steps.tsx`、`account-recent.tsx`、`quick-create.tsx`、`dashboard/empty-state.tsx`，均随 `src/components/dashboard/` 整个目录一起 `git rm`（其余 7 个真正的数据 widget 全部 `git mv` 到 `src/components/cockpit/analytics/` 保留使用）。
+
+### (e) `POST /api/v1/cockpit/inspirations` create+bump 事务化（主写路由不 fail-soft）
+
+Spec A2 未讨论这条新路由的错误处理策略。T3 review round 1 指出：既有的三个 `bumpCockpitRev` 调用先例（picked/auto-sync/retro-worker）都是 fail-soft（inner try/catch + `console.warn`，因为它们是次要旁路 hook）；但本路由的 cockpit 写入*就是*主操作，如果沿用 fail-soft，会让「行已成功写入」变成「客户端收到 500 失败」（信号不实），且会重新打开一期教训过的覆盖窗口——行落库但 rev 未失效，已打开的标签页下次整页保存会悄悄覆盖掉刚写入的灵感。裁决：`bumpCockpitRev` 加可选 `client: Prisma.TransactionClient | PrismaClient` 参数，本路由把 `create` + `bumpCockpitRev` 包进同一个 `prisma.$transaction`，且**不吞掉 bump 失败**（异常传播为 `fail(500)`）；三个既有 fail-soft 调用点不受影响（不传第二参数，用默认顶层 `prisma`，行为不变）。
+
+### (f) 其他 T1-T7 报告中发现的实际偏差
+
+- **`title-feedback` 集成方式**：spec A3 只说"轻量集成，非弹窗"，未定具体触发点；实际实现（T2）挂在抽屉脚本 tab `headline` 字段的 `onBlur`，1.5s 防抖 + 同值不重发，失败静默（不设 hint、不弹 toast）。
+- **灵感入池链路事实上单一化**：spec A2 只说"discover 改向"，未提及一期遗留的「选题池」（`TopicIdea`/`PoolButton`/`/agent?topic=&ideaId=`）链路的命运。T6 删除 `/agent` 首页壳页后，`PoolButton` 组件的唯一消费方随之消失，变成 0 消费方的死代码（brief 要求保留组件本身，删除决策留给后续 cleanup）；`ideaId` query param 兼容读取（`ScriptForm`）与 `ADOPTED` 回写（`script-result.tsx`）逻辑仍在但已无任何 UI 会生成带 `ideaId` 的链接——这条链路从"仍在但少用"变成"代码活着但完全不可达"，超出 spec 原本预期的范围，已记入 README §9 遗留清理候选。
+- **`settings.tsx` 第三张卡未按 brief 字面单独拆文件**：T5 brief 明确写"拆 ai-provider-card.tsx、baseline-card.tsx"，账号管理卡是纯静态链接（无状态无副作用），直接内联在 `settings.tsx`，未单独拆分——不算 spec 偏差但值得记录，未来若要加账号状态摘要需要先拆文件。
+- **T5 fix round 1**：`settings.tsx` 里保留的旧「AI 辅助」静态卡（写死 `OPENAI_API_KEY` 环境变量说明）与新 `AIProviderCard` 内容重复且已过时（真实配置早走 `AIConfig` 表 + 加密存储），review 判定不应等到 T6 才清理，当场删除。
+- **T6 straggler 二轮修复**：第一轮 grep 排除子路径 href 时用 `grep -v` 按整行过滤，误伤了活在 `/agent/patterns`、`/agent/inspiration` 目录内、内容其实是裸 `/agent` 硬链接的两处 straggler；改用精确正则 `['"\`]/agent(['"\`?]|$)` 重新扫描后发现并修复：`agent/patterns/page.tsx` 「去写脚本 →」、`agent/inspiration/page.tsx` 「用这个生成」标签，均改指 `/content/script/new`。
+- **T7 蓝紫渐变退役的杠杆点**：没有逐个改 12 处 `variant="brand"` 调用点，而是只改 `src/components/ui/button.tsx` 的 `brand` variant 定义本身（一处改动覆盖全部调用点），另有 6 处字面量 `bg-brand-gradient`/`text-brand-gradient` 用法逐个替换，`src/components/inspiration/insight-panel.tsx` 虽不在 brief 文件清单内但因被 `/agent/inspiration` 页引用且含渐变类，为满足「zero references」硬性要求一并处理。
