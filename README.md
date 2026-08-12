@@ -2,7 +2,7 @@
 
 > AI 自媒体工作台 — 自用创作闭环: 选题灵感 → 写稿改稿 → 拍摄/发布追踪 → 数据复盘。 主阵地抖音, 其他平台 (B站/YouTube/推特/小红书/公众号/快手/微博) 走分发登记。 设计预留 SaaS 扩展空间 (`userId` 隔离已在 schema, 未接 auth/计费)。
 
-**当前状态:** 单用户 MVP。 经历三次定位调整: "个人视频分析工具" → "小白向导式智能体" → "自用自媒体工作台" → **"Creator Cockpit 整体移植"** (2026-08-04, 详见 `docs/superpowers/specs/2026-08-04-cockpit-adoption-design.md`)。 首页 `/` 与全站外壳已换成移植自开源项目 [creator-cockpit](https://github.com/AverrryHu/creator-cockpit) 的纸质编辑部风格操作台; 紧接着完成**二期「平台页面融入驾驶舱」** (2026-08-05, 详见 `docs/superpowers/specs/2026-08-05-platform-pages-fusion-design.md`)——把一期挂壳的创作/数据/设置页面功能长进驾驶舱视图, 侧栏「平台」组解散。 本文档 §3 为当前实际 IA。
+**当前状态:** 单用户 MVP。 经历三次定位调整: "个人视频分析工具" → "小白向导式智能体" → "自用自媒体工作台" → **"Creator Cockpit 整体移植"** (2026-08-04, 详见 `docs/superpowers/specs/2026-08-04-cockpit-adoption-design.md`)。 首页 `/` 与全站外壳已换成移植自开源项目 [creator-cockpit](https://github.com/AverrryHu/creator-cockpit) 的纸质编辑部风格操作台; 紧接着完成**二期「平台页面融入驾驶舱」** (2026-08-05, 详见 `docs/superpowers/specs/2026-08-05-platform-pages-fusion-design.md`)——把一期挂壳的创作/数据/设置页面功能长进驾驶舱视图, 侧栏「平台」组解散; 再完成**三期「产出优先信息架构重组」** (2026-08-06, 详见 `docs/superpowers/specs/2026-08-06-platform-first-ia-design.md`)——侧栏从「流程优先」六视图重排为「产出优先」按平台组织。 本文档 §3 为当前实际 IA。
 
 ---
 
@@ -62,42 +62,60 @@
 
 ---
 
-## 3. 当前 IA (Creator Cockpit 全面接管 + 二期融合)
+## 3. 当前 IA (Creator Cockpit 全面接管 + 二期融合 + 三期产出优先重组)
 
 首页 `/` 与全站外壳已替换为移植自开源项目 [creator-cockpit](https://github.com/AverrryHu/creator-cockpit) 的纸质编辑部风格操作台 (一期, 详见 `docs/superpowers/specs/2026-08-04-cockpit-adoption-design.md`)。 旧工作台看板/内容库列表页/旧侧栏已删除。
 
-**二期 (平台页面融入驾驶舱, 详见 `docs/superpowers/specs/2026-08-05-platform-pages-fusion-design.md`) 已完成**: 侧栏「平台」组 (创作/数据/设置三项外链) **已解散**——AI 写稿、数据看板、AI key/baseline 三块功能已分别**长进**驾驶舱六视图内部 (不再是独立挂壳页面); `/agent` `/dashboard` `/settings` 三个旧壳页已删除, 全部 redirect 回 `/` 的对应视图 (见下方 redirect 表)。 `/accounts` 保留为双入口 (侧栏不再常驻, 但大目标状态条 + 设置视图账号卡 + 移动端导航项三处可达)。 二期还把蓝紫渐变 (Stitch 风格残留) 全面退役, 存留的站外页面 (`/accounts`、`/agent/discover`、`/content/*`) 视觉统一为 cockpit 纸质编辑部风格。
+**二期 (平台页面融入驾驶舱, 详见 `docs/superpowers/specs/2026-08-05-platform-pages-fusion-design.md`) 已完成**: 侧栏「平台」组 (创作/数据/设置三项外链) **已解散**——AI 写稿、数据看板、AI key/baseline 三块功能已分别**长进**驾驶舱视图内部 (不再是独立挂壳页面); `/agent` `/dashboard` `/settings` 三个旧壳页已删除, 全部 redirect 回 `/` 的对应视图 (见下方 redirect 表)。 `/accounts` 保留为双入口。 二期还把蓝紫渐变 (Stitch 风格残留) 全面退役, 存留的站外页面 (`/accounts`、`/agent/discover`、`/content/*`) 视觉统一为 cockpit 纸质编辑部风格。
+
+**三期 (产出优先信息架构重组, 详见 `docs/superpowers/specs/2026-08-06-platform-first-ia-design.md`) 已完成**: 二期的六视图侧栏是「流程优先」(灵感→推进→档期→总览→目标→复盘), 与"按平台组织产出"的实际心智不符——三期只重排信息架构、不动底层机制 (抽屉/409 防护/AI 生成/爬虫回填等全部保留)。 侧栏「今日推进」与「档期规划」合并为一个视图内的今日/本周/档期三个 tab; 「大目标」与「复盘实验室」合并为「内容数据分析」一个视图内的目标/复盘两个分区; 新增「创作」固定分组, 五个平台 (抖音/小红书/bilibili/X/YouTube) 各自一个流水线页; 侧栏拖拽排序整体移除 (与新的固定分组结构冲突, 按 spec"实施时定"的授权简化)。 本文档 §3 为当前实际 IA。
 
 ### Sidebar
 
-侧栏 (`src/components/cockpit/sidebar.tsx`) 现在只有一段, 全站统一:
+侧栏 (`src/components/cockpit/sidebar.tsx`) 现在是三段固定分组, 全站统一, **不支持拖拽排序**:
 
 ```
-灵感池 / 今日推进 / 档期规划 / Pipeline / 大目标 / 复盘实验室   ← Cockpit 六视图, 在 / 内切换 (可拖拽排序)
-                                                              站外页面挂入壳时渲染成 /?view=<id> 静态链接
+✣ 灵感库选题                    ← 工作台组
+◫ 今日推进                      ← 工作台组 (页内 tab: 今日 / 本周 / 档期)
+─ 创作 ──────────────────────
+▸ 抖音 / 小红书 / bilibili / X / YouTube   ← 创作组, 各自独立平台流水线页
+──────────────────────────────
+▦ 内容总览                      ← 总览组 (全平台看板, 不过滤)
+◎ 内容数据分析                  ← 总览组 (页内 tab: 目标 / 复盘)
+⚙ 设置                          ← 底部, 不在上述任一分组
 ```
 
-`settings` 是六视图之外的第七个 view state (不参与拖拽排序, 不在侧栏渲染), 只能通过「设置与备份」按钮或 `/?view=settings` 直达。 `/accounts` 不在侧栏里 (二期解散的「平台」组唯一残留的落地页), 入口见下方双入口说明。
+站外页面挂入壳时同一份侧栏渲染成 `/?view=<id>` 静态链接。 `settings` 是固定分组之外的独立 view state (不在侧栏三段分组渲染逻辑里), 只能通过「设置与备份」按钮或 `/?view=settings` 直达。 `/accounts` 不在侧栏里 (二期解散的「平台」组唯一残留的落地页), 入口见下方双入口说明。
 
 ### `/` — Cockpit 驾驶舱 (首页)
 
-`src/app/page.tsx` 只 `dynamic import` 一个客户端组件 `Cockpit.tsx` (`ssr:false`), 内部按 `view` state 切换六个可拖拽视图 (`src/components/cockpit/views/*.tsx`: inspirations / momentum / schedule / pipeline / goals / review) + 一个不可拖拽的 `settings` 视图, 均是原样移植的纯 UI + 交互逻辑 (`src/lib/cockpit/{model,workflow,schedule,calculations}.ts` 与其测试一并搬运, 逻辑零改动)。 首次进入 (workspace 为空) 走 onboarding; 支持明暗主题 + 5 套设计风格切换, 侧栏可拖拽排序、可折叠; <820px 时侧栏收起, 换成底部 `.mobile-nav`。
+`src/app/page.tsx` 只 `dynamic import` 一个客户端组件 `Cockpit.tsx` (`ssr:false`), 内部按 `view` state (`NavView`, 定义于 `src/lib/cockpit/view-routing.ts`) 切换视图: `inspirations` / `momentum`(今日/本周/档期三个 `MomentumPeriod` tab) / 五个 `platform-<平台>` / `pipeline` / `analytics`(目标/复盘两个 `AnalyticsTab` tab) 五类固定视图 + 一个独立的 `settings` 视图, 均是原样移植或参数化复用的 UI + 交互逻辑 (`src/lib/cockpit/{model,workflow,schedule,calculations}.ts` 纯函数零改动移植; `view-routing.ts` 是三期新增的纯逻辑模块, 详见下方兼容映射)。 首次进入 (workspace 为空) 走 onboarding; 支持明暗主题 + 5 套设计风格切换, 侧栏可折叠 (拖拽排序已移除); <820px 时侧栏收起, 换成底部 `.mobile-nav`。
+
+### 平台流水线页 (三期新增)
+
+五个平台 (抖音/小红书/bilibili/X/YouTube) 各有一个 `/?view=platform-<id>` 页面 (`src/components/cockpit/views/platform.tsx`), 每页固定三区:
+
+1. **产出区**: 「+ 新建内容」按钮直接创建内容并预置 `platform` 为当前页所属平台, 打开抽屉；能力分级提示文字——抖音/小红书 (全能力) 支持抽屉内就地 AI 生成, bilibili/X/YouTube (基础能力) 仅手写脚本骨架。
+2. **看板区**: 复用 `内容总览` 同一个 `ContentOverviewView` 组件 (`views/pipeline.tsx`), 传入 `platformFilter` 只显示该平台内容 (参数化复用, 非复制)。
+3. **分发区**: 读现有 `Distribution` 表, 展示登记到该平台的分发记录 (来源选题标题 + URL + 日期)。
+
+**platform 字段与主平台+分发模型**: 内容在其 `platform` 字段标记的主平台上完整走完创作流水线 (灵感→脚本→拍摄→发布→复盘)；发布到其他平台不重新走流程, 而是在该内容的脚本详情页登记一条 `Distribution` 记录 (平台+URL), 出现在对应平台流水线页的分发区——"一份内容, 一条主线, 多条分发标记"。
 
 ### `/accounts` `/agent/discover` `/content/*` — 挂入 Cockpit 外壳
 
 根布局 (`src/components/layout/main-layout.tsx`) 按路径判断: 非 `/` 时用 `ExternalShell` (`src/components/cockpit/external-shell.tsx`) 包一层, 复用同一个 `Sidebar`(`mode="external"`) + `.main-area` 容器 + 移动端 `.mobile-nav`, 主题/风格从 cockpit 写入的 localStorage 同步。 二期起 `ExternalShell` 仅剩 `/accounts`、`/agent/discover`(及其未挂导航的兄弟页 `inspiration`/`patterns`)、`/content/preflight|script|retro-sync` 使用 (`/agent` `/dashboard` `/settings` 三个壳页已删除)。 这些存留页面二期 (T7) 已做纸质风重塑 (样式层改动, 业务逻辑零改动)。
 
-### 新功能位置表 (二期融合后)
+### 新功能位置表 (二期融合 + 三期重组后)
 
-| 功能 | 一期挂壳位置 (已删除) | 二期新位置 |
+| 功能 | 一期挂壳位置 (已删除) | 当前位置 (三期) |
 |---|---|---|
 | AI 写稿 | `/agent` 向导页 | 内容抽屉「脚本」tab 就地生成按钮 (三平台下拉选择器 + 生成中态; 标题字段失焦 1.5s 防抖调用 `title-feedback` 展示一行建议) |
-| 灵感抓取/热点 | `/agent` 首页推荐行「+ 入选题池」 | `/agent/discover` (保留路由) 每条主题卡「存入灵感池」→ 写 `CockpitInspiration`, 灵感池视图右上角「抓灵感 →」跳回该页 |
-| 数据看板 (预测准确率/校准/Misses/Niche/Top) | `/dashboard` | 预测准确率·校准矩阵·Misses → 复盘实验室底部「预测与校准」区块; Niche·Top → 大目标「内容表现」区块 |
+| 灵感抓取/热点 | `/agent` 首页推荐行「+ 入选题池」 | `/agent/discover` (保留路由) 每条主题卡「存入灵感池」→ 写 `CockpitInspiration`, 灵感库选题视图右上角「抓灵感 →」跳回该页 |
+| 数据看板 (预测准确率/校准/Misses/Niche/Top) | `/dashboard` | 预测准确率·校准矩阵·Misses → 内容数据分析·复盘 tab「预测与校准」区块; Niche·Top → 内容数据分析·目标 tab「内容表现」区块 (二期时这两个 tab 曾是独立的复盘实验室/大目标视图, 三期合并进「内容数据分析」一个视图, 见 §3 Sidebar) |
 | AI key 配置 | `/settings` | cockpit 设置视图「AI Provider」卡 |
 | 账号基准播放数 (baseline) | `/settings/baseline` | cockpit 设置视图「Baseline」卡 |
-| 手动同步 | `/settings` 或账号页内触发 | 大目标「账号粉丝趋势」状态条「立即同步」按钮 (`POST /api/v1/douyin/auto-sync/trigger`) |
-| 账号绑定/管理 (深流程) | 侧栏常驻「账号」入口 | **保留** `/accounts` 页面本身, 但侧栏入口移除, 改为双入口: 大目标状态条「管理账号 →」链接 + 设置视图账号管理卡 + 移动端底部导航「账号」格 |
+| 手动同步 | `/settings` 或账号页内触发 | 内容数据分析·目标 tab「账号粉丝趋势」状态条「立即同步」按钮 (`POST /api/v1/douyin/auto-sync/trigger`) |
+| 账号绑定/管理 (深流程) | 侧栏常驻「账号」入口 | **保留** `/accounts` 页面本身, 但侧栏入口移除, 改为双入口: 内容数据分析·目标 tab 状态条「管理账号 →」链接 + 设置视图账号管理卡 + 站外页面 (`/accounts` 等) 移动端底部导航「账号」格 |
 | 深度写稿 (完整多区块生成, 非抽屉内快速生成) | `/agent` | `/content/script/new`(保留, `ScriptForm`/`ScriptResult` 组件未删除, 仍支持 `?topic=&ideaId=&platform=&niche=&inspirationId=` 预填) |
 
 ### redirect 表 (`next.config.js`)
@@ -111,7 +129,18 @@
 
 保留可直接访问的路由 (不 redirect): `/agent/discover`、`/agent/inspiration`、`/agent/patterns`、`/accounts`、`/content/script`、`/content/script/new`(深度写稿入口)、`/content/script/[id]`、`/content/preflight`、`/content/retro-sync`。
 
-**三期 (产出优先信息架构重组) 起旧 `?view=` 兼容映射**: redirect 表目的地里出现的 `schedule`/`goals`/`review` 三个旧 view 值不再是独立视图, 由 `src/lib/cockpit/view-routing.ts` (`resolveInitialView`/`resolveInitialMomentumTab`/`resolveInitialAnalyticsTab`, 单测 `tests/lib/cockpit/view-routing.test.ts`) 精确折叠: `?view=schedule` → momentum 视图 + 档期 tab; `?view=goals` → analytics 视图 + 目标 tab; `?view=review` → analytics 视图 + 复盘 tab; `inspirations`/`momentum`/`pipeline`/`settings` 及五个 `platform-*` 原生直达; 其余非法/缺省值一律回退 momentum。
+**三期 (产出优先信息架构重组) 起旧 `?view=` 兼容映射**: 二期六视图里的 `schedule`/`goals`/`review` 三个旧 view 值 (redirect 表目的地里仍会出现) 在三期后不再是独立视图, 由 `src/lib/cockpit/view-routing.ts` (`resolveInitialView`/`resolveInitialMomentumTab`/`resolveInitialAnalyticsTab`, 单测 `tests/lib/cockpit/view-routing.test.ts`) 精确折叠到新视图的对应 tab；其余三值原生直达。 六值映射矩阵:
+
+| 旧 `?view=` 值 | 三期落点 |
+|---|---|
+| `inspirations` | 灵感库选题 (原生直达, 未变) |
+| `momentum` | 今日推进 · 今日 tab (原生直达, 默认 tab) |
+| `schedule` | 今日推进 · 档期 tab (折叠) |
+| `pipeline` | 内容总览 (原生直达, 未变) |
+| `goals` | 内容数据分析 · 目标 tab (折叠) |
+| `review` | 内容数据分析 · 复盘 tab (折叠) |
+
+`settings` 及五个 `platform-*` 值本就是三期新增/未变的原生视图 id, 同样直达; 其余非法/缺省值一律回退 momentum(今日 tab)。
 
 ### `/content` 的变化
 
@@ -123,7 +152,7 @@
 - **10 张 Prisma 表**: `CockpitContent` / `CockpitInspiration` / `CockpitStageEvent` / `CockpitReviewDay` / `CockpitLiveSession` / `CockpitScheduleObjectType` / `CockpitScheduleObject` / `CockpitGoalCycle` / `CockpitInsightRule` / `CockpitPrefs`, 字段形状与 vendor `model.ts` 的 TS 类型一一对应, 保证移植过来的纯函数直接可用。 `FollowerSnapshot` **不建表**: `GET /api/v1/cockpit/workspace` 时从既有的 `AccountMetric` (爬虫每日写入) 实时派生, `PUT` 忽略该字段。
 - `GET/PUT /api/v1/cockpit/workspace`: GET 组装整个 `WorkspaceState` 返回; PUT 提交整个 `WorkspaceState` + 加载时拿到的 `rev`, 服务端 diff 落库, 若 `rev` 与当前不一致 (双标签页并发保存) 返回 **409**, 前端弹冲突提示, 不做自动合并 (单用户场景接受 last-write-wins + 显式提示, 不做 CRDT 之类的方案)。
 - 前端存储适配器 `src/lib/cockpit/storage.ts` (`loadWorkspace`/`saveWorkspace`) 替换掉原版的 IndexedDB 读写, 是移植时唯一改动的一层; `src/lib/cockpit/migrations.ts` 只搬运了 vendor `storage.ts` 里 `migrateWorkspace` 这一个纯函数 (老版本 workspace 字段升级), 其余 IndexedDB 相关代码没有移植。
-- 强能力集成点: **AI 写稿** (二期起内容抽屉脚本 tab「用 AI 写脚本」按钮就地调用生成管线并回填, 不再跳转 `/agent`; 保存定稿自动把关联 `CockpitContent` 的 script 阶段推进完成) · **爬虫指标回填** (auto-sync 命中已发视频写入播放/点赞/收藏/评论快照) · **粉丝快照** (`AccountMetric` 派生 `FollowerSnapshot` 喂 `calculateGoalHealth`) · **L1 预测对比** (复盘实验室展示预测区间 vs 实际播放, 结论可沉淀为 `InsightRule`)。
+- 强能力集成点: **AI 写稿** (二期起内容抽屉脚本 tab「用 AI 写脚本」按钮就地调用生成管线并回填, 不再跳转 `/agent`; 保存定稿自动把关联 `CockpitContent` 的 script 阶段推进完成; 三期起生成默认平台跟随内容 `platform` 字段, 而非固定抖音) · **爬虫指标回填** (auto-sync 命中已发视频写入播放/点赞/收藏/评论快照) · **粉丝快照** (`AccountMetric` 派生 `FollowerSnapshot` 喂 `calculateGoalHealth`) · **L1 预测对比** (内容数据分析·复盘 tab 展示预测区间 vs 实际播放, 结论可沉淀为 `InsightRule`)。
 - 备份/导入导出 UI 未移植 —— 数据库本身就是持久化底座, 版本记录 (`版本记录` 弹窗) 里仍保留历史版本可查看/导出, 但没有单独的「导入导出 JSON」界面 (原版基于 IndexedDB 需要这个, 我们不需要)。
 
 存量数据一次性迁移到 Cockpit 表见 §6; 老流水线 (`ScriptDraft`/`TopicIdea`/`Distribution`) 的阶段派生规则见 §3.5, 迁移脚本复用同一套判定。
@@ -158,9 +187,9 @@ API: `POST/GET /api/v1/topics`、`PATCH /api/v1/topics/[id]`、`POST/GET /api/v1
 
 ### 关键交互流
 
-1. **灵感抓取**: `/agent/discover` 页每条主题卡「存入灵感池」按钮 (`POST /api/v1/cockpit/inspirations`), 直接写入 Cockpit 灵感墙 (`CockpitInspiration`); Cockpit 灵感墙视图右上角「抓灵感 →」跳回该页。 二期起这是灵感进入系统的唯一活跃路径——`TopicIdea`(选题池) 表与配套的 `PoolButton`/`ideaId` 预填链路是 `/agent` 首页 (已随壳页一起删除) 的产物, 现无任何 UI 入口可达, 属遗留能力 (`PoolButton` 组件、`ScriptForm` 对 `ideaId` query param 的兼容读取、`script-result.tsx` 里 `ideaId` 存在时的 `ADOPTED` 回写均原样保留代码, 只是没有链接会带上 `ideaId` 了); `POST/GET /api/v1/topics` 等 API 仍在但无写入方。
+1. **灵感抓取**: `/agent/discover` 页每条主题卡「存入灵感池」按钮 (`POST /api/v1/cockpit/inspirations`), 直接写入 Cockpit 灵感墙 (`CockpitInspiration`); Cockpit 灵感库选题视图 (三期改名, 原「灵感池」) 右上角「抓灵感 →」跳回该页。 二期起这是灵感进入系统的唯一活跃路径——`TopicIdea`(选题池) 表与配套的 `PoolButton`/`ideaId` 预填链路是 `/agent` 首页 (已随壳页一起删除) 的产物, 现无任何 UI 入口可达, 属遗留能力 (`PoolButton` 组件、`ScriptForm` 对 `ideaId` query param 的兼容读取、`script-result.tsx` 里 `ideaId` 存在时的 `ADOPTED` 回写均原样保留代码, 只是没有链接会带上 `ideaId` 了); `POST/GET /api/v1/topics` 等 API 仍在但无写入方。
 2. **分发登记**: script 详情页 (`/content/script/[id]`) + 分发登记弹窗, 选平台 (注册表 key) + 贴 URL → 写一条 `Distribution` 记录, 显示「已分发 N 平台」徽标。
-3. **复盘闭环**: 现有 retro / auto-sync 不动; Cockpit 复盘实验室视图承接「待复盘 / 复盘倒计时」的展示职责 (原来在旧看板已发布列)。
+3. **复盘闭环**: 现有 retro / auto-sync 不动; Cockpit 内容数据分析·复盘 tab (三期起, 原「复盘实验室」独立视图) 承接「待复盘 / 复盘倒计时」的展示职责 (原来在旧看板已发布列)。
 
 ---
 
@@ -309,8 +338,8 @@ src/
 │   └── api/v1/                    # 所有 API routes (含 topics/ distributions/ cockpit/workspace/ cockpit/inspirations/ douyin/auto-sync/trigger/)
 ├── components/
 │   ├── cockpit/                   # Creator Cockpit 移植主体
-│   │   ├── Cockpit.tsx             # 顶层组件: state + view 路由 (六视图 + settings) + 拖拽/主题/onboarding
-│   │   ├── views/                 # 六可拖拽视图 (inspirations/momentum/schedule/pipeline/goals/review) + settings.tsx (第七视图, 不参与拖拽)
+│   │   ├── Cockpit.tsx             # 顶层组件: state + view 路由 (`NavView`, 三期起见 `lib/cockpit/view-routing.ts`) + 主题/onboarding (侧栏拖拽排序三期已移除)
+│   │   ├── views/                 # inspirations/momentum(含 schedule tab)/platform(五平台流水线页共用)/pipeline/analytics(含 goals+review tab) + settings.tsx (独立视图)
 │   │   ├── analytics/              # 二期 (T4) 从 components/dashboard/ 迁移重塑: prediction-panel/performance-panel + 7 个搬迁 widget + use-dashboard-summary hook
 │   │   ├── settings-cards/         # 二期 (T5) 新建: ai-provider-card, baseline-card
 │   │   ├── sidebar.tsx             # 全站共用侧栏 (cockpit 模式 + external 模式), 二期起「平台」外链组已移除
