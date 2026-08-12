@@ -64,7 +64,7 @@ export function EditablePageTitle({ value, fallback, onChange }: { value: string
 }
 
 export function Icon({ name }: { name: string }) {
-  const icons: Record<string, string> = { inspiration: "✣", momentum: "◫", schedule: "▤", pipeline: "▦", goals: "◎", review: "◌", settings: "⚙", plus: "＋", search: "⌕", spark: "✦", arrow: "→", backup: "⇩", version: "↻" };
+  const icons: Record<string, string> = { inspiration: "✣", momentum: "◫", schedule: "▤", pipeline: "▦", goals: "◎", analytics: "◎", review: "◌", settings: "⚙", plus: "＋", search: "⌕", spark: "✦", arrow: "→", backup: "⇩", version: "↻", platform: "▸" };
   return <span aria-hidden="true" className="icon">{icons[name] ?? "·"}</span>;
 }
 

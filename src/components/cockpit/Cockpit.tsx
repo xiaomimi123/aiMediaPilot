@@ -34,7 +34,6 @@ import {
   type InspirationCard,
   type InsightRule,
   type LiveSession,
-  type NavigationItemId,
   type PageTitleKey,
   type ScheduleObject,
   type ScheduleObjectType,
@@ -73,7 +72,7 @@ import {
   transitionContentStage,
 } from "@/lib/cockpit/workflow";
 import { EditablePageTitle, Icon, creatorMark, dashboardTitle, date, normalizeGoalQuotas, shiftDate } from "./shared";
-import { NAV_ITEMS, Sidebar } from "./sidebar";
+import { ALL_NAV_ITEMS, MOBILE_NAV_ITEMS, Sidebar, isPlatformNavView, type NavView } from "./sidebar";
 import { InspirationPoolView } from "./views/inspirations";
 import { DayView, WeekOverview, type DailyStageEntry } from "./views/momentum";
 import { ScheduleView } from "./views/schedule";
@@ -84,7 +83,6 @@ import { SettingsView } from "./views/settings";
 import { Onboarding } from "./onboarding";
 import { ContentDrawer, type ContentDrawerTab } from "./content-drawer";
 
-type NavView = NavigationItemId | "settings";
 type ColorTheme = "light" | "dark";
 
 const APP_VERSION = "1.5.0";
@@ -496,12 +494,18 @@ function createBlankState(): WorkspaceState {
   };
 }
 
+// T3/T4 移除: schedule/goals/review 已不在侧栏出现, 但仍在 NavView 联合里保留渲染分支
+// (过渡期内部跳转 + 历史 `?view=` 链接兼容), 这里继续接受它们, 完整的迁移映射交给 T6。
+const LEGACY_VIEW_IDS: ReadonlyArray<string> = ["schedule", "goals", "review"];
+
 function initialViewFromSearchParams(searchParams: URLSearchParams): NavView {
   const requested = searchParams.get("view");
+  if (!requested) return "momentum";
   if (requested === "settings") return "settings";
-  return requested && (DEFAULT_NAVIGATION_ORDER as string[]).includes(requested)
-    ? (requested as NavigationItemId)
-    : "momentum";
+  if (ALL_NAV_ITEMS.some((item) => item.id === requested) || LEGACY_VIEW_IDS.includes(requested)) {
+    return requested as NavView;
+  }
+  return "momentum";
 }
 
 export default function Cockpit() {
@@ -516,8 +520,6 @@ export default function Cockpit() {
   const [showStageColors, setShowStageColors] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showCreateContent, setShowCreateContent] = useState(false);
-  const [draggedNavId, setDraggedNavId] = useState<NavigationItemId | null>(null);
-  const [navDropTarget, setNavDropTarget] = useState<NavigationItemId | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedTab, setSelectedTab] = useState<ContentDrawerTab>("overview");
   const [pipelineQuery, setPipelineQuery] = useState("");
@@ -611,13 +613,6 @@ export default function Cockpit() {
       return item ? { event, item } : null;
     })
     .filter((entry): entry is DailyStageEntry => Boolean(entry));
-  const reviewDue = state.contents.filter(
-    (item) =>
-      item.publicationStatus === "published" &&
-      !item.review.completedAt &&
-      Boolean(item.publishedAt) &&
-      shiftDate(item.publishedAt, 3) <= date,
-  );
 
   function updateContent(id: string, patch: Partial<ContentItem>) {
     setState((prev) => ({
@@ -656,28 +651,6 @@ export default function Cockpit() {
   function updateDesignStyle(designStyle: DesignStyle) {
     if (designStyle !== "editorial") setTheme("light");
     setState((prev) => ({ ...prev, designStyle }));
-  }
-
-  function reorderNavigation(sourceId: NavigationItemId, targetId: NavigationItemId) {
-    if (sourceId === targetId) return;
-    if (!state.navigationOrder.includes(sourceId)) return;
-    setState((prev) => {
-      const sourceIndex = prev.navigationOrder.indexOf(sourceId);
-      const targetIndex = prev.navigationOrder.indexOf(targetId);
-      if (sourceIndex < 0 || targetIndex < 0) return prev;
-      const next = prev.navigationOrder.filter((id) => id !== sourceId);
-      const targetAfterRemoval = next.indexOf(targetId);
-      next.splice(sourceIndex < targetIndex ? targetAfterRemoval + 1 : targetAfterRemoval, 0, sourceId);
-      return { ...prev, navigationOrder: next };
-    });
-    setToast("侧边栏顺序已更新");
-  }
-
-  function moveNavigationBy(id: NavigationItemId, offset: -1 | 1) {
-    const currentIndex = state.navigationOrder.indexOf(id);
-    const targetId = state.navigationOrder[currentIndex + offset];
-    if (!targetId) return;
-    reorderNavigation(id, targetId);
   }
 
   function openContent(id: string, tab: ContentDrawerTab = "overview") {
@@ -1059,10 +1032,6 @@ export default function Cockpit() {
     setHydrated(true);
   }
 
-  const nav = state.navigationOrder
-    .map((id) => NAV_ITEMS.find((item) => item.id === id))
-    .filter((item): item is (typeof NAV_ITEMS)[number] => Boolean(item));
-
   return (
     <div className={sidebarCollapsed ? "cockpit-shell sidebar-collapsed" : "cockpit-shell"}>
       <Sidebar
@@ -1073,17 +1042,9 @@ export default function Cockpit() {
         brandMark={creatorMark(state.profile)}
         brandSubtitle={`${state.profile.primaryPlatform}${state.profile.contentFocus ? ` · ${state.profile.contentFocus}` : ""}`}
         onBrandClick={() => { setView("momentum"); setMomentumPeriod("today"); }}
-        navItems={nav}
         activeView={view}
         onSelectView={setView}
         onSelectSettings={() => setView("settings")}
-        reviewDueCount={reviewDue.length}
-        draggedNavId={draggedNavId}
-        navDropTarget={navDropTarget}
-        setDraggedNavId={setDraggedNavId}
-        setNavDropTarget={setNavDropTarget}
-        reorderNavigation={reorderNavigation}
-        moveNavigationBy={moveNavigationBy}
         timeProgress={health.timeProgress}
         weeksRemaining={health.weeksRemaining}
         appVersion={APP_VERSION}
@@ -1107,14 +1068,16 @@ export default function Cockpit() {
           ) : null}
 
           {view === "schedule" ? <section className="page momentum-page"><div className="page-heading"><span className="eyebrow">PRODUCTION SCHEDULE</span><EditablePageTitle value={state.pageTitles.schedule} fallback={DEFAULT_PAGE_TITLES.schedule} onChange={(value) => updatePageTitle("schedule", value)} /><p>安排内容阶段，也可以放入复盘、直播和你自定义的日程对象。</p></div><ScheduleView state={state} open={openContent} openReview={() => setView("review")} schedule={planStage} moveEvent={moveCalendarEvent} unschedule={clearStagePlan} createReviewDay={createReviewDay} moveReviewDay={moveReviewDay} removeReviewDay={deleteReviewDay} saveLive={saveLiveSession} moveLive={moveLiveSession} removeLive={deleteLiveSession} saveObjectType={saveScheduleObjectType} archiveObjectType={archiveScheduleObjectType} removeObjectType={deleteScheduleObjectType} saveObject={saveScheduleObject} moveObject={moveScheduleObject} removeObject={deleteScheduleObject} configureColors={() => setShowStageColors(true)} /></section> : null}
-          {view === "pipeline" ? <ContentOverviewView state={state} pageTitle={state.pageTitles.pipeline} updateTitle={(value) => updatePageTitle("pipeline", value)} query={pipelineQuery} setQuery={setPipelineQuery} type={pipelineType} setType={setPipelineType} open={openContent} addToday={addToToday} dropStage={onDropStage} /> : null}
-          {view === "goals" ? <GoalsView state={state} pageTitle={state.pageTitles.goals} updateTitle={(value) => updatePageTitle("goals", value)} health={health} followers={followers} published={publishedQuarter} updateGoal={updateGoal} setState={setState} notify={setToast} /> : null}
+          {/* T4/T5 替换: platform-* 占位仍渲染全量 Pipeline (无平台过滤)。 */}
+          {view === "pipeline" || isPlatformNavView(view) ? <ContentOverviewView state={state} pageTitle={state.pageTitles.pipeline} updateTitle={(value) => updatePageTitle("pipeline", value)} query={pipelineQuery} setQuery={setPipelineQuery} type={pipelineType} setType={setPipelineType} open={openContent} addToday={addToToday} dropStage={onDropStage} /> : null}
+          {/* T3 替换: analytics 占位仍渲染现有 GoalsView (原样 props)。 */}
+          {view === "goals" || view === "analytics" ? <GoalsView state={state} pageTitle={state.pageTitles.goals} updateTitle={(value) => updatePageTitle("goals", value)} health={health} followers={followers} published={publishedQuarter} updateGoal={updateGoal} setState={setState} notify={setToast} /> : null}
           {view === "review" ? <ReviewView state={state} pageTitle={state.pageTitles.review} updateTitle={(value) => updatePageTitle("review", value)} open={(id) => openContent(id, "review")} setState={setState} /> : null}
           {view === "settings" ? <SettingsView state={state} pageTitle={state.pageTitles.settings} updateTitle={(value) => updatePageTitle("settings", value)} updateDesignStyle={updateDesignStyle} setState={setState} onReset={() => { if (window.confirm("确定清空全部内容与目标数据吗？个人设置会保留，请先导出备份。")) { setState({ ...createBlankState(), designStyle: state.designStyle, navigationOrder: state.navigationOrder, profile: state.profile, pageTitles: state.pageTitles }); setToast("已清空内容与目标，个人设置已保留"); } }} /> : null}
         </div>
       </main>
 
-      <nav className="mobile-nav" aria-label="移动端导航">{nav.map((item) => <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => setView(item.id)}><Icon name={item.icon} /><span>{item.label}</span></button>)}</nav>
+      <nav className="mobile-nav" aria-label="移动端导航">{MOBILE_NAV_ITEMS.map((item) => <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => setView(item.id)}><Icon name={item.icon} /><span>{item.label}</span></button>)}</nav>
       {showCreateContent ? <CreateContentModal inspirationCards={state.inspirationCards} close={() => setShowCreateContent(false)} createBlank={createBlankContent} createFromInspiration={createContentFromInspiration} openInspirationPool={() => { setShowCreateContent(false); setView("inspirations"); }} /> : null}
       {selected ? <ContentDrawer item={selected} initialTab={selectedTab} stageEvents={state.stageEvents} stageColors={state.stageColors} contentTypes={state.contentTypes} close={() => setSelectedId(null)} update={(patch) => updateContent(selected.id, patch)} mergeScript={mergeScript} changeStage={(stage) => setState((prev) => transitionContentStage(prev, selected.id, stage, date))} setStageStatus={(stage, completed) => setStageStatus(selected.id, stage, completed)} schedule={(stage, plannedDate) => planStage(selected.id, stage, plannedDate)} unschedule={(stage) => clearStagePlan(selected.id, stage)} remove={() => deleteContent(selected)} markPublished={() => markPublished(selected)} unmarkPublished={() => unmarkPublished(selected)} saveReview={() => saveReview(selected)} ruleDeposited={Boolean(selected.review.learnedRule.trim() && state.insightRules.some((rule) => rule.sourceContentId === selected.id && rule.text === selected.review.learnedRule.trim()))} addRule={(text) => { const normalized = text.trim(); if (!normalized) return; setState((prev) => { const existing = prev.insightRules.find((rule) => rule.sourceContentId === selected.id && rule.text === normalized); if (existing) return { ...prev, insightRules: prev.insightRules.map((rule) => rule.id === existing.id ? { ...rule, active: true } : rule) }; const rule: InsightRule = { id: crypto.randomUUID(), text: normalized, sourceContentId: selected.id, createdAt: todayISO(), active: true }; return { ...prev, insightRules: [rule, ...prev.insightRules] }; }); setToast("已沉淀为内容规则"); }} notify={setToast} /> : null}
       {showStageColors ? <StageColorModal colors={state.stageColors} close={() => setShowStageColors(false)} update={(stage, color) => setState((prev) => ({ ...prev, stageColors: { ...prev.stageColors, [stage]: color.toUpperCase() } }))} reset={() => setState((prev) => ({ ...prev, stageColors: { ...DEFAULT_STAGE_COLORS } }))} /> : null}

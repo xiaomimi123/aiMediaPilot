@@ -82,6 +82,8 @@ textarea { resize: vertical; }
 .brand strong { display: -webkit-box; overflow: hidden; font-size: 13px; letter-spacing: .02em; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .brand small { display: block; margin-top: 3px; overflow: hidden; color: var(--muted); font-size: 8px; letter-spacing: .06em; text-overflow: ellipsis; white-space: nowrap; }
 .nav-section-label { padding: 12px 12px 8px; color: var(--muted); font-size: 10px; letter-spacing: .16em; }
+/* 三期 IA (T2): 固定分组标题「创作」, 气质同 .nav-section-label, 多留一点顶部间距做视觉分段。 */
+.sidebar-group-label { margin-top: 6px; padding: 12px 12px 8px; color: var(--muted); font-size: 10px; letter-spacing: .16em; }
 .nav-item { display: flex; width: 100%; align-items: center; gap: 11px; min-height: 43px; margin: 3px 0; padding: 0 12px; border: 0; border-radius: 10px; background: transparent; color: var(--ink-soft); text-align: left; transition: .18s ease; }
 .nav-item:hover { background: var(--hover-bg); color: var(--ink); }
 .nav-item.active { background: var(--surface); color: var(--ink); box-shadow: 0 7px 22px rgba(52,48,39,.06); }

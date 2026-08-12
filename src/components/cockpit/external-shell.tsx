@@ -3,12 +3,12 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { isExternalActive, NAV_ITEMS, Sidebar } from "./sidebar";
+import { isExternalActive, OVERVIEW_NAV_ITEMS, Sidebar, WORKBENCH_NAV_ITEMS } from "./sidebar";
 import { Icon } from "./shared";
 
-// 移动端底部导航（<820px，.sidebar 隐藏）里露出的 2 个工作台视图快捷入口。
-// 与桌面侧栏一致地回到 `/?view=<id>`。
-const MOBILE_COCKPIT_SHORTCUTS = NAV_ITEMS.filter((item) => item.id === "inspirations" || item.id === "momentum");
+// 移动端底部导航（<820px，.sidebar 隐藏）里露出的 2 个工作台视图快捷入口：
+// 今日推进 + 内容总览。与桌面侧栏一致地回到 `/?view=<id>`。
+const MOBILE_COCKPIT_SHORTCUTS = [WORKBENCH_NAV_ITEMS[1], OVERVIEW_NAV_ITEMS[0]];
 
 // 二期 T6 起 /agent /dashboard /settings 壳页退役, 桌面侧栏「平台」分组整段移除
 // （/accounts 桌面入口改由 goals 状态条 + settings 卡片承担）。移动端屏幕小,
