@@ -45,6 +45,10 @@ model User {
   cockpitGoalCycles          CockpitGoalCycle[]
   cockpitInsightRules        CockpitInsightRule[]
   cockpitPrefs               CockpitPrefs?
+  radarKeywords              RadarKeyword[]
+  radarItems                 RadarItem[]
+  radarRuns                  RadarRun[]
+  radarConfig                RadarConfig?
 }
 
 // Sub-project G: 灵感视频库 — 用户精选爆款 + AI 总结共性
@@ -821,4 +825,67 @@ model CockpitPrefs {
   lastBackupAt    String   @default("")
   updatedAt       DateTime @updatedAt // 冲突检测用, 服务端时间
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ============ 热点雷达 (2026-08-13 四期, spec: docs/superpowers/specs/2026-08-13-radar-deep-collection-design.md) ============
+// 设计说明：这里是服务端域数据（雷达抓取/运行结果），不进 cockpit workspace state，因此不沿用 cockpit 的 ISO 字符串日期约定——
+// 时间戳一律用 DateTime，id 由服务端 @default(cuid()) 生成（而非客户端传入）。
+
+model RadarKeyword {
+  id        String   @id @default(cuid())
+  userId    String
+  text      String
+  status    String   @default("active") // active|candidate|ignored
+  source    String   @default("manual") // manual|ai
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+}
+
+model RadarItem {
+  id              String    @id @default(cuid())
+  userId          String
+  url             String
+  titleHash       String // 标题指纹, 去重用
+  title           String
+  sourceSite      String
+  publishedAt     DateTime?
+  collectedAt     DateTime  @default(now())
+  matchedKeywords Json      @default("[]")
+  aiSummary       String    @default("")
+  aiAngle         String    @default("")
+  heatScore       Int       @default(0)
+  heatFactors     Json      @default("{}") // 四维 + 共现
+  status          String    @default("new") // new|adopted|ignored
+  inspirationId   String?
+  runId           String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, url])
+  @@index([userId, status])
+  @@index([userId, heatScore])
+}
+
+model RadarRun {
+  id           String    @id @default(cuid())
+  userId       String
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+  keywordsUsed Json      @default("[]")
+  searched     Int       @default(0)
+  read         Int       @default(0)
+  kept         Int       @default(0)
+  errors       Json      @default("[]")
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model RadarConfig {
+  userId             String  @id
+  tavilyKeyEncrypted String  @default("") // 复用 AIConfig 的 AES-256-GCM 加密
+  dailyLimit         Int     @default(20)
+  enabled            Boolean @default(false)
+  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
