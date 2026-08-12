@@ -104,6 +104,8 @@
 
 ### 热点雷达 (四期新增)
 
+一句话: **关键词 → Tavily 搜索 → AI 逐篇阅读评分 → 热度排行 → (人工审批)收入灵感库**——AI 只负责采集与排序, 是否值得做仍由人决定。
+
 服务端 AI 深度采集管线 + 独立视图, 与 cockpit 其余六视图不同——**自取数, 不进 `WorkspaceState`**（学 dashboard summary 先例，见 `src/components/cockpit/views/radar.tsx` 顶部注释）。「零 Claude 额度消耗」是硬约束: AI 阅读评分走用户自己在「AI 服务配置」卡配置的服务商 (现为 DeepSeek), 不占用 Claude 用量。
 
 **管线** (`src/lib/radar/run.ts` 的 `runRadarScan`, `src/jobs/workers/radar-worker.ts` 每日一次仿 auto-sync-worker 注册 + `/api/v1/radar/trigger` 手动触发仿二期 trigger 超时模式):
@@ -310,7 +312,7 @@ npm run dev          # http://localhost:3000
 npm run worker:dev   # BullMQ workers (analyze / retro / auto-sync / radar 四期新增)
 ```
 
-雷达功能额外需要 (均不是 `.env`, 在设置视图「雷达配置」卡里填, 见 §3「热点雷达」小节): Tavily API key (搜索, 免费档注册即得) + 已配置好的 AI 服务商 key (阅读评分复用「AI 服务配置」卡)。 两者任一缺失时「立即扫描」会明确报错, 每日自动扫描会静默跳过该轮 (不报错, 见 `runRadarScan` 注释)。
+雷达功能额外需要 (均不是 `.env`, 在设置视图「雷达配置」卡里填, 见 §3「热点雷达」小节): Tavily API key (搜索, 去 [tavily.com](https://tavily.com) 免费注册即得, 免费档每月 1000 次检索通常够用) + 已配置好的 AI 服务商 key (阅读评分复用「AI 服务配置」卡, 现走 `.env` 里的 `DEEPSEEK_API_KEY`)。 两者任一缺失时「立即扫描」会明确报错 (未配置 Tavily/未启用 → 400；服务端无 `DEEPSEEK_API_KEY` → 503), 每日自动扫描会静默跳过该轮 (不报错, 见 `runRadarScan` 注释)。
 
 ### 测试
 

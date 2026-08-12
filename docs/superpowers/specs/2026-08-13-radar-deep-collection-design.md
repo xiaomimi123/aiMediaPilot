@@ -56,3 +56,26 @@
 | 重复刷屏 | URL + 标题指纹双去重；同话题聚簇计共现而非重复入库 |
 | Tavily 单点依赖 | SearchProvider 抽象接口，实施仅 Tavily 一个实现 |
 | 真实 E2E 依赖用户 key | 管线全链路可 mock 测试；真实跑一轮需用户配 Tavily key 后自验（同 DeepSeek key 先例） |
+
+## 6. 实际实施结论（T1-T6 落地后回写，2026-08-13）
+
+设计文档写于实施前，以下是与草稿假设有出入、或草稿未覆盖、需要落盘存档的实际决策，逐条对应 `progress.md` 里的账本条目：
+
+**(a) Tavily 真实 API 形状与假设有偏差（T2）**：草稿假设的请求体是 `{api_key, query, ..., days, topic}`。WebFetch 核对官方文档（`docs.tavily.com`）后发现两处实质出入：① 鉴权走 `Authorization: Bearer <key>` header，不是 body 里的 `api_key` 字段；② 没有 `days` 参数，走 `time_range: 'day'|'week'|'month'|'year'`——为不破坏对外接口约定，`search.ts` 内部做了分桶换算（`≤1→day / ≤7→week / ≤31→month / 其余→year`）。已按官方文档实现，`SearchResult` 对 T4 消费方的类型契约不受影响。未能用真实 key curl 一次验证，注释里如实注明这是「文档为准」而非「实测为准」，真实形状最终以用户接入后跑出的结果为准。
+
+**(b) 缺 `DEEPSEEK_API_KEY` 的就绪检查方案（T4→T6 闭合）**：`runRadarScan` 本身在 worker 每日 tick 场景下对「未启用/无 Tavily key/无 DEEPSEEK_API_KEY」一律静默返回、不建 `RadarRun`——这对无人值守场景是对的（不该报错吵人）。但手动点击「立即扫描」若复用同一条静默路径，用户排了队却永远等不到反馈，分不清是队列卡住还是配置缺失。最终方案：`POST /api/v1/radar/trigger` 入队前**重复一次同样的判断**并给出明确 HTTP 状态区分——`enabled=false` 或无 Tavily key → 400；服务端环境变量缺 `DEEPSEEK_API_KEY` → 503。两处判断逻辑不同步的风险可接受：trigger 侧只影响「要不要提前拒绝」，`runRadarScan` 仍是「跑不跑、怎么跑」的单一事实来源。因此**不存在专门的"就绪检查" Run 记录**——信号来自 trigger 响应状态码本身，而非查询历史 Run。
+
+**(c) adopt 幂等守卫用 409（T5→T6 闭合）**：`PATCH /api/v1/radar/items/[id] {action:'adopt'}` 初版无状态守卫，双击会因两次请求都读到 `status='new'` 而各自建一条 `CockpitInspiration`，产生孤儿灵感卡（第二条 `inspirationId` 覆盖第一条，第一条再也追溯不回雷达条目）。收尾方案：服务端 `item.status !== 'new'` 一律 `fail(..., 409)`；`ignore` 动作走同一守卫。前端加 pending 态禁用双击是第一道防线，服务端 409 是网络重试/多标签页等 UI 层防不住场景的兜底。
+
+**(d) `GET /api/v1/radar/runs/latest` 独立轻路由，而非并入 `radar/config`**：雷达视图底部「上轮运行摘要」需要的运行统计（`searched/read/kept/errorsCount`）本可以塞进 `radar/config` GET 响应里省一次 fetch，但那样会让 `RadarConfigSafe`（`hasKey/dailyLimit/enabled` 的稳定契约）承担两个不相关的关注点。挑轻方案：独立路由，成本只是多一次 fetch（雷达视图本来就要并发拉 items/keywords/config，多一个不增加往返轮数）。从未跑过扫描时返回 `{run: null}`，前端据此展示引导文案而非一行全零摘要。
+
+**(e) 同 URL 多词只记首词——保守偏差（T4，遗留未处理）**：同一 URL 在多个关键词的搜索结果里命中时，`matchedKeywords` 只记录首次命中的关键词，不跨关键词合并。这不影响 URL/标题指纹去重的正确性，只是展示层的「命中关键词」标签会少列几个——共现加成计算若依赖 `matchedKeywords` 的关键词数量，会偏保守（低估共现强度）。当前调参未触及此偏差；若未来热度公式改为强依赖多词共现，需要回来补上跨关键词合并。
+
+**(f) 其余实际偏差（详见 `.superpowers/sdd/2026-08-13-radar-deep-collection/progress.md`）**：
+- `tavilyKeyEncrypted` 用空串表示"未配置"（`@default("")` 而非 nullable），`getRadarConfig`/`getDecryptedTavilyKey` 均显式判空串短路，避免对空串跑 AES-GCM decrypt 抛错（T1/T2）。
+- `getSearchProvider` 最终签名是 `(apiKey: string)` 而非草稿设想的 `(config)`，调用方自行从 `RadarConfig` 取出解密后的 key 再传入（T2/T4）。
+- `clusterByTopic` 是 O(n²) 实现，日频量级（每日 ≤20 篇）无碍；千级量级需要换算法，聚簇内顺序未定义、消费方不得依赖（T3/T4）。
+- worker 每日 repeat 调度层（BullMQ repeatable job 本身的触发时机）没有直接测试，循 `auto-sync-worker` 先例走人工验证——管线核心（纯函数热度合成/搜索层/阅读 prompt/API 路由）全部有 mock 测试覆盖。
+- 侧栏插入「热点雷达」项导致 `WORKBENCH_NAV_ITEMS` 下标后移，顺手修了 `external-shell.tsx` 里依赖下标 `[1]` 的移动端捷径（改按 `id` 查找）；移动端捷径未新增雷达入口（符合 brief 范围）。
+- 视图/设置卡的 DTO 类型在前端有重复定义（未抽共享类型），四路 fetch（items/keywords/config/runs-latest）已统一错误面 + 重试文案；重试按钮刻意不置 loading 态（已在代码内注释原因）。
+- 真实 Tavily + 真实 DeepSeek 的全链路端到端，全期均未跑通（无可用真实 Tavily key）；管线设计已支持，验证责任转移给用户接入真实 key 后自验，与 DeepSeek key 先例一致。
