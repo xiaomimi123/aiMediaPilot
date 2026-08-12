@@ -42,7 +42,9 @@ const FIXED_VIEW_IDS: ReadonlyArray<string> = [
  * legacy `goals`/`review` 折叠进 `"analytics"`（精确到 tab 由
  * `resolveInitialAnalyticsTab` 处理, 见下方）, 其余（含缺省、非法值、旧的 `schedule`）
  * 一律回退 `"momentum"`。`schedule` 在 T3 后不再是独立 NavView —— 旧 `?view=schedule`
- * 链接落回 momentum(今日), T6 再做到档期 tab 的精确映射。
+ * 链接落回 momentum, 精确到档期 tab 的映射由 `resolveInitialMomentumTab`
+ * 重读原始 `view` 参数完成（T6, 与 `resolveInitialAnalyticsTab` 处理
+ * legacy `goals`/`review` 的手法一致）。
  */
 export function resolveInitialView(searchParams: URLSearchParams): NavView {
   const requested = searchParams.get("view");
@@ -61,12 +63,21 @@ const MOMENTUM_TABS: ReadonlyArray<MomentumPeriod> = ["today", "week", "schedule
 
 /**
  * 解析 `?tab=` 初始档期/今日/本周 tab。**门控**: 只在 `resolvedView === "momentum"` 时
- * 才读取 `tab` 参数——否则任何非 momentum 视图（例如 `?view=inspirations&tab=schedule`）
- * 都会被忽略, 返回 `"today"`。这是为了避免 `tab` 参数在未来跨视图深链场景里被误读
- * (例如先落在 inspirations, 之后 SPA 内切到 momentum 时不应该直接跳到档期)。
+ * 才读取 `tab`/legacy `view` 参数——否则任何非 momentum 视图（例如
+ * `?view=inspirations&tab=schedule`）都会被忽略, 返回 `"today"`。这是为了避免 `tab`
+ * 参数在未来跨视图深链场景里被误读 (例如先落在 inspirations, 之后 SPA 内切到 momentum
+ * 时不应该直接跳到档期)。
+ *
+ * 与 `resolveInitialAnalyticsTab` 处理 legacy `?view=goals`/`?view=review` 的手法一致
+ * (T6): legacy `?view=schedule`（`resolveInitialView` 已把它折叠回 `"momentum"`, 这一步
+ * 的信息已经丢失）在这里重新读取原始 `view` 参数值精确落到 `"schedule"` tab, 优先级
+ * 高于 `?tab=`；否则再看 `?tab=`（新 `?view=momentum&tab=schedule` 深链的写法）, 非法/
+ * 缺省值落回 `"today"`。
  */
 export function resolveInitialMomentumTab(searchParams: URLSearchParams, resolvedView: NavView): MomentumPeriod {
   if (resolvedView !== "momentum") return "today";
+  const requestedView = searchParams.get("view");
+  if (requestedView === "schedule") return "schedule";
   const requested = searchParams.get("tab");
   if (requested && (MOMENTUM_TABS as ReadonlyArray<string>).includes(requested)) {
     return requested as MomentumPeriod;

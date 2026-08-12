@@ -105,11 +105,13 @@
 | 旧 URL | 目的地 | 说明 |
 |---|---|---|
 | `/agent` | `/?view=pipeline` | 307, 精确匹配, `/agent/discover` 等子路径不受影响 |
-| `/dashboard` | `/?view=review` | 307 |
+| `/dashboard` | `/?view=review` | 307 (目的地查询值经三期兼容映射折叠进 analytics 视图 review tab, 见下方说明) |
 | `/settings` | `/?view=settings` | 307 (二期实施中从最初的 `/` 升级为直达 settings 视图, 见 spec 实际实施结论) |
 | `/settings/baseline` | `/?view=settings` | 307, 同上 |
 
 保留可直接访问的路由 (不 redirect): `/agent/discover`、`/agent/inspiration`、`/agent/patterns`、`/accounts`、`/content/script`、`/content/script/new`(深度写稿入口)、`/content/script/[id]`、`/content/preflight`、`/content/retro-sync`。
+
+**三期 (产出优先信息架构重组) 起旧 `?view=` 兼容映射**: redirect 表目的地里出现的 `schedule`/`goals`/`review` 三个旧 view 值不再是独立视图, 由 `src/lib/cockpit/view-routing.ts` (`resolveInitialView`/`resolveInitialMomentumTab`/`resolveInitialAnalyticsTab`, 单测 `tests/lib/cockpit/view-routing.test.ts`) 精确折叠: `?view=schedule` → momentum 视图 + 档期 tab; `?view=goals` → analytics 视图 + 目标 tab; `?view=review` → analytics 视图 + 复盘 tab; `inspirations`/`momentum`/`pipeline`/`settings` 及五个 `platform-*` 原生直达; 其余非法/缺省值一律回退 momentum。
 
 ### `/content` 的变化
 

@@ -5,6 +5,7 @@ import {
   CONTENT_STAGES,
   DEFAULT_PAGE_TITLES,
   NEXT_ACTIONS,
+  PLATFORM_LABELS,
   STAGE_LABELS,
   type ContentPlatformEx,
   type ContentStage,
@@ -74,7 +75,7 @@ export function ContentOverviewView({ state, pageTitle, updateTitle, query, setQ
             .filter((event) => event.contentId === item.id && !event.completedAt)
             .sort((a, b) => a.plannedDate.localeCompare(b.plannedDate) || a.rank - b.rank)[0];
           return <article key={item.id} draggable onDragStart={(e) => e.dataTransfer.setData("text/content-id", item.id)} className="kanban-card">
-            <button className="kanban-card-main" onClick={() => open(item.id)}><div className="card-tags"><Badge tone={`tier-${item.tier.toLowerCase()}`}>{item.tier}档</Badge><span>{item.contentType}</span></div><h3>{item.title}</h3><p>{item.idea}</p><footer><span>{NEXT_ACTIONS[item.stage]}</span>{nextPlanned ? <time>{STAGE_LABELS[nextPlanned.stage]} · {nextPlanned.plannedDate.slice(5)}</time> : null}</footer></button>
+            <button className="kanban-card-main" onClick={() => open(item.id)}><div className="card-tags"><Badge tone={`tier-${item.tier.toLowerCase()}`}>{item.tier}档</Badge><span className="badge">{PLATFORM_LABELS[item.platform]}</span><span>{item.contentType}</span></div><h3>{item.title}</h3><p>{item.idea}</p><footer><span>{NEXT_ACTIONS[item.stage]}</span>{nextPlanned ? <time>{STAGE_LABELS[nextPlanned.stage]} · {nextPlanned.plannedDate.slice(5)}</time> : null}</footer></button>
             {stage === "archived" ? <span className="card-today archived">已归档</span> : stage === "inbox" ? <span className="card-today archived">灵感无需排期 · 先推进到大纲</span> : !todayEvent ? <button className="card-today" onClick={() => addToday(item.id)}>＋ 当前阶段安排今天</button> : <span className="card-today added">{todayEvent.completedAt ? "今日阶段已完成" : `今日 #${todayEvent.rank}`}</span>}
           </article>;
         })}</div>

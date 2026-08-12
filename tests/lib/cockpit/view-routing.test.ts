@@ -80,6 +80,20 @@ describe('resolveInitialMomentumTab', () => {
     expect(resolvedView).toBe('momentum');
     expect(resolveInitialMomentumTab(params, resolvedView)).toBe('schedule');
   });
+
+  it('legacy `?view=schedule`（无 tab）→ resolveInitialView 折叠成 momentum, 精确 tab 通过重读原始 view 落在 schedule (T6, 与 goals/review 手法一致)', () => {
+    const params = paramsFrom('view=schedule');
+    const resolvedView = resolveInitialView(params);
+    expect(resolvedView).toBe('momentum');
+    expect(resolveInitialMomentumTab(params, resolvedView)).toBe('schedule');
+  });
+
+  it('legacy `?view=schedule&tab=week` → 原始 view 参数优先于 tab, 仍落在 schedule', () => {
+    const params = paramsFrom('view=schedule&tab=week');
+    const resolvedView = resolveInitialView(params);
+    expect(resolvedView).toBe('momentum');
+    expect(resolveInitialMomentumTab(params, resolvedView)).toBe('schedule');
+  });
 });
 
 describe('resolveInitialAnalyticsTab', () => {

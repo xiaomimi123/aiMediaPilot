@@ -16,8 +16,17 @@ import { todayISO } from "@/lib/cockpit/calculations";
 import { stageIndex } from "@/lib/cockpit/workflow";
 import { mapGeneratedToScript } from "@/lib/cockpit/script-mapping";
 import { runGenerateScript } from "@/lib/cockpit/generate-flow";
-import { CONTENT_PLATFORMS, CONTENT_PLATFORM_LABEL, type ContentPlatform } from "@/lib/platform";
+import { CONTENT_PLATFORMS, CONTENT_PLATFORM_LABEL, isContentPlatform, type ContentPlatform } from "@/lib/platform";
 import { Badge, Icon, StarRating } from "./shared";
+
+// T6 三期: 抽屉内 AI 生成脚本只覆盖 @/lib/platform 的 ContentPlatform 三个值
+// (douyin/xiaohongshu/gongzhonghao)，而 item.platform 是六平台的 ContentPlatformEx
+// (含 bilibili/x/youtube 三个只有基础能力、platform.tsx 里已标注"暂不支持 AI 生成"
+// 的平台, 见 FULL_GENERATION_PLATFORMS 注释)。生成平台下拉默认值跟随 item.platform——
+// 落在三个全能力平台内直接用, 否则回退 douyin (下拉仍可手动改选其他两个全能力平台)。
+function defaultScriptPlatform(platform: string): ContentPlatform {
+  return isContentPlatform(platform) ? platform : "douyin";
+}
 
 async function resolveDefaultNiche(): Promise<string> {
   try {
@@ -82,7 +91,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
   const reviewStatus = !reviewPublished ? "unavailable" : item.review.completedAt ? "completed" : "pending";
 
   // ---- 抽屉内 AI 生成脚本（就地化，替代跳转 /agent） ----
-  const [scriptPlatform, setScriptPlatform] = useState<ContentPlatform>("douyin");
+  const [scriptPlatform, setScriptPlatform] = useState<ContentPlatform>(() => defaultScriptPlatform(item.platform));
   const [generating, setGenerating] = useState(false);
   const [titleHint, setTitleHint] = useState("");
   const mountedRef = useRef(true);
@@ -101,6 +110,19 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
       if (titleFeedbackTimerRef.current) window.clearTimeout(titleFeedbackTimerRef.current);
     };
   }, []);
+  // T6 三期: `<ContentDrawer>` 的调用点 (Cockpit.tsx) 没有给它加 `key={item.id}`——
+  // `openContent(id)` 可以在抽屉已经挂载时直接把 `selectedId` 从 A 切到 B (例如
+  // AnalyticsView 的「复盘」入口), React 会复用同一个组件实例、只更新 `item` prop,
+  // 不会触发 unmount/remount。若只靠上面的 `useState(() => ...)` 惰性初始值,
+  // scriptPlatform 会停留在第一个打开的 item 的默认值上, 后续切换的 item 拿不到
+  // 各自的默认平台。这里显式在 `item.id` 变化时重新计算默认值, 不依赖是否真的
+  // 发生了 remount, 同时顺手清掉上一个 item 遗留的标题建议 (与 T2 二期的平台切换
+  // 清 titleHint 是同一防陈旧套路)。
+  useEffect(() => {
+    setScriptPlatform(defaultScriptPlatform(item.platform));
+    setTitleHint("");
+    lastCheckedTitleRef.current = "";
+  }, [item.id, item.platform]);
 
   async function handleGenerateScript() {
     if (generating) return;
@@ -150,7 +172,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
     {/* “AI 体检”按钮（调 /api/ai/analyze）已在 Task 14 移除：该路由未移植，AI 相关能力统一走 /agent。 */}
     {tab === "topic" ? <div className="drawer-section"><div className="section-title-row"><div><span className="eyebrow">TOPIC GATE</span><h3>大纲卡</h3></div></div><StageScheduleField item={item} stage="topic" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{[["目标受众", "audience"], ["具体痛点", "painPoint"], ["一句话观点", "pointOfView"], ["大家通常怎么讲", "commonAngle"], ["我的反差角度", "contrastAngle"], ["可展示素材", "assets"], ["最低成本拍法", "minimumProduction"]].map(([label, key]) => <label key={key} className="field full"><span>{label}</span><textarea value={String(item.topic[key as keyof typeof item.topic] ?? "")} onChange={(e) => updateTopic({ [key]: e.target.value })} /></label>)}<div className="score-card"><div><span>六维总分</span><strong>{score}<small> / 30</small></strong></div><div className="score-grid">{Object.entries({ audience: "受众", pain: "痛点", scene: "场景", demonstrable: "可展示", distribution: "传播", efficiency: "性价比" }).map(([key, label]) => <label key={key}><span>{label}</span><input type="range" min="0" max="5" value={item.topic.score[key as keyof typeof item.topic.score]} onChange={(e) => updateTopic({ score: { ...item.topic.score, [key]: Number(e.target.value) } })} /><strong>{item.topic.score[key as keyof typeof item.topic.score]}</strong></label>)}</div></div></div> : null}
     {/* “AI 质检”按钮（调 /api/ai/analyze）已在 Task 14 移除：该路由未移植；“用 AI 写脚本”自 Task 2 起改为抽屉内就地生成，不再跳转 /agent。 */}
-    {tab === "script" ? <div className="drawer-section"><div className="section-title-row"><div><span className="eyebrow">SCRIPT</span><h3>先搭结构，再改措辞</h3></div><div style={{ display: "flex", gap: 8 }}><select value={scriptPlatform} onChange={(e) => { setScriptPlatform(e.target.value as ContentPlatform); setTitleHint(""); lastCheckedTitleRef.current = ""; }} disabled={generating} aria-label="生成平台" style={{ height: 34, borderRadius: 9 }}>{CONTENT_PLATFORMS.map((value) => <option key={value} value={value}>{CONTENT_PLATFORM_LABEL[value]}</option>)}</select><button type="button" className="ai-button small" disabled={generating} onClick={handleGenerateScript}><Icon name="spark" />{generating ? "生成中…" : "用 AI 写脚本"}</button></div></div><StageScheduleField item={item} stage="script" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{[["标题方向", "headline"], ["开头 3 秒", "hook"], ["一句话结论", "conclusion"], ["内容结构", "body"], ["案例 / 演示", "example"], ["结尾行动 / 观点", "ending"]].map(([label, key]) => <label key={key} className="field full"><span>{label}</span><textarea className={key === "body" ? "large" : ""} value={item.script[key as keyof typeof item.script]} onChange={(e) => updateScript({ [key]: e.target.value })} onBlur={key === "headline" ? handleHeadlineBlur : undefined} />{key === "headline" && titleHint ? <small className="field-hint">{titleHint}</small> : null}</label>)}</div> : null}
+    {tab === "script" ? <div className="drawer-section"><div className="section-title-row"><div><span className="eyebrow">SCRIPT</span><h3>先搭结构，再改措辞</h3></div><div style={{ display: "flex", gap: 8 }}><select value={scriptPlatform} onChange={(e) => { setScriptPlatform(e.target.value as ContentPlatform); setTitleHint(""); lastCheckedTitleRef.current = ""; }} disabled={generating} aria-label="生成平台" style={{ height: 34, borderRadius: 9 }}>{CONTENT_PLATFORMS.map((value) => <option key={value} value={value}>{CONTENT_PLATFORM_LABEL[value]}</option>)}</select><button type="button" className="ai-button small" disabled={generating} onClick={handleGenerateScript}><Icon name="spark" />{generating ? "生成中…" : "用 AI 写脚本"}</button></div></div>{!isContentPlatform(item.platform) ? <small className="field-hint">该平台暂不支持 AI 生成，可选相近平台生成后手动调整</small> : null}<StageScheduleField item={item} stage="script" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{[["标题方向", "headline"], ["开头 3 秒", "hook"], ["一句话结论", "conclusion"], ["内容结构", "body"], ["案例 / 演示", "example"], ["结尾行动 / 观点", "ending"]].map(([label, key]) => <label key={key} className="field full"><span>{label}</span><textarea className={key === "body" ? "large" : ""} value={item.script[key as keyof typeof item.script]} onChange={(e) => updateScript({ [key]: e.target.value })} onBlur={key === "headline" ? handleHeadlineBlur : undefined} />{key === "headline" && titleHint ? <small className="field-hint">{titleHint}</small> : null}</label>)}</div> : null}
     {tab === "recording" ? <div className="drawer-section"><div className="stage-detail-strip"><span>录制阶段</span><Badge tone="recording" color={stageColors.recording}>录制</Badge><small>完成后进入剪辑</small></div><StageScheduleField item={item} stage="recording" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} /><label className="field full"><span>录制备注</span><textarea className="large" value={item.recordingNotes} onChange={(e) => update({ recordingNotes: e.target.value })} placeholder="记录机位、口播、录屏、演示路径和补拍素材…" /></label><div className="checklist"><strong>录制完成清单</strong>{["机位与画面可用", "收音清晰", "口播或演示路径完整", "必要素材与补拍镜头齐全"].map((text) => <label key={text}><input type="checkbox" />{text}</label>)}</div></div> : null}
     {tab === "editing" ? <div className="drawer-section"><div className="stage-detail-strip"><span>剪辑阶段</span><Badge tone="editing" color={stageColors.editing}>剪辑</Badge><small>完成后进入发布</small></div><StageScheduleField item={item} stage="editing" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} /><label className="field full"><span>剪辑备注</span><textarea className="large" value={item.editingNotes} onChange={(e) => update({ editingNotes: e.target.value })} placeholder="记录结构删改、字幕、包装、素材替换和导出要求…" /></label><div className="checklist"><strong>剪辑完成清单</strong>{["开头 5 秒直接进入场景", "案例或演示重点清楚", "字幕清楚可读", "封面与标题已确认", `${item.tier}档制作投入已控制`].map((text) => <label key={text}><input type="checkbox" />{text}</label>)}</div></div> : null}
     {tab === "publish" ? <div className="drawer-section"><StageScheduleField item={item} stage="publishing" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} label="计划发布日期" /><div className="form-grid"><label className="field"><span>发布状态</span><select value={item.publicationStatus} disabled><option value="draft">未排期</option><option value="scheduled">已排期</option><option value="published">已发布</option></select><small>由发布档期和实际发布记录自动更新。</small></label><label className="field"><span>实际发布时间</span><input type="date" value={item.publishedAt} onChange={(e) => update({ publishedAt: e.target.value })} /></label></div><label className="field full"><span>封面文案</span><input value={item.coverCopy} onChange={(e) => update({ coverCopy: e.target.value })} /></label><label className="field full"><span>发布正文</span><textarea className="large" value={item.publishCopy} onChange={(e) => update({ publishCopy: e.target.value })} /></label><label className="field full"><span>小红书链接</span><input value={item.xhsLink} onChange={(e) => update({ xhsLink: e.target.value })} placeholder="https://www.xiaohongshu.com/..." /></label>{item.publicationStatus !== "published" ? <><button className="primary-button full-button" disabled={!item.publishedAt} onClick={markPublished}>标记为已发布</button>{!item.publishedAt ? <p className="validation-note">先填写实际发布时间，系统才会计入大目标。</p> : null}</> : <div className="published-banner"><span>已发布于 {item.publishedAt} · 已进入待复盘列表</span><button onClick={unmarkPublished}>撤销发布记录</button></div>}</div> : null}
