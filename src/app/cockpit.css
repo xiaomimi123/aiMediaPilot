@@ -87,15 +87,9 @@ textarea { resize: vertical; }
 .nav-item { display: flex; width: 100%; align-items: center; gap: 11px; min-height: 43px; margin: 3px 0; padding: 0 12px; border: 0; border-radius: 10px; background: transparent; color: var(--ink-soft); text-align: left; transition: .18s ease; }
 .nav-item:hover { background: var(--hover-bg); color: var(--ink); }
 .nav-item.active { background: var(--surface); color: var(--ink); box-shadow: 0 7px 22px rgba(52,48,39,.06); }
-.sidebar nav .nav-item { cursor: grab; }
-.sidebar nav .nav-item:active { cursor: grabbing; }
-.sidebar nav .nav-item.dragging { opacity: .42; }
-.sidebar nav .nav-item.drop-target { box-shadow: inset 0 3px 0 var(--clay); }
 .nav-item .icon { width: 20px; color: var(--muted); font-size: 19px; text-align: center; }
 .nav-item.active .icon { color: var(--clay); }
 .nav-item span:not(.icon) { flex: 1; font-size: 13px; font-weight: 600; }
-.nav-item span.nav-drag-handle { flex: 0 0 auto; color: var(--muted); font-family: ui-monospace, monospace; font-size: 13px; font-weight: 400; opacity: 0; transition: opacity .16s ease; }
-.sidebar nav .nav-item:hover .nav-drag-handle, .sidebar nav .nav-item:focus-visible .nav-drag-handle { opacity: .65; }
 .nav-item em { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 20px; background: var(--clay); color: white; font-size: 11px; font-style: normal; line-height: 20px; text-align: center; }
 .sidebar-bottom { margin-top: auto; }
 .quarter-mini { margin: 14px 4px 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--glass-bg); }
