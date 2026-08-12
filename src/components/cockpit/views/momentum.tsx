@@ -14,12 +14,13 @@ import {
 } from "@/lib/cockpit/model";
 import { percent, startOfWeekISO } from "@/lib/cockpit/calculations";
 import { stageIndex, stageProgress } from "@/lib/cockpit/workflow";
+// MomentumPeriod 的唯一定义在 view-routing.ts（和 `resolveInitialMomentumTab` 配套，
+// 供纯逻辑单测复用），这里只做 type-only import。
+import type { MomentumPeriod } from "@/lib/cockpit/view-routing";
 import { Badge, Empty, EditablePageTitle, Icon, date, shiftDate } from "../shared";
 import { ScheduleView } from "./schedule";
 
 export type DailyStageEntry = { event: StageEvent; item: ContentItem };
-
-export type MomentumPeriod = "today" | "week" | "schedule";
 
 function TodoCard({ entry, index, overdue = false, stageColors, open, openSchedule, moveToday, toggleComplete, removeFromToday }: {
   entry: DailyStageEntry;

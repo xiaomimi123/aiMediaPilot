@@ -72,9 +72,16 @@ import {
   transitionContentStage,
 } from "@/lib/cockpit/workflow";
 import { Icon, creatorMark, dashboardTitle, date, normalizeGoalQuotas, shiftDate } from "./shared";
-import { ALL_NAV_ITEMS, MOBILE_NAV_ITEMS, Sidebar, isPlatformNavView, type NavView } from "./sidebar";
+import { MOBILE_NAV_ITEMS, Sidebar } from "./sidebar";
+import {
+  isPlatformNavView,
+  resolveInitialMomentumTab,
+  resolveInitialView,
+  type MomentumPeriod,
+  type NavView,
+} from "@/lib/cockpit/view-routing";
 import { InspirationPoolView } from "./views/inspirations";
-import { MomentumView, type DailyStageEntry, type MomentumPeriod } from "./views/momentum";
+import { MomentumView, type DailyStageEntry } from "./views/momentum";
 import { ContentOverviewView } from "./views/pipeline";
 import { GoalsView } from "./views/goals";
 import { ReviewView } from "./views/review";
@@ -493,39 +500,17 @@ function createBlankState(): WorkspaceState {
   };
 }
 
-// T3/T4 移除: goals/review 已不在侧栏出现, 但仍在 NavView 联合里保留渲染分支
-// (过渡期内部跳转 + 历史 `?view=` 链接兼容), 这里继续接受它们, 完整的迁移映射交给 T6。
-// schedule 已并入 momentum 的档期 tab (T3), 不再是独立 NavView —— 旧 `?view=schedule`
-// 链接不再匹配, 落回默认 momentum(今日); 精确映射到档期 tab 交给 T6。
-const LEGACY_VIEW_IDS: ReadonlyArray<string> = ["goals", "review"];
-
-function initialViewFromSearchParams(searchParams: URLSearchParams): NavView {
-  const requested = searchParams.get("view");
-  if (!requested) return "momentum";
-  if (requested === "settings") return "settings";
-  if (ALL_NAV_ITEMS.some((item) => item.id === requested) || LEGACY_VIEW_IDS.includes(requested)) {
-    return requested as NavView;
-  }
-  return "momentum";
-}
-
-const MOMENTUM_TABS: ReadonlyArray<MomentumPeriod> = ["today", "week", "schedule"];
-
-function initialMomentumPeriodFromSearchParams(searchParams: URLSearchParams): MomentumPeriod {
-  const requested = searchParams.get("tab");
-  if (requested && (MOMENTUM_TABS as ReadonlyArray<string>).includes(requested)) {
-    return requested as MomentumPeriod;
-  }
-  return "today";
-}
+// `?view=`/`?tab=` 的解析逻辑搬到 @/lib/cockpit/view-routing.ts（纯函数, 有独立单测）——
+// goals/review 过渡期兼容、schedule 回退 momentum(今日)、tab 仅在 view=momentum 时生效
+// 这几条规则的注释和实现都在那边, 这里只消费 resolveInitialView/resolveInitialMomentumTab。
 
 export default function Cockpit() {
   const searchParams = useSearchParams();
   const [state, setState] = useState<WorkspaceState>(() => createDemoState());
   const [hydrated, setHydrated] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [view, setView] = useState<NavView>(() => initialViewFromSearchParams(searchParams));
-  const [momentumPeriod, setMomentumPeriod] = useState<MomentumPeriod>(() => initialMomentumPeriodFromSearchParams(searchParams));
+  const [view, setView] = useState<NavView>(() => resolveInitialView(searchParams));
+  const [momentumPeriod, setMomentumPeriod] = useState<MomentumPeriod>(() => resolveInitialMomentumTab(searchParams, view));
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [theme, setTheme] = useState<ColorTheme | null>(null);
   const [showStageColors, setShowStageColors] = useState(false);

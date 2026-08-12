@@ -3,30 +3,12 @@
 import Link from "next/link";
 import { percent } from "@/lib/cockpit/calculations";
 import { CONTENT_PLATFORMS, PLATFORM_LABELS } from "@/lib/cockpit/model";
+// NavView/PlatformNavId 的唯一定义现在在 view-routing.ts (纯逻辑模块, 供
+// `resolveInitialView`/`resolveInitialMomentumTab` 单测复用, 不依赖本文件的
+// next/link "use client" 组件代码) —— 这里只做 type-only import, 避免环形依赖。
+import type { NavView, PlatformNavId } from "@/lib/cockpit/view-routing";
 import { APP_NAME } from "@/lib/constants";
 import { Icon, ProgressBar } from "./shared";
-
-type SidebarPlatform = (typeof CONTENT_PLATFORMS)[number];
-export type PlatformNavId = `platform-${SidebarPlatform}`;
-
-// 三期 IA 演化: 侧栏视图 id 集合。goals/review 是旧 NavigationItemId 的残留
-// —— 已从侧栏拿掉 (T2), 但内部跳转和历史 `?view=` 链接仍需要这两个分支可达,
-// 因此暂留在联合里。// T4 移除: 把这两个视图重新挂到新 IA 后一并清理。
-// schedule 已并入 momentum 的档期 tab (T3), 不再是独立 NavView —— 状态改由
-// momentum.tsx 的 MomentumPeriod ("today"|"week"|"schedule") 承载。
-export type NavView =
-  | "inspirations"
-  | "momentum"
-  | "pipeline"
-  | "analytics"
-  | "settings"
-  | PlatformNavId
-  | "goals"
-  | "review";
-
-export function isPlatformNavView(view: NavView): view is PlatformNavId {
-  return view.startsWith("platform-");
-}
 
 // 侧栏固定项 (排除 settings 单独按钮, 以及暂留但不出现在侧栏里的 goals/review)。
 export type FixedNavId = Exclude<NavView, "settings" | "goals" | "review">;
