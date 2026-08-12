@@ -7,6 +7,7 @@ export const QUEUES = {
   ANALYZE: 'content-analyze',
   RETRO: 'content-retro',
   AUTO_SYNC: 'auto-sync',
+  RADAR: 'radar',
 } as const;
 
 export const bindQueue = new Queue(QUEUES.BIND, { connection: redis });
@@ -14,3 +15,4 @@ export const syncQueue = new Queue(QUEUES.SYNC, { connection: redis });
 export const analyzeQueue = new Queue(QUEUES.ANALYZE, { connection: redis });
 export const retroQueue = new Queue(QUEUES.RETRO, { connection: redis });
 export const autoSyncQueue = new Queue(QUEUES.AUTO_SYNC, { connection: redis });
+export const radarQueue = new Queue(QUEUES.RADAR, { connection: redis });
