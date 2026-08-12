@@ -60,6 +60,7 @@ function content(partial: Partial<ContentItem> = {}): ContentItem {
     idea: "",
     contentType: "AI 产品实测",
     tier: "B",
+    platform: "douyin",
     stage: "review",
     publicationStatus: "published",
     priority: "normal",

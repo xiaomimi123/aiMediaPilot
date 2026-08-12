@@ -58,6 +58,11 @@ describe("mapDraftToCockpit — deriveStage 分支映射", () => {
     expect(analysisId).toBeNull();
   });
 
+  it("三期 IA 演化: platform 字段 — 存量迁移统一标 'douyin'", () => {
+    const { content } = mapDraftToCockpit(draft(), null, 0, null);
+    expect(content.platform).toBe("douyin");
+  });
+
   it("READY (picked≠null, 无 analysis) → stage=recording, script 摘录来自 picked+output", () => {
     const d = draft({ picked: { titleIdx: 0, hookIdx: 0, reviewed: {} } });
     const { content } = mapDraftToCockpit(d, null, 0, null);
@@ -162,6 +167,7 @@ describe("backfillStageEvents — StageEvent 补齐计数", () => {
       idea: "",
       contentType: "",
       tier: "B",
+      platform: "douyin",
       stage,
       publicationStatus: "draft",
       priority: "normal",
@@ -267,6 +273,7 @@ describe("mapTopicToCockpit — TopicIdea 池", () => {
     expect(content!.title).toBe("副业变现的 5 个坑");
     expect(content!.idea).toBe("对标账号 XX 做过类似选题");
     expect(content!.publicationStatus).toBe("draft");
+    expect(content!.platform).toBe("douyin");
   });
 
   it("note 为 null 时 idea 落空字符串", () => {

@@ -252,6 +252,8 @@ export function mapDraftToCockpit(
     idea: draft.topic,
     contentType: "",
     tier: "B",
+    // 三期 IA 演化: platform 字段 —— 存量数据迁移只覆盖抖音短视频, 统一标 'douyin'。
+    platform: "douyin",
     stage,
     publicationStatus,
     priority: "normal",
@@ -304,6 +306,8 @@ export function mapTopicToCockpit(topic: SourceTopicIdea): ContentItem | null {
     idea: topic.note ?? "",
     contentType: "",
     tier: "B",
+    // 三期 IA 演化: platform 字段 —— 存量数据迁移只覆盖抖音短视频, 统一标 'douyin'。
+    platform: "douyin",
     stage: "topic",
     publicationStatus: "draft",
     priority: "normal",

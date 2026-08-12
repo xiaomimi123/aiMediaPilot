@@ -118,6 +118,32 @@ describe('GET /api/v1/cockpit/workspace', () => {
     expect(json.data.rev).toBe('1970-01-01T00:00:00.000Z');
   });
 
+  it('三期 IA 演化: platform 字段 — contents 组装带出 platform', async () => {
+    prismaMock.cockpitContent.findMany.mockResolvedValue([{
+      id: 'content1', userId: 'user1', title: 'T', idea: 'I', contentType: 'ct', tier: 'A',
+      platform: 'xiaohongshu', stage: 'inbox', publicationStatus: 'draft', priority: 'normal',
+      tags: [], publishedAt: '', xhsLink: '', coverCopy: '', publishCopy: '',
+      topic: {}, script: {}, recordingNotes: '', editingNotes: '', metrics: {}, review: {},
+      scriptDraftId: null, analysisId: null, createdAt: 'c', updatedAt: 'u',
+    }]);
+    const res = await GET();
+    const json = await res.json();
+    expect(json.data.state.contents[0].platform).toBe('xiaohongshu');
+  });
+
+  it("三期 IA 演化: platform 字段 — 存量行缺失 platform 时防御性回退 'douyin'", async () => {
+    prismaMock.cockpitContent.findMany.mockResolvedValue([{
+      id: 'content1', userId: 'user1', title: 'T', idea: 'I', contentType: 'ct', tier: 'A',
+      stage: 'inbox', publicationStatus: 'draft', priority: 'normal',
+      tags: [], publishedAt: '', xhsLink: '', coverCopy: '', publishCopy: '',
+      topic: {}, script: {}, recordingNotes: '', editingNotes: '', metrics: {}, review: {},
+      scriptDraftId: null, analysisId: null, createdAt: 'c', updatedAt: 'u',
+    }]);
+    const res = await GET();
+    const json = await res.json();
+    expect(json.data.state.contents[0].platform).toBe('douyin');
+  });
+
   it('无绑定 PlatformAccount → extras.account 为 null', async () => {
     prismaMock.platformAccount.findFirst.mockResolvedValue(null);
     const res = await GET();
@@ -243,7 +269,7 @@ describe('PUT /api/v1/cockpit/workspace', () => {
         id: 'insp1', text: '灵感', createdAt: 'c', updatedAt: 'u', convertedContentIds: [],
       }],
       contents: [{
-        id: 'content1', title: 'T', idea: 'I', contentType: 'ct', tier: 'A', stage: 'inbox',
+        id: 'content1', title: 'T', idea: 'I', contentType: 'ct', tier: 'A', platform: 'douyin', stage: 'inbox',
         publicationStatus: 'draft', priority: 'normal', tags: [], createdAt: 'c', updatedAt: 'u',
         publishedAt: '', xhsLink: '', coverCopy: '', publishCopy: '',
         topic: {
@@ -290,6 +316,9 @@ describe('PUT /api/v1/cockpit/workspace', () => {
     expect(contentUpsertArgs.update).not.toHaveProperty('analysisId');
     expect(contentUpsertArgs.create).not.toHaveProperty('scriptDraftId');
     expect(contentUpsertArgs.create).not.toHaveProperty('analysisId');
+    // 三期 IA 演化: platform 字段 — update/create 两个分支都要写入
+    expect(contentUpsertArgs.update.platform).toBe('douyin');
+    expect(contentUpsertArgs.create.platform).toBe('douyin');
 
     // 空表 (stageEvents 等) 仍然要 deleteMany, 且不 upsert
     expect(prismaMock.cockpitStageEvent.deleteMany).toHaveBeenCalledWith({

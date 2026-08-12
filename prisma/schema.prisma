@@ -668,6 +668,7 @@ model CockpitContent {
   idea              String  @default("")
   contentType       String  @default("")
   tier              String  @default("B") // A | B | C
+  platform          String  @default("douyin") // 三期 IA 演化: platform 字段 — douyin|xiaohongshu|bilibili|x|youtube|gongzhonghao
   stage             String  @default("inbox") // inbox|topic|script|recording|editing|publishing|review|archived
   publicationStatus String  @default("draft") // draft|scheduled|published
   priority          String  @default("normal")
@@ -689,6 +690,7 @@ model CockpitContent {
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, stage])
+  @@index([userId, platform])
   @@index([scriptDraftId])
   @@index([analysisId])
 }

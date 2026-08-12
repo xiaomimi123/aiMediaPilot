@@ -26,6 +26,7 @@ import {
   SCHEDULABLE_STAGES,
   STAGE_LABELS,
   type ContentItem,
+  type ContentPlatformEx,
   type ContentStage,
   type CreatorProfile,
   type DesignStyle,
@@ -157,6 +158,18 @@ function blankScript() {
   return { headline: "", hook: "", conclusion: "", body: "", example: "", ending: "" };
 }
 
+// 三期 IA 演化: platform 字段 —— profile.primaryPlatform 是自由文本 (见 onboarding/settings 的
+// datalist 建议项), 这里做尽力而为的关键词映射; 匹配不到任何已知平台时回退 'douyin'。
+function primaryPlatformToContentPlatform(primaryPlatform: string): ContentPlatformEx {
+  const value = primaryPlatform.trim().toLowerCase();
+  if (value.includes("小红书") || value.includes("xiaohongshu")) return "xiaohongshu";
+  if (value.includes("b站") || value.includes("bilibili")) return "bilibili";
+  if (value.includes("youtube")) return "youtube";
+  if (value === "x" || value.includes("twitter") || value.includes("推特")) return "x";
+  if (value.includes("公众号") || value.includes("gongzhonghao")) return "gongzhonghao";
+  return "douyin";
+}
+
 function createContent(partial: Partial<ContentItem> & Pick<ContentItem, "id" | "title">): ContentItem {
   return {
     id: partial.id,
@@ -164,6 +177,9 @@ function createContent(partial: Partial<ContentItem> & Pick<ContentItem, "id" | 
     idea: partial.idea ?? partial.title,
     contentType: partial.contentType ?? DEFAULT_CONTENT_TYPES[0],
     tier: partial.tier ?? "B",
+    // 三期 IA 演化: platform 字段 —— 调用方 (createBlankContent/createContentFromInspiration)
+    // 按 profile.primaryPlatform 映射后传入; demo/blank 骨架数据没有 profile 上下文, 回退 'douyin'。
+    platform: partial.platform ?? "douyin",
     stage: partial.stage ?? "inbox",
     publicationStatus: partial.publicationStatus ?? "draft",
     priority: partial.priority ?? "normal",
@@ -688,7 +704,13 @@ export default function Cockpit() {
   }
 
   function createBlankContent() {
-    const item = createContent({ id: crypto.randomUUID(), title: "未命名内容", createdAt: todayISO(), updatedAt: todayISO() });
+    const item = createContent({
+      id: crypto.randomUUID(),
+      title: "未命名内容",
+      platform: primaryPlatformToContentPlatform(state.profile.primaryPlatform),
+      createdAt: todayISO(),
+      updatedAt: todayISO(),
+    });
     setState((prev) => ({ ...prev, contents: [item, ...prev.contents] }));
     setShowCreateContent(false);
     openContent(item.id);
@@ -704,6 +726,7 @@ export default function Cockpit() {
       title: titleFromInspiration(inspiration.text),
       idea: inspiration.text,
       stage: "topic",
+      platform: primaryPlatformToContentPlatform(state.profile.primaryPlatform),
       createdAt: todayISO(),
       updatedAt: todayISO(),
     });

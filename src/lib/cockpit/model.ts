@@ -1,3 +1,35 @@
+// 三期 IA 演化: platform 字段
+// @/lib/platform 的 `ContentPlatform` 只覆盖当前已支持生成的 3 个内容创作平台
+// (douyin/xiaohongshu/gongzhonghao, 对应 ScriptDraft.platform)。Cockpit 内容看板要覆盖
+// 侧栏展示的更广平台集合 (含 bilibili/x/youtube), 因此这里定义一个扩展联合
+// ContentPlatformEx —— 每个 `ContentPlatform` 的值都属于 `ContentPlatformEx`
+// (值兼容, 非类型别名), 用于 `ContentItem.platform`。
+export type ContentPlatformEx =
+  | "douyin"
+  | "xiaohongshu"
+  | "bilibili"
+  | "x"
+  | "youtube"
+  | "gongzhonghao";
+
+// 侧栏平台分区顺序 —— 不含 gongzhonghao (公众号只在内容详情抽屉里用作平台标签, 不单独开侧栏分区)。
+export const CONTENT_PLATFORMS: ContentPlatformEx[] = [
+  "douyin",
+  "xiaohongshu",
+  "bilibili",
+  "x",
+  "youtube",
+];
+
+export const PLATFORM_LABELS: Record<ContentPlatformEx, string> = {
+  douyin: "抖音",
+  xiaohongshu: "小红书",
+  bilibili: "bilibili",
+  x: "X",
+  youtube: "YouTube",
+  gongzhonghao: "公众号",
+};
+
 export type ContentStage =
   | "inbox"
   | "topic"
@@ -75,6 +107,8 @@ export interface ContentItem {
   idea: string;
   contentType: string;
   tier: ContentTier;
+  // 三期 IA 演化: platform 字段 —— 内容归属的目标平台, 驱动侧栏按平台分区。
+  platform: ContentPlatformEx;
   stage: ContentStage;
   publicationStatus: "draft" | "scheduled" | "published";
   priority: "high" | "normal" | "low";

@@ -51,6 +51,8 @@ export async function loadWorkspaceFromDb(userId: string) {
     })),
     contents: contents.map(({ userId: _u, scriptDraftId: _s, analysisId: _a, ...rest }) => ({
       ...rest, tags: rest.tags as string[],
+      // 三期 IA 演化: platform 字段 — 防御性回退, 兼容列刚上线前写入 / 未过 db:push 默认值的存量行
+      platform: rest.platform ?? 'douyin',
       topic: rest.topic as any, script: rest.script as any,
       metrics: rest.metrics as any, review: rest.review as any,
     })) as WorkspaceState['contents'],
@@ -141,6 +143,8 @@ export async function saveWorkspaceToDb(
         idea: item.idea,
         contentType: item.contentType,
         tier: item.tier,
+        // 三期 IA 演化: platform 字段
+        platform: item.platform,
         stage: item.stage,
         publicationStatus: item.publicationStatus,
         priority: item.priority,
