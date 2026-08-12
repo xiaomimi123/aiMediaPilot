@@ -38,6 +38,7 @@ const ITEM = {
   aiAngle: '角度A',
   aiSummary: '摘要A',
   url: 'https://example.com/a',
+  status: 'new',
 };
 
 beforeEach(() => {
@@ -112,6 +113,25 @@ describe('PATCH /api/v1/radar/items/:id', () => {
     prismaMock.radarItem.findUnique.mockResolvedValueOnce(null);
     const res = await PATCH(req({ action: 'ignore' }), ctx());
     expect(res.status).toBe(404);
+  });
+
+  it('条目已 adopted → 409, 不重复建灵感/不做任何写入 (幂等守卫, 防双击产孤儿灵感卡)', async () => {
+    prismaMock.radarItem.findUnique.mockResolvedValueOnce({ ...ITEM, status: 'adopted' });
+    const res = await PATCH(req({ action: 'adopt' }), ctx());
+    expect(res.status).toBe(409);
+    const json = await res.json();
+    expect(json.success).toBe(false);
+    expect(json.message).toBe('该条目已处理');
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(prismaMock.cockpitInspiration.create).not.toHaveBeenCalled();
+    expect(bumpCockpitRevMock).not.toHaveBeenCalled();
+  });
+
+  it('条目已 ignored → 409, ignore 动作同样被挡 (状态机不允许从非 new 再次变更)', async () => {
+    prismaMock.radarItem.findUnique.mockResolvedValueOnce({ ...ITEM, status: 'ignored' });
+    const res = await PATCH(req({ action: 'ignore' }), ctx());
+    expect(res.status).toBe(409);
+    expect(prismaMock.radarItem.update).not.toHaveBeenCalled();
   });
 
   it('action 非法 → 400', async () => {

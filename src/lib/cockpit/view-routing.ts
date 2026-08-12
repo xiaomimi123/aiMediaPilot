@@ -15,8 +15,12 @@ export type PlatformNavId = `platform-${RoutingPlatform}`;
 // `resolveInitialView` 折叠到 "analytics" + `resolveInitialAnalyticsTab` 精确映射 tab
 // （见下方两个函数）。schedule 已并入 momentum 的档期 tab (T3), 不再是独立 NavView ——
 // 状态改由 `MomentumPeriod` ("today"|"week"|"schedule") 承载, 见下方 `resolveInitialMomentumTab`。
+// 四期 T6: 新增 "radar" 固定视图 (热点雷达), 挂在工作台组「灵感库选题」正下方
+// (侧栏顺序见 sidebar.tsx WORKBENCH_NAV_ITEMS)。该视图自取数 (不进 WorkspaceState,
+// 见 radar.tsx 顶部注释), 与其余固定视图一样只是多一个合法 `?view=` 目的地。
 export type NavView =
   | "inspirations"
+  | "radar"
   | "momentum"
   | "pipeline"
   | "analytics"
@@ -31,6 +35,7 @@ export function isPlatformNavView(view: NavView): view is PlatformNavId {
 // id 集合原样对应, 只取 id 不取 label/icon, 避免依赖 sidebar.tsx (见上方模块注释)。
 const FIXED_VIEW_IDS: ReadonlyArray<string> = [
   "inspirations",
+  "radar",
   "momentum",
   "pipeline",
   "analytics",

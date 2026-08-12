@@ -659,6 +659,31 @@ textarea { resize: vertical; }
 .platform-distribution-card strong { font-size: 11px; }
 .platform-distribution-card a { overflow: hidden; color: var(--clay); font-size: 9px; text-decoration: underline; text-overflow: ellipsis; white-space: nowrap; }
 .platform-distribution-card time { color: var(--muted); font-size: 8px; }
+
+/* 四期 T6: 热点雷达视图 (候选词审批条 / 热度排行 / 立即扫描三块, 见 views/radar.tsx)。
+   .radar-page 用与 .platform-page 一致的单列 grid+gap 手法把三块 panel 垂直排开。 */
+.radar-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.radar-status { padding: 0 4px; }
+.radar-candidate-bar { padding-bottom: 20px; }
+.radar-candidate-hint { margin: 0 0 14px; padding: 0 22px; color: var(--muted); font-size: 9px; }
+.radar-candidate-chips { display: flex; flex-wrap: wrap; gap: 9px; padding: 0 22px; }
+.radar-candidate-chip { display: inline-flex; align-items: center; gap: 8px; padding: 7px 8px 7px 13px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-soft); font-size: 10px; }
+.radar-candidate-chip .text-button { padding: 3px 8px; }
+.radar-ranking-panel { padding-bottom: 20px; }
+.radar-item-grid { display: grid; gap: 12px; padding: 0 22px; }
+.radar-item-card { display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; gap: 16px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.radar-item-score { display: grid; height: 62px; place-items: center; border-radius: 10px; background: var(--surface-soft); color: var(--clay); font-family: "Songti SC", serif; font-size: 24px; font-weight: 650; cursor: help; }
+.radar-item-body { min-width: 0; }
+.radar-item-title { display: block; overflow: hidden; margin-bottom: 6px; color: var(--ink); font-family: "Songti SC", serif; font-size: 13px; font-weight: 600; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
+.radar-item-title:hover { text-decoration: underline; }
+.radar-item-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+.radar-item-source { color: var(--muted); font-size: 9px; }
+.radar-item-summary, .radar-item-angle { margin: 0 0 6px; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.radar-item-angle strong { color: var(--ink); font-weight: 600; }
+.radar-item-actions { display: flex; flex-direction: column; gap: 8px; align-self: center; }
+.radar-scan-panel { padding: 20px 22px; }
+.radar-scan-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.radar-run-summary { margin: 0; }
 .content-overview-tabs { display: inline-flex; gap: 4px; margin-bottom: 14px; padding: 4px; border: 1px solid var(--line); border-radius: 11px; background: var(--glass-bg); }
 .content-overview-tabs button { display: flex; min-width: 112px; align-items: baseline; justify-content: center; gap: 6px; padding: 9px 13px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); }
 .content-overview-tabs button.active { background: var(--surface); color: var(--ink); box-shadow: 0 4px 13px rgba(52,48,39,.07); }
@@ -949,6 +974,13 @@ textarea { resize: vertical; }
 .ai-provider-list small { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; }
 .ai-provider-list-actions { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
 .text-button.danger { color: #a23f24; }
+/* 四期 T6: 雷达配置卡 —— key/上限/开关沿用 .ai-provider-* 体系 (见 radar-config-card.tsx
+   顶部注释), 这里只补关键词管理两栏分组自己的排版。 */
+.radar-keyword-heading { margin: 4px 0 4px; font-family: "Songti SC", serif; font-size: 13px; font-weight: 600; }
+.radar-keyword-hint { margin: 0 0 12px; color: var(--muted); font-size: 9px; line-height: 1.6; }
+.radar-keyword-add { margin-bottom: 4px; }
+.radar-keyword-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 10px; }
+.radar-keyword-groups h4 { margin: 0 0 4px; color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .04em; }
 .baseline-auto-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 8px; background: var(--surface-soft); font-size: 10px !important; }
 .baseline-override-hint { margin-top: 12px; padding: 9px 12px; border-radius: 8px; background: var(--clay-soft); color: #8f3f28; font-size: 9px !important; }
 .design-style-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 9px; margin-top: 17px; }
@@ -1757,6 +1789,7 @@ html[data-style="bauhaus"] .review-kpi-grid > article:nth-child(4) {
   .week-side { grid-row: auto; }.weekly-pool { grid-column: auto; }.select-content-grid, .quota-inputs, .rule-grid, .candidate-list { grid-template-columns: 1fr; }
   .month-stats { grid-template-columns: 1fr 1fr; }.calendar { min-width: 700px; }.calendar-panel { overflow-x: auto; }.calendar-panel .panel-heading { position: sticky; left: 0; min-width: 700px; }.calendar-cell { min-height: 88px; }
   .pipeline-toolbar { flex-wrap: wrap; }.search-field { width: 100%; }.pipeline-toolbar > span { margin-left: 0; }.kanban { grid-template-columns: repeat(7, 235px); }
+  .radar-item-card { grid-template-columns: 1fr; }.radar-item-score { justify-self: start; width: 62px; }.radar-item-actions { flex-direction: row; align-self: auto; }.radar-keyword-groups { grid-template-columns: 1fr; }
   .content-overview-tabs { display: flex; }.content-overview-tabs button { flex: 1; }.content-list-title { width: 280px; }
   .goal-rings { flex-wrap: wrap; }.goal-rings > div:not(.ring) { flex: 1; }.objective-input { font-size: 28px; }.goal-meta, .goal-actions { flex-wrap: wrap; }.goal-history article { grid-template-columns: 1fr 1fr; }.goal-history article > div:first-child { grid-column: 1 / -1; }
   .stage-goal-heading > button { width: 100%; }.goal-core-grid, .content-analytics-grid { grid-template-columns: 1fr; }.goal-core-grid > article { min-height: 126px; border-right: 0; border-bottom: 1px solid var(--line); }.goal-core-grid > article:last-child { border-bottom: 0; }.follower-analytics-panel > header, .content-analytics-panel > header { align-items: flex-start; flex-direction: column; }.snapshot-entry-wrap, .snapshot-entry { width: 100%; }.snapshot-entry-wrap { justify-items: stretch; }.snapshot-entry { flex-wrap: wrap; }.snapshot-entry label { flex: 1; }.snapshot-entry input { width: 100%; }.follower-analytics-body { grid-template-columns: 1fr; }.follower-analytics-body > aside { border-top: 1px solid var(--line); border-left: 0; }.content-analytics-grid > div + div { border-top: 1px solid var(--line); border-left: 0; }.goal-config-modal { width: 100vw; max-height: 100vh; border-radius: 0; }.goal-config-quota, .goal-history-settings article { grid-template-columns: 1fr; }.goal-config-modal > footer { align-items: flex-start; flex-direction: column-reverse; }.goal-config-modal > footer > div { width: 100%; }.goal-config-modal > footer > div button { flex: 1; }

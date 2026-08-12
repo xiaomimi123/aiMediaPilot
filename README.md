@@ -2,7 +2,7 @@
 
 > AI 自媒体工作台 — 自用创作闭环: 选题灵感 → 写稿改稿 → 拍摄/发布追踪 → 数据复盘。 主阵地抖音, 其他平台 (B站/YouTube/推特/小红书/公众号/快手/微博) 走分发登记。 设计预留 SaaS 扩展空间 (`userId` 隔离已在 schema, 未接 auth/计费)。
 
-**当前状态:** 单用户 MVP。 经历三次定位调整: "个人视频分析工具" → "小白向导式智能体" → "自用自媒体工作台" → **"Creator Cockpit 整体移植"** (2026-08-04, 详见 `docs/superpowers/specs/2026-08-04-cockpit-adoption-design.md`)。 首页 `/` 与全站外壳已换成移植自开源项目 [creator-cockpit](https://github.com/AverrryHu/creator-cockpit) 的纸质编辑部风格操作台; 紧接着完成**二期「平台页面融入驾驶舱」** (2026-08-05, 详见 `docs/superpowers/specs/2026-08-05-platform-pages-fusion-design.md`)——把一期挂壳的创作/数据/设置页面功能长进驾驶舱视图, 侧栏「平台」组解散; 再完成**三期「产出优先信息架构重组」** (2026-08-06, 详见 `docs/superpowers/specs/2026-08-06-platform-first-ia-design.md`)——侧栏从「流程优先」六视图重排为「产出优先」按平台组织。 本文档 §3 为当前实际 IA。
+**当前状态:** 单用户 MVP。 经历三次定位调整: "个人视频分析工具" → "小白向导式智能体" → "自用自媒体工作台" → **"Creator Cockpit 整体移植"** (2026-08-04, 详见 `docs/superpowers/specs/2026-08-04-cockpit-adoption-design.md`)。 首页 `/` 与全站外壳已换成移植自开源项目 [creator-cockpit](https://github.com/AverrryHu/creator-cockpit) 的纸质编辑部风格操作台; 紧接着完成**二期「平台页面融入驾驶舱」** (2026-08-05, 详见 `docs/superpowers/specs/2026-08-05-platform-pages-fusion-design.md`)——把一期挂壳的创作/数据/设置页面功能长进驾驶舱视图, 侧栏「平台」组解散; 再完成**三期「产出优先信息架构重组」** (2026-08-06, 详见 `docs/superpowers/specs/2026-08-06-platform-first-ia-design.md`)——侧栏从「流程优先」六视图重排为「产出优先」按平台组织; 又完成**四期「AI 深度采集 · 热点雷达」** (2026-08-13, 详见 `docs/superpowers/specs/2026-08-13-radar-deep-collection-design.md`)——新增服务端热点雷达管线 (关键词 → Tavily 搜索 → AI 逐篇阅读评分 → 热度排行), 独立「热点雷达」侧栏视图 + 设置「雷达配置」卡, 零 Claude 额度消耗 (阅读评分走用户自己的 AI provider)。 本文档 §3 为当前实际 IA。
 
 ---
 
@@ -76,6 +76,7 @@
 
 ```
 ✣ 灵感库选题                    ← 工作台组
+◉ 热点雷达                      ← 工作台组 (四期新增, 自取数视图, 见下方「热点雷达」小节)
 ◫ 今日推进                      ← 工作台组 (页内 tab: 今日 / 本周 / 档期)
 ─ 创作 ──────────────────────
 ▸ 抖音 / 小红书 / bilibili / X / YouTube   ← 创作组, 各自独立平台流水线页
@@ -89,7 +90,7 @@
 
 ### `/` — Cockpit 驾驶舱 (首页)
 
-`src/app/page.tsx` 只 `dynamic import` 一个客户端组件 `Cockpit.tsx` (`ssr:false`), 内部按 `view` state (`NavView`, 定义于 `src/lib/cockpit/view-routing.ts`) 切换视图: `inspirations` / `momentum`(今日/本周/档期三个 `MomentumPeriod` tab) / 五个 `platform-<平台>` / `pipeline` / `analytics`(目标/复盘两个 `AnalyticsTab` tab) 五类固定视图 + 一个独立的 `settings` 视图, 均是原样移植或参数化复用的 UI + 交互逻辑 (`src/lib/cockpit/{model,workflow,schedule,calculations}.ts` 纯函数零改动移植; `view-routing.ts` 是三期新增的纯逻辑模块, 详见下方兼容映射)。 首次进入 (workspace 为空) 走 onboarding; 支持明暗主题 + 5 套设计风格切换, 侧栏可折叠 (拖拽排序已移除); <820px 时侧栏收起, 换成底部 `.mobile-nav`。
+`src/app/page.tsx` 只 `dynamic import` 一个客户端组件 `Cockpit.tsx` (`ssr:false`), 内部按 `view` state (`NavView`, 定义于 `src/lib/cockpit/view-routing.ts`) 切换视图: `inspirations` / `radar`(四期新增, 自取数, 不进 `WorkspaceState`) / `momentum`(今日/本周/档期三个 `MomentumPeriod` tab) / 五个 `platform-<平台>` / `pipeline` / `analytics`(目标/复盘两个 `AnalyticsTab` tab) 六类固定视图 + 一个独立的 `settings` 视图, 均是原样移植或参数化复用的 UI + 交互逻辑 (`src/lib/cockpit/{model,workflow,schedule,calculations}.ts` 纯函数零改动移植; `view-routing.ts` 是三期新增的纯逻辑模块, 详见下方兼容映射)。 首次进入 (workspace 为空) 走 onboarding; 支持明暗主题 + 5 套设计风格切换, 侧栏可折叠 (拖拽排序已移除); <820px 时侧栏收起, 换成底部 `.mobile-nav`。
 
 ### 平台流水线页 (三期新增)
 
@@ -100,6 +101,33 @@
 3. **分发区**: 读现有 `Distribution` 表, 展示登记到该平台的分发记录 (来源选题标题 + URL + 日期)。
 
 **platform 字段与主平台+分发模型**: 内容在其 `platform` 字段标记的主平台上完整走完创作流水线 (灵感→脚本→拍摄→发布→复盘)；发布到其他平台不重新走流程, 而是在该内容的脚本详情页登记一条 `Distribution` 记录 (平台+URL), 出现在对应平台流水线页的分发区——"一份内容, 一条主线, 多条分发标记"。
+
+### 热点雷达 (四期新增)
+
+服务端 AI 深度采集管线 + 独立视图, 与 cockpit 其余六视图不同——**自取数, 不进 `WorkspaceState`**（学 dashboard summary 先例，见 `src/components/cockpit/views/radar.tsx` 顶部注释）。「零 Claude 额度消耗」是硬约束: AI 阅读评分走用户自己在「AI 服务配置」卡配置的服务商 (现为 DeepSeek), 不占用 Claude 用量。
+
+**管线** (`src/lib/radar/run.ts` 的 `runRadarScan`, `src/jobs/workers/radar-worker.ts` 每日一次仿 auto-sync-worker 注册 + `/api/v1/radar/trigger` 手动触发仿二期 trigger 超时模式):
+
+```
+活跃 RadarKeyword → Tavily 搜索 (近期结果, 含正文) → URL+标题指纹双去重
+→ AI 逐篇阅读 (zod 结构化: 摘要/角度/相关度/新鲜度/讨论强度/可做性/候选关键词)
+→ 相关性闸门 (relevance < 40 丢弃不入库) → 热度合成 (四维加权 + 同话题跨源共现加成)
+→ 写 RadarItem + 候选词入 RadarKeyword(candidate) + RadarRun 运行日志
+```
+
+每日阅读上限默认 20 篇 (`RadarConfig.dailyLimit`, 可在设置卡改), worker 内闸门读满即停。
+
+**数据模型** (4 张新表, 均 `userId` 隔离, 详见 `prisma/schema.prisma`): `RadarKeyword`(关键词, status: active/candidate/ignored) / `RadarItem`(采集条目, status: new/adopted/ignored) / `RadarRun`(每轮运行日志) / `RadarConfig`(单行, Tavily key 用 `src/lib/crypto.ts` 同款 AES-256-GCM 加密存储, 前端只回 `hasKey` 布尔不回显明文/密文)。
+
+**视图三块** (`/?view=radar`, spec §3): ① 候选关键词审批条 (仅当存在 AI 学到的候选词时显示, 采纳/忽略) ② 热度排行 (卡片: 热度分 + 悬浮展开四维分项与共现加成 / 来源链接 `target=_blank` / AI 摘要与可做角度 / 命中关键词标签 / 「收入灵感库」「忽略」——两个动作都走幂等守卫, 非 `new` 状态的条目一律 409, 防双击产生孤儿数据) ③ 「立即扫描」按钮 + 上轮运行摘要一行 (扫 X 词/读 Y 篇/入库 Z 条/错误 N)。空态分两级: 未配置 Tavily key 或未启用 → 引导文案 + 「去设置」链接; 已配置但暂无条目 → 提示手动扫描或等待每日自动采集。
+
+**「收入灵感库」复用既有事务**: `PATCH /api/v1/radar/items/[id] {action:'adopt'}` 直接调用 `cockpitInspiration.create` + `bumpCockpitRev(tx)` 同一事务 (与 `POST /api/v1/cockpit/inspirations` 同等逻辑), 并在同事务里把该 `RadarItem` 标记 `adopted` + 回写 `inspirationId`——零新增 cockpit 写路径。
+
+**设置「雷达配置」卡** (`src/components/cockpit/settings-cards/radar-config-card.tsx`, 挂在设置视图): Tavily API Key (密码框, 留空 = 不修改, 已配置时显示掩码提示) / 每日阅读上限 / 启用开关 / 关键词管理 (已启用⇄已停用双向切换, 手动新增, 重复关键词 409 提示——AI 候选词的采纳/忽略在雷达视图页顶完成, 不在这张卡)。
+
+**API**: `GET/PUT /api/v1/radar/config`、`GET/POST /api/v1/radar/keywords`、`PATCH /api/v1/radar/keywords/[id]`、`GET /api/v1/radar/items`、`PATCH /api/v1/radar/items/[id]`、`POST /api/v1/radar/trigger` (前置就绪检查: 未启用/无 Tavily key → 400；服务端无 `DEEPSEEK_API_KEY` → 503)、`GET /api/v1/radar/runs/latest` (雷达视图「上轮运行摘要」的数据源)。
+
+**成本与真实验证**: DeepSeek 每篇几厘, Tavily 免费档每月 1000 次检索通常够用。管线核心 (纯函数热度合成/搜索层/阅读 prompt/API 路由) 全链路可 mock 测试 (见 `tests/lib/radar/` `tests/api/radar/`); worker 的每日 repeat 调度层未直测, 循 auto-sync-worker 先例 (人工验证)。真实跑一轮需用户在设置卡配置真实 Tavily key 后自验 (同 DeepSeek key 先例)。
 
 ### `/accounts` `/agent/discover` `/content/*` — 挂入 Cockpit 外壳
 
@@ -254,9 +282,9 @@ API: `POST/GET /api/v1/topics`、`PATCH /api/v1/topics/[id]`、`POST/GET /api/v1
 
 ### 测试覆盖
 
-- 554 tests 大多是 API 单测 + 纯函数 + mock prisma (含 Cockpit `model/workflow/schedule/calculations`/迁移映射的原版测试)
+- 736 tests 大多是 API 单测 + 纯函数 + mock prisma (含 Cockpit `model/workflow/schedule/calculations`/迁移映射的原版测试; 四期新增雷达搜索层/热度合成/阅读 prompt/API 路由测试)
 - UI 一律走手动 E2E (是有意识的取舍)
-- Worker 集成测试缺 (auto-sync-worker, content-analyze-worker)
+- Worker 集成测试缺 (auto-sync-worker, content-analyze-worker, radar-worker 的每日 repeat 调度层)
 
 ---
 
@@ -279,14 +307,16 @@ npm install
 
 # 5. 跑 dev + worker (各开一个 terminal)
 npm run dev          # http://localhost:3000
-npm run worker:dev   # BullMQ workers (analyze / retro / auto-sync)
+npm run worker:dev   # BullMQ workers (analyze / retro / auto-sync / radar 四期新增)
 ```
+
+雷达功能额外需要 (均不是 `.env`, 在设置视图「雷达配置」卡里填, 见 §3「热点雷达」小节): Tavily API key (搜索, 免费档注册即得) + 已配置好的 AI 服务商 key (阅读评分复用「AI 服务配置」卡)。 两者任一缺失时「立即扫描」会明确报错, 每日自动扫描会静默跳过该轮 (不报错, 见 `runRadarScan` 注释)。
 
 ### 测试
 
 ```bash
 npm run typecheck    # tsc --noEmit
-npm test             # vitest, 554 tests across 68 files (含 Cockpit 纯逻辑层原版测试)
+npm test             # vitest, 736 tests across 82 files (含 Cockpit 纯逻辑层原版测试)
 npm test -- <filter> # 跑某个 file
 ```
 
@@ -335,22 +365,23 @@ src/
 │   │   ├── script/                # 脚本生成详情页 (E) + 分发登记, `script/new` 为深度写稿入口
 │   │   └── retro-sync/            # 抖音半自动复盘 (C)
 │   ├── accounts/                  # 账号绑定, 挂 ExternalShell (双入口之一)
-│   └── api/v1/                    # 所有 API routes (含 topics/ distributions/ cockpit/workspace/ cockpit/inspirations/ douyin/auto-sync/trigger/)
+│   └── api/v1/                    # 所有 API routes (含 topics/ distributions/ cockpit/workspace/ cockpit/inspirations/ douyin/auto-sync/trigger/ radar/{items,keywords,config,trigger,runs/latest})
 ├── components/
 │   ├── cockpit/                   # Creator Cockpit 移植主体
 │   │   ├── Cockpit.tsx             # 顶层组件: state + view 路由 (`NavView`, 三期起见 `lib/cockpit/view-routing.ts`) + 主题/onboarding (侧栏拖拽排序三期已移除)
-│   │   ├── views/                 # inspirations/momentum(含 schedule tab)/platform(五平台流水线页共用)/pipeline/analytics(含 goals+review tab) + settings.tsx (独立视图)
+│   │   ├── views/                 # inspirations/radar(四期新增, 自取数)/momentum(含 schedule tab)/platform(五平台流水线页共用)/pipeline/analytics(含 goals+review tab) + settings.tsx (独立视图)
 │   │   ├── analytics/              # 二期 (T4) 从 components/dashboard/ 迁移重塑: prediction-panel/performance-panel + 7 个搬迁 widget + use-dashboard-summary hook
-│   │   ├── settings-cards/         # 二期 (T5) 新建: ai-provider-card, baseline-card
-│   │   ├── sidebar.tsx             # 全站共用侧栏 (cockpit 模式 + external 模式), 二期起「平台」外链组已移除
+│   │   ├── settings-cards/         # ai-provider-card, baseline-card (二期 T5) + radar-config-card (四期 T6)
+│   │   ├── sidebar.tsx             # 全站共用侧栏 (cockpit 模式 + external 模式), 二期起「平台」外链组已移除, 四期新增「热点雷达」项
 │   │   ├── external-shell.tsx      # 站外页面外壳 (侧栏 + mobile-nav + 主题同步), 仅剩 /accounts /agent/discover /content/* 使用
 │   │   ├── content-drawer.tsx      # 内容详情抽屉, 二期 (T2) 脚本 tab 加入就地 AI 生成 + 标题实时建议
 │   │   ├── onboarding.tsx / shared.tsx
 │   ├── content/                   # script-form, script-result (深度写稿入口用), publish-checklist, prediction-card, 分发登记弹窗 etc
 │   └── layout/                    # main-layout.tsx (按路径决定是否套 ExternalShell)
 ├── lib/
-│   ├── cockpit/                   # model/workflow/schedule/calculations (纯函数, 零改动移植) + storage.ts(API 适配器) + migrations.ts(migrateWorkspace) + migrate-mapping.ts(存量数据映射) + script-mapping.ts(二期 T1: 生成结果→脚本骨架映射纯函数) + extras.ts/extras-types.ts(复盘/大目标额外数据, 含二期新增 account/settings)
-│   ├── llm/                       # DeepSeekTextLLM + OpenAIVisionLLM + prompts/
+│   ├── cockpit/                   # model/workflow/schedule/calculations (纯函数, 零改动移植) + storage.ts(API 适配器) + migrations.ts(migrateWorkspace) + migrate-mapping.ts(存量数据映射) + script-mapping.ts(二期 T1: 生成结果→脚本骨架映射纯函数) + extras.ts/extras-types.ts(复盘/大目标额外数据, 含二期新增 account/settings) + view-routing.ts(`NavView` 定义, 四期新增 `radar`)
+│   ├── radar/                     # 四期新增: search.ts(SearchProvider 抽象 + Tavily 实现) / config.ts(RadarConfig 读写+加解密) / scoring.ts(titleFingerprint/clusterByTopic/composeHeat/applyTimeDecay 纯函数) / run.ts(runRadarScan 管线主体)
+│   ├── llm/                       # DeepSeekTextLLM + OpenAIVisionLLM + prompts/ (四期新增 radar-read.ts)
 │   ├── pipeline/                  # deriveStage 纯函数 + platforms.ts 分发平台注册表
 │   ├── prediction/                # L1 formula + baseline
 │   ├── dashboard/                 # aggregate + calibration + prediction-accuracy (聚合逻辑零改动, 仍是 cockpit/analytics 面板与 `/api/v1/dashboard/summary` 的数据源)
@@ -359,12 +390,12 @@ src/
 │   ├── checklist/                 # J types + isReady
 │   └── prisma.ts
 ├── jobs/
-│   ├── queue.ts                   # 5 BullMQ queues
-│   └── workers/                   # 4 workers (bind, analyze, retro, auto-sync)
+│   ├── queue.ts                   # 6 BullMQ queues (四期新增 radar)
+│   └── workers/                   # 5 workers (bind, analyze, retro, auto-sync, radar 四期新增)
 scripts/
 └── migrate-cockpit.ts             # 存量数据 → Cockpit 表, dry-run 默认 / --apply 写库
 prisma/
-└── schema.prisma                  # User / ContentAnalysis / ActualMetric / ScriptDraft / TopicIdea / Distribution / Cockpit* (10 张) 等
+└── schema.prisma                  # User / ContentAnalysis / ActualMetric / ScriptDraft / TopicIdea / Distribution / Cockpit* (10 张) / Radar*(4 张, 四期新增) 等
 vendor/
 └── creator-cockpit/                # 移植源固定副本 (pinned 197d49b, MIT), tsconfig 排除, 不参与构建, 只读参考
 docs/superpowers/

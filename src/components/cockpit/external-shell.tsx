@@ -8,7 +8,16 @@ import { Icon } from "./shared";
 
 // 移动端底部导航（<820px，.sidebar 隐藏）里露出的 2 个工作台视图快捷入口：
 // 今日推进 + 内容总览。与桌面侧栏一致地回到 `/?view=<id>`。
-const MOBILE_COCKPIT_SHORTCUTS = [WORKBENCH_NAV_ITEMS[1], OVERVIEW_NAV_ITEMS[0]];
+//
+// 四期 T6 起 WORKBENCH_NAV_ITEMS 新插入了「热点雷达」(inspirations 之后、momentum
+// 之前)，按 id 查找而非数组下标 —— 下标写法在新增项插到中间时会静默错位 (曾经的
+// `[1]` 从指向 momentum 变成指向 radar)。故意**不**把 radar 加进这两个移动端捷径：
+// 站外落地页 (`/accounts` 等) 屏幕小、导航位有限，radar 属于 Cockpit 内部工作流，
+// 这里保持原有 3 项 (今日推进 + 内容总览 + 账号) 不扩张。
+const MOBILE_COCKPIT_SHORTCUTS = [
+  WORKBENCH_NAV_ITEMS.find((item) => item.id === "momentum")!,
+  OVERVIEW_NAV_ITEMS[0],
+];
 
 // 二期 T6 起 /agent /dashboard /settings 壳页退役, 桌面侧栏「平台」分组整段移除
 // （/accounts 桌面入口改由 goals 状态条 + settings 卡片承担）。移动端屏幕小,

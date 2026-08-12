@@ -14,9 +14,12 @@ import { Icon, ProgressBar } from "./shared";
 export type FixedNavId = Exclude<NavView, "settings">;
 export type SidebarNavItem = { id: FixedNavId; label: string; icon: string };
 
-// 工作台组 —— ✣ 灵感库选题 / ◫ 今日推进。
+// 工作台组 —— ✣ 灵感库选题 / ◉ 热点雷达 (四期新增, T6) / ◫ 今日推进。
+// 「热点雷达」紧跟在「灵感库选题」下面: 采纳雷达条目就是写进灵感库 (见 items/[id]
+// PATCH adopt), 两者是同一条数据管线的前后段, 放在一起符合心智。
 export const WORKBENCH_NAV_ITEMS: ReadonlyArray<SidebarNavItem> = [
   { id: "inspirations", label: "灵感库选题", icon: "inspiration" },
+  { id: "radar", label: "热点雷达", icon: "radar" },
   { id: "momentum", label: "今日推进", icon: "momentum" },
 ];
 

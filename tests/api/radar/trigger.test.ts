@@ -3,10 +3,21 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 const queueMock = vi.hoisted(() => ({ add: vi.fn() }));
 vi.mock('@/jobs/queue', () => ({ radarQueue: queueMock }));
 
+vi.mock('@/lib/user', () => ({
+  getOrCreateDefaultUser: vi.fn(async () => ({ id: 'user1' })),
+}));
+
+const radarConfigMock = vi.hoisted(() => ({ getRadarConfig: vi.fn() }));
+vi.mock('@/lib/radar/config', () => radarConfigMock);
+
 import { POST } from '@/app/api/v1/radar/trigger/route';
+
+const ORIGINAL_DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  process.env.DEEPSEEK_API_KEY = 'ds-fake';
+  radarConfigMock.getRadarConfig.mockResolvedValue({ hasKey: true, dailyLimit: 20, enabled: true });
 });
 
 describe('POST /api/v1/radar/trigger', () => {
@@ -25,6 +36,44 @@ describe('POST /api/v1/radar/trigger', () => {
       {},
       expect.objectContaining({ jobId: expect.stringMatching(/^manual-\d+$/) }),
     );
+  });
+
+  it('未启用 (enabled=false) → 400, 固定文案, 不入队', async () => {
+    radarConfigMock.getRadarConfig.mockResolvedValue({ hasKey: true, dailyLimit: 20, enabled: false });
+
+    const res = await POST();
+
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.success).toBe(false);
+    expect(json.message).toBe('雷达未启用或未配置 Tavily key，请到设置完成配置');
+    expect(queueMock.add).not.toHaveBeenCalled();
+  });
+
+  it('未配置 Tavily key (hasKey=false) → 400, 固定文案, 不入队', async () => {
+    radarConfigMock.getRadarConfig.mockResolvedValue({ hasKey: false, dailyLimit: 20, enabled: true });
+
+    const res = await POST();
+
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.success).toBe(false);
+    expect(json.message).toBe('雷达未启用或未配置 Tavily key，请到设置完成配置');
+    expect(queueMock.add).not.toHaveBeenCalled();
+  });
+
+  it('未配置 DEEPSEEK_API_KEY → 503, 固定文案, 不入队', async () => {
+    delete process.env.DEEPSEEK_API_KEY;
+
+    const res = await POST();
+
+    expect(res.status).toBe(503);
+    const json = await res.json();
+    expect(json.success).toBe(false);
+    expect(json.message).toBe('服务端未配置 DEEPSEEK_API_KEY');
+    expect(queueMock.add).not.toHaveBeenCalled();
+
+    process.env.DEEPSEEK_API_KEY = ORIGINAL_DEEPSEEK_API_KEY;
   });
 
   it('队列不可用 (redis 未连) → 503, 文案固定', async () => {
