@@ -81,7 +81,17 @@ export function RadarView({ setView }: { setView: (view: NavView) => void }) {
   const [keywordPending, setKeywordPending] = useState<Set<string>>(new Set());
   const [triggering, setTriggering] = useState(false);
 
+  /**
+   * 四个接口任一失败（含 `success:false` 与网络异常）都要让用户看得见、可重试 ——
+   * 不能因为 `config` 没拉到就整块空白（render gate 是 `!error && config`, 见下方
+   * JSX）。这里不追求"部分成功部分展示"的复杂状态: 任一失败就统一收敛成一条
+   * `error` 文案（取第一个失败项的 message，其余成功的分支仍然照常 setState，
+   * 但既然 `error` 非空会挡住整个内容区渲染, 这些 setState 只是让重试成功前
+   * 状态保持一致, 不影响当前这次渲染结果）。与 `use-dashboard-summary` 先例一致:
+   * 有错误 → 展示错误 + 重试按钮, 而不是静默吞掉部分失败。
+   */
   const refresh = useCallback(async () => {
+    setError(null);
     try {
       const [itemsJson, keywordsJson, configJson, runJson] = await Promise.all([
         fetchJson("/api/v1/radar/items?status=new"),
@@ -89,11 +99,16 @@ export function RadarView({ setView }: { setView: (view: NavView) => void }) {
         fetchJson("/api/v1/radar/config"),
         fetchJson("/api/v1/radar/runs/latest"),
       ]);
+      let failure: string | null = null;
       if (itemsJson.success) setItems(itemsJson.data.items);
-      else setError(itemsJson.message ?? "加载失败");
+      else failure = failure ?? itemsJson.message ?? "雷达条目加载失败";
       if (keywordsJson.success) setKeywords(keywordsJson.data);
+      else failure = failure ?? keywordsJson.message ?? "关键词加载失败";
       if (configJson.success) setConfig(configJson.data);
+      else failure = failure ?? configJson.message ?? "雷达配置加载失败";
       if (runJson.success) setLastRun(runJson.data.run);
+      else failure = failure ?? runJson.message ?? "运行记录加载失败";
+      if (failure) setError(`加载失败: ${failure}`);
     } catch {
       setError("加载失败，请检查网络后重试");
     } finally {
@@ -186,7 +201,10 @@ export function RadarView({ setView }: { setView: (view: NavView) => void }) {
     </div>
 
     {loading ? <p className="muted radar-status">加载中…</p> : null}
-    {!loading && error ? <p className="muted radar-status">{error}</p> : null}
+    {!loading && error ? <div className="radar-status-error">
+      <p className="muted radar-status">{error}</p>
+      <button type="button" className="secondary-button" onClick={() => refresh()}>重试</button>
+    </div> : null}
 
     {!loading && !error && config ? (
       !configReady

@@ -664,6 +664,8 @@ textarea { resize: vertical; }
    .radar-page 用与 .platform-page 一致的单列 grid+gap 手法把三块 panel 垂直排开。 */
 .radar-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
 .radar-status { padding: 0 4px; }
+.radar-status-error { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 0 4px; }
+.radar-status-error .radar-status { padding: 0; }
 .radar-candidate-bar { padding-bottom: 20px; }
 .radar-candidate-hint { margin: 0 0 14px; padding: 0 22px; color: var(--muted); font-size: 9px; }
 .radar-candidate-chips { display: flex; flex-wrap: wrap; gap: 9px; padding: 0 22px; }
