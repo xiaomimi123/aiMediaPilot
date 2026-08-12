@@ -5,14 +5,21 @@ import {
   SCHEDULABLE_STAGES,
   STAGE_LABELS,
   type ContentItem,
+  type LiveSession,
+  type ScheduleObject,
+  type ScheduleObjectType,
   type StageEvent,
   type WorkspaceState,
+  type WorkStage,
 } from "@/lib/cockpit/model";
 import { percent, startOfWeekISO } from "@/lib/cockpit/calculations";
 import { stageIndex, stageProgress } from "@/lib/cockpit/workflow";
-import { Badge, Empty, Icon, date, shiftDate } from "../shared";
+import { Badge, Empty, EditablePageTitle, Icon, date, shiftDate } from "../shared";
+import { ScheduleView } from "./schedule";
 
 export type DailyStageEntry = { event: StageEvent; item: ContentItem };
+
+export type MomentumPeriod = "today" | "week" | "schedule";
 
 function TodoCard({ entry, index, overdue = false, stageColors, open, openSchedule, moveToday, toggleComplete, removeFromToday }: {
   entry: DailyStageEntry;
@@ -139,4 +146,89 @@ export function WeekOverview({ state, open, openSchedule }: {
       })}</div> : <div className="panel"><Empty title="本周还没有安排内容" body="去档期规划，把要推进的内容阶段放进本周。" action={<button className="secondary-button" onClick={openSchedule}>打开档期规划</button>} /></div>}
     </section>
   </div>;
+}
+
+const MOMENTUM_DESCRIPTIONS: Record<MomentumPeriod, string> = {
+  today: "今日 Todo 自动读取档期；一个任务就是一条内容的一个大阶段。",
+  week: "本周总览自动汇总档期，不需要再维护一份周计划。",
+  schedule: "安排内容阶段，也可以放入复盘、直播和你自定义的日程对象。",
+};
+
+export function MomentumView({
+  momentumPeriod,
+  setMomentumPeriod,
+  pageTitle,
+  pageTitleFallback,
+  updatePageTitle,
+  state,
+  todayEntries,
+  overdueEntries,
+  open,
+  openReview,
+  moveToday,
+  toggleComplete,
+  removeFromToday,
+  schedule,
+  moveEvent,
+  unschedule,
+  createReviewDay,
+  moveReviewDay,
+  removeReviewDay,
+  saveLive,
+  moveLive,
+  removeLive,
+  saveObjectType,
+  archiveObjectType,
+  removeObjectType,
+  saveObject,
+  moveObject,
+  removeObject,
+  configureColors,
+}: {
+  momentumPeriod: MomentumPeriod;
+  setMomentumPeriod: (period: MomentumPeriod) => void;
+  pageTitle: string;
+  pageTitleFallback: string;
+  updatePageTitle: (value: string) => void;
+  state: WorkspaceState;
+  todayEntries: DailyStageEntry[];
+  overdueEntries: DailyStageEntry[];
+  open: (id: string) => void;
+  openReview: () => void;
+  moveToday: (eventId: string, direction: -1 | 1) => void;
+  toggleComplete: (eventId: string) => void;
+  removeFromToday: (eventId: string) => void;
+  schedule: (contentId: string, stage: WorkStage, plannedDate: string) => void;
+  moveEvent: (eventId: string, plannedDate: string) => void;
+  unschedule: (contentId: string, stage: WorkStage) => void;
+  createReviewDay: (plannedDate: string) => void;
+  moveReviewDay: (reviewDayId: string, plannedDate: string) => void;
+  removeReviewDay: (reviewDayId: string) => void;
+  saveLive: (session: LiveSession) => void;
+  moveLive: (liveSessionId: string, plannedDate: string) => void;
+  removeLive: (liveSessionId: string) => void;
+  saveObjectType: (type: ScheduleObjectType) => void;
+  archiveObjectType: (typeId: string) => void;
+  removeObjectType: (typeId: string) => void;
+  saveObject: (object: ScheduleObject) => void;
+  moveObject: (objectId: string, plannedDate: string) => void;
+  removeObject: (objectId: string) => void;
+  configureColors: () => void;
+}) {
+  const openSchedule = () => setMomentumPeriod("schedule");
+  return <section className="page momentum-page">
+    <div className="page-heading split-heading">
+      <div><span className="eyebrow">MOMENTUM</span><EditablePageTitle value={pageTitle} fallback={pageTitleFallback} onChange={updatePageTitle} /><p>{MOMENTUM_DESCRIPTIONS[momentumPeriod]}</p></div>
+      <div className="period-switch momentum-period-switch" role="tablist" aria-label="推进时间范围">
+        <button className={momentumPeriod === "today" ? "active" : ""} onClick={() => setMomentumPeriod("today")} role="tab" aria-selected={momentumPeriod === "today"}>今日</button>
+        <button className={momentumPeriod === "week" ? "active" : ""} onClick={() => setMomentumPeriod("week")} role="tab" aria-selected={momentumPeriod === "week"}>本周</button>
+        <button className={momentumPeriod === "schedule" ? "active" : ""} onClick={() => setMomentumPeriod("schedule")} role="tab" aria-selected={momentumPeriod === "schedule"}>档期</button>
+      </div>
+    </div>
+    {momentumPeriod === "today"
+      ? <DayView items={todayEntries} overdueItems={overdueEntries} stageColors={state.stageColors} open={open} openSchedule={openSchedule} moveToday={moveToday} toggleComplete={toggleComplete} removeFromToday={removeFromToday} />
+      : momentumPeriod === "week"
+      ? <WeekOverview state={state} open={open} openSchedule={openSchedule} />
+      : <ScheduleView state={state} open={open} openReview={openReview} schedule={schedule} moveEvent={moveEvent} unschedule={unschedule} createReviewDay={createReviewDay} moveReviewDay={moveReviewDay} removeReviewDay={removeReviewDay} saveLive={saveLive} moveLive={moveLive} removeLive={removeLive} saveObjectType={saveObjectType} archiveObjectType={archiveObjectType} removeObjectType={removeObjectType} saveObject={saveObject} moveObject={moveObject} removeObject={removeObject} configureColors={configureColors} />}
+  </section>;
 }

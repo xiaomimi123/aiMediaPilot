@@ -9,9 +9,11 @@ import { Icon, ProgressBar } from "./shared";
 type SidebarPlatform = (typeof CONTENT_PLATFORMS)[number];
 export type PlatformNavId = `platform-${SidebarPlatform}`;
 
-// 三期 IA 演化: 侧栏视图 id 集合。schedule/goals/review 是旧 NavigationItemId 的残留
-// —— 已从侧栏拿掉 (T2), 但内部跳转 (今日推进→档期、档期→复盘) 和历史 `?view=` 链接仍需要
-// 这三个分支可达, 因此暂留在联合里。// T3/T4 移除: 把这三个视图重新挂到新 IA 后一并清理。
+// 三期 IA 演化: 侧栏视图 id 集合。goals/review 是旧 NavigationItemId 的残留
+// —— 已从侧栏拿掉 (T2), 但内部跳转和历史 `?view=` 链接仍需要这两个分支可达,
+// 因此暂留在联合里。// T4 移除: 把这两个视图重新挂到新 IA 后一并清理。
+// schedule 已并入 momentum 的档期 tab (T3), 不再是独立 NavView —— 状态改由
+// momentum.tsx 的 MomentumPeriod ("today"|"week"|"schedule") 承载。
 export type NavView =
   | "inspirations"
   | "momentum"
@@ -19,7 +21,6 @@ export type NavView =
   | "analytics"
   | "settings"
   | PlatformNavId
-  | "schedule"
   | "goals"
   | "review";
 
@@ -27,8 +28,8 @@ export function isPlatformNavView(view: NavView): view is PlatformNavId {
   return view.startsWith("platform-");
 }
 
-// 侧栏固定项 (排除 settings 单独按钮, 以及暂留但不出现在侧栏里的 schedule/goals/review)。
-export type FixedNavId = Exclude<NavView, "settings" | "schedule" | "goals" | "review">;
+// 侧栏固定项 (排除 settings 单独按钮, 以及暂留但不出现在侧栏里的 goals/review)。
+export type FixedNavId = Exclude<NavView, "settings" | "goals" | "review">;
 export type SidebarNavItem = { id: FixedNavId; label: string; icon: string };
 
 // 工作台组 —— ✣ 灵感库选题 / ◫ 今日推进。

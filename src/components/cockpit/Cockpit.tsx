@@ -71,11 +71,10 @@ import {
   toggleStageEvent,
   transitionContentStage,
 } from "@/lib/cockpit/workflow";
-import { EditablePageTitle, Icon, creatorMark, dashboardTitle, date, normalizeGoalQuotas, shiftDate } from "./shared";
+import { Icon, creatorMark, dashboardTitle, date, normalizeGoalQuotas, shiftDate } from "./shared";
 import { ALL_NAV_ITEMS, MOBILE_NAV_ITEMS, Sidebar, isPlatformNavView, type NavView } from "./sidebar";
 import { InspirationPoolView } from "./views/inspirations";
-import { DayView, WeekOverview, type DailyStageEntry } from "./views/momentum";
-import { ScheduleView } from "./views/schedule";
+import { MomentumView, type DailyStageEntry, type MomentumPeriod } from "./views/momentum";
 import { ContentOverviewView } from "./views/pipeline";
 import { GoalsView } from "./views/goals";
 import { ReviewView } from "./views/review";
@@ -494,9 +493,11 @@ function createBlankState(): WorkspaceState {
   };
 }
 
-// T3/T4 移除: schedule/goals/review 已不在侧栏出现, 但仍在 NavView 联合里保留渲染分支
+// T3/T4 移除: goals/review 已不在侧栏出现, 但仍在 NavView 联合里保留渲染分支
 // (过渡期内部跳转 + 历史 `?view=` 链接兼容), 这里继续接受它们, 完整的迁移映射交给 T6。
-const LEGACY_VIEW_IDS: ReadonlyArray<string> = ["schedule", "goals", "review"];
+// schedule 已并入 momentum 的档期 tab (T3), 不再是独立 NavView —— 旧 `?view=schedule`
+// 链接不再匹配, 落回默认 momentum(今日); 精确映射到档期 tab 交给 T6。
+const LEGACY_VIEW_IDS: ReadonlyArray<string> = ["goals", "review"];
 
 function initialViewFromSearchParams(searchParams: URLSearchParams): NavView {
   const requested = searchParams.get("view");
@@ -508,13 +509,23 @@ function initialViewFromSearchParams(searchParams: URLSearchParams): NavView {
   return "momentum";
 }
 
+const MOMENTUM_TABS: ReadonlyArray<MomentumPeriod> = ["today", "week", "schedule"];
+
+function initialMomentumPeriodFromSearchParams(searchParams: URLSearchParams): MomentumPeriod {
+  const requested = searchParams.get("tab");
+  if (requested && (MOMENTUM_TABS as ReadonlyArray<string>).includes(requested)) {
+    return requested as MomentumPeriod;
+  }
+  return "today";
+}
+
 export default function Cockpit() {
   const searchParams = useSearchParams();
   const [state, setState] = useState<WorkspaceState>(() => createDemoState());
   const [hydrated, setHydrated] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [view, setView] = useState<NavView>(() => initialViewFromSearchParams(searchParams));
-  const [momentumPeriod, setMomentumPeriod] = useState<"today" | "week">("today");
+  const [momentumPeriod, setMomentumPeriod] = useState<MomentumPeriod>(() => initialMomentumPeriodFromSearchParams(searchParams));
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [theme, setTheme] = useState<ColorTheme | null>(null);
   const [showStageColors, setShowStageColors] = useState(false);
@@ -1061,13 +1072,38 @@ export default function Cockpit() {
         <div className="page-scroll">
           {view === "inspirations" ? <InspirationPoolView state={state} pageTitle={state.pageTitles.inspirations} updateTitle={(value) => updatePageTitle("inspirations", value)} add={addInspiration} update={updateInspiration} createContent={createContentFromInspiration} remove={removeInspiration} openContent={openContent} /> : null}
           {view === "momentum" ? (
-            <section className="page momentum-page">
-              <div className="page-heading split-heading"><div><span className="eyebrow">MOMENTUM</span><EditablePageTitle value={state.pageTitles[momentumPeriod]} fallback={DEFAULT_PAGE_TITLES[momentumPeriod]} onChange={(value) => updatePageTitle(momentumPeriod, value)} /><p>{momentumPeriod === "today" ? "今日 Todo 自动读取档期；一个任务就是一条内容的一个大阶段。" : "本周总览自动汇总档期，不需要再维护一份周计划。"}</p></div><div className="period-switch momentum-period-switch" role="tablist" aria-label="推进时间范围"><button className={momentumPeriod === "today" ? "active" : ""} onClick={() => setMomentumPeriod("today")} role="tab" aria-selected={momentumPeriod === "today"}>今日</button><button className={momentumPeriod === "week" ? "active" : ""} onClick={() => setMomentumPeriod("week")} role="tab" aria-selected={momentumPeriod === "week"}>本周</button></div></div>
-              {momentumPeriod === "today" ? <DayView items={todayEntries} overdueItems={overdueEntries} stageColors={state.stageColors} open={openContent} openSchedule={() => setView("schedule")} moveToday={moveToday} toggleComplete={toggleTodayComplete} removeFromToday={removeFromToday} /> : <WeekOverview state={state} open={openContent} openSchedule={() => setView("schedule")} />}
-            </section>
+            <MomentumView
+              momentumPeriod={momentumPeriod}
+              setMomentumPeriod={setMomentumPeriod}
+              pageTitle={state.pageTitles[momentumPeriod]}
+              pageTitleFallback={DEFAULT_PAGE_TITLES[momentumPeriod]}
+              updatePageTitle={(value) => updatePageTitle(momentumPeriod, value)}
+              state={state}
+              todayEntries={todayEntries}
+              overdueEntries={overdueEntries}
+              open={openContent}
+              openReview={() => setView("review")}
+              moveToday={moveToday}
+              toggleComplete={toggleTodayComplete}
+              removeFromToday={removeFromToday}
+              schedule={planStage}
+              moveEvent={moveCalendarEvent}
+              unschedule={clearStagePlan}
+              createReviewDay={createReviewDay}
+              moveReviewDay={moveReviewDay}
+              removeReviewDay={deleteReviewDay}
+              saveLive={saveLiveSession}
+              moveLive={moveLiveSession}
+              removeLive={deleteLiveSession}
+              saveObjectType={saveScheduleObjectType}
+              archiveObjectType={archiveScheduleObjectType}
+              removeObjectType={deleteScheduleObjectType}
+              saveObject={saveScheduleObject}
+              moveObject={moveScheduleObject}
+              removeObject={deleteScheduleObject}
+              configureColors={() => setShowStageColors(true)}
+            />
           ) : null}
-
-          {view === "schedule" ? <section className="page momentum-page"><div className="page-heading"><span className="eyebrow">PRODUCTION SCHEDULE</span><EditablePageTitle value={state.pageTitles.schedule} fallback={DEFAULT_PAGE_TITLES.schedule} onChange={(value) => updatePageTitle("schedule", value)} /><p>安排内容阶段，也可以放入复盘、直播和你自定义的日程对象。</p></div><ScheduleView state={state} open={openContent} openReview={() => setView("review")} schedule={planStage} moveEvent={moveCalendarEvent} unschedule={clearStagePlan} createReviewDay={createReviewDay} moveReviewDay={moveReviewDay} removeReviewDay={deleteReviewDay} saveLive={saveLiveSession} moveLive={moveLiveSession} removeLive={deleteLiveSession} saveObjectType={saveScheduleObjectType} archiveObjectType={archiveScheduleObjectType} removeObjectType={deleteScheduleObjectType} saveObject={saveScheduleObject} moveObject={moveScheduleObject} removeObject={deleteScheduleObject} configureColors={() => setShowStageColors(true)} /></section> : null}
           {/* T4/T5 替换: platform-* 占位仍渲染全量 Pipeline (无平台过滤)。 */}
           {view === "pipeline" || isPlatformNavView(view) ? <ContentOverviewView state={state} pageTitle={state.pageTitles.pipeline} updateTitle={(value) => updatePageTitle("pipeline", value)} query={pipelineQuery} setQuery={setPipelineQuery} type={pipelineType} setType={setPipelineType} open={openContent} addToday={addToToday} dropStage={onDropStage} /> : null}
           {/* T3 替换: analytics 占位仍渲染现有 GoalsView (原样 props)。 */}
