@@ -85,6 +85,7 @@ import {
 import { InspirationPoolView } from "./views/inspirations";
 import { MomentumView, type DailyStageEntry } from "./views/momentum";
 import { ContentOverviewView } from "./views/pipeline";
+import { PlatformView } from "./views/platform";
 import { AnalyticsView } from "./views/analytics";
 import { SettingsView } from "./views/settings";
 import { Onboarding } from "./onboarding";
@@ -700,6 +701,23 @@ export default function Cockpit() {
     setShowCreateContent(true);
   }
 
+  // 三期 T5: 平台流水线页「+ 新建内容」——走和 createBlankContent 相同的落库路径
+  // (直接创建 + 打开抽屉)，只是 platform 由调用方 (当前所在的 platform-* 页) 预置，
+  // 而不是从 profile.primaryPlatform 猜测。不经过 CreateContentModal 的两选一弹层：
+  // 平台页本身已经是"选了要做哪个平台"的入口，弹层的"从灵感池选择"分支也没有平台
+  // 预置能力，硬塞会两头不讨好，直接创建是更轻的路径。
+  function createContentForPlatform(platform: ContentPlatformEx) {
+    const item = createContent({
+      id: crypto.randomUUID(),
+      title: "未命名内容",
+      platform,
+      createdAt: todayISO(),
+      updatedAt: todayISO(),
+    });
+    setState((prev) => ({ ...prev, contents: [item, ...prev.contents] }));
+    openContent(item.id);
+  }
+
   function createContentFromInspiration(inspiration: InspirationCard) {
     const item = createContent({
       id: crypto.randomUUID(),
@@ -1101,8 +1119,9 @@ export default function Cockpit() {
               configureColors={() => setShowStageColors(true)}
             />
           ) : null}
-          {/* T4/T5 替换: platform-* 占位仍渲染全量 Pipeline (无平台过滤)。 */}
-          {view === "pipeline" || isPlatformNavView(view) ? <ContentOverviewView state={state} pageTitle={state.pageTitles.pipeline} updateTitle={(value) => updatePageTitle("pipeline", value)} query={pipelineQuery} setQuery={setPipelineQuery} type={pipelineType} setType={setPipelineType} open={openContent} addToday={addToToday} dropStage={onDropStage} /> : null}
+          {view === "pipeline" ? <ContentOverviewView state={state} pageTitle={state.pageTitles.pipeline} updateTitle={(value) => updatePageTitle("pipeline", value)} query={pipelineQuery} setQuery={setPipelineQuery} type={pipelineType} setType={setPipelineType} open={openContent} addToday={addToToday} dropStage={onDropStage} /> : null}
+          {/* T5: 五个 platform-* 视图挂 PlatformView (产出/看板/分发三区)，platform 从 view id 推导 (`platform-${key}`)。 */}
+          {isPlatformNavView(view) ? <PlatformView platform={view.slice("platform-".length) as ContentPlatformEx} state={state} pageTitle={state.pageTitles.pipeline} updateTitle={(value) => updatePageTitle("pipeline", value)} query={pipelineQuery} setQuery={setPipelineQuery} type={pipelineType} setType={setPipelineType} open={openContent} addToday={addToToday} dropStage={onDropStage} createContent={() => createContentForPlatform(view.slice("platform-".length) as ContentPlatformEx)} /> : null}
           {/* T4: analytics 挂载合并后的 AnalyticsView（目标/复盘 两个 tab，取代 T2 的 GoalsView 占位共享分支）。 */}
           {view === "analytics" ? <AnalyticsView analyticsTab={analyticsTab} setAnalyticsTab={setAnalyticsTab} state={state} goalsPageTitle={state.pageTitles.goals} updateGoalsTitle={(value) => updatePageTitle("goals", value)} health={health} followers={followers} published={publishedQuarter} updateGoal={updateGoal} notify={setToast} reviewPageTitle={state.pageTitles.review} updateReviewTitle={(value) => updatePageTitle("review", value)} open={(id) => openContent(id, "review")} setState={setState} /> : null}
           {view === "settings" ? <SettingsView state={state} pageTitle={state.pageTitles.settings} updateTitle={(value) => updatePageTitle("settings", value)} updateDesignStyle={updateDesignStyle} setState={setState} onReset={() => { if (window.confirm("确定清空全部内容与目标数据吗？个人设置会保留，请先导出备份。")) { setState({ ...createBlankState(), designStyle: state.designStyle, navigationOrder: state.navigationOrder, profile: state.profile, pageTitles: state.pageTitles }); setToast("已清空内容与目标，个人设置已保留"); } }} /> : null}

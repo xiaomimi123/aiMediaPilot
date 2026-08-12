@@ -6,19 +6,26 @@ import {
   DEFAULT_PAGE_TITLES,
   NEXT_ACTIONS,
   STAGE_LABELS,
+  type ContentPlatformEx,
   type ContentStage,
   type WorkspaceState,
 } from "@/lib/cockpit/model";
 import { Badge, EditablePageTitle, Empty, Icon, date } from "../shared";
 
-export function ContentOverviewView({ state, pageTitle, updateTitle, query, setQuery, type, setType, open, addToday, dropStage }: { state: WorkspaceState; pageTitle: string; updateTitle: (value: string) => void; query: string; setQuery: (value: string) => void; type: string; setType: (value: string) => void; open: (id: string) => void; addToday: (id: string) => void; dropStage: (event: DragEvent, stage: ContentStage) => void }) {
+// 三期 T5: platformFilter/hideHeading —— 平台流水线页 (PlatformView) 内嵌同一份组件
+// 而不是复制一份新的看板；platformFilter 只在 contents 进入视图的唯一入口 (下方
+// platformScoped) 处过滤一次，之后的看板/列表逻辑零改动。hideHeading 复用 T4
+// GoalsView/ReviewView 的 embedded 先例：容器 (PlatformView) 已有自己的
+// `.page-heading`，这里只隐藏文字部分，避免同一屏堆叠两份标题。
+export function ContentOverviewView({ state, pageTitle, updateTitle, query, setQuery, type, setType, open, addToday, dropStage, platformFilter, hideHeading = false }: { state: WorkspaceState; pageTitle: string; updateTitle: (value: string) => void; query: string; setQuery: (value: string) => void; type: string; setType: (value: string) => void; open: (id: string) => void; addToday: (id: string) => void; dropStage: (event: DragEvent, stage: ContentStage) => void; platformFilter?: ContentPlatformEx; hideHeading?: boolean }) {
   const [mode, setMode] = useState<"pipeline" | "list">("pipeline");
   const [stageFilter, setStageFilter] = useState("全部阶段");
   const [tierFilter, setTierFilter] = useState("全部档位");
   const [priorityFilter, setPriorityFilter] = useState("全部优先级");
   const [statusFilter, setStatusFilter] = useState("全部状态");
   const stages = CONTENT_STAGES;
-  const baseFiltered = state.contents.filter((item) =>
+  const platformScoped = platformFilter ? state.contents.filter((item) => item.platform === platformFilter) : state.contents;
+  const baseFiltered = platformScoped.filter((item) =>
     (type === "全部类型" || item.contentType === type)
     && `${item.title} ${item.idea} ${item.tags.join(" ")}`.toLowerCase().includes(query.trim().toLowerCase()),
   );
@@ -43,7 +50,7 @@ export function ContentOverviewView({ state, pageTitle, updateTitle, query, setQ
     .filter((event) => event.contentId === contentId && !event.completedAt)
     .sort((a, b) => a.plannedDate.localeCompare(b.plannedDate) || a.rank - b.rank)[0];
   return <section className="page pipeline-page">
-    <div className="page-heading"><span className="eyebrow">CONTENT OVERVIEW</span><EditablePageTitle value={pageTitle} fallback={DEFAULT_PAGE_TITLES.pipeline} onChange={updateTitle} /><p>在流程中推动阶段，在列表中快速搜索、筛选和查看全部内容。</p></div>
+    {!hideHeading ? <div className="page-heading"><span className="eyebrow">CONTENT OVERVIEW</span><EditablePageTitle value={pageTitle} fallback={DEFAULT_PAGE_TITLES.pipeline} onChange={updateTitle} /><p>在流程中推动阶段，在列表中快速搜索、筛选和查看全部内容。</p></div> : null}
     <div className="content-overview-tabs" role="tablist" aria-label="内容总览显示方式"><button className={mode === "pipeline" ? "active" : ""} onClick={() => setMode("pipeline")} role="tab" aria-selected={mode === "pipeline"}><span>流程</span><small>Pipeline</small></button><button className={mode === "list" ? "active" : ""} onClick={() => setMode("list")} role="tab" aria-selected={mode === "list"}><span>列表</span><small>List</small></button></div>
     <div className={`pipeline-toolbar ${mode === "list" ? "list-toolbar" : ""}`}>
       <label className="search-field"><Icon name="search" /><input id="content-overview-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索标题、原始想法或标签" /></label>

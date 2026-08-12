@@ -646,6 +646,25 @@ textarea { resize: vertical; }
 .month-note { padding: 19px; }
 
 .pipeline-page { max-width: none; }
+
+/* 三期 T5: 平台流水线页 (产出/看板/分发三区)。
+   grid-template-columns 必须显式写 minmax(0, 1fr) —— 内嵌的 ContentOverviewView
+   看板区 (.kanban) 靠 overflow-x:auto 自己滚动, 但单列 grid 若不显式限制轨道宽度,
+   轨道会按子元素 (含 kanban 的 min-content 宽度) 撑开到远超视口, 导致这里的
+   产出/分发两个 panel 一起被撑宽、右侧内容（含"+新建内容"按钮）被 .page-scroll
+   的 overflow:hidden 裁掉且无法通过滚动到达。同样的写法见上面 .day-grid。*/
+.platform-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.platform-page .pipeline-page { padding: 0; }
+.platform-output-panel { padding-bottom: 18px; }
+.platform-output-panel .panel-heading { padding-bottom: 10px; }
+.platform-capability-copy { margin: 0; padding: 0 22px; }
+.platform-distribution-panel { padding-bottom: 18px; }
+.platform-distribution-status { margin: 0; padding: 0 22px; }
+.platform-distribution-list { display: grid; gap: 8px; padding: 0 22px; }
+.platform-distribution-card { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); }
+.platform-distribution-card strong { font-size: 11px; }
+.platform-distribution-card a { overflow: hidden; color: var(--clay); font-size: 9px; text-decoration: underline; text-overflow: ellipsis; white-space: nowrap; }
+.platform-distribution-card time { color: var(--muted); font-size: 8px; }
 .content-overview-tabs { display: inline-flex; gap: 4px; margin-bottom: 14px; padding: 4px; border: 1px solid var(--line); border-radius: 11px; background: var(--glass-bg); }
 .content-overview-tabs button { display: flex; min-width: 112px; align-items: baseline; justify-content: center; gap: 6px; padding: 9px 13px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); }
 .content-overview-tabs button.active { background: var(--surface); color: var(--ink); box-shadow: 0 4px 13px rgba(52,48,39,.07); }
