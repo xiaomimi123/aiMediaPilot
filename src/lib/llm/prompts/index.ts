@@ -31,6 +31,9 @@ export * from './topic-discovery';
 // 标题实时评估 (发前 checklist)
 export * from './title-critique';
 
+// 热点雷达 — 阅读评分 (全网文章 → 选题价值评估)
+export * from './radar-read';
+
 // 通用: expert persona / JSON strictness
 export * from './expert-persona';
 export { JSON_STRICTNESS } from './base';
