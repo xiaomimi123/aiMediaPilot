@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -531,6 +532,23 @@ export default function Cockpit() {
   // 自动保存 effect, 但那次保存的内容跟服务端刚给的一模一样 (echo), 纯粹白白占用一次
   // PUT、拉长并发窗口。只要 state 还是这个引用本身 (没被用户或任何逻辑改过), 就跳过。
   const loadedStateRef = useRef<WorkspaceState | null>(null);
+
+  // R1 终审修复: 雷达视图 (`RadarView`) 是独立自取数视图, 不消费/不写
+  // `WorkspaceState`——但「收入灵感库」(adopt) 会在服务端事务里新增一条
+  // CockpitInspiration 并 bump cockpit rev (见 `radar/items/[id]/route.ts` 顶部
+  // 注释)，本标签页内存里的 state 对此一无所知。若不刷新: ①切回「灵感库选题」
+  // 视图看不到新卡片，要整页刷新才有；②本地 rev 已落后于服务端 (adopt 那次事务
+  // 已经把 rev+1)，用户接下来的任何编辑触发自动保存都会被 409 拒绝、弹出
+  // conflicted 横幅，表现成"自动保存坏了"。这里复用挂载时加载的同一条
+  // echo-save 抑制路径 (`loadedStateRef`): 拉取服务端最新 state 后原地替换 state
+  // 与 rev，并把它记成"刚加载"的引用，跳过紧随其后的那次 echo 保存。
+  const refreshWorkspace = useCallback(async () => {
+    const stored = await loadWorkspace();
+    if (stored) {
+      loadedStateRef.current = stored;
+      setState(stored);
+    }
+  }, []);
 
   useEffect(() => {
     loadWorkspace()
@@ -1088,7 +1106,7 @@ export default function Cockpit() {
         <div className="page-scroll">
           {view === "inspirations" ? <InspirationPoolView state={state} pageTitle={state.pageTitles.inspirations} updateTitle={(value) => updatePageTitle("inspirations", value)} add={addInspiration} update={updateInspiration} createContent={createContentFromInspiration} remove={removeInspiration} openContent={openContent} /> : null}
           {/* T6: 热点雷达 —— 自取数视图, 不消费 WorkspaceState (见 radar.tsx 顶部注释), 只需要 setView 用于未配置空态的「去设置」跳转。 */}
-          {view === "radar" ? <RadarView setView={setView} /> : null}
+          {view === "radar" ? <RadarView setView={setView} refreshWorkspace={refreshWorkspace} /> : null}
           {view === "momentum" ? (
             <MomentumView
               momentumPeriod={momentumPeriod}

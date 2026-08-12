@@ -117,7 +117,7 @@
 → 写 RadarItem + 候选词入 RadarKeyword(candidate) + RadarRun 运行日志
 ```
 
-每日阅读上限默认 20 篇 (`RadarConfig.dailyLimit`, 可在设置卡改), worker 内闸门读满即停。
+每日阅读上限默认 20 篇 (`RadarConfig.dailyLimit`, 可在设置卡改), 是**近 24 小时滚动累计**的额度 (而非"每次点击立即扫描各自的上限")——跑之前先查过去 24h 内该用户所有 RadarRun 的 `read` 总和, 剩余额度 = `dailyLimit - 已耗用`; 剩余为 0 时本轮仍创建 RadarRun 但不进入阅读循环, 记一条 `errors: [{stage:'budget', message:'今日阅读额度已用完'}]` 后立即收尾, 在雷达视图的上轮运行摘要中可见。
 
 **数据模型** (4 张新表, 均 `userId` 隔离, 详见 `prisma/schema.prisma`): `RadarKeyword`(关键词, status: active/candidate/ignored) / `RadarItem`(采集条目, status: new/adopted/ignored) / `RadarRun`(每轮运行日志) / `RadarConfig`(单行, Tavily key 用 `src/lib/crypto.ts` 同款 AES-256-GCM 加密存储, 前端只回 `hasKey` 布尔不回显明文/密文)。
 

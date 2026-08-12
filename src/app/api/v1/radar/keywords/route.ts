@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
@@ -47,6 +48,13 @@ export async function POST(req: Request) {
     });
     return ok({ id: keyword.id });
   } catch (e) {
+    // R4 终审修复: 上面的 findFirst 预检查只是"友好路径"（省一次报错往返），
+    // 但两次请求之间存在 TOCTOU 窗口——并发提交同一关键词时都能通过 findFirst，
+    // 最终由 `@@unique([userId, text])`（本次一并加到 schema）兜底拒绝其中一条。
+    // 命中该约束时复用与预检查完全相同的 409 文案，前端无需区分是哪条路径命中。
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      return fail('该关键词已存在', 409);
+    }
     const msg = e instanceof Error ? e.message : String(e);
     console.error('[POST radar/keywords]', e);
     return fail(`保存失败: ${msg}`, 500);

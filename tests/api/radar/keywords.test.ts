@@ -96,6 +96,21 @@ describe('POST /api/v1/radar/keywords', () => {
     expect(prismaMock.radarKeyword.create).not.toHaveBeenCalled();
   });
 
+  it('TOCTOU 竞态: findFirst 预检查未命中, 但 create 撞上唯一约束 (P2002) → 同样 409', async () => {
+    const { Prisma } = await import('@prisma/client');
+    prismaMock.radarKeyword.findFirst.mockResolvedValueOnce(null);
+    prismaMock.radarKeyword.create.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: '5.22.0',
+      }),
+    );
+    const res = await POST(req({ text: '并发提交的词' }));
+    expect(res.status).toBe(409);
+    const json = await res.json();
+    expect(json.message).toBe('该关键词已存在');
+  });
+
   it('非法 JSON → 400', async () => {
     const badReq = new Request('http://t/api/v1/radar/keywords', {
       method: 'POST',

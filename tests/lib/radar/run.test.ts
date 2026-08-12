@@ -24,7 +24,7 @@ vi.mock('@/lib/llm/deepseek', () => ({
 const prismaMock = vi.hoisted(() => {
   const m: any = {
     radarKeyword: { findMany: vi.fn(), createMany: vi.fn() },
-    radarRun: { create: vi.fn(), update: vi.fn() },
+    radarRun: { create: vi.fn(), update: vi.fn(), aggregate: vi.fn() },
     radarItem: { findMany: vi.fn(), createMany: vi.fn() },
   };
   m.$transaction = vi.fn(async (cb: any) => cb(m));
@@ -74,6 +74,7 @@ beforeEach(() => {
     ...data,
   }));
   prismaMock.radarRun.update.mockResolvedValue({});
+  prismaMock.radarRun.aggregate.mockResolvedValue({ _sum: { read: 0 } });
   prismaMock.radarItem.createMany.mockResolvedValue({ count: 0 });
   prismaMock.radarKeyword.createMany.mockResolvedValue({ count: 0 });
 
@@ -231,6 +232,67 @@ describe('runRadarScan', () => {
     expect(out!.kept).toBe(1);
     const itemsData = prismaMock.radarItem.createMany.mock.calls[0][0].data;
     expect(itemsData[0].url).toBe('https://b.example.com/2');
+  });
+
+  it('中途异常 (如事务失败) → RadarRun 兜底收尾记 fatal 错误, 并原样 rethrow', async () => {
+    searchProviderMock.search.mockResolvedValue([searchResult()]);
+    llmCallMock.mockResolvedValue({ result: readResult(), usage: {} });
+    prismaMock.$transaction.mockRejectedValueOnce(new Error('事务写入失败'));
+
+    await expect(runRadarScan('u1')).rejects.toThrow('事务写入失败');
+
+    // 异常发生前已经跑完的进度 (searched/read) 不应因为兜底收尾而丢失。
+    expect(prismaMock.radarRun.update).toHaveBeenCalledWith({
+      where: { id: 'run1' },
+      data: expect.objectContaining({
+        searched: 1,
+        read: 1,
+        kept: 0,
+        errors: [{ stage: 'fatal', message: '事务写入失败' }],
+      }),
+    });
+  });
+
+  it('累计预算: 前序 24h 已读 15, 上限 20 → 本轮只读 5 篇即停', async () => {
+    configMock.getRadarConfig.mockResolvedValue({ hasKey: true, dailyLimit: 20, enabled: true });
+    prismaMock.radarRun.aggregate.mockResolvedValue({ _sum: { read: 15 } });
+    searchProviderMock.search.mockResolvedValue(
+      Array.from({ length: 6 }, (_, i) =>
+        searchResult({ url: `https://a.example.com/${i}`, title: `标题${i}`, sourceSite: `s${i}.example.com` })
+      )
+    );
+
+    const out = await runRadarScan('u1');
+
+    expect(llmCallMock).toHaveBeenCalledTimes(5);
+    expect(out!.read).toBe(5);
+    expect(prismaMock.radarRun.aggregate).toHaveBeenCalledWith({
+      _sum: { read: true },
+      where: { userId: 'u1', startedAt: { gte: expect.any(Date) } },
+    });
+  });
+
+  it('累计预算耗尽 (前序 24h 已读 ≥ 上限) → 不进入阅读循环, 记 budget 错误并返回该轮 (非 null)', async () => {
+    configMock.getRadarConfig.mockResolvedValue({ hasKey: true, dailyLimit: 20, enabled: true });
+    prismaMock.radarRun.aggregate.mockResolvedValue({ _sum: { read: 20 } });
+    searchProviderMock.search.mockResolvedValue([searchResult()]);
+
+    const out = await runRadarScan('u1');
+
+    expect(out).not.toBeNull();
+    expect(out!.read).toBe(0);
+    expect(out!.kept).toBe(0);
+    expect(out!.errors).toEqual([{ stage: 'budget', message: '今日阅读额度已用完' }]);
+    expect(llmCallMock).not.toHaveBeenCalled();
+    expect(prismaMock.radarItem.createMany).not.toHaveBeenCalled();
+    expect(prismaMock.radarRun.update).toHaveBeenCalledWith({
+      where: { id: 'run1' },
+      data: expect.objectContaining({
+        read: 0,
+        kept: 0,
+        errors: [{ stage: 'budget', message: '今日阅读额度已用完' }],
+      }),
+    });
   });
 
   it('标题指纹重复 (批内) → 跳过第二条, 不重复阅读', async () => {

@@ -69,7 +69,13 @@ async function fetchJson(input: string, init?: RequestInit) {
   return res.json();
 }
 
-export function RadarView({ setView }: { setView: (view: NavView) => void }) {
+export function RadarView({ setView, refreshWorkspace }: {
+  setView: (view: NavView) => void;
+  /** R1 终审修复: adopt 写了 cockpit 事务 (新灵感卡片 + rev bump), 本视图不消费
+   * `WorkspaceState` 感知不到——调用它把 Cockpit 内存态与 rev 一起同步到服务端
+   * 最新值, 见 `Cockpit.tsx` 里该回调定义处的完整说明。 */
+  refreshWorkspace: () => Promise<void>;
+}) {
   const [items, setItems] = useState<RadarItemDTO[] | null>(null);
   const [keywords, setKeywords] = useState<KeywordGroups | null>(null);
   const [config, setConfig] = useState<RadarConfigSafe | null>(null);
@@ -137,6 +143,9 @@ export function RadarView({ setView }: { setView: (view: NavView) => void }) {
       });
       if (json.success) {
         setItems((prev) => (prev ? prev.filter((item) => item.id !== id) : prev));
+        // adopt 才需要刷新: 它是唯一一条写 cockpit 事务的动作 (新灵感卡片 + rev
+        // bump)。ignore 只改 RadarItem.status, 不触碰 cockpit 表, 无需刷新。
+        if (action === "adopt") await refreshWorkspace();
         setToast(action === "adopt" ? "已收入灵感库" : "已忽略该条目");
       } else {
         setToast(json.message ?? "操作失败");
