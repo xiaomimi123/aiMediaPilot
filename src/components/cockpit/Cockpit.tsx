@@ -75,16 +75,17 @@ import { Icon, creatorMark, dashboardTitle, date, normalizeGoalQuotas, shiftDate
 import { MOBILE_NAV_ITEMS, Sidebar } from "./sidebar";
 import {
   isPlatformNavView,
+  resolveInitialAnalyticsTab,
   resolveInitialMomentumTab,
   resolveInitialView,
+  type AnalyticsTab,
   type MomentumPeriod,
   type NavView,
 } from "@/lib/cockpit/view-routing";
 import { InspirationPoolView } from "./views/inspirations";
 import { MomentumView, type DailyStageEntry } from "./views/momentum";
 import { ContentOverviewView } from "./views/pipeline";
-import { GoalsView } from "./views/goals";
-import { ReviewView } from "./views/review";
+import { AnalyticsView } from "./views/analytics";
 import { SettingsView } from "./views/settings";
 import { Onboarding } from "./onboarding";
 import { ContentDrawer, type ContentDrawerTab } from "./content-drawer";
@@ -511,6 +512,7 @@ export default function Cockpit() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [view, setView] = useState<NavView>(() => resolveInitialView(searchParams));
   const [momentumPeriod, setMomentumPeriod] = useState<MomentumPeriod>(() => resolveInitialMomentumTab(searchParams, view));
+  const [analyticsTab, setAnalyticsTab] = useState<AnalyticsTab>(() => resolveInitialAnalyticsTab(searchParams, view));
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [theme, setTheme] = useState<ColorTheme | null>(null);
   const [showStageColors, setShowStageColors] = useState(false);
@@ -609,6 +611,15 @@ export default function Cockpit() {
       return item ? { event, item } : null;
     })
     .filter((entry): entry is DailyStageEntry => Boolean(entry));
+  // T4 恢复: 侧栏「内容数据分析」徽标 —— 已发布、未完成复盘、且已过 T+3 的内容数量
+  // （T2 移除 goals/review 独立侧栏项时一并拿掉，逻辑与 T2 之前完全一致，原样搬回）。
+  const reviewDueCount = state.contents.filter(
+    (item) =>
+      item.publicationStatus === "published" &&
+      !item.review.completedAt &&
+      Boolean(item.publishedAt) &&
+      shiftDate(item.publishedAt, 3) <= date,
+  ).length;
 
   function updateContent(id: string, patch: Partial<ContentItem>) {
     setState((prev) => ({
@@ -1041,6 +1052,7 @@ export default function Cockpit() {
         activeView={view}
         onSelectView={setView}
         onSelectSettings={() => setView("settings")}
+        analyticsBadgeCount={reviewDueCount}
         timeProgress={health.timeProgress}
         weeksRemaining={health.weeksRemaining}
         appVersion={APP_VERSION}
@@ -1067,7 +1079,7 @@ export default function Cockpit() {
               todayEntries={todayEntries}
               overdueEntries={overdueEntries}
               open={openContent}
-              openReview={() => setView("review")}
+              openReview={() => { setView("analytics"); setAnalyticsTab("review"); }}
               moveToday={moveToday}
               toggleComplete={toggleTodayComplete}
               removeFromToday={removeFromToday}
@@ -1091,9 +1103,8 @@ export default function Cockpit() {
           ) : null}
           {/* T4/T5 替换: platform-* 占位仍渲染全量 Pipeline (无平台过滤)。 */}
           {view === "pipeline" || isPlatformNavView(view) ? <ContentOverviewView state={state} pageTitle={state.pageTitles.pipeline} updateTitle={(value) => updatePageTitle("pipeline", value)} query={pipelineQuery} setQuery={setPipelineQuery} type={pipelineType} setType={setPipelineType} open={openContent} addToday={addToToday} dropStage={onDropStage} /> : null}
-          {/* T3 替换: analytics 占位仍渲染现有 GoalsView (原样 props)。 */}
-          {view === "goals" || view === "analytics" ? <GoalsView state={state} pageTitle={state.pageTitles.goals} updateTitle={(value) => updatePageTitle("goals", value)} health={health} followers={followers} published={publishedQuarter} updateGoal={updateGoal} setState={setState} notify={setToast} /> : null}
-          {view === "review" ? <ReviewView state={state} pageTitle={state.pageTitles.review} updateTitle={(value) => updatePageTitle("review", value)} open={(id) => openContent(id, "review")} setState={setState} /> : null}
+          {/* T4: analytics 挂载合并后的 AnalyticsView（目标/复盘 两个 tab，取代 T2 的 GoalsView 占位共享分支）。 */}
+          {view === "analytics" ? <AnalyticsView analyticsTab={analyticsTab} setAnalyticsTab={setAnalyticsTab} state={state} goalsPageTitle={state.pageTitles.goals} updateGoalsTitle={(value) => updatePageTitle("goals", value)} health={health} followers={followers} published={publishedQuarter} updateGoal={updateGoal} notify={setToast} reviewPageTitle={state.pageTitles.review} updateReviewTitle={(value) => updatePageTitle("review", value)} open={(id) => openContent(id, "review")} setState={setState} /> : null}
           {view === "settings" ? <SettingsView state={state} pageTitle={state.pageTitles.settings} updateTitle={(value) => updatePageTitle("settings", value)} updateDesignStyle={updateDesignStyle} setState={setState} onReset={() => { if (window.confirm("确定清空全部内容与目标数据吗？个人设置会保留，请先导出备份。")) { setState({ ...createBlankState(), designStyle: state.designStyle, navigationOrder: state.navigationOrder, profile: state.profile, pageTitles: state.pageTitles }); setToast("已清空内容与目标，个人设置已保留"); } }} /> : null}
         </div>
       </main>

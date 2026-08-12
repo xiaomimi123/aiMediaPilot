@@ -46,7 +46,11 @@ function AccountStatusBar({ notify }: { notify: (message: string) => void }) {
   </div>;
 }
 
-export function GoalsView({ state, pageTitle, updateTitle, health, followers, published, updateGoal, setState, notify }: { state: WorkspaceState; pageTitle: string; updateTitle: (value: string) => void; health: ReturnType<typeof calculateGoalHealth>; followers: number; published: ContentItem[]; updateGoal: (patch: Partial<GoalCycle>) => void; setState: React.Dispatch<React.SetStateAction<WorkspaceState>>; notify: (message: string) => void }) {
+// `embedded`: 三期 T4 起 GoalsView 只从 AnalyticsView（目标/复盘 tab 容器）挂载——容器
+// 自己已有一份 `.page-heading`（标题「内容数据分析」），若这里再整段渲染 eyebrow/标题/说明
+// 会造成同一屏两份「页面标题」堆叠。true 时只隐藏这部分文字，保留「配置目标指标」按钮
+// （功能性入口，不属于「标题」）。
+export function GoalsView({ state, pageTitle, updateTitle, health, followers, published, updateGoal, setState, notify, embedded = false }: { state: WorkspaceState; pageTitle: string; updateTitle: (value: string) => void; health: ReturnType<typeof calculateGoalHealth>; followers: number; published: ContentItem[]; updateGoal: (patch: Partial<GoalCycle>) => void; setState: React.Dispatch<React.SetStateAction<WorkspaceState>>; notify: (message: string) => void; embedded?: boolean }) {
   const [showConfig, setShowConfig] = useState(false);
   const [snapshotDate, setSnapshotDate] = useState(date);
   const [snapshotFollowers, setSnapshotFollowers] = useState("");
@@ -150,7 +154,7 @@ export function GoalsView({ state, pageTitle, updateTitle, health, followers, pu
 
   return <section className="page goals-page">
     <div className="page-heading stage-goal-heading">
-      <div><span className="eyebrow">大目标</span><EditablePageTitle value={pageTitle} fallback={DEFAULT_PAGE_TITLES.goals} onChange={updateTitle} /><p>{pageTitle.trim() !== state.goal.objective.trim() && state.goal.objective.trim() ? `目标方向：${state.goal.objective} · ` : ""}{state.goal.startDate} — {state.goal.endDate} · 指标修改统一放在配置中。</p></div>
+      {embedded ? <div /> : <div><span className="eyebrow">大目标</span><EditablePageTitle value={pageTitle} fallback={DEFAULT_PAGE_TITLES.goals} onChange={updateTitle} /><p>{pageTitle.trim() !== state.goal.objective.trim() && state.goal.objective.trim() ? `目标方向：${state.goal.objective} · ` : ""}{state.goal.startDate} — {state.goal.endDate} · 指标修改统一放在配置中。</p></div>}
       <button className="primary-button" onClick={() => setShowConfig(true)}>配置目标指标</button>
     </div>
 

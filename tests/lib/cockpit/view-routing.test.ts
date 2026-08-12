@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveInitialMomentumTab, resolveInitialView } from '@/lib/cockpit/view-routing';
+import { resolveInitialAnalyticsTab, resolveInitialMomentumTab, resolveInitialView } from '@/lib/cockpit/view-routing';
 
 function paramsFrom(query: string): URLSearchParams {
   return new URLSearchParams(query);
@@ -22,9 +22,9 @@ describe('resolveInitialView', () => {
     expect(resolveInitialView(paramsFrom('view=settings'))).toBe('settings');
   });
 
-  it('goals/review 过渡期 legacy id 放行', () => {
-    expect(resolveInitialView(paramsFrom('view=goals'))).toBe('goals');
-    expect(resolveInitialView(paramsFrom('view=review'))).toBe('review');
+  it('legacy `?view=goals`/`?view=review` → analytics (T4 起合并进内容数据分析, 不再是独立 NavView; 精确 tab 见 resolveInitialAnalyticsTab)', () => {
+    expect(resolveInitialView(paramsFrom('view=goals'))).toBe('analytics');
+    expect(resolveInitialView(paramsFrom('view=review'))).toBe('analytics');
   });
 
   it('固定视图 id 放行', () => {
@@ -79,5 +79,58 @@ describe('resolveInitialMomentumTab', () => {
     const resolvedView = resolveInitialView(params);
     expect(resolvedView).toBe('momentum');
     expect(resolveInitialMomentumTab(params, resolvedView)).toBe('schedule');
+  });
+});
+
+describe('resolveInitialAnalyticsTab', () => {
+  it('view=analytics&tab=review → review', () => {
+    const params = paramsFrom('view=analytics&tab=review');
+    expect(resolveInitialAnalyticsTab(params, resolveInitialView(params))).toBe('review');
+  });
+
+  it('view=analytics&tab=goals → goals', () => {
+    const params = paramsFrom('view=analytics&tab=goals');
+    expect(resolveInitialAnalyticsTab(params, resolveInitialView(params))).toBe('goals');
+  });
+
+  it('view=analytics 缺省 tab → goals', () => {
+    const params = paramsFrom('view=analytics');
+    expect(resolveInitialAnalyticsTab(params, resolveInitialView(params))).toBe('goals');
+  });
+
+  it('非法 tab → goals', () => {
+    const params = paramsFrom('view=analytics&tab=not-a-real-tab');
+    expect(resolveInitialAnalyticsTab(params, resolveInitialView(params))).toBe('goals');
+  });
+
+  it('legacy `?view=goals` → resolveInitialView 折叠成 analytics, 精确 tab 落在 goals', () => {
+    const params = paramsFrom('view=goals');
+    const resolvedView = resolveInitialView(params);
+    expect(resolvedView).toBe('analytics');
+    expect(resolveInitialAnalyticsTab(params, resolvedView)).toBe('goals');
+  });
+
+  it('legacy `?view=review` → resolveInitialView 折叠成 analytics, 精确 tab 落在 review', () => {
+    const params = paramsFrom('view=review');
+    const resolvedView = resolveInitialView(params);
+    expect(resolvedView).toBe('analytics');
+    expect(resolveInitialAnalyticsTab(params, resolvedView)).toBe('review');
+  });
+
+  it('legacy `?view=goals&tab=review` → 原始 view 参数优先于 tab, 仍落在 goals', () => {
+    const params = paramsFrom('view=goals&tab=review');
+    const resolvedView = resolveInitialView(params);
+    expect(resolvedView).toBe('analytics');
+    expect(resolveInitialAnalyticsTab(params, resolvedView)).toBe('goals');
+  });
+
+  it('门控: view=inspirations&tab=review → goals (tab 只在 view=analytics 时生效)', () => {
+    const params = paramsFrom('view=inspirations&tab=review');
+    expect(resolveInitialAnalyticsTab(params, resolveInitialView(params))).toBe('goals');
+  });
+
+  it('门控: resolvedView 直接传入非 analytics 值时同样忽略 tab', () => {
+    expect(resolveInitialAnalyticsTab(paramsFrom('tab=review'), 'momentum')).toBe('goals');
+    expect(resolveInitialAnalyticsTab(paramsFrom('view=review&tab=review'), 'settings')).toBe('goals');
   });
 });

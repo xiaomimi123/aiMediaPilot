@@ -10,8 +10,8 @@ import type { NavView, PlatformNavId } from "@/lib/cockpit/view-routing";
 import { APP_NAME } from "@/lib/constants";
 import { Icon, ProgressBar } from "./shared";
 
-// 侧栏固定项 (排除 settings 单独按钮, 以及暂留但不出现在侧栏里的 goals/review)。
-export type FixedNavId = Exclude<NavView, "settings" | "goals" | "review">;
+// 侧栏固定项 (排除 settings 单独按钮; goals/review 已在 T4 从 NavView 联合中整体移除)。
+export type FixedNavId = Exclude<NavView, "settings">;
 export type SidebarNavItem = { id: FixedNavId; label: string; icon: string };
 
 // 工作台组 —— ✣ 灵感库选题 / ◫ 今日推进。
@@ -61,6 +61,9 @@ type CockpitSidebarProps = {
   activeView: NavView;
   onSelectView: (id: FixedNavId) => void;
   onSelectSettings: () => void;
+  // 待复盘徽标 —— 恢复 T2 之前挂在旧「复盘」侧栏项上的数量提示, 现在挂在合并后的
+  // 「内容数据分析」项上（数据源逻辑不变, 见 Cockpit.tsx 的 reviewDueCount）。
+  analyticsBadgeCount: number;
   timeProgress: number;
   weeksRemaining: number;
   appVersion: string;
@@ -97,6 +100,7 @@ export function Sidebar(props: SidebarProps) {
           title={collapsed ? item.label : undefined}
         >
           <Icon name={item.icon} /><span>{item.label}</span>
+          {item.id === "analytics" && cockpit.analyticsBadgeCount > 0 ? <em>{cockpit.analyticsBadgeCount}</em> : null}
         </button>
       );
     }
