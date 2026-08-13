@@ -56,10 +56,24 @@ export async function runResearch(
     // 「用户素材」(两者都简短、且是明确关联该选题的高信号内容) 放在 searchParts
     // 之前, 让容量有限时被截掉的是体积最大、优先级最低的搜索正文, 而不是用户
     // 主动提供的内容。
+    //
+    // curatedParts 组内部再进一步排序: 用户素材放在雷达种子**之前**。理由:
+    // 雷达摘要 (aiSummary/aiAngle) 与素材框文本都没有服务端长度上限, 极端情况下
+    // (超长摘要种子 + 素材框贴了一大段长文) curatedParts 自身拼接后也可能超过
+    // MAX_RAW_MATERIALS_LEN——这时 composeRawMaterials 的全局 slice(0, maxLen)
+    // 只保留拼接结果的头部, 排在 curatedParts 最前面的内容才能保证"即使被截断也
+    // 至少保留开头, 不会整段消失"。用户主动填写的素材优先级高于自动抓取的雷达
+    // 摘要, 所以用户素材排最前; 雷达种子退居其次, 极端情况下可能被截掉(可接受,
+    // 它本身就是"零成本"的自动补充, 不是用户明确要求保留的内容)。
     const curatedParts: MaterialPart[] = [];
     const searchParts: MaterialPart[] = [];
 
-    // ① 雷达种子 — 尽力而为, 命中则注入(标注来源 url), 未命中/异常静默跳过
+    // ① 用户自备素材 — curated 组最优先, 见上方注释
+    if (input.userMaterials) {
+      pushIfNonEmpty(curatedParts, '用户素材', input.userMaterials);
+    }
+
+    // ② 雷达种子 — 尽力而为, 命中则注入(标注来源 url), 未命中/异常静默跳过
     try {
       const seed = await prisma.radarItem.findFirst({
         where: {
@@ -80,11 +94,6 @@ export async function runResearch(
         '[research] 雷达种子查询失败, 静默跳过',
         e instanceof Error ? e.message : String(e)
       );
-    }
-
-    // ② 用户自备素材 — 同样归入优先保留组
-    if (input.userMaterials) {
-      pushIfNonEmpty(curatedParts, '用户素材', input.userMaterials);
     }
 
     // ③ Tavily 搜索 — 无 key 跳过; 有 key 搜原词 + "主题 案例 数据" 各一次, 单次失败单独跳过

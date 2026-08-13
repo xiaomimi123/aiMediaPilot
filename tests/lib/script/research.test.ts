@@ -225,6 +225,37 @@ describe('runResearch', () => {
     expect(text).toContain('雷达摘要ZZZ');
   });
 
+  it('curatedParts 自身(雷达种子+用户素材)已超 8000 字上限时, 用户素材仍出现在结果里 (排在 curated 组最前, 被截的是雷达种子)', async () => {
+    // 雷达摘要/素材框文本均无服务端长度上限, 极端情况下二者拼起来就能超过
+    // MAX_RAW_MATERIALS_LEN, 不需要借助搜索结果。用一个 9000 字的超长雷达摘要
+    // 模拟这种情况, 同时完全不配置 Tavily key (searchParts 恒为空), 确保
+    // "用户素材被保留"这件事跟搜索正文无关——纯粹是 curated 组内部排序的效果。
+    prismaMock.radarItem.findFirst.mockResolvedValue({
+      id: 'r1',
+      userId: 'u1',
+      url: 'https://radar.example.com/seed',
+      title: '减脂饮食热点',
+      aiSummary: 'z'.repeat(9000),
+      aiAngle: '',
+      status: 'adopted',
+    });
+    configMock.getDecryptedTavilyKey.mockResolvedValue(null);
+
+    const out = await runResearch('u1', {
+      topic: '减脂饮食',
+      niche: '健康',
+      userMaterials: '用户明确填写的素材要点DEF',
+    });
+
+    expect(out).toEqual(fakeBrief());
+    const userMessage = llmCallMock.mock.calls[0][0].userMessage;
+    const text = JSON.stringify(userMessage);
+    // curatedParts 自身(雷达种子 9000 字 + 用户素材)已经超过 8000 字上限,
+    // 但用户素材排在 curated 组最前面, 应完整出现在截断后传给 LLM 的文本里;
+    // 排在其后的超长雷达摘要允许被截断(不要求完整保留)。
+    expect(text).toContain('用户明确填写的素材要点DEF');
+  });
+
   it('素材超长 → 拼接后截断至 8000 字再传给 callStructured', async () => {
     const out = await runResearch('u1', {
       topic: '减脂饮食',
