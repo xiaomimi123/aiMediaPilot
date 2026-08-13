@@ -1,9 +1,11 @@
 import { ok, fail } from '@/lib/api';
 import { getDeepSeekTextLLM } from '@/lib/llm/clients';
+import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
 import { CRITIQUE_BY_PLATFORM, type CritiquePlatform } from '@/lib/llm/prompts';
 import { ipKey, rateLimit } from '@/lib/rate-limit';
 import { normalizeNiche } from '@/lib/niche';
 import { isContentPlatform } from '@/lib/platform';
+import { getOrCreateDefaultUser } from '@/lib/user';
 
 // title-critique 的支持平台恰好等于 ContentPlatform, CritiquePlatform 名义上不同但值一致
 const isCritiquePlatform = (v: unknown): v is CritiquePlatform => isContentPlatform(v);
@@ -34,7 +36,8 @@ export async function POST(req: Request) {
     return fail('niche 不能为空', 400);
   }
 
-  const apiKey = process.env.DEEPSEEK_API_KEY;
+  const user = await getOrCreateDefaultUser();
+  const apiKey = await resolveDeepSeekApiKey(user.id);
   if (!apiKey) {
     return fail('DEEPSEEK_API_KEY 未配置', 500);
   }

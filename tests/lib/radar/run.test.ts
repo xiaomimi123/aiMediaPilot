@@ -21,6 +21,13 @@ vi.mock('@/lib/llm/deepseek', () => ({
   },
 }));
 
+// resolveDeepSeekApiKey 内部查 AIConfig(+decrypt); 单测已在别处覆盖 (tests/lib/llm/resolve-key.test.ts),
+// 这里只关心 runRadarScan 是否正确消费其返回值 — 直接代理 env, 保留既有
+// `process.env.DEEPSEEK_API_KEY` 测试模式, 不需要额外 mock prisma.aIConfig。
+vi.mock('@/lib/llm/resolve-key', () => ({
+  resolveDeepSeekApiKey: vi.fn(async () => process.env.DEEPSEEK_API_KEY ?? null),
+}));
+
 const prismaMock = vi.hoisted(() => {
   const m: any = {
     radarKeyword: { findMany: vi.fn(), createMany: vi.fn() },

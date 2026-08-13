@@ -10,6 +10,13 @@ vi.mock('@/lib/user', () => ({
 const radarConfigMock = vi.hoisted(() => ({ getRadarConfig: vi.fn() }));
 vi.mock('@/lib/radar/config', () => radarConfigMock);
 
+// resolveDeepSeekApiKey 内部查 AIConfig(+decrypt); 单测已在别处覆盖, 这里只关心
+// route 是否正确消费其返回值 — 直接代理 env, 保留既有 `process.env.DEEPSEEK_API_KEY`
+// 测试模式 (设置/删除 env 即可控制 key 有无), 不需要额外 mock prisma.aIConfig。
+vi.mock('@/lib/llm/resolve-key', () => ({
+  resolveDeepSeekApiKey: vi.fn(async () => process.env.DEEPSEEK_API_KEY ?? null),
+}));
+
 import { POST } from '@/app/api/v1/radar/trigger/route';
 
 const ORIGINAL_DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;

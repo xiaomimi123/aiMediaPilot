@@ -1,5 +1,6 @@
 import { ok, fail } from '@/lib/api';
 import { getDeepSeekTextLLM } from '@/lib/llm/clients';
+import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
 import {
   SCRIPT_GENERATE_DOUYIN,
   SCRIPT_GENERATE_XIAOHONGSHU,
@@ -62,7 +63,8 @@ export async function POST(req: Request) {
     return fail('niche 不能为空', 400);
   }
 
-  const apiKey = process.env.DEEPSEEK_API_KEY;
+  const user = await getOrCreateDefaultUser();
+  const apiKey = await resolveDeepSeekApiKey(user.id);
   if (!apiKey) {
     return fail('DEEPSEEK_API_KEY 未配置', 500);
   }

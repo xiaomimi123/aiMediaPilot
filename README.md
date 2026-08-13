@@ -106,7 +106,7 @@
 
 一句话: **关键词 → Tavily 搜索 → AI 逐篇阅读评分 → 热度排行 → (人工审批)收入灵感库**——AI 只负责采集与排序, 是否值得做仍由人决定。
 
-服务端 AI 深度采集管线 + 独立视图, 与 cockpit 其余六视图不同——**自取数, 不进 `WorkspaceState`**（学 dashboard summary 先例，见 `src/components/cockpit/views/radar.tsx` 顶部注释）。「零 Claude 额度消耗」是硬约束: AI 阅读评分走用户自己在「AI 服务配置」卡配置的服务商 (现为 DeepSeek), 不占用 Claude 用量。
+服务端 AI 深度采集管线 + 独立视图, 与 cockpit 其余六视图不同——**自取数, 不进 `WorkspaceState`**（学 dashboard summary 先例，见 `src/components/cockpit/views/radar.tsx` 顶部注释）。「零 Claude 额度消耗」是硬约束: AI 阅读评分走用户自己在「AI 服务配置」卡配置的服务商 (现为 DeepSeek); DeepSeek key 解析优先读该卡里的 `AIConfig` 记录, 未配置时回退 `.env` 里的 `DEEPSEEK_API_KEY` (见 `src/lib/llm/resolve-key.ts`), 不占用 Claude 用量。
 
 **管线** (`src/lib/radar/run.ts` 的 `runRadarScan`, `src/jobs/workers/radar-worker.ts` 每日一次仿 auto-sync-worker 注册 + `/api/v1/radar/trigger` 手动触发仿二期 trigger 超时模式):
 
@@ -127,7 +127,7 @@
 
 **设置「雷达配置」卡** (`src/components/cockpit/settings-cards/radar-config-card.tsx`, 挂在设置视图): Tavily API Key (密码框, 留空 = 不修改, 已配置时显示掩码提示) / 每日阅读上限 / 启用开关 / 关键词管理 (已启用⇄已停用双向切换, 手动新增, 重复关键词 409 提示——AI 候选词的采纳/忽略在雷达视图页顶完成, 不在这张卡)。
 
-**API**: `GET/PUT /api/v1/radar/config`、`GET/POST /api/v1/radar/keywords`、`PATCH /api/v1/radar/keywords/[id]`、`GET /api/v1/radar/items`、`PATCH /api/v1/radar/items/[id]`、`POST /api/v1/radar/trigger` (前置就绪检查: 未启用/无 Tavily key → 400；服务端无 `DEEPSEEK_API_KEY` → 503)、`GET /api/v1/radar/runs/latest` (雷达视图「上轮运行摘要」的数据源)。
+**API**: `GET/PUT /api/v1/radar/config`、`GET/POST /api/v1/radar/keywords`、`PATCH /api/v1/radar/keywords/[id]`、`GET /api/v1/radar/items`、`PATCH /api/v1/radar/items/[id]`、`POST /api/v1/radar/trigger` (前置就绪检查: 未启用/无 Tavily key → 400；无可用 DeepSeek key (设置卡 `AIConfig` 与 `.env` 均未配置) → 503)、`GET /api/v1/radar/runs/latest` (雷达视图「上轮运行摘要」的数据源)。
 
 **成本与真实验证**: DeepSeek 每篇几厘, Tavily 免费档每月 1000 次检索通常够用。管线核心 (纯函数热度合成/搜索层/阅读 prompt/API 路由) 全链路可 mock 测试 (见 `tests/lib/radar/` `tests/api/radar/`); worker 的每日 repeat 调度层未直测, 循 auto-sync-worker 先例 (人工验证)。真实跑一轮需用户在设置卡配置真实 Tavily key 后自验 (同 DeepSeek key 先例)。
 
@@ -279,12 +279,12 @@ API: `POST/GET /api/v1/topics`、`PATCH /api/v1/topics/[id]`、`POST/GET /api/v1
 ### LLM 配置
 
 - 视频管线 vision LLM 是 Bailian Qwen-VL,文本 LLM 是 DeepSeek。
-- API keys 当前在 `.env` (DEEPSEEK_API_KEY, OPENAI_API_KEY, OPENAI_BASE_URL 等)
-- 多 user SaaS 时需用 AIConfig 表 (schema 已存在,但 worker 现在直读 env)
+- DeepSeek key: 优先读设置「AI 服务配置」卡里的 `AIConfig` 记录 (`provider='deepseek'`, AES-256-GCM 加密存储), 查不到或解密失败时回退 `.env` 里的 `DEEPSEEK_API_KEY` (`src/lib/llm/resolve-key.ts` 的 `resolveDeepSeekApiKey`, 所有消费点——脚本生成/选题生成/灵感总结/标题反馈/热点雷达/内容分析复盘——统一走它)。
+- vision LLM (OpenAI/Bailian) key 仍只在 `.env` (OPENAI_API_KEY, OPENAI_BASE_URL 等), 未纳入本次桥接范围。
 
 ### 测试覆盖
 
-- 736 tests 大多是 API 单测 + 纯函数 + mock prisma (含 Cockpit `model/workflow/schedule/calculations`/迁移映射的原版测试; 四期新增雷达搜索层/热度合成/阅读 prompt/API 路由测试)
+- 748 tests 大多是 API 单测 + 纯函数 + mock prisma (含 Cockpit `model/workflow/schedule/calculations`/迁移映射的原版测试; 四期新增雷达搜索层/热度合成/阅读 prompt/API 路由测试)
 - UI 一律走手动 E2E (是有意识的取舍)
 - Worker 集成测试缺 (auto-sync-worker, content-analyze-worker, radar-worker 的每日 repeat 调度层)
 
@@ -312,13 +312,13 @@ npm run dev          # http://localhost:3000
 npm run worker:dev   # BullMQ workers (analyze / retro / auto-sync / radar 四期新增)
 ```
 
-雷达功能额外需要 (均不是 `.env`, 在设置视图「雷达配置」卡里填, 见 §3「热点雷达」小节): Tavily API key (搜索, 去 [tavily.com](https://tavily.com) 免费注册即得, 免费档每月 1000 次检索通常够用) + 已配置好的 AI 服务商 key (阅读评分复用「AI 服务配置」卡, 现走 `.env` 里的 `DEEPSEEK_API_KEY`)。 两者任一缺失时「立即扫描」会明确报错 (未配置 Tavily/未启用 → 400；服务端无 `DEEPSEEK_API_KEY` → 503), 每日自动扫描会静默跳过该轮 (不报错, 见 `runRadarScan` 注释)。
+雷达功能额外需要: Tavily API key (在设置视图「雷达配置」卡里填, 见 §3「热点雷达」小节; 去 [tavily.com](https://tavily.com) 免费注册即得, 免费档每月 1000 次检索通常够用) + 一个可用的 DeepSeek key (阅读评分复用「AI 服务配置」卡——优先读该卡里配置的 key, 未配置时回退 `.env` 里的 `DEEPSEEK_API_KEY`)。 两者任一缺失时「立即扫描」会明确报错 (未配置 Tavily/未启用 → 400；无可用 DeepSeek key → 503), 每日自动扫描会静默跳过该轮 (不报错, 见 `runRadarScan` 注释)。
 
 ### 测试
 
 ```bash
 npm run typecheck    # tsc --noEmit
-npm test             # vitest, 736 tests across 82 files (含 Cockpit 纯逻辑层原版测试)
+npm test             # vitest, 748 tests across 83 files (含 Cockpit 纯逻辑层原版测试)
 npm test -- <filter> # 跑某个 file
 ```
 

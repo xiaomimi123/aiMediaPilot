@@ -2,6 +2,7 @@ export const APP_NAME = 'MediaPilot';
 
 export const AI_PROVIDERS = [
   { id: 'openai', label: 'OpenAI', defaultModel: 'gpt-4o-mini' },
+  { id: 'deepseek', label: 'DeepSeek', defaultModel: 'deepseek-chat' },
   // Phase 4 再补:
   // { id: 'anthropic', label: 'Anthropic', defaultModel: 'claude-3-5-sonnet-latest' },
   // { id: 'zhipu',     label: '智谱 GLM',  defaultModel: 'glm-4-flash' },

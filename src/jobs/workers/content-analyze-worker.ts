@@ -20,6 +20,7 @@ import { LocalWhisperClient } from '@/lib/llm/local-whisper';
 import type { TranscriptionResult } from '@/lib/llm/whisper';
 import { type IVisionLLM, type TokenUsage } from '@/lib/llm/vision';
 import { getDeepSeekTextLLM, getOpenAIVisionLLM } from '@/lib/llm/clients';
+import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
 import { HOOK, RETENTION, TITLE_CAPTION, COVER, SYNTHESIZE, SYNTHESIZE_WEIGHTS } from '@/lib/llm/prompts';
 import { computePrediction } from '@/lib/prediction/formula';
 import { resolveBaseline } from '@/lib/prediction/baseline';
@@ -451,8 +452,8 @@ async function handleAnalyze(job: Job<JobData>) {
   // vision LLM — hook / retention / cover need video frames
   const visionLLM = getOpenAIVisionLLM({ apiKey, baseURL: openaiBaseURL, defaultModel: visionModel, jsonModeFallback: useJsonMode });
 
-  // text LLM — DeepSeek if env set, else OpenAI (用 visionModel 保留 v1 行为)
-  const deepseekKey = process.env.DEEPSEEK_API_KEY;
+  // text LLM — DeepSeek if configured (设置卡优先, .env 回退), 否则 OpenAI (用 visionModel 保留 v1 行为)
+  const deepseekKey = await resolveDeepSeekApiKey(analysis.userId);
   const sharedTextLLM: IVisionLLM = deepseekKey
     ? getDeepSeekTextLLM(deepseekKey)
     : getOpenAIVisionLLM({ apiKey, baseURL: openaiBaseURL, defaultModel: visionModel, jsonModeFallback: useJsonMode });

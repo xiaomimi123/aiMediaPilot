@@ -2,6 +2,7 @@ import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { getDeepSeekTextLLM } from '@/lib/llm/clients';
+import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
 import { INSPIRATION_INSIGHT } from '@/lib/llm/prompts';
 import { normalizeNiche } from '@/lib/niche';
 import type { ContentPlatform } from '@/lib/platform';
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
     return fail('部分视频不存在或不属于你', 404);
   }
 
-  const apiKey = process.env.DEEPSEEK_API_KEY;
+  const apiKey = await resolveDeepSeekApiKey(user.id);
   if (!apiKey) return fail('DEEPSEEK_API_KEY 未配置', 500);
 
   // Infer batch platform — same across all → use it; else 'mixed'

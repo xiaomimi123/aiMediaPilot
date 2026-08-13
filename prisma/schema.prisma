@@ -144,7 +144,7 @@ model Distribution {
 model AIConfig {
   id        String   @id @default(cuid())
   userId    String
-  provider  String // "openai" | "anthropic" | "zhipu" | "qwen" | "doubao"
+  provider  String // "openai" | "deepseek" | "anthropic" | "zhipu" | "qwen" | "doubao"
   apiKey    String // 加密存储
   modelId   String // 具体模型标识
   isDefault Boolean  @default(false)

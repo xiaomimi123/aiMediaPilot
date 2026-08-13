@@ -8,6 +8,7 @@ import {
   type ClusterableItem,
 } from './scoring';
 import { getDeepSeekTextLLM } from '@/lib/llm/clients';
+import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
 import { RADAR_READ, type RadarReadResponse } from '@/lib/llm/prompts/radar-read';
 
 /**
@@ -58,7 +59,8 @@ interface ClusterInput extends ClusterableItem {
  *
  * 决定 (brief 明确): `enabled=false` 或未配置 Tavily key 时**不创建 RadarRun**,
  * 直接返回 null — 不是"运行了但立刻结束"的状态, 而是"这一轮压根没跑"。
- * 同样地, 全局 DEEPSEEK_API_KEY 缺失时也没法评估任何一篇, 同样返回 null
+ * 同样地, DeepSeek key 缺失 (设置卡 AIConfig 与 `.env` 均未配置, 见
+ * `resolveDeepSeekApiKey`) 时也没法评估任何一篇, 同样返回 null
  * (brief 未明确这个分支, 但语义上与"没有可用 key"一致, 不单独创建一条全错的 Run)。
  */
 export async function runRadarScan(userId: string): Promise<RadarRunStats | null> {
@@ -68,9 +70,9 @@ export async function runRadarScan(userId: string): Promise<RadarRunStats | null
   const tavilyKey = await getDecryptedTavilyKey(userId);
   if (!tavilyKey) return null;
 
-  const deepseekKey = process.env.DEEPSEEK_API_KEY;
+  const deepseekKey = await resolveDeepSeekApiKey(userId);
   if (!deepseekKey) {
-    console.error('[radar/run] DEEPSEEK_API_KEY 未配置, 跳过本轮扫描');
+    console.error('[radar/run] DEEPSEEK_API_KEY 未配置 (AIConfig 与 .env 均无), 跳过本轮扫描');
     return null;
   }
 

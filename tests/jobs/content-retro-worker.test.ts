@@ -40,6 +40,13 @@ vi.mock('@/lib/llm/deepseek', () => ({
   DeepSeekTextLLM: class { callStructured = llmCallMock; },
 }));
 
+// resolveDeepSeekApiKey 内部查 AIConfig(+decrypt); 单测已在别处覆盖, 这里只关心
+// worker 是否正确消费其返回值 — 直接代理 env, 保留既有
+// `process.env.DEEPSEEK_API_KEY` 有/无切换 OpenAI/DeepSeek 路径的测试模式。
+vi.mock('@/lib/llm/resolve-key', () => ({
+  resolveDeepSeekApiKey: vi.fn(async () => process.env.DEEPSEEK_API_KEY ?? null),
+}));
+
 import { runRetroPipeline } from '@/jobs/workers/content-retro-worker';
 
 beforeEach(() => {

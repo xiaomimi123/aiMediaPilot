@@ -7,6 +7,7 @@ import { probeDouyinCookie, runDouyinAdapter } from '@/lib/douyin/adapter';
 import { parseReportMd } from '@/lib/douyin/report-parser';
 import { type IVisionLLM, type TokenUsage } from '@/lib/llm/vision';
 import { getDeepSeekTextLLM, getOpenAIVisionLLM } from '@/lib/llm/clients';
+import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
 import { RETRO_GAP, type RetroGapResponse } from '@/lib/llm/prompts';
 import { todayISO } from '@/lib/cockpit/calculations';
 import { bumpCockpitRev } from '@/lib/cockpit/server-store';
@@ -121,7 +122,7 @@ export async function runRetroPipeline(analysisId: string): Promise<void> {
   let retroReport: RetroGapResponse | null = null;
   let llmUsageDelta: TokenUsage | null = null;
   try {
-    const deepseekKey = process.env.DEEPSEEK_API_KEY;
+    const deepseekKey = await resolveDeepSeekApiKey(analysis.userId);
     const llm: IVisionLLM = deepseekKey
       ? getDeepSeekTextLLM(deepseekKey)
       : getOpenAIVisionLLM({

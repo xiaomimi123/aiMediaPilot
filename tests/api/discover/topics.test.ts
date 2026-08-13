@@ -9,6 +9,13 @@ vi.mock('@/lib/user', () => ({
   getOrCreateDefaultUser: vi.fn(async () => ({ id: 'user1' })),
 }));
 
+// resolveDeepSeekApiKey 内部查 AIConfig(+decrypt); 单测已在别处覆盖, 这里只关心
+// route 是否正确消费其返回值 — 直接代理 env, 保留既有 `process.env.DEEPSEEK_API_KEY`
+// 测试模式 (设置/删除 env 即可控制 key 有无), 不需要额外 mock prisma.aIConfig。
+vi.mock('@/lib/llm/resolve-key', () => ({
+  resolveDeepSeekApiKey: vi.fn(async () => process.env.DEEPSEEK_API_KEY ?? null),
+}));
+
 const prismaMock = vi.hoisted(() => ({
   scriptDraft: { findMany: vi.fn() },
 }));

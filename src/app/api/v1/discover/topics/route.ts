@@ -2,6 +2,7 @@ import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { getDeepSeekTextLLM } from '@/lib/llm/clients';
+import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
 import { TOPIC_DISCOVERY } from '@/lib/llm/prompts';
 import { normalizeNiche } from '@/lib/niche';
 
@@ -38,11 +39,12 @@ export async function POST(req: Request) {
       ? body.extraHint.trim().slice(0, 200)
       : undefined;
 
-  const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!apiKey) return fail('DEEPSEEK_API_KEY 未配置', 500);
-
   // 去重: 拉用户最近 30 条脚本的 topic, 喂给 LLM 让它避开
   const user = await getOrCreateDefaultUser();
+
+  const apiKey = await resolveDeepSeekApiKey(user.id);
+  if (!apiKey) return fail('DEEPSEEK_API_KEY 未配置', 500);
+
   const recent = await prisma.scriptDraft.findMany({
     where: { userId: user.id, niche },
     orderBy: { createdAt: 'desc' },

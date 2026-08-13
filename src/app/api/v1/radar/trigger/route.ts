@@ -2,6 +2,7 @@ import { ok, fail } from '@/lib/api';
 import { radarQueue } from '@/jobs/queue';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { getRadarConfig } from '@/lib/radar/config';
+import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
 
 const ADD_TIMEOUT_MS = 4000;
 
@@ -47,7 +48,8 @@ export async function POST() {
   if (!config.enabled || !config.hasKey) {
     return fail('雷达未启用或未配置 Tavily key，请到设置完成配置', 400);
   }
-  if (!process.env.DEEPSEEK_API_KEY) {
+  const deepseekKey = await resolveDeepSeekApiKey(user.id);
+  if (!deepseekKey) {
     return fail('服务端未配置 DEEPSEEK_API_KEY', 503);
   }
 
