@@ -49,7 +49,11 @@ export async function loadWorkspaceFromDb(userId: string) {
     inspirationCards: inspirations.map(({ userId: _u, ...rest }) => ({
       ...rest, convertedContentIds: rest.convertedContentIds as string[],
     })),
-    contents: contents.map(({ userId: _u, scriptDraftId: _s, analysisId: _a, ...rest }) => ({
+    // 六期 T2: scriptDraftId 只读下发 (供抽屉重开懒加载拉回改稿 UI)——不从 contents
+    // 剥掉了；PUT /api/v1/cockpit/workspace 的 saveWorkspaceToDb 仍然不接收这个字段
+    // (data 字段列表里没有它), 服务端始终是唯一写入方。analysisId 暂不需要前端消费,
+    // 继续剥掉。
+    contents: contents.map(({ userId: _u, analysisId: _a, ...rest }) => ({
       ...rest, tags: rest.tags as string[],
       // 三期 IA 演化: platform 字段 — 防御性回退, 兼容列刚上线前写入 / 未过 db:push 默认值的存量行
       platform: rest.platform ?? 'douyin',

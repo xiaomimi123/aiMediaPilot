@@ -160,6 +160,8 @@
 
 **抽屉交互** (内容详情抽屉「脚本」tab, `src/components/cockpit/content-drawer.tsx`): 生成前可折叠「素材(可选)」文本域 + 时长下拉(30/45/60s); 生成后素材简报折叠区(要点+来源链接) + 逐字稿分块渲染(块头角色中文标签+秒段, 块内「换一版」+ 一句话指令输入) + 页顶「整体指令」+ hook 块 3 候选切换(沿用既有 picked 机制)。
 
+**抽屉懒加载拉回改稿 UI (六期)**: 五期的分块改稿面板只存在于抽屉自己的前端 state, 重开抽屉(或刷新页面后重开)后消失, 只剩六个文本框(见上文 spec §6(c) 限制)。六期起: 打开抽屉挂载时若本地无生成态且 `item.scriptDraftId`(`CockpitContent` 服务端字段, 由上面 `cockpitContentId` 回写关联, `server-store.ts` 只读下发给前端, `PUT /api/v1/cockpit/workspace` 仍不接收) 非空, 懒加载 `GET /api/v1/scripts/{id}` 拉回 `output`, 用窄化解析纯函数 `parseDraftOutput` (`src/lib/cockpit/draft-restore.ts`) 恢复 sections/research/hooks/时长; 解析不出合法 `sections`(旧 `retentionBeats` 形态、非 douyin 输出、请求失败等)一律静默保持现状, 不阻断六个文本框编辑。
+
 **设置「风格档案」卡** (`src/components/cockpit/settings-cards/style-profile-card.tsx`): 上半编辑 `StyleProfile.description`(口吻/句式/口头禅/忌讳); 下半只读样本列表(平台 badge + 预览 + 创建时间), 单条可删, 不提供手动新增入口(样本只经由脚本定稿沉淀, 避免两条写入路径)。
 
 **数据模型** (2 张新表, 零迁移): `StyleProfile`(userId 单行) / `StyleSample`(定稿沉淀, `platform` + `content` + `sourceScriptDraftId` 溯源, `@@index([userId, platform, createdAt])`); `ScriptDraft.output` Json 内新增 `research`/`script.sections[]` 两键, 旧稿没有这两键时抽屉按旧结构原样渲染。
@@ -325,7 +327,7 @@ API: `POST/GET /api/v1/topics`、`PATCH /api/v1/topics/[id]`、`POST/GET /api/v1
 
 ### 测试覆盖
 
-- 877 tests 大多是 API 单测 + 纯函数 + mock prisma (含 Cockpit `model/workflow/schedule/calculations`/迁移映射的原版测试; 四期新增雷达搜索层/热度合成/阅读 prompt/API 路由测试; 五期新增研究层/风格层/两阶段生成/两级改稿/风格档案 API 的 mock 测试)
+- 895 tests 大多是 API 单测 + 纯函数 + mock prisma (含 Cockpit `model/workflow/schedule/calculations`/迁移映射的原版测试; 四期新增雷达搜索层/热度合成/阅读 prompt/API 路由测试; 五期新增研究层/风格层/两阶段生成/两级改稿/风格档案 API 的 mock 测试; 六期新增 `draft-restore.ts` 窄化解析纯函数测试)
 - UI 一律走手动 E2E (是有意识的取舍); 五期收尾用真实 DeepSeek+Tavily key 额外跑了一轮全链路真实 E2E (非 mock), 见 `.superpowers/sdd/2026-08-13-script-quality/task-8-report.md`
 - Worker 集成测试缺 (auto-sync-worker, content-analyze-worker, radar-worker 的每日 repeat 调度层)
 
@@ -361,7 +363,7 @@ npm run worker:dev   # BullMQ workers (analyze / retro / auto-sync / radar 四�
 
 ```bash
 npm run typecheck    # tsc --noEmit
-npm test             # vitest, 877 tests across 88 files (含 Cockpit 纯逻辑层原版测试)
+npm test             # vitest, 895 tests across 89 files (含 Cockpit 纯逻辑层原版测试)
 npm test -- <filter> # 跑某个 file
 ```
 
@@ -419,12 +421,12 @@ src/
 │   │   ├── settings-cards/         # ai-provider-card, baseline-card (二期 T5) + radar-config-card (四期 T6) + style-profile-card (五期新增)
 │   │   ├── sidebar.tsx             # 全站共用侧栏 (cockpit 模式 + external 模式), 二期起「平台」外链组已移除, 四期新增「热点雷达」项
 │   │   ├── external-shell.tsx      # 站外页面外壳 (侧栏 + mobile-nav + 主题同步), 仅剩 /accounts /agent/discover /content/* 使用
-│   │   ├── content-drawer.tsx      # 内容详情抽屉, 二期 (T2) 脚本 tab 加入就地 AI 生成 + 标题实时建议; 五期新增素材框/时长/简报折叠区/分块渲染/换一版/整体指令
+│   │   ├── content-drawer.tsx      # 内容详情抽屉, 二期 (T2) 脚本 tab 加入就地 AI 生成 + 标题实时建议; 五期新增素材框/时长/简报折叠区/分块渲染/换一版/整体指令; 六期新增挂载时懒加载拉回改稿 UI (parseDraftOutput)
 │   │   ├── onboarding.tsx / shared.tsx
 │   ├── content/                   # script-form, script-result (深度写稿入口用), publish-checklist, prediction-card, 分发登记弹窗 etc
 │   └── layout/                    # main-layout.tsx (按路径决定是否套 ExternalShell)
 ├── lib/
-│   ├── cockpit/                   # model/workflow/schedule/calculations (纯函数, 零改动移植) + storage.ts(API 适配器) + migrations.ts(migrateWorkspace) + migrate-mapping.ts(存量数据映射) + script-mapping.ts(二期 T1: 生成结果→脚本骨架映射纯函数, 五期扩展 sections→body/hook 映射) + extras.ts/extras-types.ts(复盘/大目标额外数据, 含二期新增 account/settings) + view-routing.ts(`NavView` 定义, 四期新增 `radar`)
+│   ├── cockpit/                   # model/workflow/schedule/calculations (纯函数, 零改动移植) + storage.ts(API 适配器) + migrations.ts(migrateWorkspace) + migrate-mapping.ts(存量数据映射) + script-mapping.ts(二期 T1: 生成结果→脚本骨架映射纯函数, 五期扩展 sections→body/hook 映射) + draft-restore.ts(六期: `ScriptDraft.output` → 抽屉改稿 UI 恢复字段的窄化解析纯函数) + extras.ts/extras-types.ts(复盘/大目标额外数据, 含二期新增 account/settings) + view-routing.ts(`NavView` 定义, 四期新增 `radar`)
 │   ├── radar/                     # 四期新增: search.ts(SearchProvider 抽象 + Tavily 实现) / config.ts(RadarConfig 读写+加解密) / scoring.ts(titleFingerprint/clusterByTopic/composeHeat/applyTimeDecay 纯函数) / run.ts(runRadarScan 管线主体)
 │   ├── script/                    # 五期新增: research.ts(runResearch 两阶段生成的阶段一, 雷达种子+Tavily+素材框合并→DeepSeek 提炼简报) / style.ts(getStyleContext 风格上下文切换 + depositStyleSample 定稿沉淀)
 │   ├── llm/                       # DeepSeekTextLLM + OpenAIVisionLLM + prompts/ (四期新增 radar-read.ts; 五期新增 research-brief.ts / script-write-douyin.ts / script-refine.ts)

@@ -125,6 +125,10 @@ export interface ContentItem {
   editingNotes: string;
   metrics: MetricsSnapshot;
   review: Review;
+  // 六期: 服务端字段, 由 /api/v1/scripts/generate (douyin) best-effort 回写关联,
+  // 供抽屉重开时懒加载拉回改稿 UI (T2)。只读下发——PUT /api/v1/cockpit/workspace
+  // 不接收/不写这个字段 (见 server-store.ts saveWorkspaceToDb 的 data 字段列表)。
+  scriptDraftId?: string | null;
 }
 
 export interface InspirationCard {

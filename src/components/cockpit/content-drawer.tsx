@@ -16,6 +16,7 @@ import { todayISO } from "@/lib/cockpit/calculations";
 import { stageIndex } from "@/lib/cockpit/workflow";
 import { mapGeneratedToScript, sectionsToScriptFields, type DouyinSection } from "@/lib/cockpit/script-mapping";
 import { runGenerateScript } from "@/lib/cockpit/generate-flow";
+import { parseDraftOutput } from "@/lib/cockpit/draft-restore";
 import { CONTENT_PLATFORMS, CONTENT_PLATFORM_LABEL, isContentPlatform, type ContentPlatform } from "@/lib/platform";
 import { Badge, Icon, StarRating } from "./shared";
 
@@ -245,6 +246,49 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
     lastCheckedTitleRef.current = "";
     resetScriptGenerationState();
   }, [item.id, item.platform]);
+
+  // T2 六期: 抽屉懒加载拉回改稿 UI —— item.script (六字段骨架) 关抽屉前已经持久化
+  // 到 DB, 重开即可见; 但 sections/research/hooks 等只是抽屉自己的前端派生 state
+  // (见上面 T7 注释), 之前每次挂载新 item / 切换 item 都会被上面那个 effect 的
+  // resetScriptGenerationState() 清空, 抽屉重开后分块改稿面板 (ScriptSectionsPanel)
+  // 消失、只剩六个文本框, 五期 spec §6(c) 描述的限制。
+  //
+  // 触发条件: 本地无生成态 (scriptDraftId state 仍是 null——上面 reset 效果刚清空,
+  // 或本次是全新挂载) 且 item.scriptDraftId (T1 回写的服务端字段, server-store.ts
+  // 只读下发) 非空。effect 依赖里带上本地 scriptDraftId: reset 效果与本 effect
+  // 在同一次 item.id 变化的 effect flush 里按声明顺序各自触发, 若 reset 效果确实
+  // 把上一个 item 残留的非空 scriptDraftId 清成 null, 这次 flush 里读到的仍是
+  // React 还没应用的旧值——但那次 setState 会触发一次新的渲染, 本 effect 因为
+  // scriptDraftId 出现在依赖数组里会跟着重新求值一次, 那时读到的就是清空后的
+  // null, 不会漏拉取。
+  //
+  // 拉回失败/该草稿不是这篇内容当前平台的形状 (parseDraftOutput 解析不出合法
+  // sections, 例如旧 retentionBeats 形态或非 douyin 输出) 一律静默保持现状——
+  // 不 notify、不阻断骨架文本框编辑 (没有额外的 loading 态去 disable 任何输入)。
+  useEffect(() => {
+    if (scriptDraftId || !item.scriptDraftId) return;
+    const requestedItemId = item.id;
+    const draftId = item.scriptDraftId;
+    (async () => {
+      try {
+        const res = await fetch(`/api/v1/scripts/${draftId}`);
+        const json = await res.json();
+        if (!mountedRef.current || currentItemIdRef.current !== requestedItemId) return;
+        if (!json.success) return;
+        const parsed = parseDraftOutput(json.data?.output);
+        if (!parsed || !parsed.sections) return;
+        setScriptDraftId(draftId);
+        setSections(parsed.sections);
+        if (parsed.research) setResearch(parsed.research);
+        if (parsed.hooks) setHooks(parsed.hooks);
+        if (parsed.durationSec !== undefined) setDurationSec(parsed.durationSec);
+        const pickedHookIdx = (json.data?.picked as { hookIdx?: unknown } | undefined)?.hookIdx;
+        if (typeof pickedHookIdx === "number") setPickedHookIdx(pickedHookIdx);
+      } catch {
+        // 网络失败等: 静默保持现状, 不打扰用户
+      }
+    })();
+  }, [item.id, item.scriptDraftId, scriptDraftId]);
 
   // T7: 上一个 item / 上一次生成留下的 sections/research/scriptDraftId 等派生
   // state 全部清空——切换 item 或手动改 scriptPlatform 下拉都要调用, 否则会把

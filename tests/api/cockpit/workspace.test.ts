@@ -144,6 +144,21 @@ describe('GET /api/v1/cockpit/workspace', () => {
     expect(json.data.state.contents[0].platform).toBe('douyin');
   });
 
+  it('六期 T2: scriptDraftId 只读下发 — contents 组装带出 scriptDraftId (供抽屉懒加载拉回改稿 UI)', async () => {
+    prismaMock.cockpitContent.findMany.mockResolvedValue([{
+      id: 'content1', userId: 'user1', title: 'T', idea: 'I', contentType: 'ct', tier: 'A',
+      platform: 'douyin', stage: 'script', publicationStatus: 'draft', priority: 'normal',
+      tags: [], publishedAt: '', xhsLink: '', coverCopy: '', publishCopy: '',
+      topic: {}, script: {}, recordingNotes: '', editingNotes: '', metrics: {}, review: {},
+      scriptDraftId: 'draft1', analysisId: null, createdAt: 'c', updatedAt: 'u',
+    }]);
+    const res = await GET();
+    const json = await res.json();
+    expect(json.data.state.contents[0].scriptDraftId).toBe('draft1');
+    // analysisId 是服务端字段中前端暂不消费的那个, 继续剥掉
+    expect(json.data.state.contents[0]).not.toHaveProperty('analysisId');
+  });
+
   it('无绑定 PlatformAccount → extras.account 为 null', async () => {
     prismaMock.platformAccount.findFirst.mockResolvedValue(null);
     const res = await GET();
