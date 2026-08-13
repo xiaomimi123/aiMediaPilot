@@ -913,3 +913,16 @@ model StyleSample {
 
   @@index([userId, platform, createdAt])
 }
+
+// ============ 人设定位驱动选题 (八期, spec: docs/superpowers/specs/2026-08-14-persona-driven-topics-design.md §1) ============
+// PersonaProfile 是 userId 单行配置，学 StyleProfile/RadarConfig 先例：不建 User 反向关系。
+
+model PersonaProfile {
+  userId      String   @id
+  audience    String   @default("") // 目标受众
+  targetFans  String   @default("") // 想吸引的粉丝画像
+  pillars     Json     @default("[]") // PersonaPillar[]
+  angle       String   @default("") // 差异化角度
+  avoid       String   @default("") // 忌讳
+  updatedAt   DateTime @updatedAt
+}

@@ -47,3 +47,6 @@ export * from './image-plan';
 // 通用: expert persona / JSON strictness
 export * from './expert-persona';
 export { JSON_STRICTNESS } from './base';
+
+// 人设定位驱动选题 (八期): 人设档案 → 注入段
+export * from './persona-section';
