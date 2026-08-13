@@ -12,6 +12,10 @@ import { IMAGE_PLAN, ImagePlanSchema, type ImagePlan } from '@/lib/llm/prompts/i
  * 幂等: 已有 output.imagePlan 且请求未带 ?force=1 → 直接返回既有计划, 不调用 LLM。
  * 没有计划 (或带 force=1) → 调 LLM 生成, 严格校验 images 张数 = 1 (封面) + shotIdeas
  * 条数且 ≤10, 不符则 502 提示重试; 通过才落盘 output.imagePlan (spread 保留其余键)。
+ *
+ * idx 完整性校验: LLM 输出的每个元素自带 idx 字段, 但数组顺序不保证与 idx 一致
+ * (消费侧 T3 按 idx 而非数组下标取值)。落盘前额外校验 idx 字段集合必须恰为
+ * {0..张数-1} (无缺失/无重复), 否则视为同一类"数量不对"问题, 502 同一重试文案。
  */
 
 // 防御性读取 ScriptDraft.output — 只关心出图计划所需的四个字段, 其余键原样透传。
@@ -61,6 +65,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
     const expectedCount = 1 + shotIdeas.length;
     if (plan.images.length !== expectedCount || plan.images.length > 10) {
+      return fail('AI 生成的配图数量不对, 请重试', 502);
+    }
+
+    const idxSet = new Set(plan.images.map((img) => img.idx));
+    const idxSetValid =
+      idxSet.size === plan.images.length &&
+      Array.from({ length: plan.images.length }, (_, i) => i).every((i) => idxSet.has(i));
+    if (!idxSetValid) {
       return fail('AI 生成的配图数量不对, 请重试', 502);
     }
 

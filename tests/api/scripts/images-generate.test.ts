@@ -154,6 +154,29 @@ describe('POST /api/v1/scripts/[id]/images — 成功', () => {
     expect(call.data.output).toMatchObject({ coverText: 'x', tags: ['#a'] });
   });
 
+  it('imagePlan.images 乱序 (数组顺序与 idx 字段不一致) → 按 idx 字段匹配取对 prompt', async () => {
+    const shuffledPlan = {
+      style: validPlan.style,
+      images: [
+        { idx: 2, prompt: validPlan.images[2].prompt },
+        { idx: 0, prompt: validPlan.images[0].prompt },
+        { idx: 1, prompt: validPlan.images[1].prompt },
+      ],
+    };
+    prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(
+      baseXhsDraft({ output: { coverText: 'x', imagePlan: shuffledPlan } }),
+    );
+    const res = await POST(reqPOST({ idx: 0 }), ctx);
+    expect(res.status).toBe(200);
+    expect(generateMock).toHaveBeenCalledWith({
+      prompt: validPlan.images[0].prompt,
+      size: '1024x1536',
+      quality: 'medium',
+    });
+    const call = prismaMock.scriptDraft.update.mock.calls[0][0];
+    expect(call.data.output.images[0].prompt).toBe(validPlan.images[0].prompt);
+  });
+
   it('覆盖写: 同 idx 再次生成覆盖旧记录', async () => {
     prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(
       baseXhsDraft({
@@ -222,9 +245,11 @@ describe('POST /api/v1/scripts/[id]/images — 校验', () => {
     expect(generateMock).not.toHaveBeenCalled();
   });
 
-  it('idx 越界 (>= plan.images.length) → 400, 不调 provider', async () => {
+  it('idx 越界 (计划中没有该 idx) → 400 文案「出图计划中没有第 <idx+1> 张」, 不调 provider', async () => {
     const res = await POST(reqPOST({ idx: 99 }), ctx);
     expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.message).toBe('出图计划中没有第 100 张');
     expect(generateMock).not.toHaveBeenCalled();
   });
 
@@ -247,6 +272,27 @@ describe('POST /api/v1/scripts/[id]/images — provider 失败', () => {
     const json = await res.json();
     expect(json.success).toBe(false);
     expect(json.message).toContain('第 2 张生成失败');
+    expect(prismaMock.scriptDraft.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/v1/scripts/[id]/images — 写盘失败', () => {
+  it('writeFile reject → 500 文案「图片写入失败, 请重试」, 不写库', async () => {
+    writeFileMock.mockRejectedValueOnce(new Error('ENOSPC: no space left on device'));
+    const res = await POST(reqPOST({ idx: 0 }), ctx);
+    expect(res.status).toBe(500);
+    const json = await res.json();
+    expect(json.success).toBe(false);
+    expect(json.message).toBe('图片写入失败, 请重试');
+    expect(prismaMock.scriptDraft.update).not.toHaveBeenCalled();
+  });
+
+  it('mkdir reject → 500 文案「图片写入失败, 请重试」, 不写库', async () => {
+    mkdirMock.mockRejectedValueOnce(new Error('EACCES: permission denied'));
+    const res = await POST(reqPOST({ idx: 0 }), ctx);
+    expect(res.status).toBe(500);
+    const json = await res.json();
+    expect(json.message).toBe('图片写入失败, 请重试');
     expect(prismaMock.scriptDraft.update).not.toHaveBeenCalled();
   });
 });

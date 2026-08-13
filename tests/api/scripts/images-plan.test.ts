@@ -216,6 +216,46 @@ describe('POST /api/v1/scripts/[id]/images/plan — 校验', () => {
     expect(prismaMock.scriptDraft.update).not.toHaveBeenCalled();
   });
 
+  it('LLM 返回 images 数量对但 idx 字段有缺失 (非 {0..N-1}) → 502 重试文案, 不写库', async () => {
+    llmMock.callStructured.mockResolvedValueOnce({
+      result: {
+        style: validPlan.style,
+        images: [
+          { idx: 0, prompt: validPlan.images[0].prompt },
+          { idx: 1, prompt: validPlan.images[1].prompt },
+          { idx: 5, prompt: validPlan.images[2].prompt }, // 应为 2, 缺失导致 idx 集合不是 {0,1,2}
+        ],
+      },
+      usage: { model: 'deepseek', promptTokens: 10, completionTokens: 10, estCostUSD: 0 },
+    });
+    const res = await POST(reqPOST(), ctx);
+    expect(res.status).toBe(502);
+    const json = await res.json();
+    expect(json.success).toBe(false);
+    expect(json.message).toMatch(/重试/);
+    expect(prismaMock.scriptDraft.update).not.toHaveBeenCalled();
+  });
+
+  it('LLM 返回 images 数量对但 idx 字段重复 → 502 重试文案, 不写库', async () => {
+    llmMock.callStructured.mockResolvedValueOnce({
+      result: {
+        style: validPlan.style,
+        images: [
+          { idx: 0, prompt: validPlan.images[0].prompt },
+          { idx: 0, prompt: validPlan.images[1].prompt }, // 重复 idx=0, 缺 idx=2
+          { idx: 2, prompt: validPlan.images[2].prompt },
+        ],
+      },
+      usage: { model: 'deepseek', promptTokens: 10, completionTokens: 10, estCostUSD: 0 },
+    });
+    const res = await POST(reqPOST(), ctx);
+    expect(res.status).toBe(502);
+    const json = await res.json();
+    expect(json.success).toBe(false);
+    expect(json.message).toMatch(/重试/);
+    expect(prismaMock.scriptDraft.update).not.toHaveBeenCalled();
+  });
+
   it('LLM 抛错 → 500, 不写库', async () => {
     llmMock.callStructured.mockRejectedValueOnce(new Error('LLM down'));
     const res = await POST(reqPOST(), ctx);

@@ -62,12 +62,15 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (!parsedOutput.success) return fail('该脚本还没有出图计划, 请先生成', 400);
 
   const { imagePlan, images: existingImages } = parsedOutput.data;
-  if (idx >= imagePlan.images.length) return fail('idx 超出出图计划范围', 400);
+  // 按 idx 字段匹配, 不用数组下标 — imagePlan.images 每个元素自带 idx, 但 LLM
+  // 输出顺序不保证与 idx 一致, 数组下标取值在错位时会静默拿到别张图的 prompt。
+  const planImage = imagePlan.images.find((img) => img.idx === idx);
+  if (!planImage) return fail(`出图计划中没有第 ${idx + 1} 张`, 400);
 
   const apiKey = await resolveImageApiKey(user.id);
   if (!apiKey) return fail('OpenAI 生图 key 未配置', 503);
 
-  const prompt = imagePlan.images[idx].prompt;
+  const prompt = planImage.prompt;
   const provider = getImageProvider(apiKey);
 
   let buf: Buffer;
@@ -80,8 +83,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   }
 
   const dir = path.join(process.cwd(), 'public', 'generated', id);
-  await mkdir(dir, { recursive: true });
-  await writeFile(path.join(dir, `${idx}.png`), buf);
+  try {
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, `${idx}.png`), buf);
+  } catch (e) {
+    console.error('[POST scripts/images] 写盘失败', e);
+    return fail('图片写入失败, 请重试', 500);
+  }
 
   const relPath = `/generated/${id}/${idx}.png`;
   await prisma.scriptDraft.update({
