@@ -32,6 +32,7 @@ model User {
   competitors                Competitor[]
   contentAnalyses            ContentAnalysis[]
   scriptDrafts               ScriptDraft[]
+  styleSamples               StyleSample[]
   inspirationVideos          InspirationVideo[]
   inspirationInsights        InspirationInsight[]
   topicIdeas                 TopicIdea[]
@@ -889,4 +890,26 @@ model RadarConfig {
   dailyLimit         Int     @default(20)
   enabled            Boolean @default(false)
   user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ============ 风格档案 (五期「创作质量深化」Task 1, spec: docs/superpowers/specs/2026-08-13-script-quality-design.md §2) ============
+// StyleProfile 是 userId 单行配置，学 RadarConfig 先例：不建 User 反向关系。
+// StyleSample 是「定稿即样本」积累路线的沉淀记录，学 ScriptDraft 先例：建 User 关系。
+
+model StyleProfile {
+  userId      String   @id
+  description String   @default("") // 口吻/句式/口头禅/忌讳
+  updatedAt   DateTime @updatedAt
+}
+
+model StyleSample {
+  id                  String   @id @default(cuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id])
+  platform            String // 本期只有 'douyin'
+  content             String // 定稿逐字稿纯文本
+  sourceScriptDraftId String? // 溯源
+  createdAt           DateTime @default(now())
+
+  @@index([userId, platform, createdAt])
 }
