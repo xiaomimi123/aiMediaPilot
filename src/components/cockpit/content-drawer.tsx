@@ -86,6 +86,32 @@ function parseHooks(raw: unknown): HookCandidate[] {
   return Array.isArray(raw) ? raw.filter(isHookCandidate) : [];
 }
 
+interface XhsShotIdea { idx: number; description: string }
+
+function isXhsShotIdea(value: unknown): value is XhsShotIdea {
+  return isPlainRecord(value) && typeof value.idx === "number" && typeof value.description === "string" && value.description.length > 0;
+}
+
+function parseXhsShotIdeas(raw: unknown): XhsShotIdea[] {
+  return Array.isArray(raw) ? raw.filter(isXhsShotIdea).sort((a, b) => a.idx - b.idx) : [];
+}
+
+function parseXhsTags(raw: unknown): string[] {
+  return Array.isArray(raw) ? raw.filter((v): v is string => typeof v === "string" && v.length > 0) : [];
+}
+
+/**
+ * 素材简报折叠区 —— douyin 分块面板与 T6 六期小红书面板共用同一份渲染 (「复用
+ * 五期组件」), 从 ScriptSectionsPanel 内联的同款 JSX 抽出为独立子组件, 避免两处
+ * 各写一份、后续改一处漏改一处。
+ */
+function ResearchBriefDetails({ research, researchDegraded }: { research: ResearchBriefView | null; researchDegraded: boolean }) {
+  if (research) {
+    return <details className="script-research-details"><summary>素材简报（{research.points.length}）</summary><ul className="script-research-list">{research.points.map((point, idx) => <li key={idx}><p className="script-research-fact">{point.fact}</p><p className="script-research-meta"><span>用法：{point.usage}</span><span>来源：{/^https?:\/\//.test(point.source) ? <a href={point.source} target="_blank" rel="noreferrer">{point.source}</a> : point.source}</span></p></li>)}</ul></details>;
+  }
+  return researchDegraded ? <p className="field-hint">素材检索这次降级了，稿子按主题直接生成，没有引用具体素材。</p> : null;
+}
+
 /**
  * 逐字稿分块面板 — 素材简报折叠区 + 整体指令 + 逐块渲染 (含 hook 块下方 3 候选
  * 切换, 复用 T3 已有的 /api/v1/scripts/{id}/picked 接口) + 每块「换一版」一句话
@@ -122,9 +148,7 @@ function ScriptSectionsPanel({ sections, research, researchDegraded, hooks, pick
   // "改写中…" : ... 等) 仍按各自 state 单独判断, 不受影响。
   const busy = anyRefining || hookPending || generating;
   return <div className="script-sections-panel">
-    {research
-      ? <details className="script-research-details"><summary>素材简报（{research.points.length}）</summary><ul className="script-research-list">{research.points.map((point, idx) => <li key={idx}><p className="script-research-fact">{point.fact}</p><p className="script-research-meta"><span>用法：{point.usage}</span><span>来源：{/^https?:\/\//.test(point.source) ? <a href={point.source} target="_blank" rel="noreferrer">{point.source}</a> : point.source}</span></p></li>)}</ul></details>
-      : researchDegraded ? <p className="field-hint">素材检索这次降级了，稿子按主题直接生成，没有引用具体素材。</p> : null}
+    <ResearchBriefDetails research={research} researchDegraded={researchDegraded} />
     <div className="script-all-instruction-row">
       <input value={allInstruction} onChange={(e) => onAllInstructionChange(e.target.value)} maxLength={200} placeholder="整体指令，例如：语气更轻松一些" disabled={busy} aria-label="整体改写指令" />
       <button type="button" className="secondary-button small" disabled={busy || !allInstruction.trim()} onClick={onRefineAll}>{refiningAll ? "改写中…" : "整体指令"}</button>
@@ -138,6 +162,47 @@ function ScriptSectionsPanel({ sections, research, researchDegraded, hooks, pick
       {section.role === "hook" && hooks.length > 0 ? <div className="script-hook-picker">{hooks.map((hook, hookIdx) => <button key={hookIdx} type="button" className={hookIdx === pickedHookIdx ? "script-hook-option active" : "script-hook-option"} disabled={busy} aria-pressed={hookIdx === pickedHookIdx} onClick={() => onPickHook(hookIdx)}>候选 {hookIdx + 1}：{hook.text}</button>)}</div> : null}
       {openSectionIdx === idx ? <div className="script-instruction-row"><input value={sectionInstruction} onChange={(e) => onSectionInstructionChange(e.target.value)} maxLength={200} placeholder="一句话指令，例如：这段再犀利一点" disabled={busy} aria-label={`第 ${idx + 1} 段改写指令`} /><button type="button" className="secondary-button small" disabled={busy || !sectionInstruction.trim()} onClick={() => onRefineSection(idx)}>{refiningSectionIdx === idx ? "改写中…" : "确认"}</button></div> : null}
     </div>)}
+  </div>;
+}
+
+/**
+ * T6 六期: 小红书两阶段生成后的展示面板 —— 素材简报折叠区 (复用上面
+ * `ResearchBriefDetails`, 与 douyin 的 `ScriptSectionsPanel` 同款) + 页顶整稿
+ * 指令框 (只有 scope:'all', 小红书不支持分块改稿, 见 spec §2) + intro/body/
+ * tags/shotIdeas 只读展示——六字段骨架文本框仍是唯一可编辑的落点 (照
+ * douyin sections 面板的先例, 分块/整稿面板本身只读, 编辑走下方骨架文本框或
+ * 指令框驱动的 refine 请求)。
+ */
+function XhsScriptPanel({ research, researchDegraded, intro, body, tags, shotIdeas, instruction, onInstructionChange, onRefineAll, refining, generating }: {
+  research: ResearchBriefView | null;
+  researchDegraded: boolean;
+  intro: string;
+  body: string;
+  tags: string[];
+  shotIdeas: XhsShotIdea[];
+  instruction: string;
+  onInstructionChange: (value: string) => void;
+  onRefineAll: () => void;
+  refining: boolean;
+  generating: boolean;
+}) {
+  const busy = refining || generating;
+  return <div className="script-sections-panel">
+    <ResearchBriefDetails research={research} researchDegraded={researchDegraded} />
+    <div className="script-all-instruction-row">
+      <input value={instruction} onChange={(e) => onInstructionChange(e.target.value)} maxLength={200} placeholder="整稿指令，例如：语气更轻松一些" disabled={busy} aria-label="小红书整稿改写指令" />
+      <button type="button" className="secondary-button small" disabled={busy || !instruction.trim()} onClick={onRefineAll}>{refining ? "改写中…" : "整稿指令"}</button>
+    </div>
+    <div className="script-section-card">
+      <div className="script-section-head"><strong>开头引导</strong></div>
+      <p className="script-section-text">{intro}</p>
+    </div>
+    <div className="script-section-card">
+      <div className="script-section-head"><strong>正文</strong></div>
+      <p className="script-section-text">{body}</p>
+    </div>
+    {tags.length > 0 ? <div className="script-section-card"><div className="script-section-head"><strong>标签</strong></div><p className="script-section-text">{tags.map((tag) => `#${tag}`).join(" ")}</p></div> : null}
+    {shotIdeas.length > 0 ? <div className="script-section-card"><div className="script-section-head"><strong>配图建议</strong></div><ul className="script-research-list">{shotIdeas.map((idea) => <li key={idea.idx}><p className="script-research-fact">{idea.idx}. {idea.description}</p></li>)}</ul></div> : null}
   </div>;
 }
 
@@ -212,10 +277,22 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
   const [openSectionIdx, setOpenSectionIdx] = useState<number | null>(null);
   const [sectionInstruction, setSectionInstruction] = useState("");
   const [refiningSectionIdx, setRefiningSectionIdx] = useState<number | null>(null);
-  // T9 终审: 「用 AI 写脚本」按钮要跟 ScriptSectionsPanel 内部的 hook 候选切换/
-  // 换一版/整体指令互斥——生成会整体替换 scriptDraftId/sections, 这三类动作在
-  // 途时点生成、或生成在途时点这三类动作, 都会打到同一草稿的并发写操作上。
-  const scriptActionPending = refiningAll || refiningSectionIdx !== null || pickHookPending;
+  // ---- T6 六期: xiaohongshu 两阶段生成的派生 state (与上面 douyin 专属的
+  // sections/hooks 并列, 同一时刻只会有一组非空——scriptDraftId 是共享的单一
+  // 判据)。intro/body 为 null 表示尚未生成/尚未恢复, XhsScriptPanel 只在两者
+  // 都非 null 时渲染 (对应 draft-restore.ts parseDraftOutput 的 xhs 形态判据:
+  // intro/body 都是非空字符串才算合法)。----
+  const [xhsIntro, setXhsIntro] = useState<string | null>(null);
+  const [xhsBody, setXhsBody] = useState<string | null>(null);
+  const [xhsTags, setXhsTags] = useState<string[]>([]);
+  const [xhsShotIdeas, setXhsShotIdeas] = useState<XhsShotIdea[]>([]);
+  const [xhsInstruction, setXhsInstruction] = useState("");
+  const [xhsRefining, setXhsRefining] = useState(false);
+  // T9 终审 + T6 六期扩展: 「用 AI 写脚本」按钮要跟 ScriptSectionsPanel 内部的
+  // hook 候选切换/换一版/整体指令、以及 XhsScriptPanel 的整稿指令互斥——生成
+  // 会整体替换 scriptDraftId/sections/intro/body, 这些动作在途时点生成、或
+  // 生成在途时点这些动作, 都会打到同一草稿的并发写操作上。
+  const scriptActionPending = refiningAll || refiningSectionIdx !== null || pickHookPending || xhsRefining;
   const mountedRef = useRef(true);
   const currentItemIdRef = useRef(item.id);
   currentItemIdRef.current = item.id;
@@ -270,9 +347,12 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
   // 触发一次新的渲染, 本 effect 因为 scriptDraftId 出现在依赖数组里会跟着重新
   // 求值一次, 那时读到的就是清空后的 null, 不会漏拉取。
   //
-  // 拉回失败/该草稿不是这篇内容当前平台的形状 (parseDraftOutput 解析不出合法
-  // sections, 例如旧 retentionBeats 形态或非 douyin 输出) 一律静默保持现状——
-  // 不 notify、不阻断骨架文本框编辑 (没有额外的 loading 态去 disable 任何输入)。
+  // 拉回失败/该草稿解析不出任何一种已知形状 (parseDraftOutput 既找不到合法
+  // sections 也找不到合法 intro+body, 例如旧 retentionBeats 形态) 一律静默保持
+  // 现状——不 notify、不阻断骨架文本框编辑 (没有额外的 loading 态去 disable
+  // 任何输入)。T6 六期: parseDraftOutput 现在能解析出两种互斥形状——douyin
+  // (`sections` 非空) 或 xiaohongshu (`intro`+`body` 都非空), 按 `parsed.sections`
+  // 是否存在分流到对应的恢复分支, 两条分支都会写 scriptDraftId 触发面板渲染。
   const effectiveScriptDraftId = scriptDraftIdOverride ?? item.scriptDraftId ?? null;
   useEffect(() => {
     if (scriptDraftId || !effectiveScriptDraftId) return;
@@ -285,14 +365,23 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
         if (!mountedRef.current || currentItemIdRef.current !== requestedItemId) return;
         if (!json.success) return;
         const parsed = parseDraftOutput(json.data?.output);
-        if (!parsed || !parsed.sections) return;
-        setScriptDraftId(draftId);
-        setSections(parsed.sections);
-        if (parsed.research) setResearch(parsed.research);
-        if (parsed.hooks) setHooks(parsed.hooks);
-        if (parsed.durationSec !== undefined) setDurationSec(parsed.durationSec);
+        if (!parsed) return;
         const pickedHookIdx = (json.data?.picked as { hookIdx?: unknown } | undefined)?.hookIdx;
-        if (typeof pickedHookIdx === "number") setPickedHookIdx(pickedHookIdx);
+        if (parsed.sections) {
+          setScriptDraftId(draftId);
+          setSections(parsed.sections);
+          if (parsed.research) setResearch(parsed.research);
+          if (parsed.hooks) setHooks(parsed.hooks);
+          if (parsed.durationSec !== undefined) setDurationSec(parsed.durationSec);
+          if (typeof pickedHookIdx === "number") setPickedHookIdx(pickedHookIdx);
+        } else if (parsed.intro && parsed.body) {
+          setScriptDraftId(draftId);
+          setXhsIntro(parsed.intro);
+          setXhsBody(parsed.body);
+          if (parsed.research) setResearch(parsed.research);
+          if (parsed.tags) setXhsTags(parsed.tags);
+          if (parsed.shotIdeas) setXhsShotIdeas(parsed.shotIdeas);
+        }
       } catch {
         // 网络失败等: 静默保持现状, 不打扰用户
       }
@@ -314,15 +403,21 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
     setAllInstruction("");
     setOpenSectionIdx(null);
     setSectionInstruction("");
+    setXhsIntro(null);
+    setXhsBody(null);
+    setXhsTags([]);
+    setXhsShotIdeas([]);
+    setXhsInstruction("");
   }
 
   async function handleGenerateScript() {
-    // T9 终审: 生成本身也要跟 hook 候选切换/换一版/整体指令三组动作互斥——
-    // 生成会整体替换 scriptDraftId/sections, 若在改稿/选 hook 请求在途时打断,
-    // 迟到的响应可能覆盖掉新草稿, 或改稿请求会打到已经不存在的旧草稿上。
-    if (generating || refiningAll || refiningSectionIdx !== null || pickHookPending) return;
+    // T9 终审 + T6 六期扩展: 生成本身也要跟 hook 候选切换/换一版/整体指令/
+    // xhs 整稿指令四组动作互斥——生成会整体替换 scriptDraftId/sections/
+    // intro/body, 若在改稿/选 hook 请求在途时打断, 迟到的响应可能覆盖掉新
+    // 草稿, 或改稿请求会打到已经不存在的旧草稿上。
+    if (generating || refiningAll || refiningSectionIdx !== null || pickHookPending || xhsRefining) return;
     await runGenerateScript(
-      { itemId: item.id, title: item.title, platform: scriptPlatform, materials: scriptPlatform === "douyin" ? (materials.trim() || undefined) : undefined, durationSec: scriptPlatform === "douyin" ? durationSec : undefined, cockpitContentId: item.id },
+      { itemId: item.id, title: item.title, platform: scriptPlatform, materials: scriptPlatform === "douyin" || scriptPlatform === "xiaohongshu" ? (materials.trim() || undefined) : undefined, durationSec: scriptPlatform === "douyin" ? durationSec : undefined, cockpitContentId: item.id },
       {
         // 不能直接把裸的 `fetch` 引用传下去: 原生 fetch 依赖 `this === window`
         // 的隐式绑定, 脱离 window 对象单独调用会抛 "Illegal invocation"。
@@ -343,6 +438,13 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
           setResearchDegraded(Boolean(data.researchDegraded));
           setHooks(parseHooks(data.hooks));
           setPickedHookIdx(null);
+          // T6 六期: xiaohongshu 分支响应带 intro/body/tags/shotIdeas, douyin
+          // 分支响应没有这几个键——非字符串/非数组时各自落到 null/[] 兜底,
+          // 与上面 sections/hooks 在跨平台切换时的清空行为保持一致。
+          setXhsIntro(typeof data.intro === "string" && data.intro.length > 0 ? data.intro : null);
+          setXhsBody(typeof data.body === "string" && data.body.length > 0 ? data.body : null);
+          setXhsTags(parseXhsTags(data.tags));
+          setXhsShotIdeas(parseXhsShotIdeas(data.shotIdeas));
           // 修复轮 1: 生成成功即把新 scriptDraftId 记进 Cockpit.tsx 的同会话覆盖表,
           // 让「关抽屉→立即重开」也能走上面的懒加载拉回效果——不用等下次整页刷新
           // 才能从 workspace GET 里看到 item.scriptDraftId。
@@ -353,7 +455,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
   }
 
   async function handlePickHook(hookIdx: number) {
-    if (!scriptDraftId || pickHookPending || generating || refiningAll || refiningSectionIdx !== null) return;
+    if (!scriptDraftId || pickHookPending || generating || refiningAll || refiningSectionIdx !== null || xhsRefining) return;
     // 跨 item 竞态守卫: 请求发起时捕获目标 item, await 期间用户可能已切到另一篇
     // 内容 (resetScriptGenerationState 已清空 sections/scriptDraftId)——这条迟到
     // 的响应不该再把 A 内容的选定结果写进现在显示的 B 内容面板。过期直接丢弃,
@@ -411,7 +513,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
 
   async function handleRefineSection(idx: number) {
     const instruction = sectionInstruction.trim();
-    if (!scriptDraftId || !instruction || refiningSectionIdx !== null || refiningAll || generating || pickHookPending) return;
+    if (!scriptDraftId || !instruction || refiningSectionIdx !== null || refiningAll || generating || pickHookPending || xhsRefining) return;
     const requestedItemId = item.id;
     setRefiningSectionIdx(idx);
     try {
@@ -431,7 +533,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
 
   async function handleRefineAll() {
     const instruction = allInstruction.trim();
-    if (!scriptDraftId || !instruction || refiningAll || refiningSectionIdx !== null || generating || pickHookPending) return;
+    if (!scriptDraftId || !instruction || refiningAll || refiningSectionIdx !== null || generating || pickHookPending || xhsRefining) return;
     const requestedItemId = item.id;
     setRefiningAll(true);
     try {
@@ -443,6 +545,48 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
       }
     } finally {
       setRefiningAll(false);
+    }
+  }
+
+  /**
+   * T6 六期: 小红书页顶整稿指令——只支持 scope:'all' (小红书不做分块改稿, 见
+   * spec §2), 响应形状是 `{ intro, body }` (不是 douyin 的 `{ sections }`), 因此
+   * 不复用上面的 `runRefine` (那个只认 sections 响应), 独立实现同款竞态守卫 +
+   * 成功/失败路径。成功后本地替换 intro/body, 并按 `mapGeneratedToScript`
+   * (xiaohongshu 分支即 mapXiaohongshu) 同款语义 intro→hook、body→body 回填
+   * 六字段骨架——只传 { intro, body } 两键, mapXiaohongshu 对未出现的
+   * titles/coverText/shotIdeas/tags 键不会产出对应字段, 不会误覆盖骨架里其它
+   * 字段 (headline/conclusion/example/ending) 已有的用户内容。
+   */
+  async function handleRefineXhsAll() {
+    const instruction = xhsInstruction.trim();
+    if (!scriptDraftId || !instruction || xhsRefining || refiningAll || refiningSectionIdx !== null || generating || pickHookPending) return;
+    const requestedItemId = item.id;
+    setXhsRefining(true);
+    try {
+      const res = await fetch(`/api/v1/scripts/${scriptDraftId}/refine`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ scope: "all", instruction }),
+      });
+      const json = await res.json();
+      if (!mountedRef.current || currentItemIdRef.current !== requestedItemId) return;
+      if (json.success) {
+        const newIntro = json.data.intro as string;
+        const newBody = json.data.body as string;
+        setXhsIntro(newIntro);
+        setXhsBody(newBody);
+        mergeScript(item.id, mapGeneratedToScript("xiaohongshu", { intro: newIntro, body: newBody }));
+        setXhsInstruction("");
+      } else {
+        notify(json.message || "改写失败");
+      }
+    } catch (e) {
+      if (mountedRef.current && currentItemIdRef.current === requestedItemId) {
+        notify(e instanceof Error ? e.message : "改写失败，请稍后重试");
+      }
+    } finally {
+      setXhsRefining(false);
     }
   }
 
@@ -474,7 +618,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
     {/* “AI 体检”按钮（调 /api/ai/analyze）已在 Task 14 移除：该路由未移植，AI 相关能力统一走 /agent。 */}
     {tab === "topic" ? <div className="drawer-section"><div className="section-title-row"><div><span className="eyebrow">TOPIC GATE</span><h3>大纲卡</h3></div></div><StageScheduleField item={item} stage="topic" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{[["目标受众", "audience"], ["具体痛点", "painPoint"], ["一句话观点", "pointOfView"], ["大家通常怎么讲", "commonAngle"], ["我的反差角度", "contrastAngle"], ["可展示素材", "assets"], ["最低成本拍法", "minimumProduction"]].map(([label, key]) => <label key={key} className="field full"><span>{label}</span><textarea value={String(item.topic[key as keyof typeof item.topic] ?? "")} onChange={(e) => updateTopic({ [key]: e.target.value })} /></label>)}<div className="score-card"><div><span>六维总分</span><strong>{score}<small> / 30</small></strong></div><div className="score-grid">{Object.entries({ audience: "受众", pain: "痛点", scene: "场景", demonstrable: "可展示", distribution: "传播", efficiency: "性价比" }).map(([key, label]) => <label key={key}><span>{label}</span><input type="range" min="0" max="5" value={item.topic.score[key as keyof typeof item.topic.score]} onChange={(e) => updateTopic({ score: { ...item.topic.score, [key]: Number(e.target.value) } })} /><strong>{item.topic.score[key as keyof typeof item.topic.score]}</strong></label>)}</div></div></div> : null}
     {/* “AI 质检”按钮（调 /api/ai/analyze）已在 Task 14 移除：该路由未移植；“用 AI 写脚本”自 Task 2 起改为抽屉内就地生成，不再跳转 /agent。 */}
-    {tab === "script" ? <div className="drawer-section"><div className="section-title-row"><div><span className="eyebrow">SCRIPT</span><h3>先搭结构，再改措辞</h3></div></div>{!isContentPlatform(item.platform) ? <small className="field-hint">该平台暂不支持 AI 生成，可选相近平台生成后手动调整</small> : null}{scriptPlatform === "douyin" ? <div className="script-generate-options"><details className="script-materials-details"><summary>素材（可选）</summary><textarea value={materials} onChange={(e) => setMaterials(e.target.value)} disabled={generating} placeholder="粘贴素材原文、参考链接或要点，生成时会尝试真实引用进正文" /></details><label className="field script-duration-field"><span>时长</span><select value={durationSec} onChange={(e) => setDurationSec(Number(e.target.value) as 30 | 45 | 60)} disabled={generating} aria-label="视频时长">{[30, 45, 60].map((value) => <option key={value} value={value}>{value} 秒</option>)}</select></label></div> : null}<div className="script-generate-actions"><select value={scriptPlatform} onChange={(e) => { setScriptPlatform(e.target.value as ContentPlatform); setTitleHint(""); lastCheckedTitleRef.current = ""; resetScriptGenerationState(); }} disabled={generating} aria-label="生成平台" style={{ height: 34, borderRadius: 9 }}>{CONTENT_PLATFORMS.map((value) => <option key={value} value={value}>{CONTENT_PLATFORM_LABEL[value]}</option>)}</select><button type="button" className="ai-button small" disabled={generating || scriptActionPending} onClick={handleGenerateScript}><Icon name="spark" />{generating ? "生成中…" : "用 AI 写脚本"}</button></div><StageScheduleField item={item} stage="script" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{sections ? <ScriptSectionsPanel sections={sections} research={research} researchDegraded={researchDegraded} hooks={hooks} pickedHookIdx={pickedHookIdx} hookPending={pickHookPending} onPickHook={handlePickHook} allInstruction={allInstruction} onAllInstructionChange={setAllInstruction} onRefineAll={handleRefineAll} refiningAll={refiningAll} openSectionIdx={openSectionIdx} onToggleSection={(idx) => { setOpenSectionIdx(openSectionIdx === idx ? null : idx); setSectionInstruction(""); }} sectionInstruction={sectionInstruction} onSectionInstructionChange={setSectionInstruction} onRefineSection={handleRefineSection} refiningSectionIdx={refiningSectionIdx} generating={generating} /> : null}{[["标题方向", "headline"], ["开头 3 秒", "hook"], ["一句话结论", "conclusion"], ["内容结构", "body"], ["案例 / 演示", "example"], ["结尾行动 / 观点", "ending"]].map(([label, key]) => <label key={key} className="field full"><span>{label}</span><textarea className={key === "body" ? "large" : ""} value={item.script[key as keyof typeof item.script]} onChange={(e) => updateScript({ [key]: e.target.value })} onBlur={key === "headline" ? handleHeadlineBlur : undefined} />{key === "headline" && titleHint ? <small className="field-hint">{titleHint}</small> : null}</label>)}</div> : null}
+    {tab === "script" ? <div className="drawer-section"><div className="section-title-row"><div><span className="eyebrow">SCRIPT</span><h3>先搭结构，再改措辞</h3></div></div>{!isContentPlatform(item.platform) ? <small className="field-hint">该平台暂不支持 AI 生成，可选相近平台生成后手动调整</small> : null}{scriptPlatform === "douyin" ? <div className="script-generate-options"><details className="script-materials-details"><summary>素材（可选）</summary><textarea value={materials} onChange={(e) => setMaterials(e.target.value)} disabled={generating} placeholder="粘贴素材原文、参考链接或要点，生成时会尝试真实引用进正文" /></details><label className="field script-duration-field"><span>时长</span><select value={durationSec} onChange={(e) => setDurationSec(Number(e.target.value) as 30 | 45 | 60)} disabled={generating} aria-label="视频时长">{[30, 45, 60].map((value) => <option key={value} value={value}>{value} 秒</option>)}</select></label></div> : scriptPlatform === "xiaohongshu" ? <div className="script-generate-options single"><details className="script-materials-details"><summary>素材（可选）</summary><textarea value={materials} onChange={(e) => setMaterials(e.target.value)} disabled={generating} placeholder="粘贴素材原文、参考链接或要点，生成时会尝试真实引用进正文" /></details></div> : null}<div className="script-generate-actions"><select value={scriptPlatform} onChange={(e) => { setScriptPlatform(e.target.value as ContentPlatform); setTitleHint(""); lastCheckedTitleRef.current = ""; resetScriptGenerationState(); }} disabled={generating} aria-label="生成平台" style={{ height: 34, borderRadius: 9 }}>{CONTENT_PLATFORMS.map((value) => <option key={value} value={value}>{CONTENT_PLATFORM_LABEL[value]}</option>)}</select><button type="button" className="ai-button small" disabled={generating || scriptActionPending} onClick={handleGenerateScript}><Icon name="spark" />{generating ? "生成中…" : "用 AI 写脚本"}</button></div><StageScheduleField item={item} stage="script" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{sections ? <ScriptSectionsPanel sections={sections} research={research} researchDegraded={researchDegraded} hooks={hooks} pickedHookIdx={pickedHookIdx} hookPending={pickHookPending} onPickHook={handlePickHook} allInstruction={allInstruction} onAllInstructionChange={setAllInstruction} onRefineAll={handleRefineAll} refiningAll={refiningAll} openSectionIdx={openSectionIdx} onToggleSection={(idx) => { setOpenSectionIdx(openSectionIdx === idx ? null : idx); setSectionInstruction(""); }} sectionInstruction={sectionInstruction} onSectionInstructionChange={setSectionInstruction} onRefineSection={handleRefineSection} refiningSectionIdx={refiningSectionIdx} generating={generating} /> : xhsIntro !== null && xhsBody !== null ? <XhsScriptPanel research={research} researchDegraded={researchDegraded} intro={xhsIntro} body={xhsBody} tags={xhsTags} shotIdeas={xhsShotIdeas} instruction={xhsInstruction} onInstructionChange={setXhsInstruction} onRefineAll={handleRefineXhsAll} refining={xhsRefining} generating={generating} /> : null}{[["标题方向", "headline"], ["开头 3 秒", "hook"], ["一句话结论", "conclusion"], ["内容结构", "body"], ["案例 / 演示", "example"], ["结尾行动 / 观点", "ending"]].map(([label, key]) => <label key={key} className="field full"><span>{label}</span><textarea className={key === "body" ? "large" : ""} value={item.script[key as keyof typeof item.script]} onChange={(e) => updateScript({ [key]: e.target.value })} onBlur={key === "headline" ? handleHeadlineBlur : undefined} />{key === "headline" && titleHint ? <small className="field-hint">{titleHint}</small> : null}</label>)}</div> : null}
     {tab === "recording" ? <div className="drawer-section"><div className="stage-detail-strip"><span>录制阶段</span><Badge tone="recording" color={stageColors.recording}>录制</Badge><small>完成后进入剪辑</small></div><StageScheduleField item={item} stage="recording" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} /><label className="field full"><span>录制备注</span><textarea className="large" value={item.recordingNotes} onChange={(e) => update({ recordingNotes: e.target.value })} placeholder="记录机位、口播、录屏、演示路径和补拍素材…" /></label><div className="checklist"><strong>录制完成清单</strong>{["机位与画面可用", "收音清晰", "口播或演示路径完整", "必要素材与补拍镜头齐全"].map((text) => <label key={text}><input type="checkbox" />{text}</label>)}</div></div> : null}
     {tab === "editing" ? <div className="drawer-section"><div className="stage-detail-strip"><span>剪辑阶段</span><Badge tone="editing" color={stageColors.editing}>剪辑</Badge><small>完成后进入发布</small></div><StageScheduleField item={item} stage="editing" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} /><label className="field full"><span>剪辑备注</span><textarea className="large" value={item.editingNotes} onChange={(e) => update({ editingNotes: e.target.value })} placeholder="记录结构删改、字幕、包装、素材替换和导出要求…" /></label><div className="checklist"><strong>剪辑完成清单</strong>{["开头 5 秒直接进入场景", "案例或演示重点清楚", "字幕清楚可读", "封面与标题已确认", `${item.tier}档制作投入已控制`].map((text) => <label key={text}><input type="checkbox" />{text}</label>)}</div></div> : null}
     {tab === "publish" ? <div className="drawer-section"><StageScheduleField item={item} stage="publishing" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} label="计划发布日期" /><div className="form-grid"><label className="field"><span>发布状态</span><select value={item.publicationStatus} disabled><option value="draft">未排期</option><option value="scheduled">已排期</option><option value="published">已发布</option></select><small>由发布档期和实际发布记录自动更新。</small></label><label className="field"><span>实际发布时间</span><input type="date" value={item.publishedAt} onChange={(e) => update({ publishedAt: e.target.value })} /></label></div><label className="field full"><span>封面文案</span><input value={item.coverCopy} onChange={(e) => update({ coverCopy: e.target.value })} /></label><label className="field full"><span>发布正文</span><textarea className="large" value={item.publishCopy} onChange={(e) => update({ publishCopy: e.target.value })} /></label><label className="field full"><span>小红书链接</span><input value={item.xhsLink} onChange={(e) => update({ xhsLink: e.target.value })} placeholder="https://www.xiaohongshu.com/..." /></label>{item.publicationStatus !== "published" ? <><button className="primary-button full-button" disabled={!item.publishedAt} onClick={markPublished}>标记为已发布</button>{!item.publishedAt ? <p className="validation-note">先填写实际发布时间，系统才会计入大目标。</p> : null}</> : <div className="published-banner"><span>已发布于 {item.publishedAt} · 已进入待复盘列表</span><button onClick={unmarkPublished}>撤销发布记录</button></div>}</div> : null}

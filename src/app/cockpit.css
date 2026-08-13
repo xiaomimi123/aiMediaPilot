@@ -1156,6 +1156,8 @@ textarea { resize: vertical; }
 .field-hint { display: block; margin-top: 5px; color: var(--muted); font-size: 9px; line-height: 1.5; }
 /* T7 五期: 抽屉脚本页 —— 素材/时长输入 + 生成后逐字稿分块面板 (素材简报/整体指令/换一版/hook 候选) */
 .script-generate-options { display: grid; grid-template-columns: 1fr 160px; gap: 12px; align-items: start; }
+/* T6 六期: 小红书没有时长下拉 (durationSec 只有 douyin 消费), 素材折叠区单独占一整行 */
+.script-generate-options.single { grid-template-columns: 1fr; }
 .script-materials-details summary { cursor: pointer; color: var(--muted); font-size: 9px; font-weight: 700; }
 .script-materials-details[open] summary { margin-bottom: 8px; }
 .script-materials-details textarea { width: 100%; min-height: 64px; padding: 9px 10px; font-size: 11px; line-height: 1.6; }

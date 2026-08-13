@@ -77,12 +77,13 @@ export async function runGenerateScript(
       return;
     }
 
-    // douyin (T4 五期): /scripts/generate 路由自己创建并持久化了 ScriptDraft、
-    // 响应里已带 scriptDraftId —— 不再像旧逻辑那样二次 POST /api/v1/scripts,
-    // 否则会在数据库里留下一条重复的 ScriptDraft (真正被引用的仍是 generate
-    // 路由那条, 二次保存那条成了孤儿记录)。其它平台的生成路由不落库, 仍然要靠
-    // 这次二次保存才会产生 ScriptDraft, 相应路径保持不变。
-    if (platform === "douyin") {
+    // douyin (T4 五期) / xiaohongshu (T4 六期): /scripts/generate 路由自己创建
+    // 并持久化了 ScriptDraft、响应里已带 scriptDraftId —— 不再像旧逻辑那样二次
+    // POST /api/v1/scripts, 否则会在数据库里留下一条重复的 ScriptDraft (真正被
+    // 引用的仍是 generate 路由那条, 二次保存那条成了孤儿记录, 且会把
+    // CockpitContent.scriptDraftId 覆盖指向孤儿记录——T4 报告交接的真实 bug)。
+    // gongzhonghao 的生成路由仍不落库, 继续靠下面的二次保存产生 ScriptDraft。
+    if (platform === "douyin" || platform === "xiaohongshu") {
       if (!deps.isMounted() || !deps.isCurrentItem(itemId)) return;
       const data = genJson.data as Record<string, unknown>;
       deps.onGenerated?.(data);

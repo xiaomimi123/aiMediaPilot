@@ -114,4 +114,57 @@ describe("parseDraftOutput", () => {
     });
     expect(result).not.toHaveProperty("hooks");
   });
+
+  // ---- 六期: xiaohongshu 形态 (无 script 包裹层, 顶层直接是 intro/body) ----
+
+  const FULL_XHS_OUTPUT = {
+    research: { points: [{ fact: "事实一", source: "https://a.com", usage: "开头引用" }] },
+    titles: [{ text: "标题一", hookType: "悬念" }, { text: "标题二", hookType: "冲突" }],
+    coverText: "封面文案",
+    intro: "开头引导文案",
+    body: "正文内容",
+    tags: ["标签一", "标签二"],
+    shotIdeas: [
+      { idx: 2, description: "第二个镜头" },
+      { idx: 1, description: "第一个镜头" },
+    ],
+  };
+
+  it("完整六期 xiaohongshu 形态 → intro/body/research/titles/tags/shotIdeas/coverText 全部解析出来", () => {
+    const result = parseDraftOutput(FULL_XHS_OUTPUT);
+    expect(result).not.toBeNull();
+    expect(result).not.toHaveProperty("sections");
+    expect(result!.intro).toBe("开头引导文案");
+    expect(result!.body).toBe("正文内容");
+    expect(result!.research).toEqual({ points: [{ fact: "事实一", source: "https://a.com", usage: "开头引用" }] });
+    expect(result!.titles).toEqual([{ text: "标题一" }, { text: "标题二" }]);
+    expect(result!.tags).toEqual(["标签一", "标签二"]);
+    // shotIdeas 按 idx 升序排列, 与输入顺序 (2 在前 1 在后) 相反
+    expect(result!.shotIdeas).toEqual([
+      { idx: 1, description: "第一个镜头" },
+      { idx: 2, description: "第二个镜头" },
+    ]);
+    expect(result!.coverText).toBe("封面文案");
+  });
+
+  it("xiaohongshu 形态: intro/body 缺一个 → 既不是 douyin 也不是 xhs 形状, 返回 null", () => {
+    expect(parseDraftOutput({ intro: "只有开头" })).toBeNull();
+    expect(parseDraftOutput({ body: "只有正文" })).toBeNull();
+    expect(parseDraftOutput({ intro: "", body: "正文" })).toBeNull();
+  });
+
+  it("xiaohongshu 形态: intro/body 合法但 tags/shotIdeas/coverText 畸形或缺失 → 各自独立不出现, intro/body 仍正常解析", () => {
+    const result = parseDraftOutput({ intro: "开头", body: "正文", tags: "not-an-array", shotIdeas: [{ idx: "x", description: "坏的" }] });
+    expect(result).not.toBeNull();
+    expect(result!.intro).toBe("开头");
+    expect(result!.body).toBe("正文");
+    expect(result).not.toHaveProperty("tags");
+    expect(result).not.toHaveProperty("shotIdeas");
+    expect(result).not.toHaveProperty("coverText");
+  });
+
+  it("xiaohongshu 形态: tags 数组存在但全部是空字符串 → tags 不出现 (不是空数组 key)", () => {
+    const result = parseDraftOutput({ intro: "开头", body: "正文", tags: ["", ""] });
+    expect(result).not.toHaveProperty("tags");
+  });
 });
