@@ -21,6 +21,35 @@ describe('RADAR_READ.buildSystemPrompt', () => {
   it('要求简体中文输出', () => {
     expect(RADAR_READ.buildSystemPrompt()).toContain('中文');
   });
+
+  it('缺省 personaSection → 与无参数调用字符级一致', () => {
+    expect(RADAR_READ.buildSystemPrompt(undefined)).toBe(RADAR_READ.buildSystemPrompt());
+  });
+
+  it('personaSection 为空串 → 与无参数调用字符级一致', () => {
+    expect(RADAR_READ.buildSystemPrompt('')).toBe(RADAR_READ.buildSystemPrompt());
+  });
+
+  it('无 personaSection → 不提 pillarHit', () => {
+    expect(RADAR_READ.buildSystemPrompt()).not.toContain('pillarHit');
+  });
+
+  it('personaSection 非空 → 拼入定位内容', () => {
+    const prompt = RADAR_READ.buildSystemPrompt('目标受众: 25-35 岁互联网从业者\n内容支柱:\n- 工具评测: 拆解 AI 工具实际效果');
+    expect(prompt).toContain('25-35 岁互联网从业者');
+    expect(prompt).toContain('工具评测');
+  });
+
+  it('personaSection 非空 → relevance 语义句换为「对上述定位的价值」', () => {
+    const prompt = RADAR_READ.buildSystemPrompt('目标受众: 测试受众');
+    expect(prompt).toContain('对上述定位的价值');
+    expect(prompt).not.toContain('与用户关注的关键词 / AI 知识赛道的相关程度');
+  });
+
+  it('personaSection 非空 → 要求输出命中的支柱名或 null (pillarHit)', () => {
+    const prompt = RADAR_READ.buildSystemPrompt('目标受众: 测试受众');
+    expect(prompt).toContain('pillarHit');
+  });
 });
 
 describe('RADAR_READ.buildUserMessage', () => {
@@ -128,5 +157,26 @@ describe('RadarReadResponseSchema', () => {
   it('缺少必填字段 → 拒绝', () => {
     const { summary, ...rest } = valid;
     expect(() => RadarReadResponseSchema.parse(rest)).toThrow();
+  });
+
+  it('pillarHit 缺省 → 默认解析为 null', () => {
+    const parsed = RadarReadResponseSchema.parse(valid);
+    expect(parsed.pillarHit).toBeNull();
+  });
+
+  it('pillarHit 为 null → 通过', () => {
+    const parsed = RadarReadResponseSchema.parse({ ...valid, pillarHit: null });
+    expect(parsed.pillarHit).toBeNull();
+  });
+
+  it('pillarHit 为合法字符串 (≤10 字) → 通过', () => {
+    const parsed = RadarReadResponseSchema.parse({ ...valid, pillarHit: '工具评测' });
+    expect(parsed.pillarHit).toBe('工具评测');
+  });
+
+  it('pillarHit 超过 10 字 → 拒绝', () => {
+    expect(() =>
+      RadarReadResponseSchema.parse({ ...valid, pillarHit: '一'.repeat(11) })
+    ).toThrow();
   });
 });

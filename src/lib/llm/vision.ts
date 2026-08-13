@@ -20,7 +20,10 @@ export interface TokenUsage {
 export interface CallStructuredOpts<T> {
   systemPrompt: string;
   userMessage: ContentPart[];
-  responseSchema: ZodSchema<T>;
+  // Input 显式设为 any (而非默认与 Output 相同): 允许 schema 带 `.default()`/`.transform()`
+  // 等 Input !== Output 的字段 (如 radar-read 的 pillarHit) 仍能推断出正确的 Output 类型 T,
+  // 不因 Input 类型不匹配而报 "not assignable" (纯类型层放宽, 不影响运行时行为)。
+  responseSchema: z.ZodType<T, z.ZodTypeDef, any>;
   model?: string;
   maxTokens?: number;
 }

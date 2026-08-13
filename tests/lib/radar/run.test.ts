@@ -33,6 +33,7 @@ const prismaMock = vi.hoisted(() => {
     radarKeyword: { findMany: vi.fn(), createMany: vi.fn() },
     radarRun: { create: vi.fn(), update: vi.fn(), aggregate: vi.fn() },
     radarItem: { findMany: vi.fn(), createMany: vi.fn() },
+    personaProfile: { findUnique: vi.fn() },
   };
   m.$transaction = vi.fn(async (cb: any) => cb(m));
   return m;
@@ -60,6 +61,7 @@ function readResult(overrides: Partial<RadarReadResponse> = {}): RadarReadRespon
     discussion: 60,
     feasibility: 75,
     suggestedKeywords: [],
+    pillarHit: null,
     ...overrides,
   };
 }
@@ -84,6 +86,7 @@ beforeEach(() => {
   prismaMock.radarRun.aggregate.mockResolvedValue({ _sum: { read: 0 } });
   prismaMock.radarItem.createMany.mockResolvedValue({ count: 0 });
   prismaMock.radarKeyword.createMany.mockResolvedValue({ count: 0 });
+  prismaMock.personaProfile.findUnique.mockResolvedValue(null);
 
   searchProviderMock.search.mockResolvedValue([]);
   llmCallMock.mockResolvedValue({ result: readResult(), usage: {} });
@@ -316,5 +319,92 @@ describe('runRadarScan', () => {
     expect(out!.kept).toBe(1);
     const itemsData = prismaMock.radarItem.createMany.mock.calls[0][0].data;
     expect(itemsData[0].url).toBe('https://a.example.com/1');
+  });
+});
+
+describe('runRadarScan — 人设注入 (T3)', () => {
+  const personaRow = {
+    userId: 'u1',
+    audience: '25-35 岁互联网从业者',
+    targetFans: '想转行做 AI 的人',
+    pillars: [{ name: '工具评测', description: '拆解 AI 工具实际效果' }],
+    angle: '只讲能落地的方法',
+    avoid: '不做标题党',
+  };
+
+  it('无档案 → buildSystemPrompt 不含人设内容, heatFactors.personaAdjust=0 且 pillarHit=null, heatScore 不受影响', async () => {
+    prismaMock.personaProfile.findUnique.mockResolvedValue(null);
+    searchProviderMock.search.mockResolvedValue([searchResult()]);
+    llmCallMock.mockResolvedValue({ result: readResult(), usage: {} });
+
+    const out = await runRadarScan('u1');
+
+    expect(out).not.toBeNull();
+    expect(llmCallMock.mock.calls[0][0].systemPrompt).not.toContain('工具评测');
+    const itemsData = prismaMock.radarItem.createMany.mock.calls[0][0].data;
+    expect(itemsData[0].heatFactors.personaAdjust).toBe(0);
+    expect(itemsData[0].heatFactors.pillarHit).toBeNull();
+  });
+
+  it('有档案且命中支柱 → systemPrompt 含定位内容, heatFactors.personaAdjust=+8, pillarHit=支柱名, heatScore 相应提高', async () => {
+    prismaMock.personaProfile.findUnique.mockResolvedValue(personaRow);
+    searchProviderMock.search.mockResolvedValue([searchResult()]);
+    llmCallMock.mockResolvedValue({
+      result: readResult({ pillarHit: '工具评测' }),
+      usage: {},
+    });
+
+    const out = await runRadarScan('u1');
+
+    expect(out).not.toBeNull();
+    expect(llmCallMock.mock.calls[0][0].systemPrompt).toContain('工具评测');
+    const itemsData = prismaMock.radarItem.createMany.mock.calls[0][0].data;
+    expect(itemsData[0].heatFactors.personaAdjust).toBe(8);
+    expect(itemsData[0].heatFactors.pillarHit).toBe('工具评测');
+  });
+
+  it('有档案但 AI 编造不存在的支柱名 → validatePillarHit 判为未命中 (null), 走 offPillarFactor 折扣而非加分', async () => {
+    prismaMock.personaProfile.findUnique.mockResolvedValue(personaRow);
+    searchProviderMock.search.mockResolvedValue([searchResult()]);
+    llmCallMock.mockResolvedValue({
+      result: readResult({ pillarHit: '编造的支柱' }),
+      usage: {},
+    });
+
+    const out = await runRadarScan('u1');
+
+    expect(out).not.toBeNull();
+    const itemsData = prismaMock.radarItem.createMany.mock.calls[0][0].data;
+    expect(itemsData[0].heatFactors.pillarHit).toBeNull();
+    expect(itemsData[0].heatFactors.personaAdjust).toBeLessThan(0);
+  });
+
+  it('有档案但未命中任何支柱 (pillarHit=null) → heatFactors.personaAdjust 为负 (offPillarFactor 折扣)', async () => {
+    prismaMock.personaProfile.findUnique.mockResolvedValue(personaRow);
+    searchProviderMock.search.mockResolvedValue([searchResult()]);
+    llmCallMock.mockResolvedValue({
+      result: readResult({ pillarHit: null }),
+      usage: {},
+    });
+
+    const out = await runRadarScan('u1');
+
+    expect(out).not.toBeNull();
+    const itemsData = prismaMock.radarItem.createMany.mock.calls[0][0].data;
+    expect(itemsData[0].heatFactors.pillarHit).toBeNull();
+    expect(itemsData[0].heatFactors.personaAdjust).toBeLessThan(0);
+  });
+
+  it('loadPersonaProfile 每轮只调用一次 (不随命中篇数重复查询)', async () => {
+    prismaMock.personaProfile.findUnique.mockResolvedValue(personaRow);
+    searchProviderMock.search.mockResolvedValue([
+      searchResult({ url: 'https://a.example.com/1', title: '标题一' }),
+      searchResult({ url: 'https://b.example.com/2', title: '标题二', sourceSite: 'b.example.com' }),
+    ]);
+    llmCallMock.mockResolvedValue({ result: readResult({ pillarHit: '工具评测' }), usage: {} });
+
+    await runRadarScan('u1');
+
+    expect(prismaMock.personaProfile.findUnique).toHaveBeenCalledTimes(1);
   });
 });

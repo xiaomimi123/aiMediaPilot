@@ -24,6 +24,15 @@ export const HEAT_WEIGHTS = {
   decayFloorRatio: 0.3,
 } as const;
 
+/**
+ * 人设定位调权常量 (applyPersonaAdjust 消费)。
+ * pillarBonus: 命中内容支柱时的加分; offPillarFactor: 有档案但未命中时的乘性折扣。
+ */
+export const PERSONA_ADJUST = {
+  pillarBonus: 8,
+  offPillarFactor: 0.7,
+} as const;
+
 export interface ReadScores {
   relevance: number;
   freshness: number;
@@ -123,6 +132,27 @@ export function composeHeat(read: ReadScores, cooccurrenceSources: number): numb
     HEAT_WEIGHTS.cooccurrenceCap
   );
   return Math.round(clamp(base + bonus, 0, 100));
+}
+
+/**
+ * 人设定位调权 — 在 composeHeat 之后叠加, 让选题热度贴合博主自己的内容支柱。
+ * 无档案 (hasProfile=false): 原样返回, adjust=0 (未建立人设的用户不受影响)。
+ * 有档案且命中某支柱 (pillarHit 非 null): heat + pillarBonus, clamp 到 [0, 100]。
+ * 有档案但未命中 (pillarHit 为 null): heat × offPillarFactor, 四舍五入。
+ * 返回 adjust = 调整后 heat - 调整前 heat (可负), 供 heatFactors.personaAdjust 记录。
+ */
+export function applyPersonaAdjust(
+  heat: number,
+  pillarHit: string | null,
+  hasProfile: boolean
+): { heat: number; adjust: number } {
+  if (!hasProfile) return { heat, adjust: 0 };
+
+  const adjusted = pillarHit
+    ? clamp(heat + PERSONA_ADJUST.pillarBonus, 0, 100)
+    : Math.round(heat * PERSONA_ADJUST.offPillarFactor);
+
+  return { heat: adjusted, adjust: adjusted - heat };
 }
 
 /**

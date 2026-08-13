@@ -5,11 +5,14 @@ import {
   titleFingerprint,
   clusterByTopic,
   composeHeat,
+  applyPersonaAdjust,
   type ClusterableItem,
 } from './scoring';
 import { getDeepSeekTextLLM } from '@/lib/llm/clients';
 import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
 import { RADAR_READ, type RadarReadResponse } from '@/lib/llm/prompts/radar-read';
+import { loadPersonaProfile, validatePillarHit } from '@/lib/persona/profile';
+import { buildPersonaSection } from '@/lib/llm/prompts/persona-section';
 
 /**
  * 热点雷达 — 采集管线主体 (worker 与手动触发路由共用)。
@@ -48,6 +51,7 @@ interface KeptItem {
   matchedKeywords: string[];
   fingerprint: string;
   readOut: RadarReadResponse;
+  pillarHit: string | null;
 }
 
 interface ClusterInput extends ClusterableItem {
@@ -79,6 +83,14 @@ export async function runRadarScan(userId: string): Promise<RadarRunStats | null
   const keywords = await prisma.radarKeyword.findMany({
     where: { userId, status: 'active' },
   });
+
+  // 人设定位注入 (T3): 每轮扫描只查一次, 供下面阅读循环的每一篇复用 —
+  // 未建立档案 (profile === null) 时 personaSection 为空串, RADAR_READ.buildSystemPrompt
+  // 保持与未接入人设前字符级一致, applyPersonaAdjust 也原样不调权。
+  const profile = await loadPersonaProfile(userId);
+  const personaSection = buildPersonaSection(profile);
+  const hasProfile = profile !== null;
+  const personaPillars = profile?.pillars ?? [];
 
   const run = await prisma.radarRun.create({
     data: {
@@ -173,8 +185,8 @@ export async function runRadarScan(userId: string): Promise<RadarRunStats | null
 
       let readOut: RadarReadResponse;
       try {
-        const out = await llm.callStructured({
-          systemPrompt: RADAR_READ.buildSystemPrompt(),
+        const out = await llm.callStructured<RadarReadResponse>({
+          systemPrompt: RADAR_READ.buildSystemPrompt(personaSection),
           userMessage: RADAR_READ.buildUserMessage({
             title: cand.result.title,
             content: cand.result.content,
@@ -192,11 +204,14 @@ export async function runRadarScan(userId: string): Promise<RadarRunStats | null
       if (readOut.relevance < RELEVANCE_GATE) continue;
 
       for (const kw of readOut.suggestedKeywords) suggestedKeywordsAll.add(kw);
+      // 严格校验 AI 声称命中的支柱是否真的存在于档案里 (防止编造), 无档案时 personaPillars=[] 恒为 null。
+      const pillarHit = validatePillarHit(readOut.pillarHit, personaPillars);
       keptItems.push({
         result: cand.result,
         matchedKeywords: cand.matchedKeywords,
         fingerprint: titleFingerprint(cand.result.title),
         readOut,
+        pillarHit,
       });
     }
 
@@ -208,17 +223,30 @@ export async function runRadarScan(userId: string): Promise<RadarRunStats | null
     }));
     const clusters = clusterByTopic(clusterInputs);
 
-    const heatByItem = new Map<KeptItem, { heatScore: number; cooccurrenceSources: number }>();
+    const heatByItem = new Map<
+      KeptItem,
+      { heatScore: number; cooccurrenceSources: number; personaAdjust: number; pillarHit: string | null }
+    >();
     for (const cluster of clusters) {
       const sourceSites = new Set(cluster.map((c) => c.item.result.sourceSite));
       const cooccurrenceSources = Math.max(0, sourceSites.size - 1);
       for (const c of cluster) {
         const { relevance, freshness, discussion, feasibility } = c.item.readOut;
-        const heatScore = composeHeat(
+        const baseHeat = composeHeat(
           { relevance, freshness, discussion, feasibility },
           cooccurrenceSources
         );
-        heatByItem.set(c.item, { heatScore, cooccurrenceSources });
+        const { heat: heatScore, adjust: personaAdjust } = applyPersonaAdjust(
+          baseHeat,
+          c.item.pillarHit,
+          hasProfile
+        );
+        heatByItem.set(c.item, {
+          heatScore,
+          cooccurrenceSources,
+          personaAdjust,
+          pillarHit: c.item.pillarHit,
+        });
       }
     }
 
@@ -246,6 +274,8 @@ export async function runRadarScan(userId: string): Promise<RadarRunStats | null
           discussion: item.readOut.discussion,
           feasibility: item.readOut.feasibility,
           cooccurrenceSources: heat.cooccurrenceSources,
+          personaAdjust: heat.personaAdjust,
+          pillarHit: heat.pillarHit,
         },
         status: 'new',
         runId: run.id,

@@ -4,7 +4,9 @@ import {
   clusterByTopic,
   composeHeat,
   applyTimeDecay,
+  applyPersonaAdjust,
   HEAT_WEIGHTS,
+  PERSONA_ADJUST,
 } from '@/lib/radar/scoring';
 
 describe('titleFingerprint', () => {
@@ -189,5 +191,39 @@ describe('applyTimeDecay', () => {
   it('未过 24h (如 10h) → 不扣分', () => {
     const now = new Date(base.getTime() + 10 * 60 * 60 * 1000);
     expect(applyTimeDecay(100, base, now)).toBe(100);
+  });
+});
+
+describe('applyPersonaAdjust', () => {
+  it('无档案 (hasProfile=false) → 原样返回, adjust=0', () => {
+    expect(applyPersonaAdjust(80, null, false)).toEqual({ heat: 80, adjust: 0 });
+    expect(applyPersonaAdjust(80, '工具评测', false)).toEqual({ heat: 80, adjust: 0 });
+  });
+
+  it('有档案且命中 → +pillarBonus(8)', () => {
+    expect(applyPersonaAdjust(50, '工具评测', true)).toEqual({ heat: 58, adjust: 8 });
+  });
+
+  it('有档案且命中, 加成后超过 100 → clamp 100 (95→100)', () => {
+    expect(applyPersonaAdjust(95, '工具评测', true)).toEqual({ heat: 100, adjust: 5 });
+  });
+
+  it('有档案且未命中 → ×offPillarFactor(0.7) 四舍五入 (80→56)', () => {
+    expect(applyPersonaAdjust(80, null, true)).toEqual({ heat: 56, adjust: -24 });
+  });
+
+  it('有档案且未命中, 四舍五入边界 (heat=75 → 52.5 → 53)', () => {
+    expect(applyPersonaAdjust(75, null, true)).toEqual({ heat: 53, adjust: -22 });
+  });
+
+  it('adjust 为实际加减值, 可负', () => {
+    const { heat, adjust } = applyPersonaAdjust(80, null, true);
+    expect(heat + adjust * -1 + adjust).toBe(heat);
+    expect(adjust).toBeLessThan(0);
+  });
+
+  it('PERSONA_ADJUST 常量导出 pillarBonus=8, offPillarFactor=0.7', () => {
+    expect(PERSONA_ADJUST.pillarBonus).toBe(8);
+    expect(PERSONA_ADJUST.offPillarFactor).toBe(0.7);
   });
 });
