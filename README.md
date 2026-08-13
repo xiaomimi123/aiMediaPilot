@@ -2,7 +2,7 @@
 
 > AI 自媒体工作台 — 自用创作闭环: 选题灵感 → 写稿改稿 → 拍摄/发布追踪 → 数据复盘。 主阵地抖音, 其他平台 (B站/YouTube/推特/小红书/公众号/快手/微博) 走分发登记。 设计预留 SaaS 扩展空间 (`userId` 隔离已在 schema, 未接 auth/计费)。
 
-**当前状态:** 单用户 MVP。 经历三次定位调整: "个人视频分析工具" → "小白向导式智能体" → "自用自媒体工作台" → **"Creator Cockpit 整体移植"** (2026-08-04, 详见 `docs/superpowers/specs/2026-08-04-cockpit-adoption-design.md`)。 首页 `/` 与全站外壳已换成移植自开源项目 [creator-cockpit](https://github.com/AverrryHu/creator-cockpit) 的纸质编辑部风格操作台; 紧接着完成**二期「平台页面融入驾驶舱」** (2026-08-05, 详见 `docs/superpowers/specs/2026-08-05-platform-pages-fusion-design.md`)——把一期挂壳的创作/数据/设置页面功能长进驾驶舱视图, 侧栏「平台」组解散; 再完成**三期「产出优先信息架构重组」** (2026-08-06, 详见 `docs/superpowers/specs/2026-08-06-platform-first-ia-design.md`)——侧栏从「流程优先」六视图重排为「产出优先」按平台组织; 又完成**四期「AI 深度采集 · 热点雷达」** (2026-08-13, 详见 `docs/superpowers/specs/2026-08-13-radar-deep-collection-design.md`)——新增服务端热点雷达管线 (关键词 → Tavily 搜索 → AI 逐篇阅读评分 → 热度排行), 独立「热点雷达」侧栏视图 + 设置「雷达配置」卡, 零 Claude 额度消耗 (阅读评分走用户自己的 AI provider); 又完成**五期「创作质量深化」** (2026-08-13, 详见 `docs/superpowers/specs/2026-08-13-script-quality-design.md`)——抖音脚本生成从单次大 prompt 升级为「研究→写作」两阶段管线, 产出可直接口播的完整逐字稿 (`script.sections[]`), 叠加 Tavily 联网研究打底 + 抽屉素材框, 定稿自动沉淀为风格样本供后续生成 few-shot 参照, 新增分块/整稿两级改稿; 又完成**六期「抽屉改稿闭环 + 小红书两阶段接入」** (2026-08-14, 详见 `docs/superpowers/specs/2026-08-14-drawer-closure-xhs-design.md`)——补齐五期两个已知限制 (抽屉关闭后改稿 UI 不可恢复、定稿自动推进阶段失效), 同时把小红书从旧单阶段生成升级为与抖音同款的「研究→写作」两阶段管线, 抽屉新增小红书素材简报/正文渲染 + 整稿指令框; 又完成**七期「小红书 AI 配图生成」** (2026-08-14, 详见 `docs/superpowers/specs/2026-08-14-xhs-image-generation-design.md`)——把小红书图文笔记里的 `shotIdeas` 配图建议升级为 gpt-image-1 真实生成的图片, 抽屉内一键全生成 (封面+全部配图), 单张失败可单独重试, 完成后打包 zip (png + 发布文案) 一键下载, 实现"定稿即成品"。 本文档 §3 为当前实际 IA。
+**当前状态:** 单用户 MVP。 经历三次定位调整: "个人视频分析工具" → "小白向导式智能体" → "自用自媒体工作台" → **"Creator Cockpit 整体移植"** (2026-08-04, 详见 `docs/superpowers/specs/2026-08-04-cockpit-adoption-design.md`)。 首页 `/` 与全站外壳已换成移植自开源项目 [creator-cockpit](https://github.com/AverrryHu/creator-cockpit) 的纸质编辑部风格操作台; 紧接着完成**二期「平台页面融入驾驶舱」** (2026-08-05, 详见 `docs/superpowers/specs/2026-08-05-platform-pages-fusion-design.md`)——把一期挂壳的创作/数据/设置页面功能长进驾驶舱视图, 侧栏「平台」组解散; 再完成**三期「产出优先信息架构重组」** (2026-08-06, 详见 `docs/superpowers/specs/2026-08-06-platform-first-ia-design.md`)——侧栏从「流程优先」六视图重排为「产出优先」按平台组织; 又完成**四期「AI 深度采集 · 热点雷达」** (2026-08-13, 详见 `docs/superpowers/specs/2026-08-13-radar-deep-collection-design.md`)——新增服务端热点雷达管线 (关键词 → Tavily 搜索 → AI 逐篇阅读评分 → 热度排行), 独立「热点雷达」侧栏视图 + 设置「雷达配置」卡, 零 Claude 额度消耗 (阅读评分走用户自己的 AI provider); 又完成**五期「创作质量深化」** (2026-08-13, 详见 `docs/superpowers/specs/2026-08-13-script-quality-design.md`)——抖音脚本生成从单次大 prompt 升级为「研究→写作」两阶段管线, 产出可直接口播的完整逐字稿 (`script.sections[]`), 叠加 Tavily 联网研究打底 + 抽屉素材框, 定稿自动沉淀为风格样本供后续生成 few-shot 参照, 新增分块/整稿两级改稿; 又完成**六期「抽屉改稿闭环 + 小红书两阶段接入」** (2026-08-14, 详见 `docs/superpowers/specs/2026-08-14-drawer-closure-xhs-design.md`)——补齐五期两个已知限制 (抽屉关闭后改稿 UI 不可恢复、定稿自动推进阶段失效), 同时把小红书从旧单阶段生成升级为与抖音同款的「研究→写作」两阶段管线, 抽屉新增小红书素材简报/正文渲染 + 整稿指令框; 又完成**七期「小红书 AI 配图生成」** (2026-08-14, 详见 `docs/superpowers/specs/2026-08-14-xhs-image-generation-design.md`)——把小红书图文笔记里的 `shotIdeas` 配图建议升级为 gpt-image-1 真实生成的图片, 抽屉内一键全生成 (封面+全部配图), 单张失败可单独重试, 完成后打包 zip (png + 发布文案) 一键下载, 实现"定稿即成品"; 又完成**八期「人设定位驱动选题」** (2026-08-14, 详见 `docs/superpowers/specs/2026-08-14-persona-driven-topics-design.md`)——新增 `PersonaProfile` 人设定位档案(受众/想吸引的粉丝/3-5 条内容支柱/差异化角度/忌讳), 设置页「人设定位」卡支持直接编辑与「AI 帮我起草」五问访谈(DeepSeek 综合风格档案+定稿样本+雷达关键词起草, 只回填表单不落库, 保存才写库), 建立后自动注入三处: 热点雷达阅读评分(命中内容支柱 +8 分/未命中 ×0.7 降权 + 雷达页支柱名/"偏离定位"徽标)、选题与灵感生成(倾斜推荐更贴合定位的方向)、抖音与小红书写稿角度(受众画像与差异化角度约束切入点, 公众号与改稿路由不注入); 无档案时以上行为与现状完全一致(零迁移)。 本文档 §3 为当前实际 IA。
 
 ---
 
@@ -355,13 +355,13 @@ API: `POST/GET /api/v1/topics`、`PATCH /api/v1/topics/[id]`、`POST/GET /api/v1
 ### LLM 配置
 
 - 视频管线 vision LLM 是 Bailian Qwen-VL,文本 LLM 是 DeepSeek。
-- DeepSeek key: 优先读设置「AI 服务配置」卡里的 `AIConfig` 记录 (`provider='deepseek'`, AES-256-GCM 加密存储), 查不到或解密失败时回退 `.env` 里的 `DEEPSEEK_API_KEY` (`src/lib/llm/resolve-key.ts` 的 `resolveDeepSeekApiKey`, 所有消费点——脚本生成/选题生成/灵感总结/标题反馈/热点雷达/内容分析复盘——统一走它)。
+- DeepSeek key: 优先读设置「AI 服务配置」卡里的 `AIConfig` 记录 (`provider='deepseek'`, AES-256-GCM 加密存储), 查不到或解密失败时回退 `.env` 里的 `DEEPSEEK_API_KEY` (`src/lib/llm/resolve-key.ts` 的 `resolveDeepSeekApiKey`, 所有消费点——脚本生成/选题生成/灵感总结/标题反馈/热点雷达/内容分析复盘/人设定位访谈起草(八期)——统一走它)。
 - vision LLM (OpenAI/Bailian) key 仍只在 `.env` (OPENAI_API_KEY, OPENAI_BASE_URL 等), 未纳入本次桥接范围。
 
 ### 测试覆盖
 
-- 1048 tests 绝大多数是 API 单测 + 纯函数 + mock prisma (含 Cockpit `model/workflow/schedule/calculations`/迁移映射的原版测试; 四期新增雷达搜索层/热度合成/阅读 prompt/API 路由测试; 五期新增研究层/风格层/两阶段生成/两级改稿/风格档案 API 的 mock 测试; 六期新增 `draft-restore.ts` 窄化解析纯函数测试(含新增的 xiaohongshu 形状嗅探用例) + xiaohongshu 分支两阶段化/`depositStyleSample` 平台分支沉淀测试 + `generate-flow.ts` xiaohongshu 跳过二次保存的回归用例; 七期新增 `GptImageProvider`/`resolveImageApiKey` 单测 + 出图计划 prompt/schema 与 `images/plan`、`images`、`images/archive` 三条路由的 mock 测试(含 idx 字段匹配/写盘容错/zip 打包缺文件跳过等边界) + `draft-restore.ts` 的 `imagePlan`/`images` 窄化解析用例; 七期终审修复新增 `writeGeneratedImage` 原子写 (`src/lib/image/write-generated-image.ts`) 的并发竞态 mock 回归 + `output.images` 父键缺失场景的**真实连 Postgres 集成测试** `tests/lib/image/write-generated-image.integration.test.ts`(需本机 docker compose 起了 postgres, 用真实 `PrismaClient` 建临时 User/ScriptDraft 行、跑写入、`findUnique` 读回断言、afterAll 清理))
-- UI 一律走手动 E2E (是有意识的取舍); 五期收尾用真实 DeepSeek+Tavily key 额外跑了一轮全链路真实 E2E (非 mock), 见 `.superpowers/sdd/2026-08-13-script-quality/task-8-report.md`; 六期收尾同样用真实 key 跑通抖音懒加载恢复+`picked`自动推进/小红书两阶段生成+整稿改稿+定稿沉淀样本, 并额外用浏览器走查确认了抽屉小红书面板渲染、页顶整稿指令回填六字段骨架、关抽屉重开(不刷新)恢复三处 UI 行为, 详见 `.superpowers/sdd/2026-08-14-drawer-closure-xhs/task-6-report.md`; **七期收尾未跑真实生图 E2E**(用户尚未配置 OpenAI 生图 key, 与 DeepSeek/Tavily 先例同样的降级——mock 全过, 真实成图/打包验证责任转移给用户配 key 后自验), 详见 `.superpowers/sdd/2026-08-14-xhs-image-generation/task-6-report.md`
+- 1172 tests 绝大多数是 API 单测 + 纯函数 + mock prisma (含 Cockpit `model/workflow/schedule/calculations`/迁移映射的原版测试; 四期新增雷达搜索层/热度合成/阅读 prompt/API 路由测试; 五期新增研究层/风格层/两阶段生成/两级改稿/风格档案 API 的 mock 测试; 六期新增 `draft-restore.ts` 窄化解析纯函数测试(含新增的 xiaohongshu 形状嗅探用例) + xiaohongshu 分支两阶段化/`depositStyleSample` 平台分支沉淀测试 + `generate-flow.ts` xiaohongshu 跳过二次保存的回归用例; 七期新增 `GptImageProvider`/`resolveImageApiKey` 单测 + 出图计划 prompt/schema 与 `images/plan`、`images`、`images/archive` 三条路由的 mock 测试(含 idx 字段匹配/写盘容错/zip 打包缺文件跳过等边界) + `draft-restore.ts` 的 `imagePlan`/`images` 窄化解析用例; 七期终审修复新增 `writeGeneratedImage` 原子写 (`src/lib/image/write-generated-image.ts`) 的并发竞态 mock 回归 + `output.images` 父键缺失场景的**真实连 Postgres 集成测试** `tests/lib/image/write-generated-image.integration.test.ts`(需本机 docker compose 起了 postgres, 用真实 `PrismaClient` 建临时 User/ScriptDraft 行、跑写入、`findUnique` 读回断言、afterAll 清理); 八期新增 `PersonaProfile` 数据层(`isProfileEstablished`/`parsePersonaPillars`/`validatePillarHit`)/`buildPersonaSection`/`applyPersonaAdjust`/`pickPersonaBadge` 纯函数测试 + `persona/profile`、`persona/draft` 路由 mock 测试 + 雷达评分/选题/灵感/写稿四处注入点"无档案字符级一致"回归测试)
+- UI 一律走手动 E2E (是有意识的取舍); 五期收尾用真实 DeepSeek+Tavily key 额外跑了一轮全链路真实 E2E (非 mock), 见 `.superpowers/sdd/2026-08-13-script-quality/task-8-report.md`; 六期收尾同样用真实 key 跑通抖音懒加载恢复+`picked`自动推进/小红书两阶段生成+整稿改稿+定稿沉淀样本, 并额外用浏览器走查确认了抽屉小红书面板渲染、页顶整稿指令回填六字段骨架、关抽屉重开(不刷新)恢复三处 UI 行为, 详见 `.superpowers/sdd/2026-08-14-drawer-closure-xhs/task-6-report.md`; **七期收尾未跑真实生图 E2E**(用户尚未配置 OpenAI 生图 key, 与 DeepSeek/Tavily 先例同样的降级——mock 全过, 真实成图/打包验证责任转移给用户配 key 后自验), 详见 `.superpowers/sdd/2026-08-14-xhs-image-generation/task-6-report.md`; 八期收尾用真实 DeepSeek+Tavily key 跑通访谈建档(真实起草 5 条具体支柱→保存→established)+真实雷达扫描(`heatFactors` 命中 `pillarHit`/`personaAdjust`)+真实生成一篇抖音稿(临时 `console.log` 验证后移除, 确认 727 字符 persona 段确实注入 system prompt)+无档案回退(临时清空再恢复), 过程中发现并修复了一个环境类问题(radar-worker 长驻进程未重启导致跑的是旧代码, 非产品代码 bug), 详见 `.superpowers/sdd/2026-08-14-persona-driven-topics/task-6-report.md`
 - Worker 集成测试缺 (auto-sync-worker, content-analyze-worker, radar-worker 的每日 repeat 调度层)
 
 ---
@@ -398,7 +398,7 @@ npm run worker:dev   # BullMQ workers (analyze / retro / auto-sync / radar 四�
 
 ```bash
 npm run typecheck    # tsc --noEmit
-npm test             # vitest, 1048 tests across 97 files (含 Cockpit 纯逻辑层原版测试; 其中 1 个文件是真实连 Postgres 的集成测试, 需先 docker compose up -d postgres)
+npm test             # vitest, 1172 tests across 104 files (含 Cockpit 纯逻辑层原版测试; 其中 1 个文件是真实连 Postgres 的集成测试, 需先 docker compose up -d postgres)
 npm test -- <filter> # 跑某个 file
 ```
 
@@ -413,6 +413,13 @@ npx prisma db push   # 同步 + regenerate client
 ### 重启 dev / worker (改 schema 后必须)
 
 dev server 和 worker 都缓存 prisma client。 schema 改后必须重启它们才能用新字段。
+
+`worker:dev` (`tsx src/jobs/workers/index.ts`) 是长驻进程, 启动时一次性 import 所有依赖文件, **不像
+Next dev server 那样对代码改动热重载** —— 改了 `src/lib/radar/`（或任何 worker 会 import 到的模块）
+后, 常驻的 worker 进程仍在跑旧代码且不会报错 (只是悄悄少算/漏算新逻辑), 必须手动 kill 后重新
+`npm run worker:dev`。 八期 T6 收尾真实验证雷达评分注入时踩到过 (worker 在人设定位 5 个提交之前就
+启动着, 扫描出的 `heatFactors` 一直缺 `pillarHit`/`personaAdjust`, 重启后才正常), 与"改 schema 必须
+重启"是同一类"长驻进程 + 代码不同步"问题, 重启即愈。
 
 ### 存量数据迁移到 Cockpit (一次性)
 

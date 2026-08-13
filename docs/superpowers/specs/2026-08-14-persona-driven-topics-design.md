@@ -57,3 +57,22 @@ model PersonaProfile {                  // userId 单行，学 StyleProfile 先�
 | 老雷达条目无 pillarHit | 展示层缺字段不渲染徽标、不调权（零迁移） |
 | 草稿覆盖已存档案 | draft 只回填表单不落库，保存才 PUT |
 | 真实 E2E | 收尾：真实建档访谈一轮 + 真实雷达扫描验证徽标/调权 + 真实生成一篇验证角度注入（key 均已就绪） |
+
+## 6. 实际实施结论 (T6 收尾)
+
+**实施期间产生的技术决策（Task 1-5 已知不确定点回收）：**
+
+- **`vision.ts` `CallStructuredOpts<T>` 泛型放宽**：`responseSchema` 类型从 `z.ZodType<T>` 改为 `z.ZodType<T, z.ZodTypeDef, any>`（Input 显式设为 `any`）。原因：`radar-read.ts` 的 `pillarHit` 字段用了 `.nullable().optional().default(null)`，此时 zod schema 的 Input 类型（`string | null | undefined`）与 Output 类型（`string | null`）不一致，若 `CallStructuredOpts<T>` 仍要求 Input === Output 会在其余不带 `.default()` 的调用点报 "not assignable"。放宽只影响类型层，不影响运行时行为；验证过其余调用点（script-write-douyin/xhs、topic-discovery 等）类型推断未被弱化。
+- **niche 硬编码 `'ai-knowledge'`**：`persona/draft/route.ts` 的 `DEFAULT_NICHE` 常量沿用 `radar-read.ts` 先例——产品当前只服务单一 AI 知识赛道，5 问访谈本身也不收集 niche，没有别的来源可取。多赛道场景需要改造（不在本期范围）。
+- **`refine` 改稿路由不注入 persona——系已知边界**：spec §3 明确只列三处注入（雷达评分/选题灵感/写稿角度），`src/app/api/v1/scripts/[id]/refine/route.ts` 未纳入。改稿是针对已有稿件的局部调整（用户给具体修改指令），角度已经在首次生成时由 persona 段定过，改稿场景重复注入意义不大且会拉长 prompt；`gongzhonghao` 平台生成同样不注入（spec §3 明确写明"gongzhonghao 不动"）。两处都是设计边界，不是遗漏。
+- **`heatScore` 与 `heatFactors` 的分层语义**：`RadarItem.heatScore`（入库/排序用的最终分）已经过 `composeHeat`（四维加权 + 共现加成）**和** `applyPersonaAdjust`（命中 +8 / 未命中 ×0.7）两层处理，是"最终展示分"。而 `heatFactors.relevance/freshness/discussion/feasibility` 是 `RADAR_READ` 阅读评分的**原始四维分**（未经任何调整），`heatFactors.cooccurrenceSources`/`personaAdjust`/`pillarHit` 是过程量（共现来源数 / 人设调权增量 / 命中的支柱名）。换句话说：`heatScore` 是"结果"，`heatFactors` 是"结果是怎么算出来的"审计轨迹——人设调权只体现在 `heatScore` 与 `heatFactors.personaAdjust` 两处，不会回写四维原始分。
+
+**真实 E2E 实测结果与偏差（真实 DeepSeek + Tavily key，非 mock）：**
+
+1. **①访谈建档**：5 问真实作答（AI 知识类抖音博主 / 想吸引想用 AI 提效搞副业的普通人 / 擅长工具实测），`POST /api/v1/persona/draft` 返回 5 条具体支柱（翻车实测/效率革命/行业内幕/赚钱案例/技术祛魅，均能直接派生选题方向，非"分享干货"类空泛表述）；`PUT` 保存后 `GET` 返回 `established: true`。符合预期，无偏差。
+2. **②真实雷达扫描**：首次触发命中 24h 滚动读预算已耗尽（`errors: [{stage: 'budget', message: '今日阅读额度已用完'}]`，`read: 0`）——临时 `PUT /api/v1/radar/config { dailyLimit: 200 }` 重扫后暴露了**一个真实的环境类问题（非产品代码 bug）**：常驻的 `radar-worker`（`npm run worker:dev`，`tsx` 长驻进程，无热重载）启动时间早于本期全部 5 个 persona 提交，扫描出的 `RadarItem.heatFactors` 完全没有 `pillarHit`/`personaAdjust` 键——worker 进程在导入时固化了旧版 `run.ts`（无人设注入逻辑），此后仓库代码怎么改它都不知道。重启 worker 进程后重新扫描，`heatFactors` 正确带上 `pillarHit: "行业内幕"`（7/7 命中同一支柱，因搜索结果都是 AI 模型资讯类新闻）与 `personaAdjust`（多数为 0——因共现加成已让 `composeHeat` 基础分逼近 100 上限，`applyPersonaAdjust` 的 `clamp(heat+8, 0, 100)` 空间有限）。**这与 README 已有的"dev server 长时间运行持旧 Prisma Client 会 500"是同一类问题（长驻进程 + 无热重载 + 代码变更），本期把它记录为通用开发提示（见 §6 下方"新增开发提示"），不需要代码修复。** 雷达页徽标渲染走 `pickPersonaBadge` 纯函数，用真实 `heatFactors` 数据复现验证（`pillarHit` 非空 → `{type:'pillar', name}` → 渲染支柱名徽标），未做浏览器像素级走查（同 T5 先例，API 级复现替代）。
+3. **③真实生成一篇抖音稿**：主题「实测一款新出的 AI 写作工具能不能替代人工写公众号文章」，`POST /api/v1/scripts/generate`（platform=douyin）成功返回完整逐字稿。system prompt 注入证据：临时在 `scripts/generate/route.ts` 里加了一行 `console.log('personaSection.length =', personaSection.length)`，日志确认 `personaSection.length = 727`（非 0，内容含真实档案的受众/支柱段落），验证后已从代码中移除（`git diff` 确认无残留，未进入任何 commit）。稿件内容角度体现受众定位：hook/main 段落围绕"实测""翻车""AI 有边界"展开，与档案 `angle` 字段「真实是最大差异化：所有结论来自亲自测试，不吹不黑，翻车也照说」高度吻合，CTA 段呼应 pillar「翻车实测」（"下次实测AI写文案，告诉你哪些能信、哪些纯瞎扯"）。
+4. **④无档案回退**：临时 `PUT` 清空 `audience` 字段（`established` 变为 `false`）后：生成一篇稿件复现 `personaSection.length = 0`（同法用临时 `console.log` 验证后移除）；雷达扫描（新增临时关键词避开 URL 去重，确保读到新内容）复现 `heatFactors` 中 `pillarHit: null`、`personaAdjust: 0` 对全部 7 条命中结果一致成立——行为与"无档案"现状完全一致。验证完毕后已用①保存的完整档案内容 `PUT` 恢复 `PersonaProfile`（`established` 恢复 `true`），并把临时调高的 `radar.dailyLimit` 恢复为 20，删除本轮回退验证专用的临时关键词与产生的雷达条目/测试稿件（`PersonaProfile` 本身作为①的真实成果保留不删）。
+5. **⑤typecheck + test + build**：全绿（详见 task-6-report.md 命令输出）。
+
+**新增开发提示（记入 README 技术债 / 本地开发章节）：**`radar-worker`（`npm run worker:dev`）是 `tsx` 常驻进程，不像 Next dev server 那样对 API route 改动热重载——**改了 `src/lib/radar/` 或其任何依赖后必须手动重启 worker 进程**，否则会在旧代码上跑，且不会报错（只是悄悄少算/漏算新逻辑），排查成本高。与「dev server 长时间运行持旧 Prisma Client 会 500」同属"长驻进程 + 代码变更不同步"这一类问题，重启即可解决。
