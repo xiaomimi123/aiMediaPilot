@@ -13,6 +13,7 @@ import { EditablePageTitle, creatorMark, dashboardTitle, normalizeGoalQuotas } f
 import { AIProviderCard } from "../settings-cards/ai-provider-card";
 import { BaselineCard } from "../settings-cards/baseline-card";
 import { RadarConfigCard } from "../settings-cards/radar-config-card";
+import { StyleProfileCard } from "../settings-cards/style-profile-card";
 
 const DESIGN_STYLE_OPTIONS: ReadonlyArray<{
   id: DesignStyle;
@@ -100,6 +101,7 @@ export function SettingsView({ state, pageTitle, updateTitle, updateDesignStyle,
       <AIProviderCard />
       <BaselineCard baselinePlays={settings.baselinePlays} retroMedian={settings.retroMedian} retroCount={settings.retroCount} />
       <RadarConfigCard />
+      <StyleProfileCard />
       <div className="panel settings-card"><div className="settings-icon">⇄</div><div><h2>账号管理</h2><p>绑定抖音 / 小红书账号、查看登录状态与手动同步，都在独立的账号管理页完成——这里只是第二个入口。</p><Link className="text-button" href="/accounts">前往账号管理 →</Link></div></div>
     </div>
   </section>;

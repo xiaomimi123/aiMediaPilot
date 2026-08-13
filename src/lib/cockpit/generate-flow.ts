@@ -5,6 +5,10 @@ export interface GenerateScriptRequest {
   itemId: string;
   title: string;
   platform: ContentPlatform;
+  /** T4 五期: 用户自备素材原文 (可选)，douyin 生成时会尝试真实引用进正文 */
+  materials?: string;
+  /** T4 五期: 目标时长秒数 (30/45/60)，仅 douyin 消费，其它平台忽略 */
+  durationSec?: number;
 }
 
 export interface GenerateScriptDeps {
@@ -18,6 +22,13 @@ export interface GenerateScriptDeps {
   isMounted: () => boolean;
   /** 抽屉当前展示的是否仍是发起这次生成时的那篇内容 (对应 currentItemIdRef.current === itemId) */
   isCurrentItem: (itemId: string) => boolean;
+  /**
+   * T7: 生成 (+ 非 douyin 平台的二次保存) 全部成功后触发一次, 携带最终可用的
+   * scriptDraftId 及原始响应字段 (douyin 额外带 sections/research/researchDegraded/hooks)。
+   * 调用方用它把 T4 新字段落到抽屉自己的 state 上 (mergeScript 只管 ScriptDraft 六个骨架字段)。
+   * 与 mergeScript 共用同一处 isMounted/isCurrentItem 陈旧结果丢弃判断。
+   */
+  onGenerated?: (data: Record<string, unknown>) => void;
 }
 
 /**
@@ -38,18 +49,38 @@ export async function runGenerateScript(
   request: GenerateScriptRequest,
   deps: GenerateScriptDeps,
 ): Promise<void> {
-  const { itemId, title, platform } = request;
+  const { itemId, title, platform, materials, durationSec } = request;
   deps.setGenerating(true);
   try {
     const niche = await deps.resolveDefaultNiche();
     const genRes = await deps.fetch("/api/v1/scripts/generate", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ topic: title, niche, platform }),
+      body: JSON.stringify({
+        topic: title,
+        niche,
+        platform,
+        ...(materials ? { materials } : {}),
+        ...(durationSec !== undefined ? { durationSec } : {}),
+      }),
     });
     const genJson = await genRes.json();
     if (!genJson.success) {
       deps.notify(genJson.message || "生成失败");
+      return;
+    }
+
+    // douyin (T4 五期): /scripts/generate 路由自己创建并持久化了 ScriptDraft、
+    // 响应里已带 scriptDraftId —— 不再像旧逻辑那样二次 POST /api/v1/scripts,
+    // 否则会在数据库里留下一条重复的 ScriptDraft (真正被引用的仍是 generate
+    // 路由那条, 二次保存那条成了孤儿记录)。其它平台的生成路由不落库, 仍然要靠
+    // 这次二次保存才会产生 ScriptDraft, 相应路径保持不变。
+    if (platform === "douyin") {
+      if (!deps.isMounted() || !deps.isCurrentItem(itemId)) return;
+      const data = genJson.data as Record<string, unknown>;
+      deps.onGenerated?.(data);
+      deps.mergeScript(itemId, deps.mapGeneratedToScript(platform, data));
+      deps.notify("AI 脚本已生成并回填");
       return;
     }
 
@@ -67,6 +98,7 @@ export async function runGenerateScript(
 
     // 抽屉已关闭或已切换到另一篇内容: 结果静默丢弃, 不回填也不提示
     if (!deps.isMounted() || !deps.isCurrentItem(itemId)) return;
+    deps.onGenerated?.({ ...(genJson.data as Record<string, unknown>), scriptDraftId: (saveJson.data as { id?: unknown } | undefined)?.id });
     deps.mergeScript(itemId, deps.mapGeneratedToScript(platform, genJson.data));
     deps.notify("AI 脚本已生成并回填");
   } catch (e) {

@@ -56,16 +56,14 @@ describe("runGenerateScript", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("生成 + 保存均成功 → mergeScript 收到映射后的字段并带上正确 itemId, notify 成功文案, generating 复位", async () => {
+  it("douyin: 生成成功 → 不再二次 POST /api/v1/scripts (T4 五期 generate 路由已自己落库并返回 scriptDraftId), mergeScript 收到映射后的字段, onGenerated 收到完整响应", async () => {
     const setGenerating = vi.fn();
     const notify = vi.fn();
     const mergeScript = vi.fn();
-    const generatedData = { titles: [{ text: "标题一" }], platform: "douyin", inspirationApplied: false };
+    const onGenerated = vi.fn();
+    const generatedData = { titles: [{ text: "标题一" }], scriptDraftId: "draft-1", sections: [{ role: "hook", startSec: 0, endSec: 3, text: "钩子" }] };
     const mapGeneratedToScript = vi.fn().mockReturnValue({ headline: "标题一" });
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({ json: async () => ({ success: true, data: generatedData }) })
-      .mockResolvedValueOnce({ json: async () => ({ success: true }) });
+    const fetchMock = vi.fn().mockResolvedValueOnce({ json: async () => ({ success: true, data: generatedData }) });
 
     await runGenerateScript(
       { itemId: "content-1", title: "示例标题", platform: "douyin" },
@@ -75,12 +73,70 @@ describe("runGenerateScript", () => {
         notify,
         mergeScript,
         mapGeneratedToScript,
+        onGenerated,
         isCurrentItem: (id) => id === "content-1",
       }),
     );
 
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(mapGeneratedToScript).toHaveBeenCalledWith("douyin", generatedData);
     expect(mergeScript).toHaveBeenCalledWith("content-1", { headline: "标题一" });
+    expect(onGenerated).toHaveBeenCalledWith(generatedData);
+    expect(notify).toHaveBeenCalledWith("AI 脚本已生成并回填");
+    expect(setGenerating).toHaveBeenLastCalledWith(false);
+  });
+
+  it("douyin: 请求体透传 materials/durationSec (未提供时不出现在请求体里)", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({ json: async () => ({ success: true, data: { titles: [] } }) });
+
+    await runGenerateScript(
+      { itemId: "content-1", title: "标题", platform: "douyin", materials: "素材原文", durationSec: 60 },
+      baseDeps({ fetch: fetchMock as unknown as typeof fetch }),
+    );
+
+    const genBody = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(genBody.materials).toBe("素材原文");
+    expect(genBody.durationSec).toBe(60);
+
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValueOnce({ json: async () => ({ success: true, data: { titles: [] } }) });
+    await runGenerateScript(
+      { itemId: "content-1", title: "标题", platform: "douyin" },
+      baseDeps({ fetch: fetchMock as unknown as typeof fetch }),
+    );
+    const genBody2 = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(genBody2).not.toHaveProperty("materials");
+    expect(genBody2).not.toHaveProperty("durationSec");
+  });
+
+  it("非 douyin 平台 (如 xiaohongshu): 沿用生成 + 二次保存两阶段流程, mergeScript 收到映射字段, onGenerated 带上保存后的 scriptDraftId", async () => {
+    const setGenerating = vi.fn();
+    const notify = vi.fn();
+    const mergeScript = vi.fn();
+    const onGenerated = vi.fn();
+    const generatedData = { titles: [{ text: "标题一" }], platform: "xiaohongshu", inspirationApplied: false };
+    const mapGeneratedToScript = vi.fn().mockReturnValue({ headline: "标题一" });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ json: async () => ({ success: true, data: generatedData }) })
+      .mockResolvedValueOnce({ json: async () => ({ success: true, data: { id: "draft-2" } }) });
+
+    await runGenerateScript(
+      { itemId: "content-1", title: "示例标题", platform: "xiaohongshu" },
+      baseDeps({
+        fetch: fetchMock as unknown as typeof fetch,
+        setGenerating,
+        notify,
+        mergeScript,
+        mapGeneratedToScript,
+        onGenerated,
+        isCurrentItem: (id) => id === "content-1",
+      }),
+    );
+
+    expect(mapGeneratedToScript).toHaveBeenCalledWith("xiaohongshu", generatedData);
+    expect(mergeScript).toHaveBeenCalledWith("content-1", { headline: "标题一" });
+    expect(onGenerated).toHaveBeenCalledWith({ ...generatedData, scriptDraftId: "draft-2" });
     expect(notify).toHaveBeenCalledWith("AI 脚本已生成并回填");
     expect(setGenerating).toHaveBeenLastCalledWith(false);
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -91,7 +147,7 @@ describe("runGenerateScript", () => {
     expect(saveBody.output).not.toHaveProperty("inspirationApplied");
   });
 
-  it("保存接口返回失败 → notify 报错且不回填, 不因为生成阶段成功了就误报成功", async () => {
+  it("非 douyin 平台: 保存接口返回失败 → notify 报错且不回填, 不因为生成阶段成功了就误报成功", async () => {
     const notify = vi.fn();
     const mergeScript = vi.fn();
     const fetchMock = vi
@@ -100,7 +156,7 @@ describe("runGenerateScript", () => {
       .mockResolvedValueOnce({ json: async () => ({ success: false, message: "保存失败: 数据库繁忙" }) });
 
     await runGenerateScript(
-      { itemId: "content-1", title: "标题", platform: "douyin" },
+      { itemId: "content-1", title: "标题", platform: "xiaohongshu" },
       baseDeps({ fetch: fetchMock as unknown as typeof fetch, notify, mergeScript }),
     );
 

@@ -14,7 +14,7 @@ import {
 } from "@/lib/cockpit/model";
 import { todayISO } from "@/lib/cockpit/calculations";
 import { stageIndex } from "@/lib/cockpit/workflow";
-import { mapGeneratedToScript } from "@/lib/cockpit/script-mapping";
+import { mapGeneratedToScript, sectionsToScriptFields, type DouyinSection } from "@/lib/cockpit/script-mapping";
 import { runGenerateScript } from "@/lib/cockpit/generate-flow";
 import { CONTENT_PLATFORMS, CONTENT_PLATFORM_LABEL, isContentPlatform, type ContentPlatform } from "@/lib/platform";
 import { Badge, Icon, StarRating } from "./shared";
@@ -40,6 +40,97 @@ async function resolveDefaultNiche(): Promise<string> {
 }
 
 export type ContentDrawerTab = "overview" | "topic" | "script" | "recording" | "editing" | "publish" | "review";
+
+// ---- T7: 抽屉内逐字稿分块交互 (只有 douyin 有 sections/refine 能力) — 生成响应/
+// refine 响应都是未知形状 (来自 LLM 结构化输出经过 zod 校验后的 JSON, 但抽屉这层
+// 仍按仓库既有习惯做一次窄化解析, 不直接信任网络响应的 TS 类型标注)。 ----
+
+const SECTION_ROLE_LABEL: Record<string, string> = { hook: "开头钩子", main: "主体", cta: "结尾行动" };
+
+interface ResearchPoint { fact: string; source: string; usage: string }
+interface ResearchBriefView { points: ResearchPoint[] }
+interface HookCandidate { text: string }
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isDouyinSection(value: unknown): value is DouyinSection {
+  if (!isPlainRecord(value)) return false;
+  return typeof value.role === "string" && typeof value.startSec === "number" && typeof value.endSec === "number" && typeof value.text === "string" && value.text.length > 0;
+}
+
+function parseSections(raw: unknown): DouyinSection[] | null {
+  if (!Array.isArray(raw)) return null;
+  const sections = raw.filter(isDouyinSection);
+  return sections.length > 0 ? sections : null;
+}
+
+function isResearchPoint(value: unknown): value is ResearchPoint {
+  if (!isPlainRecord(value)) return false;
+  return typeof value.fact === "string" && typeof value.source === "string" && typeof value.usage === "string";
+}
+
+function parseResearch(raw: unknown): ResearchBriefView | null {
+  if (!isPlainRecord(raw) || !Array.isArray(raw.points)) return null;
+  const points = raw.points.filter(isResearchPoint);
+  return points.length > 0 ? { points } : null;
+}
+
+function isHookCandidate(value: unknown): value is HookCandidate {
+  return isPlainRecord(value) && typeof value.text === "string" && value.text.length > 0;
+}
+
+function parseHooks(raw: unknown): HookCandidate[] {
+  return Array.isArray(raw) ? raw.filter(isHookCandidate) : [];
+}
+
+/**
+ * 逐字稿分块面板 — 素材简报折叠区 + 整体指令 + 逐块渲染 (含 hook 块下方 3 候选
+ * 切换, 复用 T3 已有的 /api/v1/scripts/{id}/picked 接口) + 每块「换一版」一句话
+ * 指令。拆成独立组件是循 StageScheduleField/StageStatusPanel 的先例——
+ * ContentDrawer 主体 return 本身已经很密, 这块逻辑独立、props 边界清楚, 抽出来
+ * 单独用正常排版写更可读。
+ */
+function ScriptSectionsPanel({ sections, research, researchDegraded, hooks, pickedHookIdx, hookPending, onPickHook, allInstruction, onAllInstructionChange, onRefineAll, refiningAll, openSectionIdx, onToggleSection, sectionInstruction, onSectionInstructionChange, onRefineSection, refiningSectionIdx }: {
+  sections: DouyinSection[];
+  research: ResearchBriefView | null;
+  researchDegraded: boolean;
+  hooks: HookCandidate[];
+  pickedHookIdx: number | null;
+  hookPending: boolean;
+  onPickHook: (idx: number) => void;
+  allInstruction: string;
+  onAllInstructionChange: (value: string) => void;
+  onRefineAll: () => void;
+  refiningAll: boolean;
+  openSectionIdx: number | null;
+  onToggleSection: (idx: number) => void;
+  sectionInstruction: string;
+  onSectionInstructionChange: (value: string) => void;
+  onRefineSection: (idx: number) => void;
+  refiningSectionIdx: number | null;
+}) {
+  const anyRefining = refiningAll || refiningSectionIdx !== null;
+  return <div className="script-sections-panel">
+    {research
+      ? <details className="script-research-details"><summary>素材简报（{research.points.length}）</summary><ul className="script-research-list">{research.points.map((point, idx) => <li key={idx}><p className="script-research-fact">{point.fact}</p><p className="script-research-meta"><span>用法：{point.usage}</span><span>来源：{/^https?:\/\//.test(point.source) ? <a href={point.source} target="_blank" rel="noreferrer">{point.source}</a> : point.source}</span></p></li>)}</ul></details>
+      : researchDegraded ? <p className="field-hint">素材检索这次降级了，稿子按主题直接生成，没有引用具体素材。</p> : null}
+    <div className="script-all-instruction-row">
+      <input value={allInstruction} onChange={(e) => onAllInstructionChange(e.target.value)} maxLength={200} placeholder="整体指令，例如：语气更轻松一些" disabled={anyRefining} aria-label="整体改写指令" />
+      <button type="button" className="secondary-button small" disabled={anyRefining || !allInstruction.trim()} onClick={onRefineAll}>{refiningAll ? "改写中…" : "整体指令"}</button>
+    </div>
+    {sections.map((section, idx) => <div key={idx} className="script-section-card">
+      <div className="script-section-head">
+        <strong>{SECTION_ROLE_LABEL[section.role] ?? section.role} {section.startSec}-{section.endSec}s</strong>
+        <button type="button" className="text-button" disabled={anyRefining} onClick={() => onToggleSection(idx)}>换一版</button>
+      </div>
+      <p className="script-section-text">{section.text}</p>
+      {section.role === "hook" && hooks.length > 0 ? <div className="script-hook-picker">{hooks.map((hook, hookIdx) => <button key={hookIdx} type="button" className={hookIdx === pickedHookIdx ? "script-hook-option active" : "script-hook-option"} disabled={hookPending} aria-pressed={hookIdx === pickedHookIdx} onClick={() => onPickHook(hookIdx)}>候选 {hookIdx + 1}：{hook.text}</button>)}</div> : null}
+      {openSectionIdx === idx ? <div className="script-instruction-row"><input value={sectionInstruction} onChange={(e) => onSectionInstructionChange(e.target.value)} maxLength={200} placeholder="一句话指令，例如：这段再犀利一点" disabled={refiningSectionIdx === idx} aria-label={`第 ${idx + 1} 段改写指令`} /><button type="button" className="secondary-button small" disabled={refiningSectionIdx === idx || !sectionInstruction.trim()} onClick={() => onRefineSection(idx)}>{refiningSectionIdx === idx ? "改写中…" : "确认"}</button></div> : null}
+    </div>)}
+  </div>;
+}
 
 function StageScheduleField({ item, stage, stageEvents, schedule, unschedule, label = "计划完成时间" }: {
   item: ContentItem;
@@ -94,6 +185,24 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
   const [scriptPlatform, setScriptPlatform] = useState<ContentPlatform>(() => defaultScriptPlatform(item.platform));
   const [generating, setGenerating] = useState(false);
   const [titleHint, setTitleHint] = useState("");
+  // ---- T7: 素材（可选）+ 时长 输入, 只有 douyin 消费, 其它平台生成时忽略 ----
+  const [materials, setMaterials] = useState("");
+  const [durationSec, setDurationSec] = useState<30 | 45 | 60>(45);
+  // ---- T7: 本次生成响应里 douyin 特有的新字段 (scriptDraftId/sections/research)。
+  // 六字段骨架 (item.script) 仍是唯一的持久化落点, 这些是纯前端展示/改稿用的
+  // 派生 state, 不进 WorkspaceState。----
+  const [scriptDraftId, setScriptDraftId] = useState<string | null>(null);
+  const [sections, setSections] = useState<DouyinSection[] | null>(null);
+  const [research, setResearch] = useState<ResearchBriefView | null>(null);
+  const [researchDegraded, setResearchDegraded] = useState(false);
+  const [hooks, setHooks] = useState<HookCandidate[]>([]);
+  const [pickedHookIdx, setPickedHookIdx] = useState<number | null>(null);
+  const [pickHookPending, setPickHookPending] = useState(false);
+  const [allInstruction, setAllInstruction] = useState("");
+  const [refiningAll, setRefiningAll] = useState(false);
+  const [openSectionIdx, setOpenSectionIdx] = useState<number | null>(null);
+  const [sectionInstruction, setSectionInstruction] = useState("");
+  const [refiningSectionIdx, setRefiningSectionIdx] = useState<number | null>(null);
   const mountedRef = useRef(true);
   const currentItemIdRef = useRef(item.id);
   currentItemIdRef.current = item.id;
@@ -122,12 +231,30 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
     setScriptPlatform(defaultScriptPlatform(item.platform));
     setTitleHint("");
     lastCheckedTitleRef.current = "";
+    resetScriptGenerationState();
   }, [item.id, item.platform]);
+
+  // T7: 上一个 item / 上一次生成留下的 sections/research/scriptDraftId 等派生
+  // state 全部清空——切换 item 或手动改 scriptPlatform 下拉都要调用, 否则会把
+  // A 内容的分块 UI 错误地叠在 B 内容上 (refine 接口按 scriptDraftId 定位, 不
+  // 清空会拿旧 scriptDraftId 去改一篇看起来是新内容的稿子)。素材（可选）/时长
+  // 输入不在此列——它们是本次生成的输入参数, 切换生成平台后仍可复用。
+  function resetScriptGenerationState() {
+    setScriptDraftId(null);
+    setSections(null);
+    setResearch(null);
+    setResearchDegraded(false);
+    setHooks([]);
+    setPickedHookIdx(null);
+    setAllInstruction("");
+    setOpenSectionIdx(null);
+    setSectionInstruction("");
+  }
 
   async function handleGenerateScript() {
     if (generating) return;
     await runGenerateScript(
-      { itemId: item.id, title: item.title, platform: scriptPlatform },
+      { itemId: item.id, title: item.title, platform: scriptPlatform, materials: materials.trim() || undefined, durationSec: scriptPlatform === "douyin" ? durationSec : undefined },
       {
         // 不能直接把裸的 `fetch` 引用传下去: 原生 fetch 依赖 `this === window`
         // 的隐式绑定, 脱离 window 对象单独调用会抛 "Illegal invocation"。
@@ -140,8 +267,91 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
         setGenerating,
         isMounted: () => mountedRef.current,
         isCurrentItem: (id) => currentItemIdRef.current === id,
+        onGenerated: (data) => {
+          setScriptDraftId(typeof data.scriptDraftId === "string" ? data.scriptDraftId : null);
+          setSections(parseSections(data.sections));
+          setResearch(parseResearch(data.research));
+          setResearchDegraded(Boolean(data.researchDegraded));
+          setHooks(parseHooks(data.hooks));
+          setPickedHookIdx(null);
+        },
       },
     );
+  }
+
+  async function handlePickHook(hookIdx: number) {
+    if (!scriptDraftId || pickHookPending) return;
+    setPickHookPending(true);
+    try {
+      const res = await fetch(`/api/v1/scripts/${scriptDraftId}/picked`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ hookIdx, reviewed: {} }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setPickedHookIdx(hookIdx);
+      } else {
+        notify(json.message || "选定失败");
+      }
+    } catch (e) {
+      notify(e instanceof Error ? e.message : "选定失败，请稍后重试");
+    } finally {
+      setPickHookPending(false);
+    }
+  }
+
+  // 返回是否成功——两个调用点都只在成功时才清空自己的指令输入框, 失败要保留
+  // 用户已经打好的指令原文, 方便直接改一改重试, 不用重新输入一遍。
+  async function runRefine(body: { scope: "section"; sectionIdx: number; instruction: string } | { scope: "all"; instruction: string }): Promise<boolean> {
+    if (!scriptDraftId) return false;
+    const res = await fetch(`/api/v1/scripts/${scriptDraftId}/refine`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    if (json.success) {
+      const nextSections = json.data.sections as DouyinSection[];
+      setSections(nextSections);
+      mergeScript(item.id, sectionsToScriptFields(nextSections));
+      return true;
+    }
+    // 502 (AI 越权改动) 与其余错误共用同一条展示路径 — 路由返回的 message 已经
+    // 是「AI 修改了未指定的段落, 请重试」这类面向用户的完整文案。
+    notify(json.message || "改写失败");
+    return false;
+  }
+
+  async function handleRefineSection(idx: number) {
+    const instruction = sectionInstruction.trim();
+    if (!scriptDraftId || !instruction || refiningSectionIdx !== null || refiningAll) return;
+    setRefiningSectionIdx(idx);
+    try {
+      const succeeded = await runRefine({ scope: "section", sectionIdx: idx, instruction });
+      if (succeeded) {
+        setOpenSectionIdx(null);
+        setSectionInstruction("");
+      }
+    } catch (e) {
+      notify(e instanceof Error ? e.message : "改写失败，请稍后重试");
+    } finally {
+      setRefiningSectionIdx(null);
+    }
+  }
+
+  async function handleRefineAll() {
+    const instruction = allInstruction.trim();
+    if (!scriptDraftId || !instruction || refiningAll || refiningSectionIdx !== null) return;
+    setRefiningAll(true);
+    try {
+      const succeeded = await runRefine({ scope: "all", instruction });
+      if (succeeded) setAllInstruction("");
+    } catch (e) {
+      notify(e instanceof Error ? e.message : "改写失败，请稍后重试");
+    } finally {
+      setRefiningAll(false);
+    }
   }
 
   function handleHeadlineBlur() {
@@ -172,7 +382,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
     {/* “AI 体检”按钮（调 /api/ai/analyze）已在 Task 14 移除：该路由未移植，AI 相关能力统一走 /agent。 */}
     {tab === "topic" ? <div className="drawer-section"><div className="section-title-row"><div><span className="eyebrow">TOPIC GATE</span><h3>大纲卡</h3></div></div><StageScheduleField item={item} stage="topic" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{[["目标受众", "audience"], ["具体痛点", "painPoint"], ["一句话观点", "pointOfView"], ["大家通常怎么讲", "commonAngle"], ["我的反差角度", "contrastAngle"], ["可展示素材", "assets"], ["最低成本拍法", "minimumProduction"]].map(([label, key]) => <label key={key} className="field full"><span>{label}</span><textarea value={String(item.topic[key as keyof typeof item.topic] ?? "")} onChange={(e) => updateTopic({ [key]: e.target.value })} /></label>)}<div className="score-card"><div><span>六维总分</span><strong>{score}<small> / 30</small></strong></div><div className="score-grid">{Object.entries({ audience: "受众", pain: "痛点", scene: "场景", demonstrable: "可展示", distribution: "传播", efficiency: "性价比" }).map(([key, label]) => <label key={key}><span>{label}</span><input type="range" min="0" max="5" value={item.topic.score[key as keyof typeof item.topic.score]} onChange={(e) => updateTopic({ score: { ...item.topic.score, [key]: Number(e.target.value) } })} /><strong>{item.topic.score[key as keyof typeof item.topic.score]}</strong></label>)}</div></div></div> : null}
     {/* “AI 质检”按钮（调 /api/ai/analyze）已在 Task 14 移除：该路由未移植；“用 AI 写脚本”自 Task 2 起改为抽屉内就地生成，不再跳转 /agent。 */}
-    {tab === "script" ? <div className="drawer-section"><div className="section-title-row"><div><span className="eyebrow">SCRIPT</span><h3>先搭结构，再改措辞</h3></div><div style={{ display: "flex", gap: 8 }}><select value={scriptPlatform} onChange={(e) => { setScriptPlatform(e.target.value as ContentPlatform); setTitleHint(""); lastCheckedTitleRef.current = ""; }} disabled={generating} aria-label="生成平台" style={{ height: 34, borderRadius: 9 }}>{CONTENT_PLATFORMS.map((value) => <option key={value} value={value}>{CONTENT_PLATFORM_LABEL[value]}</option>)}</select><button type="button" className="ai-button small" disabled={generating} onClick={handleGenerateScript}><Icon name="spark" />{generating ? "生成中…" : "用 AI 写脚本"}</button></div></div>{!isContentPlatform(item.platform) ? <small className="field-hint">该平台暂不支持 AI 生成，可选相近平台生成后手动调整</small> : null}<StageScheduleField item={item} stage="script" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{[["标题方向", "headline"], ["开头 3 秒", "hook"], ["一句话结论", "conclusion"], ["内容结构", "body"], ["案例 / 演示", "example"], ["结尾行动 / 观点", "ending"]].map(([label, key]) => <label key={key} className="field full"><span>{label}</span><textarea className={key === "body" ? "large" : ""} value={item.script[key as keyof typeof item.script]} onChange={(e) => updateScript({ [key]: e.target.value })} onBlur={key === "headline" ? handleHeadlineBlur : undefined} />{key === "headline" && titleHint ? <small className="field-hint">{titleHint}</small> : null}</label>)}</div> : null}
+    {tab === "script" ? <div className="drawer-section"><div className="section-title-row"><div><span className="eyebrow">SCRIPT</span><h3>先搭结构，再改措辞</h3></div></div>{!isContentPlatform(item.platform) ? <small className="field-hint">该平台暂不支持 AI 生成，可选相近平台生成后手动调整</small> : null}{scriptPlatform === "douyin" ? <div className="script-generate-options"><details className="script-materials-details"><summary>素材（可选）</summary><textarea value={materials} onChange={(e) => setMaterials(e.target.value)} disabled={generating} placeholder="粘贴素材原文、参考链接或要点，生成时会尝试真实引用进正文" /></details><label className="field script-duration-field"><span>时长</span><select value={durationSec} onChange={(e) => setDurationSec(Number(e.target.value) as 30 | 45 | 60)} disabled={generating} aria-label="视频时长">{[30, 45, 60].map((value) => <option key={value} value={value}>{value} 秒</option>)}</select></label></div> : null}<div className="script-generate-actions"><select value={scriptPlatform} onChange={(e) => { setScriptPlatform(e.target.value as ContentPlatform); setTitleHint(""); lastCheckedTitleRef.current = ""; resetScriptGenerationState(); }} disabled={generating} aria-label="生成平台" style={{ height: 34, borderRadius: 9 }}>{CONTENT_PLATFORMS.map((value) => <option key={value} value={value}>{CONTENT_PLATFORM_LABEL[value]}</option>)}</select><button type="button" className="ai-button small" disabled={generating} onClick={handleGenerateScript}><Icon name="spark" />{generating ? "生成中…" : "用 AI 写脚本"}</button></div><StageScheduleField item={item} stage="script" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{sections ? <ScriptSectionsPanel sections={sections} research={research} researchDegraded={researchDegraded} hooks={hooks} pickedHookIdx={pickedHookIdx} hookPending={pickHookPending} onPickHook={handlePickHook} allInstruction={allInstruction} onAllInstructionChange={setAllInstruction} onRefineAll={handleRefineAll} refiningAll={refiningAll} openSectionIdx={openSectionIdx} onToggleSection={(idx) => { setOpenSectionIdx(openSectionIdx === idx ? null : idx); setSectionInstruction(""); }} sectionInstruction={sectionInstruction} onSectionInstructionChange={setSectionInstruction} onRefineSection={handleRefineSection} refiningSectionIdx={refiningSectionIdx} /> : null}{[["标题方向", "headline"], ["开头 3 秒", "hook"], ["一句话结论", "conclusion"], ["内容结构", "body"], ["案例 / 演示", "example"], ["结尾行动 / 观点", "ending"]].map(([label, key]) => <label key={key} className="field full"><span>{label}</span><textarea className={key === "body" ? "large" : ""} value={item.script[key as keyof typeof item.script]} onChange={(e) => updateScript({ [key]: e.target.value })} onBlur={key === "headline" ? handleHeadlineBlur : undefined} />{key === "headline" && titleHint ? <small className="field-hint">{titleHint}</small> : null}</label>)}</div> : null}
     {tab === "recording" ? <div className="drawer-section"><div className="stage-detail-strip"><span>录制阶段</span><Badge tone="recording" color={stageColors.recording}>录制</Badge><small>完成后进入剪辑</small></div><StageScheduleField item={item} stage="recording" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} /><label className="field full"><span>录制备注</span><textarea className="large" value={item.recordingNotes} onChange={(e) => update({ recordingNotes: e.target.value })} placeholder="记录机位、口播、录屏、演示路径和补拍素材…" /></label><div className="checklist"><strong>录制完成清单</strong>{["机位与画面可用", "收音清晰", "口播或演示路径完整", "必要素材与补拍镜头齐全"].map((text) => <label key={text}><input type="checkbox" />{text}</label>)}</div></div> : null}
     {tab === "editing" ? <div className="drawer-section"><div className="stage-detail-strip"><span>剪辑阶段</span><Badge tone="editing" color={stageColors.editing}>剪辑</Badge><small>完成后进入发布</small></div><StageScheduleField item={item} stage="editing" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} /><label className="field full"><span>剪辑备注</span><textarea className="large" value={item.editingNotes} onChange={(e) => update({ editingNotes: e.target.value })} placeholder="记录结构删改、字幕、包装、素材替换和导出要求…" /></label><div className="checklist"><strong>剪辑完成清单</strong>{["开头 5 秒直接进入场景", "案例或演示重点清楚", "字幕清楚可读", "封面与标题已确认", `${item.tier}档制作投入已控制`].map((text) => <label key={text}><input type="checkbox" />{text}</label>)}</div></div> : null}
     {tab === "publish" ? <div className="drawer-section"><StageScheduleField item={item} stage="publishing" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} label="计划发布日期" /><div className="form-grid"><label className="field"><span>发布状态</span><select value={item.publicationStatus} disabled><option value="draft">未排期</option><option value="scheduled">已排期</option><option value="published">已发布</option></select><small>由发布档期和实际发布记录自动更新。</small></label><label className="field"><span>实际发布时间</span><input type="date" value={item.publishedAt} onChange={(e) => update({ publishedAt: e.target.value })} /></label></div><label className="field full"><span>封面文案</span><input value={item.coverCopy} onChange={(e) => update({ coverCopy: e.target.value })} /></label><label className="field full"><span>发布正文</span><textarea className="large" value={item.publishCopy} onChange={(e) => update({ publishCopy: e.target.value })} /></label><label className="field full"><span>小红书链接</span><input value={item.xhsLink} onChange={(e) => update({ xhsLink: e.target.value })} placeholder="https://www.xiaohongshu.com/..." /></label>{item.publicationStatus !== "published" ? <><button className="primary-button full-button" disabled={!item.publishedAt} onClick={markPublished}>标记为已发布</button>{!item.publishedAt ? <p className="validation-note">先填写实际发布时间，系统才会计入大目标。</p> : null}</> : <div className="published-banner"><span>已发布于 {item.publishedAt} · 已进入待复盘列表</span><button onClick={unmarkPublished}>撤销发布记录</button></div>}</div> : null}

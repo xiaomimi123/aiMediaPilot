@@ -32,6 +32,35 @@ function isValidSection(
   );
 }
 
+/**
+ * sections 数组窄化解析后的形态 —— 供 mapDouyin 与抽屉「换一版」/「整体指令」
+ * refine 成功回填共用 (见下方 sectionsToScriptFields)。
+ */
+export interface DouyinSection {
+  role: string;
+  startSec: number;
+  endSec: number;
+  text: string;
+}
+
+/**
+ * sections 数组 → ScriptDraft 的 body（按 `[role start-end s]\n text` 逐块拼接）
+ * + hook（role==='hook' 块的 text）。mapDouyin 的 sections 分支与
+ * content-drawer.tsx 的 refine 成功回填共用这份拼接逻辑，避免两处对同一段
+ * 文案格式各写一份、后续改动漏改一处。
+ */
+export function sectionsToScriptFields(sections: DouyinSection[]): Partial<ScriptDraft> {
+  const draft: Partial<ScriptDraft> = {};
+  if (sections.length > 0) {
+    draft.body = sections.map((s) => `[${s.role} ${s.startSec}-${s.endSec}s]\n${s.text}`).join("\n\n");
+  }
+  const hookSection = sections.find((s) => s.role === "hook");
+  if (hookSection) {
+    draft.hook = hookSection.text;
+  }
+  return draft;
+}
+
 // ---------------------------------------------------------------------------
 // douyin (五期逐字稿形态): hooks[{text,rationale}] / sections[{role,startSec,endSec,text}] /
 //         titles[{text,hookType}] / cover{textOverlay,shotIdea,colorTone}
@@ -52,14 +81,8 @@ function mapDouyin(result: Record<string, unknown>): Partial<ScriptDraft> {
   if (Array.isArray(rawSections) && rawSections.length > 0) {
     // 新形态: 有 sections 数组 → body 由 sections 拼接, hook 取 role==='hook' 块的 text。
     // 单块畸形直接丢弃该块 (窄化解析防御风格), 不回退到旧的 hooks[]/retentionBeats[] 逻辑。
-    const sections = rawSections.filter(isValidSection);
-    if (sections.length > 0) {
-      draft.body = sections.map((s) => `[${s.role} ${s.startSec}-${s.endSec}s]\n${s.text}`).join("\n\n");
-    }
-    const hookSection = sections.find((s) => s.role === "hook");
-    if (hookSection) {
-      draft.hook = hookSection.text;
-    }
+    const sections = rawSections.filter(isValidSection).map((s) => ({ role: String(s.role), startSec: s.startSec, endSec: s.endSec, text: s.text }));
+    Object.assign(draft, sectionsToScriptFields(sections));
   } else {
     // 旧形态: 无 sections → 完全不变的旧逻辑 (hooks[] → hook, retentionBeats[] → body)。
     const hooks = result.hooks;
