@@ -4,6 +4,7 @@ import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { todayISO } from '@/lib/cockpit/calculations';
 import { bumpCockpitRev } from '@/lib/cockpit/server-store';
+import { depositStyleSample } from '@/lib/script/style';
 import type { PickedState } from '@/lib/script-picked/types';
 
 function parsePicked(input: unknown): PickedState | null {
@@ -79,6 +80,13 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
       }
     } catch (e) {
       console.warn('[PUT scripts/picked] cockpit stage advance failed', e);
+    }
+
+    // 定稿即样本 — 沉淀风格样本(幂等, T3 内部已做归属校验); 失败不阻塞定稿本身
+    try {
+      await depositStyleSample(user.id, id);
+    } catch (e) {
+      console.warn('[PUT scripts/picked] deposit style sample failed', e);
     }
 
     return ok({ saved: true });

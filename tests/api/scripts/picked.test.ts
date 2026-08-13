@@ -20,6 +20,9 @@ const prismaMock = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
+const depositStyleSample = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/script/style', () => ({ depositStyleSample }));
+
 import { PUT } from '@/app/api/v1/scripts/[id]/picked/route';
 
 function reqJSON(body: unknown) {
@@ -40,6 +43,7 @@ beforeEach(() => {
   prismaMock.cockpitContent.update.mockResolvedValue({});
   prismaMock.cockpitStageEvent.create.mockResolvedValue({});
   prismaMock.$executeRaw.mockResolvedValue(undefined);
+  depositStyleSample.mockResolvedValue(true);
 });
 
 describe('PUT /api/v1/scripts/[id]/picked', () => {
@@ -126,5 +130,20 @@ describe('PUT /api/v1/scripts/[id]/picked', () => {
     expect(prismaMock.cockpitContent.update).not.toHaveBeenCalled();
     expect(prismaMock.cockpitStageEvent.create).not.toHaveBeenCalled();
     expect(prismaMock.$executeRaw).not.toHaveBeenCalled();
+  });
+
+  it('定稿成功 → 调用 depositStyleSample(userId, draftId)', async () => {
+    const res = await PUT(reqJSON({ reviewed: {} }), ctx);
+    expect(res.status).toBe(200);
+    expect(depositStyleSample).toHaveBeenCalledWith('user1', 'abc');
+  });
+
+  it('depositStyleSample 失败(reject) → 不阻塞定稿, 仍返回 200', async () => {
+    depositStyleSample.mockRejectedValueOnce(new Error('boom'));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const res = await PUT(reqJSON({ reviewed: {} }), ctx);
+    expect(res.status).toBe(200);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });
