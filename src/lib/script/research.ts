@@ -46,7 +46,18 @@ export async function runResearch(
   input: RunResearchInput
 ): Promise<ResearchBrief | null> {
   try {
-    const parts: MaterialPart[] = [];
+    // parts 分两组组装、最后按「精炼素材优先, 搜索正文兜底」的顺序拼接——
+    // composeRawMaterials 超长时是简单的头部保留/尾部截断 (slice(0, maxLen)),
+    // 而 Tavily 搜索经常两次查询各 5 条结果、单条正文就有数千字, 合计轻松突破
+    // MAX_RAW_MATERIALS_LEN; 若仍按"雷达种子→搜索→用户素材"的原始产生顺序拼接,
+    // 用户在素材框里明确填写的内容会被排在最后、经常被整体截断在外, 完全不会
+    // 出现在喂给 DeepSeek 的 rawMaterials 里 (真实调用验证过: 搜索结果一多,
+    // 简报清一色引用搜索来源, 用户素材从未被引用)。改为把「雷达种子」与
+    // 「用户素材」(两者都简短、且是明确关联该选题的高信号内容) 放在 searchParts
+    // 之前, 让容量有限时被截掉的是体积最大、优先级最低的搜索正文, 而不是用户
+    // 主动提供的内容。
+    const curatedParts: MaterialPart[] = [];
+    const searchParts: MaterialPart[] = [];
 
     // ① 雷达种子 — 尽力而为, 命中则注入(标注来源 url), 未命中/异常静默跳过
     try {
@@ -59,7 +70,7 @@ export async function runResearch(
       });
       if (seed) {
         pushIfNonEmpty(
-          parts,
+          curatedParts,
           `雷达来源(${seed.url})`,
           [seed.aiSummary, seed.aiAngle].filter((s) => s.trim() !== '').join('\n')
         );
@@ -71,7 +82,12 @@ export async function runResearch(
       );
     }
 
-    // ② Tavily 搜索 — 无 key 跳过; 有 key 搜原词 + "主题 案例 数据" 各一次, 单次失败单独跳过
+    // ② 用户自备素材 — 同样归入优先保留组
+    if (input.userMaterials) {
+      pushIfNonEmpty(curatedParts, '用户素材', input.userMaterials);
+    }
+
+    // ③ Tavily 搜索 — 无 key 跳过; 有 key 搜原词 + "主题 案例 数据" 各一次, 单次失败单独跳过
     const tavilyKey = await getDecryptedTavilyKey(userId);
     if (tavilyKey) {
       const provider = getSearchProvider(tavilyKey);
@@ -83,7 +99,7 @@ export async function runResearch(
             days: SEARCH_DAYS,
           });
           for (const r of results) {
-            pushIfNonEmpty(parts, `搜索(${r.url})`, r.content);
+            pushIfNonEmpty(searchParts, `搜索(${r.url})`, r.content);
           }
         } catch (e) {
           console.warn(
@@ -94,10 +110,7 @@ export async function runResearch(
       }
     }
 
-    // ③ 用户自备素材
-    if (input.userMaterials) {
-      pushIfNonEmpty(parts, '用户素材', input.userMaterials);
-    }
+    const parts = [...curatedParts, ...searchParts];
 
     // 素材池全空 → 降级返回 null, 不调用 DeepSeek
     if (parts.length === 0) return null;

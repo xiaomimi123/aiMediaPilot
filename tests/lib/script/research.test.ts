@@ -188,6 +188,43 @@ describe('runResearch', () => {
     expect(out).toBeNull();
   });
 
+  it('搜索正文远超 8000 字上限时, 用户素材/雷达种子仍保留在 rawMaterials 里 (截断只吃搜索正文)', async () => {
+    prismaMock.radarItem.findFirst.mockResolvedValue({
+      id: 'r1',
+      userId: 'u1',
+      url: 'https://radar.example.com/seed',
+      title: '减脂饮食热点',
+      aiSummary: '雷达摘要ZZZ',
+      aiAngle: '雷达角度YYY',
+      status: 'adopted',
+    });
+    configMock.getDecryptedTavilyKey.mockResolvedValue('tvly-fake');
+    const bigResult = (url: string) => ({
+      url,
+      title: '标题',
+      content: 'y'.repeat(9000),
+      sourceSite: 'example.com',
+    });
+    searchProviderMock.search.mockResolvedValue([
+      bigResult('https://s.example.com/1'),
+      bigResult('https://s.example.com/2'),
+    ]);
+
+    const out = await runResearch('u1', {
+      topic: '减脂饮食',
+      niche: '健康',
+      userMaterials: '用户明确填写的素材要点ABC',
+    });
+
+    expect(out).toEqual(fakeBrief());
+    const userMessage = llmCallMock.mock.calls[0][0].userMessage;
+    const text = JSON.stringify(userMessage);
+    // 拼接总量远超 8000 字上限 (雷达种子+用户素材+2 条 9000 字搜索正文),
+    // 但雷达种子与用户素材排在搜索正文之前, 应完整保留在截断后传给 LLM 的文本里。
+    expect(text).toContain('用户明确填写的素材要点ABC');
+    expect(text).toContain('雷达摘要ZZZ');
+  });
+
   it('素材超长 → 拼接后截断至 8000 字再传给 callStructured', async () => {
     const out = await runResearch('u1', {
       topic: '减脂饮食',
