@@ -34,6 +34,11 @@ export * from './title-critique';
 // 热点雷达 — 阅读评分 (全网文章 → 选题价值评估)
 export * from './radar-read';
 
+// 创作质量深化: 素材简报 → 完整逐字稿写作 → 改稿
+export * from './research-brief';
+export * from './script-write-douyin';
+export * from './script-refine';
+
 // 通用: expert persona / JSON strictness
 export * from './expert-persona';
 export { JSON_STRICTNESS } from './base';
