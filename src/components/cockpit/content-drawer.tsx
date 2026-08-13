@@ -254,7 +254,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
   async function handleGenerateScript() {
     if (generating) return;
     await runGenerateScript(
-      { itemId: item.id, title: item.title, platform: scriptPlatform, materials: materials.trim() || undefined, durationSec: scriptPlatform === "douyin" ? durationSec : undefined },
+      { itemId: item.id, title: item.title, platform: scriptPlatform, materials: scriptPlatform === "douyin" ? (materials.trim() || undefined) : undefined, durationSec: scriptPlatform === "douyin" ? durationSec : undefined },
       {
         // 不能直接把裸的 `fetch` 引用传下去: 原生 fetch 依赖 `this === window`
         // 的隐式绑定, 脱离 window 对象单独调用会抛 "Illegal invocation"。
@@ -281,6 +281,11 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
 
   async function handlePickHook(hookIdx: number) {
     if (!scriptDraftId || pickHookPending) return;
+    // 跨 item 竞态守卫: 请求发起时捕获目标 item, await 期间用户可能已切到另一篇
+    // 内容 (resetScriptGenerationState 已清空 sections/scriptDraftId)——这条迟到
+    // 的响应不该再把 A 内容的选定结果写进现在显示的 B 内容面板。过期直接丢弃,
+    // 不 setState、不 notify。参考 generate-flow.ts 的 isMounted()/isCurrentItem() 先例。
+    const requestedItemId = item.id;
     setPickHookPending(true);
     try {
       const res = await fetch(`/api/v1/scripts/${scriptDraftId}/picked`, {
@@ -289,13 +294,16 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
         body: JSON.stringify({ hookIdx, reviewed: {} }),
       });
       const json = await res.json();
+      if (!mountedRef.current || currentItemIdRef.current !== requestedItemId) return;
       if (json.success) {
         setPickedHookIdx(hookIdx);
       } else {
         notify(json.message || "选定失败");
       }
     } catch (e) {
-      notify(e instanceof Error ? e.message : "选定失败，请稍后重试");
+      if (mountedRef.current && currentItemIdRef.current === requestedItemId) {
+        notify(e instanceof Error ? e.message : "选定失败，请稍后重试");
+      }
     } finally {
       setPickHookPending(false);
     }
@@ -305,12 +313,17 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
   // 用户已经打好的指令原文, 方便直接改一改重试, 不用重新输入一遍。
   async function runRefine(body: { scope: "section"; sectionIdx: number; instruction: string } | { scope: "all"; instruction: string }): Promise<boolean> {
     if (!scriptDraftId) return false;
+    // 跨 item 竞态守卫: 同 handlePickHook——改稿请求在途期间抽屉可能已切到另一篇
+    // 内容, 迟到的响应不该覆盖现在显示的 (另一篇) 内容的段落, 也不该弹错误 toast
+    // 打扰用户。静默丢弃, 不 setState、不 notify。
+    const requestedItemId = item.id;
     const res = await fetch(`/api/v1/scripts/${scriptDraftId}/refine`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
     const json = await res.json();
+    if (!mountedRef.current || currentItemIdRef.current !== requestedItemId) return false;
     if (json.success) {
       const nextSections = json.data.sections as DouyinSection[];
       setSections(nextSections);
@@ -326,6 +339,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
   async function handleRefineSection(idx: number) {
     const instruction = sectionInstruction.trim();
     if (!scriptDraftId || !instruction || refiningSectionIdx !== null || refiningAll) return;
+    const requestedItemId = item.id;
     setRefiningSectionIdx(idx);
     try {
       const succeeded = await runRefine({ scope: "section", sectionIdx: idx, instruction });
@@ -334,7 +348,9 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
         setSectionInstruction("");
       }
     } catch (e) {
-      notify(e instanceof Error ? e.message : "改写失败，请稍后重试");
+      if (mountedRef.current && currentItemIdRef.current === requestedItemId) {
+        notify(e instanceof Error ? e.message : "改写失败，请稍后重试");
+      }
     } finally {
       setRefiningSectionIdx(null);
     }
@@ -343,12 +359,15 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
   async function handleRefineAll() {
     const instruction = allInstruction.trim();
     if (!scriptDraftId || !instruction || refiningAll || refiningSectionIdx !== null) return;
+    const requestedItemId = item.id;
     setRefiningAll(true);
     try {
       const succeeded = await runRefine({ scope: "all", instruction });
       if (succeeded) setAllInstruction("");
     } catch (e) {
-      notify(e instanceof Error ? e.message : "改写失败，请稍后重试");
+      if (mountedRef.current && currentItemIdRef.current === requestedItemId) {
+        notify(e instanceof Error ? e.message : "改写失败，请稍后重试");
+      }
     } finally {
       setRefiningAll(false);
     }
