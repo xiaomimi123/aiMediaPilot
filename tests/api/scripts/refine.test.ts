@@ -68,6 +68,37 @@ function baseDraft(overrides: Partial<{ userId: string; platform: string; output
   };
 }
 
+const xhsResearch = {
+  points: [{ fact: '小红书数据 88%', source: 'https://example.com/b', usage: '用于 intro 里的反差数据' }],
+};
+
+const xhsIntroOld = '你是不是也经常写完稿子还要来回改？今天分享几个小技巧, 帮你一次搞定小红书图文笔记。';
+const xhsBodyOld =
+  '第一步, 先明确你的目标受众是谁。第二步, 用一个具体场景开头, 让读者有代入感。**第三步, 把干货浓缩成 3 条以内的清单**, 太多读者记不住。最后用一句话总结, 呼应开头的场景, 形成闭环。';
+const xhsTitles = [{ text: '✨这样写小红书笔记, 效率翻倍', hookType: '数字' }];
+const xhsCoverText = '3 个技巧';
+const xhsTags = ['#AI效率', '#小红书运营'];
+const xhsShotIdeas = [{ idx: 1, description: '封面大字截图' }];
+
+function baseXhsDraft(overrides: Partial<{ userId: string; platform: string; output: unknown }> = {}) {
+  return {
+    id: 'draft1',
+    userId: 'user1',
+    niche: 'ai-knowledge',
+    platform: 'xiaohongshu',
+    output: {
+      research: xhsResearch,
+      titles: xhsTitles,
+      coverText: xhsCoverText,
+      intro: xhsIntroOld,
+      body: xhsBodyOld,
+      tags: xhsTags,
+      shotIdeas: xhsShotIdeas,
+    },
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.DEEPSEEK_API_KEY = 'sk-test';
@@ -205,6 +236,91 @@ describe('POST /api/v1/scripts/[id]/refine — scope=all', () => {
     });
     const res = await POST(reqJSON({ scope: 'all', instruction: '整体口语化一点' }), ctx);
     expect(res.status).toBe(502);
+    expect(prismaMock.scriptDraft.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/v1/scripts/[id]/refine — xiaohongshu', () => {
+  it('scope=section → 400 小红书暂不支持分块改稿, 不调用 LLM', async () => {
+    prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(baseXhsDraft());
+    const res = await POST(reqJSON({ scope: 'section', sectionIdx: 0, instruction: '换个说法' }), ctx);
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.message).toBe('小红书暂不支持分块改稿');
+    expect(llmMock.callStructured).not.toHaveBeenCalled();
+    expect(prismaMock.scriptDraft.update).not.toHaveBeenCalled();
+  });
+
+  it('scope=all 合法改写 → 200, 只覆盖 intro/body, 其余四键原样持久化', async () => {
+    prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(baseXhsDraft());
+    const newIntro = '全新开头, 一句话戳中痛点, 让读者立刻想往下看。';
+    const newBody =
+      '全新正文第一段, 讲一个具体场景。**全新正文第二段, 加粗关键干货**。全新正文第三段, 呼应开头收尾。';
+    llmMock.callStructured.mockResolvedValueOnce({
+      result: { intro: newIntro, body: newBody },
+      usage: { model: 'deepseek', promptTokens: 10, completionTokens: 10, estCostUSD: 0 },
+    });
+
+    const res = await POST(reqJSON({ scope: 'all', instruction: '换个更有冲击力的开头' }), ctx);
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.data).toEqual({ intro: newIntro, body: newBody });
+
+    expect(prismaMock.scriptDraft.update).toHaveBeenCalledWith({
+      where: { id: 'draft1' },
+      data: {
+        output: expect.objectContaining({
+          research: xhsResearch,
+          titles: xhsTitles,
+          coverText: xhsCoverText,
+          intro: newIntro,
+          body: newBody,
+          tags: xhsTags,
+          shotIdeas: xhsShotIdeas,
+        }),
+      },
+    });
+  });
+
+  it('复用 output.research 传给 XHS_REFINE, 不重新搜索', async () => {
+    prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(baseXhsDraft());
+    llmMock.callStructured.mockResolvedValueOnce({
+      result: { intro: xhsIntroOld, body: xhsBodyOld },
+      usage: { model: 'deepseek', promptTokens: 10, completionTokens: 10, estCostUSD: 0 },
+    });
+    await POST(reqJSON({ scope: 'all', instruction: '更简洁一点' }), ctx);
+    expect(llmMock.callStructured).toHaveBeenCalledTimes(1);
+    const call = llmMock.callStructured.mock.calls[0][0];
+    const userText = (call.userMessage[0] as { text: string }).text;
+    expect(userText).toContain('小红书数据 88%');
+  });
+
+  it('getStyleContext 被以 (userId, "xiaohongshu") 调用', async () => {
+    prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(baseXhsDraft());
+    llmMock.callStructured.mockResolvedValueOnce({
+      result: { intro: xhsIntroOld, body: xhsBodyOld },
+      usage: { model: 'deepseek', promptTokens: 10, completionTokens: 10, estCostUSD: 0 },
+    });
+    await POST(reqJSON({ scope: 'all', instruction: '换个说法' }), ctx);
+    expect(getStyleContextMock).toHaveBeenCalledWith('user1', 'xiaohongshu');
+  });
+
+  it('旧稿没有 intro/body → 400, 不调用 LLM', async () => {
+    prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(
+      baseXhsDraft({ output: { titles: xhsTitles, coverText: xhsCoverText, tags: xhsTags, shotIdeas: xhsShotIdeas } }),
+    );
+    const res = await POST(reqJSON({ scope: 'all', instruction: '换个说法' }), ctx);
+    expect(res.status).toBe(400);
+    expect(llmMock.callStructured).not.toHaveBeenCalled();
+    expect(prismaMock.scriptDraft.update).not.toHaveBeenCalled();
+  });
+
+  it('LLM 抛错 → 500, 不写库', async () => {
+    prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(baseXhsDraft());
+    llmMock.callStructured.mockRejectedValueOnce(new Error('LLM down'));
+    const res = await POST(reqJSON({ scope: 'all', instruction: '换个说法' }), ctx);
+    expect(res.status).toBe(500);
     expect(prismaMock.scriptDraft.update).not.toHaveBeenCalled();
   });
 });

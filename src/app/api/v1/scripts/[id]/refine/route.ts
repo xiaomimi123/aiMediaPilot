@@ -6,6 +6,7 @@ import { getDeepSeekTextLLM } from '@/lib/llm/clients';
 import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
 import { getStyleContext } from '@/lib/script/style';
 import { SCRIPT_REFINE } from '@/lib/llm/prompts/script-refine';
+import { XHS_REFINE } from '@/lib/llm/prompts/xhs-refine';
 import { ScriptSectionSchema, type DouyinFullScript } from '@/lib/llm/prompts/script-write-douyin';
 import { ResearchBriefSchema, type ResearchBrief } from '@/lib/llm/prompts/research-brief';
 
@@ -30,6 +31,16 @@ interface RefineBody {
 const ScriptOutputReadSchema = z
   .object({
     script: z.object({ sections: z.array(ScriptSectionSchema).min(1) }),
+    research: ResearchBriefSchema.nullable().optional(),
+  })
+  .passthrough();
+
+// 小红书整稿改稿只需要 intro/body 存在即可改写, 其余四键 (titles/coverText/tags/shotIdeas)
+// 原样透传, 不参与本次校验。
+const XhsOutputReadSchema = z
+  .object({
+    intro: z.string().min(1),
+    body: z.string().min(1),
     research: ResearchBriefSchema.nullable().optional(),
   })
   .passthrough();
@@ -77,7 +88,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     select: { id: true, userId: true, niche: true, platform: true, output: true },
   });
   if (!draft || draft.userId !== user.id) return fail('脚本不存在', 404);
-  if (draft.platform !== 'douyin') return fail('仅支持抖音脚本改稿', 400);
+
+  if (draft.platform === 'xiaohongshu') {
+    return handleXhsRefine({ id, scope, instruction, draft, userId: user.id });
+  }
+  if (draft.platform !== 'douyin') return fail('仅支持抖音/小红书脚本改稿', 400);
 
   const parsedOutput = ScriptOutputReadSchema.safeParse(draft.output);
   if (!parsedOutput.success) return fail('该脚本还没有可改写的逐字稿, 请先生成', 400);
@@ -132,6 +147,59 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error('[POST scripts/refine]', e);
+    return fail(`改稿失败: ${msg}`, 500);
+  }
+}
+
+/**
+ * 小红书整稿改稿 — 只重写 intro/body 两个区块, titles/coverText/tags/shotIdeas
+ * 从 draft.output spread 原样透传, 构造上不可能被本次改写覆盖。
+ */
+async function handleXhsRefine(args: {
+  id: string;
+  scope: 'section' | 'all';
+  instruction: string;
+  draft: { niche: string; output: unknown };
+  userId: string;
+}) {
+  const { id, scope, instruction, draft, userId } = args;
+
+  if (scope === 'section') return fail('小红书暂不支持分块改稿', 400);
+
+  const parsedOutput = XhsOutputReadSchema.safeParse(draft.output);
+  if (!parsedOutput.success) return fail('该脚本还没有可改写的图文笔记, 请先生成', 400);
+
+  const { intro, body, research } = parsedOutput.data;
+
+  const apiKey = await resolveDeepSeekApiKey(userId);
+  if (!apiKey) return fail('DEEPSEEK_API_KEY 未配置', 503);
+
+  const style = await getStyleContext(userId, 'xiaohongshu');
+  const llm = getDeepSeekTextLLM(apiKey);
+
+  try {
+    const out = await llm.callStructured({
+      systemPrompt: XHS_REFINE.buildSystemPrompt(draft.niche, style),
+      userMessage: XHS_REFINE.buildUserMessage({ intro, body, instruction, brief: research ?? null }),
+      responseSchema: XHS_REFINE.responseSchema,
+    });
+    const { intro: newIntro, body: newBody } = out.result;
+
+    await prisma.scriptDraft.update({
+      where: { id },
+      data: {
+        output: {
+          ...(draft.output as Record<string, unknown>),
+          intro: newIntro,
+          body: newBody,
+        },
+      },
+    });
+
+    return ok({ intro: newIntro, body: newBody });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('[POST scripts/refine xiaohongshu]', e);
     return fail(`改稿失败: ${msg}`, 500);
   }
 }
