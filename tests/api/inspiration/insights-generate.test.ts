@@ -18,6 +18,7 @@ const prismaMock = vi.hoisted(() => ({
   inspirationInsight: {
     create: vi.fn(async () => ({ id: 'insight1' })),
   },
+  personaProfile: { findUnique: vi.fn() },
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
@@ -43,6 +44,7 @@ import { POST } from '@/app/api/v1/inspiration/insights/generate/route';
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.DEEPSEEK_API_KEY = 'sk-test';
+  prismaMock.personaProfile.findUnique.mockResolvedValue(null);
   llmMock.callStructured.mockResolvedValue({
     result: {
       titlePatterns: ['数字'],
@@ -132,5 +134,39 @@ describe('POST /api/v1/inspiration/insights/generate — BigInt 0n 语义保留'
     const passedVideos = (buildUserMessageSpy.mock.calls[0] as any)[0].videos;
     expect(passedVideos[0].playCount).toBeNull();
     expect(passedVideos[1].playCount).toBe(100);
+  });
+});
+
+describe('POST /api/v1/inspiration/insights/generate — 人设定位注入 (T4)', () => {
+  const twoVideos = [
+    { id: 'v1', title: '标题一', authorName: 'a', platform: 'douyin', playCount: 100n, likeCount: 10n, commentCount: 2n, duration: 30, userNote: null },
+    { id: 'v2', title: '标题二', authorName: 'b', platform: 'douyin', playCount: 200n, likeCount: 20n, commentCount: 4n, duration: 45, userNote: null },
+  ];
+
+  it('无档案 (personaProfile.findUnique → null) → systemPrompt 不含人设定位段', async () => {
+    prismaMock.inspirationVideo.findMany.mockResolvedValueOnce(twoVideos);
+    prismaMock.personaProfile.findUnique.mockResolvedValue(null);
+    const res = await POST(req({ videoIds: ['v1', 'v2'], niche: 'ai-knowledge' }));
+    expect(res.status).toBe(200);
+    const systemPrompt = llmMock.callStructured.mock.calls[0][0].systemPrompt as string;
+    expect(systemPrompt).not.toContain('你的定位');
+  });
+
+  it('有档案 → systemPrompt 含人设定位内容 (受众/支柱)', async () => {
+    prismaMock.inspirationVideo.findMany.mockResolvedValueOnce(twoVideos);
+    prismaMock.personaProfile.findUnique.mockResolvedValue({
+      userId: 'user1',
+      audience: '25-35 岁互联网从业者',
+      targetFans: '想转行做 AI 的人',
+      pillars: [{ name: '工具评测', description: '拆解 AI 工具实际效果' }],
+      angle: '只讲能落地的方法',
+      avoid: '不做标题党',
+    });
+    const res = await POST(req({ videoIds: ['v1', 'v2'], niche: 'ai-knowledge' }));
+    expect(res.status).toBe(200);
+    const systemPrompt = llmMock.callStructured.mock.calls[0][0].systemPrompt as string;
+    expect(systemPrompt).toContain('25-35 岁互联网从业者');
+    expect(systemPrompt).toContain('工具评测');
+    expect(prismaMock.personaProfile.findUnique).toHaveBeenCalledWith({ where: { userId: 'user1' } });
   });
 });

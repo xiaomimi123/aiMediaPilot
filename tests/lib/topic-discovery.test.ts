@@ -29,6 +29,33 @@ describe('TOPIC_DISCOVERY.buildSystemPrompt', () => {
     expect(s).toContain('med:');
     expect(s).toContain('high:');
   });
+
+  it('缺省 personaSection → 与无参数调用字符级一致', () => {
+    expect(TOPIC_DISCOVERY.buildSystemPrompt('ai-knowledge', '2026-06-22', undefined)).toBe(
+      TOPIC_DISCOVERY.buildSystemPrompt('ai-knowledge', '2026-06-22'),
+    );
+    expect(TOPIC_DISCOVERY.buildSystemPrompt('ai-knowledge')).toBe(
+      TOPIC_DISCOVERY.buildSystemPrompt('ai-knowledge', undefined, undefined),
+    );
+  });
+
+  it('personaSection 为空串 → 与无参数调用字符级一致', () => {
+    expect(TOPIC_DISCOVERY.buildSystemPrompt('ai-knowledge', '2026-06-22', '')).toBe(
+      TOPIC_DISCOVERY.buildSystemPrompt('ai-knowledge', '2026-06-22'),
+    );
+  });
+
+  it('personaSection 非空 → 含受众文本, 拼在任务描述之后、方法论之前', () => {
+    const persona = '目标受众: 25-35 岁互联网从业者\n内容支柱:\n- 工具评测: 拆解 AI 工具实际效果';
+    const s = TOPIC_DISCOVERY.buildSystemPrompt('ai-knowledge', '2026-06-22', persona);
+    expect(s).toContain('25-35 岁互联网从业者');
+    expect(s).toContain('工具评测');
+    const personaIdx = s.indexOf('25-35 岁互联网从业者');
+    const methodIdx = s.indexOf('你的方法论:');
+    expect(personaIdx).toBeGreaterThan(-1);
+    expect(methodIdx).toBeGreaterThan(-1);
+    expect(personaIdx).toBeLessThan(methodIdx);
+  });
 });
 
 describe('TOPIC_DISCOVERY.buildUserMessage', () => {

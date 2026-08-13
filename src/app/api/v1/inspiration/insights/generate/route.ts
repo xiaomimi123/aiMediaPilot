@@ -6,6 +6,8 @@ import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
 import { INSPIRATION_INSIGHT } from '@/lib/llm/prompts';
 import { normalizeNiche } from '@/lib/niche';
 import type { ContentPlatform } from '@/lib/platform';
+import { loadPersonaProfile } from '@/lib/persona/profile';
+import { buildPersonaSection } from '@/lib/llm/prompts/persona-section';
 
 interface ReqBody {
   videoIds?: unknown;
@@ -58,10 +60,14 @@ export async function POST(req: Request) {
       ? (videos[0].platform as ContentPlatform)
       : ('mixed' as const);
 
+  // 人设定位注入 (T4): 未建立档案时 personaSection 为空串, buildSystemPrompt 保持字符级一致
+  const profile = await loadPersonaProfile(user.id);
+  const personaSection = buildPersonaSection(profile);
+
   const llm = getDeepSeekTextLLM(apiKey);
   try {
     const out = await llm.callStructured({
-      systemPrompt: INSPIRATION_INSIGHT.buildSystemPrompt(niche, batchPlatform),
+      systemPrompt: INSPIRATION_INSIGHT.buildSystemPrompt(niche, batchPlatform, personaSection),
       userMessage: INSPIRATION_INSIGHT.buildUserMessage({
         niche,
         platform: batchPlatform,

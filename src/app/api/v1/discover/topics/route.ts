@@ -5,6 +5,8 @@ import { getDeepSeekTextLLM } from '@/lib/llm/clients';
 import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
 import { TOPIC_DISCOVERY } from '@/lib/llm/prompts';
 import { normalizeNiche } from '@/lib/niche';
+import { loadPersonaProfile } from '@/lib/persona/profile';
+import { buildPersonaSection } from '@/lib/llm/prompts/persona-section';
 
 interface ReqBody {
   niche?: unknown;
@@ -53,10 +55,14 @@ export async function POST(req: Request) {
   });
   const recentTopics = recent.map((s) => s.topic).filter((t): t is string => !!t);
 
+  // 人设定位注入 (T4): 未建立档案时 personaSection 为空串, buildSystemPrompt 保持字符级一致
+  const profile = await loadPersonaProfile(user.id);
+  const personaSection = buildPersonaSection(profile);
+
   const llm = getDeepSeekTextLLM(apiKey);
   try {
     const out = await llm.callStructured({
-      systemPrompt: TOPIC_DISCOVERY.buildSystemPrompt(niche, todayISO()),
+      systemPrompt: TOPIC_DISCOVERY.buildSystemPrompt(niche, todayISO(), personaSection),
       userMessage: TOPIC_DISCOVERY.buildUserMessage({
         niche,
         count,

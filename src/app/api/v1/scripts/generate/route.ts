@@ -12,6 +12,8 @@ import { isContentPlatform, type ContentPlatform } from '@/lib/platform';
 import { readInspirationInsight } from '@/lib/json-readers';
 import { runResearch } from '@/lib/script/research';
 import { getStyleContext } from '@/lib/script/style';
+import { loadPersonaProfile } from '@/lib/persona/profile';
+import { buildPersonaSection } from '@/lib/llm/prompts/persona-section';
 
 const PROMPT_BY_PLATFORM = {
   gongzhonghao: SCRIPT_GENERATE_GONGZHONGHAO,
@@ -124,9 +126,12 @@ export async function POST(req: Request) {
     try {
       const research = await runResearch(user.id, { topic, niche, userMaterials: materials });
       const style = await getStyleContext(user.id, 'douyin');
+      // 人设定位注入 (T4): 未建立档案时 personaSection 为空串, buildSystemPrompt 保持字符级一致
+      const profile = await loadPersonaProfile(user.id);
+      const personaSection = buildPersonaSection(profile);
       const llm = getDeepSeekTextLLM(apiKey);
       const out = await llm.callStructured({
-        systemPrompt: SCRIPT_WRITE_DOUYIN.buildSystemPrompt(niche, style),
+        systemPrompt: SCRIPT_WRITE_DOUYIN.buildSystemPrompt(niche, style, personaSection),
         userMessage: SCRIPT_WRITE_DOUYIN.buildUserMessage({ topic, durationSec, brief: research }),
         responseSchema: SCRIPT_WRITE_DOUYIN.responseSchema,
       });
@@ -169,9 +174,12 @@ export async function POST(req: Request) {
     try {
       const research = await runResearch(user.id, { topic, niche, userMaterials: materials });
       const style = await getStyleContext(user.id, 'xiaohongshu');
+      // 人设定位注入 (T4): 未建立档案时 personaSection 为空串, buildSystemPrompt 保持字符级一致
+      const profile = await loadPersonaProfile(user.id);
+      const personaSection = buildPersonaSection(profile);
       const llm = getDeepSeekTextLLM(apiKey);
       const out = await llm.callStructured({
-        systemPrompt: SCRIPT_WRITE_XHS.buildSystemPrompt(niche, style),
+        systemPrompt: SCRIPT_WRITE_XHS.buildSystemPrompt(niche, style, personaSection),
         userMessage: SCRIPT_WRITE_XHS.buildUserMessage({ topic, brief: research }),
         responseSchema: SCRIPT_WRITE_XHS.responseSchema,
       });

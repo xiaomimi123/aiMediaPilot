@@ -35,9 +35,17 @@ const DIFFICULTY_GUIDE = `
 - high: 1+ 天准备, 需要采访/数据/复杂剪辑 (深度调研 / 实验验证 / 多平台对比)`;
 
 export const TOPIC_DISCOVERY = {
-  buildSystemPrompt(niche: string, currentDate?: string): string {
+  /**
+   * personaSection 缺省/空串时, 输出必须与不传参数时字符级一致 (T4 采集管线未接入人设档案的场景,
+   * 以及现有测试断言)。非空时: 在任务描述之后拼入人设定位段, 要求选题贴合定位。
+   */
+  buildSystemPrompt(niche: string, currentDate?: string, personaSection?: string): string {
     const dateLine = currentDate ? `当前日期: ${currentDate}。 ` : '';
-    return `${dateLine}你是 ${niche} 赛道的自媒体选题策略师。 用户求你给出可立刻上手的选题清单, 帮他突破"没有选题灵感"的卡点。
+    const hasPersona = Boolean(personaSection && personaSection.trim());
+    const personaBlock = hasPersona
+      ? `\n\n你的定位:\n${personaSection}\n\n选题需贴合上述定位 — 优先命中列出的内容支柱, 避免明显偏离受众或触犯忌讳的方向。`
+      : '';
+    return `${dateLine}你是 ${niche} 赛道的自媒体选题策略师。 用户求你给出可立刻上手的选题清单, 帮他突破"没有选题灵感"的卡点。${personaBlock}
 
 你的方法论:
 1. **聚焦受众痛点**: 该 niche 用户每天/每周遇到的具体问题、好奇心、焦虑、决策困难

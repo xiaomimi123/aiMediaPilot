@@ -18,6 +18,7 @@ vi.mock('@/lib/llm/resolve-key', () => ({
 
 const prismaMock = vi.hoisted(() => ({
   scriptDraft: { findMany: vi.fn() },
+  personaProfile: { findUnique: vi.fn() },
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
@@ -47,6 +48,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   process.env.DEEPSEEK_API_KEY = 'sk-test';
   prismaMock.scriptDraft.findMany.mockResolvedValue([]);
+  prismaMock.personaProfile.findUnique.mockResolvedValue(null);
   llmMock.callStructured.mockResolvedValue({
     result: validResult,
     usage: { model: 'deepseek', promptTokens: 100, completionTokens: 200, estCostUSD: 0.001 },
@@ -142,5 +144,32 @@ describe('POST /api/v1/discover/topics', () => {
     } finally {
       process.env.DEEPSEEK_API_KEY = old;
     }
+  });
+});
+
+describe('POST /api/v1/discover/topics — 人设定位注入 (T4)', () => {
+  it('无档案 (personaProfile.findUnique → null) → systemPrompt 不含人设定位段', async () => {
+    prismaMock.personaProfile.findUnique.mockResolvedValue(null);
+    const res = await POST(reqJSON({ niche: 'ai-knowledge' }));
+    expect(res.status).toBe(200);
+    const systemPrompt = llmMock.callStructured.mock.calls[0][0].systemPrompt as string;
+    expect(systemPrompt).not.toContain('你的定位');
+  });
+
+  it('有档案 → systemPrompt 含人设定位内容 (受众/支柱)', async () => {
+    prismaMock.personaProfile.findUnique.mockResolvedValue({
+      userId: 'user1',
+      audience: '25-35 岁互联网从业者',
+      targetFans: '想转行做 AI 的人',
+      pillars: [{ name: '工具评测', description: '拆解 AI 工具实际效果' }],
+      angle: '只讲能落地的方法',
+      avoid: '不做标题党',
+    });
+    const res = await POST(reqJSON({ niche: 'ai-knowledge' }));
+    expect(res.status).toBe(200);
+    const systemPrompt = llmMock.callStructured.mock.calls[0][0].systemPrompt as string;
+    expect(systemPrompt).toContain('25-35 岁互联网从业者');
+    expect(systemPrompt).toContain('工具评测');
+    expect(prismaMock.personaProfile.findUnique).toHaveBeenCalledWith({ where: { userId: 'user1' } });
   });
 });

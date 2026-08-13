@@ -39,8 +39,14 @@ ${samplesText}`;
 }
 
 export const SCRIPT_WRITE_XHS = {
-  buildSystemPrompt(niche: string, style: StyleContext): string {
-    return `${getExpertPersona(niche)}
+  /**
+   * personaSection 缺省/空串时, 输出必须与不传参数时字符级一致 (现有测试断言)。
+   * 非空时: 拼在 getExpertPersona 之后、任务描述之前。
+   */
+  buildSystemPrompt(niche: string, style: StyleContext, personaSection?: string): string {
+    const hasPersona = Boolean(personaSection && personaSection.trim());
+    const personaBlock = hasPersona ? `\n\n你的定位:\n${personaSection}` : '';
+    return `${getExpertPersona(niche)}${personaBlock}
 
 任务: 为这条小红书 图文笔记 写一份可以直接发布的完整内容, 按 schema 产出 titles / coverText / intro / body / tags / shotIdeas。
 

@@ -42,12 +42,20 @@ const PLATFORM_CONTEXT: Record<InsightPlatform, string> = {
 };
 
 export const INSPIRATION_INSIGHT = {
-  buildSystemPrompt(niche?: string, platform?: InsightPlatform): string {
+  /**
+   * personaSection 缺省/空串时, 输出必须与不传参数时字符级一致 (T4 采集管线未接入人设档案的场景,
+   * 以及现有测试断言)。非空时: 在任务描述之后拼入人设定位段, 要求 recommendedTopics 贴合定位。
+   */
+  buildSystemPrompt(niche?: string, platform?: InsightPlatform, personaSection?: string): string {
     const nicheLine = niche ? `用户的内容垂类: ${niche}。 ` : '';
     const platformLine = platform
       ? `分析对象: ${PLATFORM_CONTEXT[platform]}。 `
       : '分析对象: 抖音短视频。 ';
-    return `${nicheLine}${platformLine}你是内容策略分析师。 用户提供 N 条他们精选的爆款 (标题/作者/播放/点赞/评论/时长), 你的任务是抽取共性规律 + 推出可执行的下一步 topic。
+    const hasPersona = Boolean(personaSection && personaSection.trim());
+    const personaBlock = hasPersona
+      ? `\n\n你的定位:\n${personaSection}\n\n推荐的下一步 topic (recommendedTopics) 应贴合上述定位 — 优先命中列出的内容支柱。`
+      : '';
+    return `${nicheLine}${platformLine}你是内容策略分析师。 用户提供 N 条他们精选的爆款 (标题/作者/播放/点赞/评论/时长), 你的任务是抽取共性规律 + 推出可执行的下一步 topic。${personaBlock}
 
 输出结构 (按 schema 严格输出):
 

@@ -287,6 +287,30 @@ describe('SCRIPT_WRITE_DOUYIN.buildSystemPrompt', () => {
     expect(p).toContain(samplesStyle.samples[1]);
     expect(p).toMatch(/口吻|句式|用词/);
   });
+
+  it('缺省 personaSection → 与无参数调用字符级一致', () => {
+    expect(SCRIPT_WRITE_DOUYIN.buildSystemPrompt('ai-knowledge', descStyle, undefined)).toBe(
+      SCRIPT_WRITE_DOUYIN.buildSystemPrompt('ai-knowledge', descStyle),
+    );
+  });
+
+  it('personaSection 为空串 → 与无参数调用字符级一致', () => {
+    expect(SCRIPT_WRITE_DOUYIN.buildSystemPrompt('ai-knowledge', descStyle, '')).toBe(
+      SCRIPT_WRITE_DOUYIN.buildSystemPrompt('ai-knowledge', descStyle),
+    );
+  });
+
+  it('personaSection 非空 → 拼在 getExpertPersona 之后、任务描述之前, 且含受众文本', () => {
+    const persona = '目标受众: 25-35 岁互联网从业者\n内容支柱:\n- 工具评测: 拆解 AI 工具实际效果';
+    const p = SCRIPT_WRITE_DOUYIN.buildSystemPrompt('ai-knowledge', descStyle, persona);
+    expect(p).toContain('25-35 岁互联网从业者');
+    expect(p).toContain('工具评测');
+    const personaIdx = p.indexOf('25-35 岁互联网从业者');
+    const taskIdx = p.indexOf('任务: 为这条抖音口播短视频写一份可以直接照着念的口播逐字稿');
+    expect(personaIdx).toBeGreaterThan(-1);
+    expect(taskIdx).toBeGreaterThan(-1);
+    expect(personaIdx).toBeLessThan(taskIdx);
+  });
 });
 
 describe('SCRIPT_WRITE_DOUYIN.buildUserMessage', () => {

@@ -20,6 +20,7 @@ const prismaMock = vi.hoisted(() => ({
   inspirationInsight: { findFirst: vi.fn() },
   scriptDraft: { create: vi.fn() },
   cockpitContent: { findUnique: vi.fn(), update: vi.fn() },
+  personaProfile: { findUnique: vi.fn() },
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
@@ -99,6 +100,7 @@ beforeEach(() => {
   prismaMock.scriptDraft.create.mockResolvedValue({ id: 'draft1' });
   prismaMock.cockpitContent.findUnique.mockResolvedValue(null);
   prismaMock.cockpitContent.update.mockResolvedValue({});
+  prismaMock.personaProfile.findUnique.mockResolvedValue(null);
   runResearchMock.mockResolvedValue(researchBrief);
   getStyleContextMock.mockResolvedValue(styleContext);
 });
@@ -435,6 +437,77 @@ describe('POST /api/v1/scripts/generate — xiaohongshu (两阶段: research →
     expect(res.status).toBe(500);
     const json = await res.json();
     expect(json.success).toBe(false);
+  });
+});
+
+describe('POST /api/v1/scripts/generate — 人设定位注入 (T4)', () => {
+  const personaRow = {
+    userId: 'user1',
+    audience: '25-35 岁互联网从业者',
+    targetFans: '想转行做 AI 的人',
+    pillars: [{ name: '工具评测', description: '拆解 AI 工具实际效果' }],
+    angle: '只讲能落地的方法',
+    avoid: '不做标题党',
+  };
+
+  it('douyin: 无档案 → systemPrompt 不含人设定位段', async () => {
+    prismaMock.personaProfile.findUnique.mockResolvedValue(null);
+    const res = await POST(makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge' }));
+    expect(res.status).toBe(200);
+    const systemPrompt = llmMock.callStructured.mock.calls[0][0].systemPrompt as string;
+    expect(systemPrompt).not.toContain('你的定位');
+  });
+
+  it('douyin: 有档案 → systemPrompt 含人设定位内容 (受众/支柱)', async () => {
+    prismaMock.personaProfile.findUnique.mockResolvedValue(personaRow);
+    const res = await POST(makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge' }));
+    expect(res.status).toBe(200);
+    const systemPrompt = llmMock.callStructured.mock.calls[0][0].systemPrompt as string;
+    expect(systemPrompt).toContain('25-35 岁互联网从业者');
+    expect(systemPrompt).toContain('工具评测');
+    expect(prismaMock.personaProfile.findUnique).toHaveBeenCalledWith({ where: { userId: 'user1' } });
+  });
+
+  it('xiaohongshu: 无档案 → systemPrompt 不含人设定位段', async () => {
+    llmMock.callStructured.mockResolvedValue({
+      result: xhsScriptResult,
+      usage: { model: 'deepseek', promptTokens: 100, completionTokens: 200, estCostUSD: 0.001 },
+    });
+    prismaMock.personaProfile.findUnique.mockResolvedValue(null);
+    const res = await POST(
+      makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge', platform: 'xiaohongshu' }),
+    );
+    expect(res.status).toBe(200);
+    const systemPrompt = llmMock.callStructured.mock.calls[0][0].systemPrompt as string;
+    expect(systemPrompt).not.toContain('你的定位');
+  });
+
+  it('xiaohongshu: 有档案 → systemPrompt 含人设定位内容 (受众/支柱)', async () => {
+    llmMock.callStructured.mockResolvedValue({
+      result: xhsScriptResult,
+      usage: { model: 'deepseek', promptTokens: 100, completionTokens: 200, estCostUSD: 0.001 },
+    });
+    prismaMock.personaProfile.findUnique.mockResolvedValue(personaRow);
+    const res = await POST(
+      makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge', platform: 'xiaohongshu' }),
+    );
+    expect(res.status).toBe(200);
+    const systemPrompt = llmMock.callStructured.mock.calls[0][0].systemPrompt as string;
+    expect(systemPrompt).toContain('25-35 岁互联网从业者');
+    expect(systemPrompt).toContain('工具评测');
+    expect(prismaMock.personaProfile.findUnique).toHaveBeenCalledWith({ where: { userId: 'user1' } });
+  });
+
+  it('gongzhonghao: 分支不动 — 不查 personaProfile', async () => {
+    llmMock.callStructured.mockResolvedValueOnce({
+      result: legacyPlatformResponse,
+      usage: { model: 'deepseek', promptTokens: 100, completionTokens: 200, estCostUSD: 0.001 },
+    });
+    const res = await POST(
+      makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge', platform: 'gongzhonghao' }),
+    );
+    expect(res.status).toBe(200);
+    expect(prismaMock.personaProfile.findUnique).not.toHaveBeenCalled();
   });
 });
 
