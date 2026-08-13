@@ -16,8 +16,8 @@ vi.mock('@/lib/user', () => ({
 const prismaMock = vi.hoisted(() => ({
   scriptDraft: {
     findUnique: vi.fn(),
-    update: vi.fn(),
   },
+  $executeRaw: vi.fn(),
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
@@ -55,16 +55,25 @@ function baseXhsDraft(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+// $executeRaw 以 tagged template 形式调用: prisma.$executeRaw`...${a}...${b}...${c}`
+// 在 mock 下等价于 prismaMock.$executeRaw(stringsArray, a, b, c) —— 本文件里
+// SQL 固定是 `UPDATE ... jsonb_set(output, ARRAY['images', ${idxParam}], ${jsonParam}::jsonb, true) WHERE id = ${idParam}`,
+// 所以每次调用的参数数组形状固定为 [strings, idxParam(string), jsonParam(string), idParam(string)]。
+function rawCallArgs(call: unknown[]) {
+  const [, idxParam, jsonParam, idParam] = call as [unknown, string, string, string];
+  return { idxParam, record: JSON.parse(jsonParam), idParam };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.IMAGE_API_KEY = 'sk-test';
   prismaMock.scriptDraft.findUnique.mockResolvedValue(baseXhsDraft());
-  prismaMock.scriptDraft.update.mockResolvedValue({});
+  prismaMock.$executeRaw.mockResolvedValue(undefined);
   generateMock.mockResolvedValue(Buffer.from('fake-png-bytes'));
 });
 
 describe('POST /api/v1/scripts/[id]/images — 成功', () => {
-  it('生成成功: 写盘路径正确, output.images 形状正确, ok 响应 { idx, path }', async () => {
+  it('生成成功: 写盘路径正确, $executeRaw 原子写 jsonb_set 参数形状正确, ok 响应 { idx, path }', async () => {
     const res = await POST(reqPOST({ idx: 1 }), ctx);
     expect(res.status).toBe(200);
     const json = await res.json();
@@ -80,21 +89,14 @@ describe('POST /api/v1/scripts/[id]/images — 成功', () => {
     expect(String(writtenPath)).toMatch(/1\.png$/);
     expect(Buffer.isBuffer(writtenBuf)).toBe(true);
 
-    expect(prismaMock.scriptDraft.update).toHaveBeenCalledWith({
-      where: { id: 'draft1' },
-      data: {
-        output: expect.objectContaining({
-          coverText: 'x',
-          imagePlan: validPlan,
-          images: {
-            1: {
-              path: '/generated/draft1/1.png',
-              prompt: validPlan.images[1].prompt,
-              createdAt: expect.any(String),
-            },
-          },
-        }),
-      },
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1);
+    const { idxParam, record, idParam } = rawCallArgs(prismaMock.$executeRaw.mock.calls[0]);
+    expect(idxParam).toBe('1');
+    expect(idParam).toBe('draft1');
+    expect(record).toEqual({
+      path: '/generated/draft1/1.png',
+      prompt: validPlan.images[1].prompt,
+      createdAt: expect.any(String),
     });
   });
 
@@ -115,7 +117,10 @@ describe('POST /api/v1/scripts/[id]/images — 成功', () => {
     });
   });
 
-  it('单张覆盖不动其他 idx: output.images 已有其他 idx 时 spread 保留', async () => {
+  it('原子写不 spread 生成前读到的快照: SQL 参数只含当前 idx 的单条 record, 不携带其他 idx 或整份 output', async () => {
+    // 读到的快照里 idx 0 已有记录 —— 旧实现会把这份快照 spread 进 update data,
+    // 新实现的写路径必须完全不依赖这份快照的 images 内容 (由 DB 端 jsonb_set
+    // 基于行内当前值合并, 而不是应用层 merge)。
     prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(
       baseXhsDraft({
         output: {
@@ -128,30 +133,29 @@ describe('POST /api/v1/scripts/[id]/images — 成功', () => {
       }),
     );
     await POST(reqPOST({ idx: 1 }), ctx);
-    expect(prismaMock.scriptDraft.update).toHaveBeenCalledWith({
-      where: { id: 'draft1' },
-      data: {
-        output: expect.objectContaining({
-          images: {
-            0: { path: '/generated/draft1/0.png', prompt: 'old prompt', createdAt: '2026-01-01T00:00:00.000Z' },
-            1: {
-              path: '/generated/draft1/1.png',
-              prompt: validPlan.images[1].prompt,
-              createdAt: expect.any(String),
-            },
-          },
-        }),
-      },
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1);
+    const { idxParam, record } = rawCallArgs(prismaMock.$executeRaw.mock.calls[0]);
+    expect(idxParam).toBe('1');
+    expect(record).toEqual({
+      path: '/generated/draft1/1.png',
+      prompt: validPlan.images[1].prompt,
+      createdAt: expect.any(String),
     });
+    // 写入参数里不应出现 idx 0 的旧记录信息 —— 证明没有把快照整份带进 SQL 参数。
+    expect(JSON.stringify(prismaMock.$executeRaw.mock.calls[0])).not.toContain('old prompt');
   });
 
-  it('output 其余键 spread 保留', async () => {
+  it('output 其余键不受影响: jsonb_set 只作用于 images[idx] 这一路径, SQL 参数不携带 output 整体', async () => {
     prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(
       baseXhsDraft({ output: { coverText: 'x', tags: ['#a'], imagePlan: validPlan } }),
     );
     await POST(reqPOST({ idx: 0 }), ctx);
-    const call = prismaMock.scriptDraft.update.mock.calls[0][0];
-    expect(call.data.output).toMatchObject({ coverText: 'x', tags: ['#a'] });
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1);
+    const callArgsStr = JSON.stringify(prismaMock.$executeRaw.mock.calls[0]);
+    // record 参数只含 {path, prompt, createdAt} —— 不含 coverText/tags/imagePlan,
+    // 证明写入不是靠应用层 spread 整份 output 再回写。
+    expect(callArgsStr).not.toContain('coverText');
+    expect(callArgsStr).not.toContain('imagePlan');
   });
 
   it('imagePlan.images 乱序 (数组顺序与 idx 字段不一致) → 按 idx 字段匹配取对 prompt', async () => {
@@ -173,11 +177,11 @@ describe('POST /api/v1/scripts/[id]/images — 成功', () => {
       size: '1024x1536',
       quality: 'medium',
     });
-    const call = prismaMock.scriptDraft.update.mock.calls[0][0];
-    expect(call.data.output.images[0].prompt).toBe(validPlan.images[0].prompt);
+    const { record } = rawCallArgs(prismaMock.$executeRaw.mock.calls[0]);
+    expect(record.prompt).toBe(validPlan.images[0].prompt);
   });
 
-  it('覆盖写: 同 idx 再次生成覆盖旧记录', async () => {
+  it('覆盖写: 同 idx 再次生成写入新 record (依赖 DB jsonb_set 覆盖旧值, 不依赖读快照)', async () => {
     prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(
       baseXhsDraft({
         output: {
@@ -190,9 +194,64 @@ describe('POST /api/v1/scripts/[id]/images — 成功', () => {
       }),
     );
     await POST(reqPOST({ idx: 1 }), ctx);
-    const call = prismaMock.scriptDraft.update.mock.calls[0][0];
-    expect(call.data.output.images[1].prompt).toBe(validPlan.images[1].prompt);
-    expect(call.data.output.images[1].createdAt).not.toBe('2020-01-01T00:00:00.000Z');
+    const { record } = rawCallArgs(prismaMock.$executeRaw.mock.calls[0]);
+    expect(record.prompt).toBe(validPlan.images[1].prompt);
+    expect(record.createdAt).not.toBe('2020-01-01T00:00:00.000Z');
+  });
+});
+
+describe('POST /api/v1/scripts/[id]/images — 并发写 (竞态回归)', () => {
+  it('两个并发请求写不同 idx: 写路径不依赖生成前读到的快照, 两次 $executeRaw 调用互不覆盖', async () => {
+    // 两次请求"生成前"读到的是同一份不含任何 images 的快照 —— 精确复现 T5 前端
+    // 并发 2 对同一 draftId 不同 idx 同时 POST 的场景: provider.generate() 耗时
+    // 30-120s 期间, 两个请求手里的快照都是生成前那一刻的旧版本。
+    //
+    // 旧实现: 写库时 `{ ...draft.output, images: { ...existingImages, [idx]: record } }`
+    // —— 两次都基于同一份"不含任何 images"的快照 spread, 后落库的 update 会把
+    // 先落库请求刚写入的 idx 整个覆盖掉 (因为它的 existingImages 快照里根本没有
+    // 对方那条记录)。
+    //
+    // 新实现: 写库改成 `$executeRaw` + `jsonb_set(output, ARRAY['images', idx], record, true)`,
+    // 断言点 —— 每次调用的 SQL 参数只包含"自己这个 idx 的单条 record", 完全不
+    // 引用另一个 idx 或整份 images/output 快照。只要参数形状证明了这一点, 就说明
+    // 两次写入在应用层是互相独立的原子单键操作, 由 Postgres 行锁保证串行化,
+    // 不存在互相覆盖的可能 —— 竞态在写路径设计上被消除, 而不是靠碰运气不撞车。
+    prismaMock.scriptDraft.findUnique.mockResolvedValue(
+      baseXhsDraft({ output: { coverText: 'x', imagePlan: validPlan } }),
+    );
+
+    const [res0, res1] = await Promise.all([
+      POST(reqPOST({ idx: 0 }), ctx),
+      POST(reqPOST({ idx: 1 }), ctx),
+    ]);
+    expect(res0.status).toBe(200);
+    expect(res1.status).toBe(200);
+
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(2);
+    const calls = prismaMock.$executeRaw.mock.calls.map(rawCallArgs);
+    const call0 = calls.find((c) => c.idxParam === '0');
+    const call1 = calls.find((c) => c.idxParam === '1');
+    expect(call0).toBeDefined();
+    expect(call1).toBeDefined();
+
+    expect(call0!.idParam).toBe('draft1');
+    expect(call1!.idParam).toBe('draft1');
+    expect(call0!.record).toEqual({
+      path: '/generated/draft1/0.png',
+      prompt: validPlan.images[0].prompt,
+      createdAt: expect.any(String),
+    });
+    expect(call1!.record).toEqual({
+      path: '/generated/draft1/1.png',
+      prompt: validPlan.images[1].prompt,
+      createdAt: expect.any(String),
+    });
+
+    // 互相独立: 每次调用的整段参数序列化后, 都不包含对方 idx 的 path/prompt。
+    const raw0 = JSON.stringify(prismaMock.$executeRaw.mock.calls.find((c) => c[1] === '0'));
+    const raw1 = JSON.stringify(prismaMock.$executeRaw.mock.calls.find((c) => c[1] === '1'));
+    expect(raw0).not.toContain('/1.png');
+    expect(raw1).not.toContain('/0.png');
   });
 });
 
@@ -260,7 +319,7 @@ describe('POST /api/v1/scripts/[id]/images — 校验', () => {
     const json = await res.json();
     expect(json.message).toBe('OpenAI 生图 key 未配置');
     expect(generateMock).not.toHaveBeenCalled();
-    expect(prismaMock.scriptDraft.update).not.toHaveBeenCalled();
+    expect(prismaMock.$executeRaw).not.toHaveBeenCalled();
   });
 });
 
@@ -272,7 +331,7 @@ describe('POST /api/v1/scripts/[id]/images — provider 失败', () => {
     const json = await res.json();
     expect(json.success).toBe(false);
     expect(json.message).toContain('第 2 张生成失败');
-    expect(prismaMock.scriptDraft.update).not.toHaveBeenCalled();
+    expect(prismaMock.$executeRaw).not.toHaveBeenCalled();
   });
 });
 
@@ -284,7 +343,7 @@ describe('POST /api/v1/scripts/[id]/images — 写盘失败', () => {
     const json = await res.json();
     expect(json.success).toBe(false);
     expect(json.message).toBe('图片写入失败, 请重试');
-    expect(prismaMock.scriptDraft.update).not.toHaveBeenCalled();
+    expect(prismaMock.$executeRaw).not.toHaveBeenCalled();
   });
 
   it('mkdir reject → 500 文案「图片写入失败, 请重试」, 不写库', async () => {
@@ -293,6 +352,6 @@ describe('POST /api/v1/scripts/[id]/images — 写盘失败', () => {
     expect(res.status).toBe(500);
     const json = await res.json();
     expect(json.message).toBe('图片写入失败, 请重试');
-    expect(prismaMock.scriptDraft.update).not.toHaveBeenCalled();
+    expect(prismaMock.$executeRaw).not.toHaveBeenCalled();
   });
 });

@@ -11,10 +11,15 @@ import { ImagePlanSchema } from '@/lib/llm/prompts/image-plan';
 /**
  * 逐张生图路由 — 按 output.imagePlan 里指定 idx 的 prompt 生成单张配图,
  * 写盘 `public/generated/<draftId>/<idx>.png` (mkdir recursive, 覆盖), 并把
- * `{ path, prompt, createdAt }` 落到 `output.images[idx]` (spread 保留其余 idx
- * 与 output 其余键)。
+ * `{ path, prompt, createdAt }` 落到 `output.images[idx]`。
  *
- * 一次只生一张 (前端逐张调用, 便于单张重试/展示进度), 不做批量。
+ * 一次只生一张 (前端逐张调用, 便于单张重试/展示进度), 不做批量。前端对同一
+ * draftId 的多个 idx 会并发调用本路由 (池并发 2) —— provider.generate() 耗时
+ * 30-120s, 若写库时用"生成前读到的 output 快照" spread 拼装, 两个并发请求都会
+ * 拼着同一份陈旧快照, 后落库的会把先落库那张的 images[idx] 记录静默覆盖掉。
+ * 因此落库不用 update + spread, 改用 `$executeRaw` + `jsonb_set` 对
+ * output.images[idx] 做数据库层原子单键写入 (基于行内当前值, Postgres 行锁
+ * 天然串行化并发 UPDATE), 生成前的快照读取只用于 plan/idx 存在性校验。
  */
 
 const BodySchema = z.object({
@@ -61,7 +66,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const parsedOutput = OutputReadSchema.safeParse(draft.output);
   if (!parsedOutput.success) return fail('该脚本还没有出图计划, 请先生成', 400);
 
-  const { imagePlan, images: existingImages } = parsedOutput.data;
+  const { imagePlan } = parsedOutput.data;
   // 按 idx 字段匹配, 不用数组下标 — imagePlan.images 每个元素自带 idx, 但 LLM
   // 输出顺序不保证与 idx 一致, 数组下标取值在错位时会静默拿到别张图的 prompt。
   const planImage = imagePlan.images.find((img) => img.idx === idx);
@@ -92,18 +97,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   }
 
   const relPath = `/generated/${id}/${idx}.png`;
-  await prisma.scriptDraft.update({
-    where: { id },
-    data: {
-      output: {
-        ...(draft.output as Record<string, unknown>),
-        images: {
-          ...(existingImages ?? {}),
-          [idx]: { path: relPath, prompt, createdAt: new Date().toISOString() },
-        },
-      },
-    },
-  });
+  const record = { path: relPath, prompt, createdAt: new Date().toISOString() };
+  // 原子写: 基于行内当前值单键更新 output.images[idx], 不依赖生成前读到的快照,
+  // 消除并发生图请求互相覆盖对方落库结果的竞态 (见文件头注释)。
+  await prisma.$executeRaw`UPDATE "ScriptDraft" SET output = jsonb_set(output, ARRAY['images', ${String(idx)}], ${JSON.stringify(record)}::jsonb, true) WHERE id = ${id}`;
 
   return ok({ idx, path: relPath });
 }
