@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { NavView } from "@/lib/cockpit/view-routing";
+import { pickPersonaBadge } from "@/lib/radar/persona-badge";
 import { Empty } from "../shared";
 
 /**
@@ -42,6 +43,10 @@ type RadarItemDTO = {
     discussion?: number;
     feasibility?: number;
     cooccurrenceSources?: number;
+    /** 八期 T5: 人设定位调权后处理字段, 老条目 (本期上线前采集) 没有这两个键——
+     * 徽标渲染走 `pickPersonaBadge`, 缺字段一律不展示 (零迁移)。 */
+    pillarHit?: string | null;
+    personaAdjust?: number;
   } | null;
   status: string;
   inspirationId: string | null;
@@ -86,6 +91,9 @@ export function RadarView({ setView, refreshWorkspace }: {
   const [itemPending, setItemPending] = useState<Set<string>>(new Set());
   const [keywordPending, setKeywordPending] = useState<Set<string>>(new Set());
   const [triggering, setTriggering] = useState(false);
+  /** 八期 T5: 是否已建立人设档案 —— 只用于页顶一行引导, 独立于上面四个接口的
+   * 失败收敛逻辑 (取不到就不展示引导, 不阻塞雷达本身的核心功能)。 */
+  const [personaEstablished, setPersonaEstablished] = useState<boolean | null>(null);
 
   /**
    * 四个接口任一失败（含 `success:false` 与网络异常）都要让用户看得见、可重试 ——
@@ -125,6 +133,14 @@ export function RadarView({ setView, refreshWorkspace }: {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    fetchJson("/api/v1/persona/profile")
+      .then((json) => {
+        if (json?.success) setPersonaEstablished(Boolean(json.data.established));
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -209,6 +225,11 @@ export function RadarView({ setView, refreshWorkspace }: {
       <p>按你的行业关键词全网深读，AI 逐篇阅读评分后汇总成热度排行；看中的直接收入灵感库。</p>
     </div>
 
+    {personaEstablished === false ? <div className="radar-persona-hint">
+      <p>建立人设档案让选题更贴合定位</p>
+      <button type="button" className="text-button" onClick={() => setView("settings")}>去设置 →</button>
+    </div> : null}
+
     {loading ? <p className="muted radar-status">加载中…</p> : null}
     {!loading && error ? <div className="radar-status-error">
       <p className="muted radar-status">{error}</p>
@@ -288,6 +309,7 @@ function RadarItemCard({ item, pending, onAction }: {
   pending: boolean;
   onAction: (id: string, action: "adopt" | "ignore") => void;
 }) {
+  const personaBadge = pickPersonaBadge(item.heatFactors);
   return <article className="radar-item-card">
     <div className="radar-item-score" title={heatFactorsTitle(item.heatFactors)}>{Math.round(item.displayScore)}</div>
     <div className="radar-item-body">
@@ -295,6 +317,8 @@ function RadarItemCard({ item, pending, onAction }: {
       <div className="radar-item-meta">
         <span className="radar-item-source">{item.sourceSite}</span>
         {item.matchedKeywords.map((kw) => <span key={kw} className="badge">{kw}</span>)}
+        {personaBadge?.type === "pillar" ? <span className="badge">{personaBadge.name}</span> : null}
+        {personaBadge?.type === "off" ? <span className="badge radar-item-badge-off">偏离定位</span> : null}
       </div>
       {item.aiSummary ? <p className="radar-item-summary">{item.aiSummary}</p> : null}
       {item.aiAngle ? <p className="radar-item-angle"><strong>可做角度：</strong>{item.aiAngle}</p> : null}
