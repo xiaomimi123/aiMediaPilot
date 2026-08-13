@@ -81,7 +81,18 @@ export function AIProviderCard() {
     refresh();
   };
 
-  const handleTest = async (id: string) => {
+  const handleTest = async (id: string, provider: string) => {
+    // T5 七期: 连通性测试路由 (/api/v1/ai/config/test) 目前只实现了 openai 的
+    // chat.completions 探测——deepseek/gpt-image 打过去只会拿到路由那句
+    // "暂仅支持测试 openai" 的兜底拒绝, 文案生硬、容易被误读成保存失败 (这不是
+    // 生图新引入的问题, deepseek 用户此前测试同样会撞上这句话)。这里前端直接
+    // 短路: 非 openai 的配置不发请求, 直接给一句面向用户的友好提示, 引导去
+    // 实际生成流程里验证, 而不是在这个通用测试按钮上硬凑一个它本来就不支持
+    // 的能力。
+    if (provider !== "openai") {
+      setStatus({ kind: "ok", msg: "该服务商暂不支持在线连通性测试，保存后可在实际生成时验证是否可用" });
+      return;
+    }
     setTestingId(id);
     setStatus({ kind: "idle" });
     try {
@@ -107,7 +118,7 @@ export function AIProviderCard() {
     <div className="settings-icon">✦</div>
     <div>
       <h2>AI 服务配置</h2>
-      <p>配置文本生成用的 AI 服务商 API Key；密钥使用 AES-256-GCM 加密后存入数据库，前端不会回显明文。</p>
+      <p>配置 AI 服务商（文本 / 生图）API Key；密钥使用 AES-256-GCM 加密后存入数据库，前端不会回显明文。</p>
       <form className="ai-provider-form" onSubmit={handleSave}>
         <div className="form-grid">
           <label className="field">
@@ -162,7 +173,7 @@ export function AIProviderCard() {
                 <small>{c.modelId} · {c.apiKeyMasked}</small>
               </div>
               <div className="ai-provider-list-actions">
-                <button type="button" className="text-button" disabled={testingId === c.id} onClick={() => handleTest(c.id)}>{testingId === c.id ? "测试中…" : "测试"}</button>
+                <button type="button" className="text-button" disabled={testingId === c.id} onClick={() => handleTest(c.id, c.provider)}>{testingId === c.id ? "测试中…" : "测试"}</button>
                 <button type="button" className="text-button danger" onClick={() => handleDelete(c.id)}>删除</button>
               </div>
             </li>)}

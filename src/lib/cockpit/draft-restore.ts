@@ -145,6 +145,55 @@ function parseShotIdeas(raw: unknown): RestoredShotIdea[] | undefined {
   return ideas.length > 0 ? ideas : undefined;
 }
 
+// ---- T5 七期: 出图计划 (imagePlan) / 逐张生图结果 (images) 窄化解析 —— 只有
+// xiaohongshu 形态可能带这两个键 (落库形状见 images/plan、images 两条路由:
+// `imagePlan: { style, images:[{idx,prompt}] }`、`images: { [idx]: {path,prompt,
+// createdAt} }`, idx 落到 JSON 后是字符串键, Object.entries 需要 Number() 转回)。
+// 两者都是可选增量字段, 缺失/畸形不影响 intro/body 主形态的解析——独立
+// try-and-drop, 不出现在返回对象里而不是给 undefined 值, 与本文件其余字段解析
+// 风格一致。
+
+export interface RestoredImagePlanImage {
+  idx: number;
+  prompt: string;
+}
+
+export interface RestoredImagePlan {
+  style: string;
+  images: RestoredImagePlanImage[];
+}
+
+function isImagePlanImage(value: unknown): value is RestoredImagePlanImage {
+  return isPlainObject(value) && typeof value.idx === "number" && isNonEmptyString(value.prompt);
+}
+
+function parseImagePlan(raw: unknown): RestoredImagePlan | undefined {
+  if (!isPlainObject(raw) || !isNonEmptyString(raw.style) || !Array.isArray(raw.images)) return undefined;
+  const images = raw.images.filter(isImagePlanImage).map((i) => ({ idx: i.idx, prompt: i.prompt }));
+  return images.length > 0 ? { style: raw.style, images } : undefined;
+}
+
+export interface RestoredGeneratedImage {
+  path: string;
+  prompt: string;
+  createdAt: string;
+}
+
+function isGeneratedImage(value: unknown): value is RestoredGeneratedImage {
+  return isPlainObject(value) && isNonEmptyString(value.path) && isNonEmptyString(value.prompt) && isNonEmptyString(value.createdAt);
+}
+
+function parseImages(raw: unknown): Record<number, RestoredGeneratedImage> | undefined {
+  if (!isPlainObject(raw)) return undefined;
+  const result: Record<number, RestoredGeneratedImage> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    const idx = Number(key);
+    if (!Number.isInteger(idx) || idx < 0 || !isGeneratedImage(value)) continue;
+    result[idx] = value;
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
 export interface ParsedDraftOutput {
   sections?: DouyinSection[];
   research?: RestoredResearch;
@@ -157,6 +206,10 @@ export interface ParsedDraftOutput {
   tags?: string[];
   shotIdeas?: RestoredShotIdea[];
   coverText?: string;
+  /** T5 七期: 出图计划 (style + 每张图 prompt), 存在即代表已规划过全套配图 */
+  imagePlan?: RestoredImagePlan;
+  /** T5 七期: 已生成的配图, 按 idx 索引, 可能只是 imagePlan 的子集 (部分张已出图) */
+  images?: Record<number, RestoredGeneratedImage>;
 }
 
 /**
@@ -209,6 +262,12 @@ export function parseDraftOutput(output: unknown): ParsedDraftOutput | null {
     if (shotIdeas) result.shotIdeas = shotIdeas;
 
     if (isNonEmptyString(output.coverText)) result.coverText = output.coverText;
+
+    const imagePlan = parseImagePlan(output.imagePlan);
+    if (imagePlan) result.imagePlan = imagePlan;
+
+    const images = parseImages(output.images);
+    if (images) result.images = images;
 
     return result;
   }

@@ -167,4 +167,80 @@ describe("parseDraftOutput", () => {
     const result = parseDraftOutput({ intro: "开头", body: "正文", tags: ["", ""] });
     expect(result).not.toHaveProperty("tags");
   });
+
+  // ---- T5 七期: 出图计划 (imagePlan) / 逐张生图结果 (images) ----
+
+  const FULL_XHS_WITH_IMAGES = {
+    intro: "开头引导文案",
+    body: "正文内容",
+    imagePlan: {
+      style: "minimalist flat illustration, warm pastel palette",
+      images: [
+        { idx: 0, prompt: "封面图 prompt" },
+        { idx: 1, prompt: "第一张配图 prompt" },
+      ],
+    },
+    images: {
+      0: { path: "/generated/draft1/0.png", prompt: "封面图 prompt", createdAt: "2026-08-14T00:00:00.000Z" },
+    },
+  };
+
+  it("xiaohongshu 形态: imagePlan + 部分 images 齐全 → 都解析出来, images 按 idx 数字键索引", () => {
+    const result = parseDraftOutput(FULL_XHS_WITH_IMAGES);
+    expect(result).not.toBeNull();
+    expect(result!.imagePlan).toEqual({
+      style: "minimalist flat illustration, warm pastel palette",
+      images: [
+        { idx: 0, prompt: "封面图 prompt" },
+        { idx: 1, prompt: "第一张配图 prompt" },
+      ],
+    });
+    expect(result!.images).toEqual({
+      0: { path: "/generated/draft1/0.png", prompt: "封面图 prompt", createdAt: "2026-08-14T00:00:00.000Z" },
+    });
+  });
+
+  it("xiaohongshu 形态: 没有 imagePlan/images 键 → 两者都不出现 (未出过图的旧稿正常恢复)", () => {
+    const result = parseDraftOutput({ intro: "开头", body: "正文" });
+    expect(result).not.toBeNull();
+    expect(result).not.toHaveProperty("imagePlan");
+    expect(result).not.toHaveProperty("images");
+  });
+
+  it("xiaohongshu 形态: imagePlan 畸形 (缺 style / images 非数组) → imagePlan 不出现, intro/body 仍正常解析", () => {
+    const result = parseDraftOutput({ intro: "开头", body: "正文", imagePlan: { images: "not-an-array" } });
+    expect(result).not.toBeNull();
+    expect(result!.intro).toBe("开头");
+    expect(result).not.toHaveProperty("imagePlan");
+  });
+
+  it("xiaohongshu 形态: imagePlan.images 单条畸形 (prompt 缺失) → 该条被过滤, 其余合法条仍解析", () => {
+    const result = parseDraftOutput({
+      intro: "开头",
+      body: "正文",
+      imagePlan: { style: "some style token", images: [{ idx: 0, prompt: "合法 prompt" }, { idx: 1 }] },
+    });
+    expect(result!.imagePlan).toEqual({ style: "some style token", images: [{ idx: 0, prompt: "合法 prompt" }] });
+  });
+
+  it("xiaohongshu 形态: images 值畸形 (缺 createdAt) → 该条被过滤, 其余合法条仍解析, 非法/负数键忽略", () => {
+    const result = parseDraftOutput({
+      intro: "开头",
+      body: "正文",
+      images: {
+        0: { path: "/generated/d/0.png", prompt: "p0", createdAt: "2026-08-14T00:00:00.000Z" },
+        1: { path: "/generated/d/1.png", prompt: "p1" }, // 缺 createdAt, 整条丢弃
+      },
+    });
+    expect(result!.images).toEqual({
+      0: { path: "/generated/d/0.png", prompt: "p0", createdAt: "2026-08-14T00:00:00.000Z" },
+    });
+  });
+
+  it("xiaohongshu 形态: images 全部畸形/为空对象 → images 不出现 (不是空对象 key)", () => {
+    const result = parseDraftOutput({ intro: "开头", body: "正文", images: {} });
+    expect(result).not.toHaveProperty("images");
+    const result2 = parseDraftOutput({ intro: "开头", body: "正文", images: { 0: { path: "只有 path" } } });
+    expect(result2).not.toHaveProperty("images");
+  });
 });

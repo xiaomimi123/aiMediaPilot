@@ -100,6 +100,24 @@ function parseXhsTags(raw: unknown): string[] {
   return Array.isArray(raw) ? raw.filter((v): v is string => typeof v === "string" && v.length > 0) : [];
 }
 
+// ---- T5 七期: 出图计划 / 逐张生图结果的窄化解析 —— 消费 POST .../images/plan
+// (`ok({plan})`, plan = `{style, images:[{idx,prompt}]}`) 与 POST .../images
+// (`ok({idx,path})`) 两条路由的响应, 不直接信任 fetch 返回的 any 类型标注,
+// 与本文件其余网络响应窄化解析同一风格 (parseSections/parseHooks 等)。
+interface XhsImagePlanImage { idx: number; prompt: string }
+interface XhsImagePlanView { style: string; images: XhsImagePlanImage[] }
+interface XhsGeneratedImage { path: string; prompt: string; createdAt: string }
+
+function isXhsImagePlanImage(value: unknown): value is XhsImagePlanImage {
+  return isPlainRecord(value) && typeof value.idx === "number" && typeof value.prompt === "string";
+}
+
+function parseXhsImagePlan(raw: unknown): XhsImagePlanView | null {
+  if (!isPlainRecord(raw) || typeof raw.style !== "string" || !Array.isArray(raw.images)) return null;
+  const images = raw.images.filter(isXhsImagePlanImage);
+  return images.length > 0 ? { style: raw.style, images } : null;
+}
+
 /**
  * 素材简报折叠区 —— douyin 分块面板与 T6 六期小红书面板共用同一份渲染 (「复用
  * 五期组件」), 从 ScriptSectionsPanel 内联的同款 JSX 抽出为独立子组件, 避免两处
@@ -119,7 +137,7 @@ function ResearchBriefDetails({ research, researchDegraded }: { research: Resear
  * ContentDrawer 主体 return 本身已经很密, 这块逻辑独立、props 边界清楚, 抽出来
  * 单独用正常排版写更可读。
  */
-function ScriptSectionsPanel({ sections, research, researchDegraded, hooks, pickedHookIdx, hookPending, onPickHook, allInstruction, onAllInstructionChange, onRefineAll, refiningAll, openSectionIdx, onToggleSection, sectionInstruction, onSectionInstructionChange, onRefineSection, refiningSectionIdx, generating }: {
+function ScriptSectionsPanel({ sections, research, researchDegraded, hooks, pickedHookIdx, hookPending, onPickHook, allInstruction, onAllInstructionChange, onRefineAll, refiningAll, openSectionIdx, onToggleSection, sectionInstruction, onSectionInstructionChange, onRefineSection, refiningSectionIdx, generating, imgGenerating }: {
   sections: DouyinSection[];
   research: ResearchBriefView | null;
   researchDegraded: boolean;
@@ -138,6 +156,8 @@ function ScriptSectionsPanel({ sections, research, researchDegraded, hooks, pick
   onRefineSection: (idx: number) => void;
   refiningSectionIdx: number | null;
   generating: boolean;
+  /** T5 七期: 出图 pending——与本组件覆盖的四类动作双向互斥 (见下方 busy) */
+  imgGenerating: boolean;
 }) {
   const anyRefining = refiningAll || refiningSectionIdx !== null;
   // T9 终审: hook 候选切换 / 换一版 / 整体指令 / 生成中(generating) 是同一草稿上
@@ -145,8 +165,10 @@ function ScriptSectionsPanel({ sections, research, researchDegraded, hooks, pick
   // 走 POST generate 且会整体替换 scriptDraftId/sections)——原先各自只识别自己
   // 那组的 pending, 互不识别对方在途, 可并发触发同一草稿的写操作。这里统一成一个
   // busy 开关喂给全部四类控件的 disabled, 各自的「进行中」文案态 (refiningAll ?
-  // "改写中…" : ... 等) 仍按各自 state 单独判断, 不受影响。
-  const busy = anyRefining || hookPending || generating;
+  // "改写中…" : ... 等) 仍按各自 state 单独判断, 不受影响。T5 七期: imgGenerating
+  // (出图 pending) 并入同一 busy 开关——出图与改稿共用同一份 scriptDraftId 落库,
+  // 不能并发写。
+  const busy = anyRefining || hookPending || generating || imgGenerating;
   return <div className="script-sections-panel">
     <ResearchBriefDetails research={research} researchDegraded={researchDegraded} />
     <div className="script-all-instruction-row">
@@ -173,7 +195,7 @@ function ScriptSectionsPanel({ sections, research, researchDegraded, hooks, pick
  * douyin sections 面板的先例, 分块/整稿面板本身只读, 编辑走下方骨架文本框或
  * 指令框驱动的 refine 请求)。
  */
-function XhsScriptPanel({ research, researchDegraded, intro, body, tags, shotIdeas, instruction, onInstructionChange, onRefineAll, refining, generating }: {
+function XhsScriptPanel({ research, researchDegraded, intro, body, tags, shotIdeas, instruction, onInstructionChange, onRefineAll, refining, generating, imagePlan, images, imgGenerating, failedImageIdxs, onGenerateImages, onRetryImage, archiveHref }: {
   research: ResearchBriefView | null;
   researchDegraded: boolean;
   intro: string;
@@ -185,8 +207,19 @@ function XhsScriptPanel({ research, researchDegraded, intro, body, tags, shotIde
   onRefineAll: () => void;
   refining: boolean;
   generating: boolean;
+  /** T5 七期: 出图计划 (style + 每张图 prompt)——null 表示尚未点过「生成配图」/懒加载没恢复到 */
+  imagePlan: XhsImagePlanView | null;
+  /** 已生成的配图, 按 idx 索引, 可能是 imagePlan 的子集 (部分张已出图/部分失败) */
+  images: Record<number, XhsGeneratedImage>;
+  imgGenerating: boolean;
+  failedImageIdxs: Set<number>;
+  onGenerateImages: () => void;
+  onRetryImage: (idx: number) => void;
+  /** 有 scriptDraftId 才非 null——「打包下载」只在同时有 scriptDraftId 且至少一张成图时渲染 */
+  archiveHref: string | null;
 }) {
-  const busy = refining || generating;
+  const busy = refining || generating || imgGenerating;
+  const hasAnyImage = Object.keys(images).length > 0;
   return <div className="script-sections-panel">
     <ResearchBriefDetails research={research} researchDegraded={researchDegraded} />
     <div className="script-all-instruction-row">
@@ -203,6 +236,31 @@ function XhsScriptPanel({ research, researchDegraded, intro, body, tags, shotIde
     </div>
     {tags.length > 0 ? <div className="script-section-card"><div className="script-section-head"><strong>标签</strong></div><p className="script-section-text">{tags.map((tag) => `#${tag}`).join(" ")}</p></div> : null}
     {shotIdeas.length > 0 ? <div className="script-section-card"><div className="script-section-head"><strong>配图建议</strong></div><ul className="script-research-list">{shotIdeas.map((idea) => <li key={idea.idx}><p className="script-research-fact">{idea.idx}. {idea.description}</p></li>)}</ul></div> : null}
+    {/* T5 七期: 出图计划 + 缩略图网格 —— 按钮常亮 (无 key 时点击后端 503, 由父组件 notify 引导),
+        点击先幂等 POST plan 拿到 imagePlan (没有则先规划), 再并发逐张 POST images, 每张成功即
+        渐进渲染缩略图, 失败的格显示「重试」。「打包下载」只在至少一张成图时出现。 */}
+    <div className="script-section-card script-image-section">
+      <div className="script-section-head">
+        <strong>配图</strong>
+        <div className="script-image-actions">
+          {hasAnyImage && archiveHref ? <a className="text-button" href={archiveHref} download>打包下载</a> : null}
+          <button type="button" className="secondary-button small" disabled={busy} onClick={onGenerateImages}>{imgGenerating ? "生成中…" : "生成配图"}</button>
+        </div>
+      </div>
+      {imagePlan
+        ? <div className="script-image-grid">{imagePlan.images.map((img) => {
+          const done = images[img.idx];
+          const failed = failedImageIdxs.has(img.idx);
+          return <div key={img.idx} className="script-image-tile">
+            {done
+              ? <a href={done.path} target="_blank" rel="noreferrer"><img src={done.path} alt={`配图 ${img.idx + 1}`} /></a>
+              : failed
+                ? <div className="script-image-tile-state failed"><span>生成失败</span><button type="button" className="text-button" disabled={imgGenerating} onClick={() => onRetryImage(img.idx)}>重试</button></div>
+                : <div className="script-image-tile-state pending"><span>{imgGenerating ? "生成中…" : "待生成"}</span></div>}
+          </div>;
+        })}</div>
+        : <p className="field-hint">点击「生成配图」自动规划并生成整套配图（封面 + 正文配图）。</p>}
+    </div>
   </div>;
 }
 
@@ -288,11 +346,25 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
   const [xhsShotIdeas, setXhsShotIdeas] = useState<XhsShotIdea[]>([]);
   const [xhsInstruction, setXhsInstruction] = useState("");
   const [xhsRefining, setXhsRefining] = useState(false);
-  // T9 终审 + T6 六期扩展: 「用 AI 写脚本」按钮要跟 ScriptSectionsPanel 内部的
-  // hook 候选切换/换一版/整体指令、以及 XhsScriptPanel 的整稿指令互斥——生成
-  // 会整体替换 scriptDraftId/sections/intro/body, 这些动作在途时点生成、或
-  // 生成在途时点这些动作, 都会打到同一草稿的并发写操作上。
-  const scriptActionPending = refiningAll || refiningSectionIdx !== null || pickHookPending || xhsRefining;
+  // ---- T5 七期: 抽屉内配图生成的派生 state —— imagePlan 为 null 表示尚未点过
+  // 「生成配图」/懒加载没恢复到已有计划; xhsImages 按 idx 索引已生成的图 (可能
+  // 是 imagePlan 的子集, 逐张 POST、渐进渲染); failedImgIdxs 记录本次批量/单张
+  // 重试中失败的 idx, 驱动对应缩略图格的「重试」按钮, 成功后从集合移除。
+  // imgKeyMissingNotifiedRef 防止并发池 (2 个 worker) 同时命中 503 (未配置生图
+  // key) 时重复弹两次相同的引导 toast——每次新的一批生成/单张重试开始前复位。
+  const [imagePlan, setImagePlan] = useState<XhsImagePlanView | null>(null);
+  const [xhsImages, setXhsImages] = useState<Record<number, XhsGeneratedImage>>({});
+  const [imgGenerating, setImgGenerating] = useState(false);
+  const [failedImgIdxs, setFailedImgIdxs] = useState<Set<number>>(new Set());
+  const imgKeyMissingNotifiedRef = useRef(false);
+  // T9 终审 + T6 六期扩展 + T5 七期扩展: 「用 AI 写脚本」按钮要跟
+  // ScriptSectionsPanel 内部的 hook 候选切换/换一版/整体指令、XhsScriptPanel 的
+  // 整稿指令、以及出图 (imgGenerating) 互斥——生成会整体替换
+  // scriptDraftId/sections/intro/body, 这些动作在途时点生成、或生成在途时点
+  // 这些动作, 都会打到同一草稿的并发写操作上; 出图虽然不改 intro/body, 但同样
+  // 写同一条 ScriptDraft.output (imagePlan/images 键), 并发写有互相覆盖对方
+  // spread 快照的风险, 一并纳入同一互斥开关。
+  const scriptActionPending = refiningAll || refiningSectionIdx !== null || pickHookPending || xhsRefining || imgGenerating;
   const mountedRef = useRef(true);
   const currentItemIdRef = useRef(item.id);
   currentItemIdRef.current = item.id;
@@ -398,6 +470,11 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
           if (parsed.research) setResearch(parsed.research);
           if (parsed.tags) setXhsTags(parsed.tags);
           if (parsed.shotIdeas) setXhsShotIdeas(parsed.shotIdeas);
+          // T5 七期: 出图计划/已生成配图同样是抽屉自己的前端派生 state, 懒加载
+          // 重开时一并拉回——否则重开抽屉后缩略图网格和「打包下载」都会消失,
+          // 即便 output.images 早已落库。
+          if (parsed.imagePlan) setImagePlan(parsed.imagePlan);
+          if (parsed.images) setXhsImages(parsed.images);
         }
       } catch {
         // 网络失败等: 静默保持现状, 不打扰用户
@@ -426,14 +503,17 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
     setXhsTags([]);
     setXhsShotIdeas([]);
     setXhsInstruction("");
+    setImagePlan(null);
+    setXhsImages({});
+    setFailedImgIdxs(new Set());
   }
 
   async function handleGenerateScript() {
-    // T9 终审 + T6 六期扩展: 生成本身也要跟 hook 候选切换/换一版/整体指令/
-    // xhs 整稿指令四组动作互斥——生成会整体替换 scriptDraftId/sections/
-    // intro/body, 若在改稿/选 hook 请求在途时打断, 迟到的响应可能覆盖掉新
-    // 草稿, 或改稿请求会打到已经不存在的旧草稿上。
-    if (generating || refiningAll || refiningSectionIdx !== null || pickHookPending || xhsRefining) return;
+    // T9 终审 + T6 六期扩展 + T5 七期扩展: 生成本身也要跟 hook 候选切换/换一版/
+    // 整体指令/xhs 整稿指令/出图五组动作互斥——生成会整体替换
+    // scriptDraftId/sections/intro/body, 若在改稿/选 hook/出图请求在途时打断,
+    // 迟到的响应可能覆盖掉新草稿, 或改稿/出图请求会打到已经不存在的旧草稿上。
+    if (generating || refiningAll || refiningSectionIdx !== null || pickHookPending || xhsRefining || imgGenerating) return;
     await runGenerateScript(
       { itemId: item.id, title: item.title, platform: scriptPlatform, materials: scriptPlatform === "douyin" || scriptPlatform === "xiaohongshu" ? (materials.trim() || undefined) : undefined, durationSec: scriptPlatform === "douyin" ? durationSec : undefined, cockpitContentId: item.id },
       {
@@ -464,6 +544,12 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
           setXhsBody(typeof data.body === "string" && data.body.length > 0 ? data.body : null);
           setXhsTags(parseXhsTags(data.tags));
           setXhsShotIdeas(parseXhsShotIdeas(data.shotIdeas));
+          // T5 七期: 新生成的草稿是全新的 ScriptDraft (新 scriptDraftId), 旧稿的
+          // 出图计划/已生成配图不再属于这条新草稿, 必须清空——否则会把上一篇
+          // (或上一次生成前) 的缩略图错误地叠在这次新生成的图文笔记上。
+          setImagePlan(null);
+          setXhsImages({});
+          setFailedImgIdxs(new Set());
           // 修复轮 1: 生成成功即把新 scriptDraftId 记进 Cockpit.tsx 的同会话覆盖表,
           // 让「关抽屉→立即重开」也能走上面的懒加载拉回效果——不用等下次整页刷新
           // 才能从 workspace GET 里看到 item.scriptDraftId。
@@ -474,7 +560,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
   }
 
   async function handlePickHook(hookIdx: number) {
-    if (!scriptDraftId || pickHookPending || generating || refiningAll || refiningSectionIdx !== null || xhsRefining) return;
+    if (!scriptDraftId || pickHookPending || generating || refiningAll || refiningSectionIdx !== null || xhsRefining || imgGenerating) return;
     // 跨 item 竞态守卫: 请求发起时捕获目标 item, await 期间用户可能已切到另一篇
     // 内容 (resetScriptGenerationState 已清空 sections/scriptDraftId)——这条迟到
     // 的响应不该再把 A 内容的选定结果写进现在显示的 B 内容面板。过期直接丢弃,
@@ -532,7 +618,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
 
   async function handleRefineSection(idx: number) {
     const instruction = sectionInstruction.trim();
-    if (!scriptDraftId || !instruction || refiningSectionIdx !== null || refiningAll || generating || pickHookPending || xhsRefining) return;
+    if (!scriptDraftId || !instruction || refiningSectionIdx !== null || refiningAll || generating || pickHookPending || xhsRefining || imgGenerating) return;
     const requestedItemId = item.id;
     setRefiningSectionIdx(idx);
     try {
@@ -552,7 +638,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
 
   async function handleRefineAll() {
     const instruction = allInstruction.trim();
-    if (!scriptDraftId || !instruction || refiningAll || refiningSectionIdx !== null || generating || pickHookPending || xhsRefining) return;
+    if (!scriptDraftId || !instruction || refiningAll || refiningSectionIdx !== null || generating || pickHookPending || xhsRefining || imgGenerating) return;
     const requestedItemId = item.id;
     setRefiningAll(true);
     try {
@@ -579,7 +665,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
    */
   async function handleRefineXhsAll() {
     const instruction = xhsInstruction.trim();
-    if (!scriptDraftId || !instruction || xhsRefining || refiningAll || refiningSectionIdx !== null || generating || pickHookPending) return;
+    if (!scriptDraftId || !instruction || xhsRefining || refiningAll || refiningSectionIdx !== null || generating || pickHookPending || imgGenerating) return;
     const requestedItemId = item.id;
     setXhsRefining(true);
     try {
@@ -606,6 +692,136 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
       }
     } finally {
       setXhsRefining(false);
+    }
+  }
+
+  /**
+   * T5 七期: 出图 —— 单张调用, 被批量生成 (handleGenerateImages 的并发池) 与
+   * 单格重试 (handleRetryImage) 共用。成功: 写入 xhsImages[idx], 从
+   * failedImgIdxs 移除该 idx (若在集合里)。失败: 503 (未配置 OpenAI 生图 key)
+   * 走统一引导 toast (由 imgKeyMissingNotifiedRef 防重复弹出) 并返回 "no-key"
+   * 让调用方中止批量池的后续张数 (同一草稿共用同一把 key, 继续逐张打只会
+   * 拿到同样的 503, 纯粹浪费请求); 其余失败 (502 vendor 生成失败等) 只标记该
+   * 格 failedImgIdxs, 驱动该格「重试」按钮, 不弹全局 toast (避免批量生成时
+   * 多张失败连环弹窗打扰)。
+   *
+   * 跨 item 竞态守卫: 与 handlePickHook/runRefine 同款——await 期间抽屉可能
+   * 已切到另一篇内容, 迟到的响应不该再写进现在显示的 (另一篇) 内容面板,
+   * 也不该占用 failedImgIdxs 展示重试按钮。
+   */
+  async function generateOneImage(draftId: string, requestedItemId: string, idx: number): Promise<"ok" | "failed" | "no-key"> {
+    try {
+      const res = await fetch(`/api/v1/scripts/${draftId}/images`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ idx }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!mountedRef.current || currentItemIdRef.current !== requestedItemId) return "failed";
+      if (json?.success && typeof json.data?.path === "string") {
+        const path = json.data.path as string;
+        setXhsImages((prev) => ({ ...prev, [idx]: { path, prompt: "", createdAt: new Date().toISOString() } }));
+        setFailedImgIdxs((prev) => {
+          if (!prev.has(idx)) return prev;
+          const next = new Set(prev);
+          next.delete(idx);
+          return next;
+        });
+        return "ok";
+      }
+      if (res.status === 503) {
+        if (!imgKeyMissingNotifiedRef.current) {
+          imgKeyMissingNotifiedRef.current = true;
+          notify(`${json?.message || "未配置 OpenAI 生图 key"}，请前往「设置 → AI 服务配置」保存后重试`);
+        }
+        return "no-key";
+      }
+      setFailedImgIdxs((prev) => new Set(prev).add(idx));
+      return "failed";
+    } catch {
+      if (mountedRef.current && currentItemIdRef.current === requestedItemId) {
+        setFailedImgIdxs((prev) => new Set(prev).add(idx));
+      }
+      return "failed";
+    }
+  }
+
+  /** 并发 2 的简单 worker 池——任一 worker 拿到 "no-key" 就置 aborted, 两个
+   * worker 各自在下一轮 while 判断时退出, 不再耗时打剩余张数。 */
+  async function runImagePool(draftId: string, requestedItemId: string, targets: number[]) {
+    let cursor = 0;
+    let aborted = false;
+    async function worker() {
+      while (!aborted && cursor < targets.length) {
+        if (!mountedRef.current || currentItemIdRef.current !== requestedItemId) return;
+        const idx = targets[cursor++];
+        const outcome = await generateOneImage(draftId, requestedItemId, idx);
+        if (outcome === "no-key") aborted = true;
+      }
+    }
+    await Promise.all([worker(), worker()]);
+  }
+
+  /**
+   * 「生成配图」—— 按钮常亮 (无 key 时不做前置探测, 点击后端 503 才引导, 见简报
+   * 裁决)。无本地 imagePlan 先幂等 POST plan (已有计划直接返回, 不重复调 LLM);
+   * 拿到计划后并发 2 逐张生成尚未成功的 idx (已成图的跳过, 支持"部分张失败→
+   * 重新点生成配图→只补齐失败的那些")。
+   */
+  async function handleGenerateImages() {
+    if (!scriptDraftId || imgGenerating || generating || refiningAll || refiningSectionIdx !== null || pickHookPending || xhsRefining) return;
+    const requestedItemId = item.id;
+    const draftId = scriptDraftId;
+    imgKeyMissingNotifiedRef.current = false;
+    setImgGenerating(true);
+    try {
+      let plan = imagePlan;
+      if (!plan) {
+        const res = await fetch(`/api/v1/scripts/${draftId}/images/plan`, { method: "POST" });
+        const json = await res.json().catch(() => null);
+        if (!mountedRef.current || currentItemIdRef.current !== requestedItemId) return;
+        if (!json?.success) {
+          if (res.status === 503) {
+            notify(`${json?.message || "未配置生成配图所需的 API Key"}，请前往「设置 → AI 服务配置」保存后重试`);
+          } else {
+            notify(json?.message || "出图计划生成失败");
+          }
+          return;
+        }
+        plan = parseXhsImagePlan(json.data?.plan);
+        if (!plan) {
+          notify("出图计划解析失败，请重试");
+          return;
+        }
+        setImagePlan(plan);
+      }
+      const targets = plan.images.map((img) => img.idx).filter((idx) => !(idx in xhsImages));
+      if (targets.length === 0) return;
+      await runImagePool(draftId, requestedItemId, targets);
+    } catch (e) {
+      if (mountedRef.current && currentItemIdRef.current === requestedItemId) {
+        notify(e instanceof Error ? e.message : "生成配图失败，请稍后重试");
+      }
+    } finally {
+      // 与 runGenerateScript/handlePickHook 等既有 handler 同一约定: pending 复位
+      // 无条件执行, 不依赖 isMounted/isCurrentItem——卡在"生成中…"比一次多余的
+      // no-op setState (React 18 对已卸载组件调用 setState 是安全的) 更糟。
+      setImgGenerating(false);
+    }
+  }
+
+  /** 单格「重试」—— 复用 generateOneImage, 与批量生成共用同一个 imgGenerating
+   * pending 开关 (简化互斥: 批量在跑时所有格的重试按钮也一并 disabled)。 */
+  async function handleRetryImage(idx: number) {
+    if (!scriptDraftId || imgGenerating || generating || refiningAll || refiningSectionIdx !== null || pickHookPending || xhsRefining) return;
+    const requestedItemId = item.id;
+    const draftId = scriptDraftId;
+    imgKeyMissingNotifiedRef.current = false;
+    setImgGenerating(true);
+    try {
+      await generateOneImage(draftId, requestedItemId, idx);
+    } finally {
+      setImgGenerating(false);
     }
   }
 
@@ -637,7 +853,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
     {/* “AI 体检”按钮（调 /api/ai/analyze）已在 Task 14 移除：该路由未移植，AI 相关能力统一走 /agent。 */}
     {tab === "topic" ? <div className="drawer-section"><div className="section-title-row"><div><span className="eyebrow">TOPIC GATE</span><h3>大纲卡</h3></div></div><StageScheduleField item={item} stage="topic" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{[["目标受众", "audience"], ["具体痛点", "painPoint"], ["一句话观点", "pointOfView"], ["大家通常怎么讲", "commonAngle"], ["我的反差角度", "contrastAngle"], ["可展示素材", "assets"], ["最低成本拍法", "minimumProduction"]].map(([label, key]) => <label key={key} className="field full"><span>{label}</span><textarea value={String(item.topic[key as keyof typeof item.topic] ?? "")} onChange={(e) => updateTopic({ [key]: e.target.value })} /></label>)}<div className="score-card"><div><span>六维总分</span><strong>{score}<small> / 30</small></strong></div><div className="score-grid">{Object.entries({ audience: "受众", pain: "痛点", scene: "场景", demonstrable: "可展示", distribution: "传播", efficiency: "性价比" }).map(([key, label]) => <label key={key}><span>{label}</span><input type="range" min="0" max="5" value={item.topic.score[key as keyof typeof item.topic.score]} onChange={(e) => updateTopic({ score: { ...item.topic.score, [key]: Number(e.target.value) } })} /><strong>{item.topic.score[key as keyof typeof item.topic.score]}</strong></label>)}</div></div></div> : null}
     {/* “AI 质检”按钮（调 /api/ai/analyze）已在 Task 14 移除：该路由未移植；“用 AI 写脚本”自 Task 2 起改为抽屉内就地生成，不再跳转 /agent。 */}
-    {tab === "script" ? <div className="drawer-section"><div className="section-title-row"><div><span className="eyebrow">SCRIPT</span><h3>先搭结构，再改措辞</h3></div></div>{!isContentPlatform(item.platform) ? <small className="field-hint">该平台暂不支持 AI 生成，可选相近平台生成后手动调整</small> : null}{scriptPlatform === "douyin" ? <div className="script-generate-options"><details className="script-materials-details"><summary>素材（可选）</summary><textarea value={materials} onChange={(e) => setMaterials(e.target.value)} disabled={generating} placeholder="粘贴素材原文、参考链接或要点，生成时会尝试真实引用进正文" /></details><label className="field script-duration-field"><span>时长</span><select value={durationSec} onChange={(e) => setDurationSec(Number(e.target.value) as 30 | 45 | 60)} disabled={generating} aria-label="视频时长">{[30, 45, 60].map((value) => <option key={value} value={value}>{value} 秒</option>)}</select></label></div> : scriptPlatform === "xiaohongshu" ? <div className="script-generate-options single"><details className="script-materials-details"><summary>素材（可选）</summary><textarea value={materials} onChange={(e) => setMaterials(e.target.value)} disabled={generating} placeholder="粘贴素材原文、参考链接或要点，生成时会尝试真实引用进正文" /></details></div> : null}<div className="script-generate-actions"><select value={scriptPlatform} onChange={(e) => { setScriptPlatform(e.target.value as ContentPlatform); setTitleHint(""); lastCheckedTitleRef.current = ""; resetScriptGenerationState(); }} disabled={generating || scriptActionPending} aria-label="生成平台" style={{ height: 34, borderRadius: 9 }}>{CONTENT_PLATFORMS.map((value) => <option key={value} value={value}>{CONTENT_PLATFORM_LABEL[value]}</option>)}</select><button type="button" className="ai-button small" disabled={generating || scriptActionPending} onClick={handleGenerateScript}><Icon name="spark" />{generating ? "生成中…" : "用 AI 写脚本"}</button></div><StageScheduleField item={item} stage="script" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{sections ? <ScriptSectionsPanel sections={sections} research={research} researchDegraded={researchDegraded} hooks={hooks} pickedHookIdx={pickedHookIdx} hookPending={pickHookPending} onPickHook={handlePickHook} allInstruction={allInstruction} onAllInstructionChange={setAllInstruction} onRefineAll={handleRefineAll} refiningAll={refiningAll} openSectionIdx={openSectionIdx} onToggleSection={(idx) => { setOpenSectionIdx(openSectionIdx === idx ? null : idx); setSectionInstruction(""); }} sectionInstruction={sectionInstruction} onSectionInstructionChange={setSectionInstruction} onRefineSection={handleRefineSection} refiningSectionIdx={refiningSectionIdx} generating={generating} /> : xhsIntro !== null && xhsBody !== null ? <XhsScriptPanel research={research} researchDegraded={researchDegraded} intro={xhsIntro} body={xhsBody} tags={xhsTags} shotIdeas={xhsShotIdeas} instruction={xhsInstruction} onInstructionChange={setXhsInstruction} onRefineAll={handleRefineXhsAll} refining={xhsRefining} generating={generating} /> : null}{[["标题方向", "headline"], ["开头 3 秒", "hook"], ["一句话结论", "conclusion"], ["内容结构", "body"], ["案例 / 演示", "example"], ["结尾行动 / 观点", "ending"]].map(([label, key]) => <label key={key} className="field full"><span>{label}</span><textarea className={key === "body" ? "large" : ""} value={item.script[key as keyof typeof item.script]} onChange={(e) => updateScript({ [key]: e.target.value })} onBlur={key === "headline" ? handleHeadlineBlur : undefined} />{key === "headline" && titleHint ? <small className="field-hint">{titleHint}</small> : null}</label>)}</div> : null}
+    {tab === "script" ? <div className="drawer-section"><div className="section-title-row"><div><span className="eyebrow">SCRIPT</span><h3>先搭结构，再改措辞</h3></div></div>{!isContentPlatform(item.platform) ? <small className="field-hint">该平台暂不支持 AI 生成，可选相近平台生成后手动调整</small> : null}{scriptPlatform === "douyin" ? <div className="script-generate-options"><details className="script-materials-details"><summary>素材（可选）</summary><textarea value={materials} onChange={(e) => setMaterials(e.target.value)} disabled={generating} placeholder="粘贴素材原文、参考链接或要点，生成时会尝试真实引用进正文" /></details><label className="field script-duration-field"><span>时长</span><select value={durationSec} onChange={(e) => setDurationSec(Number(e.target.value) as 30 | 45 | 60)} disabled={generating} aria-label="视频时长">{[30, 45, 60].map((value) => <option key={value} value={value}>{value} 秒</option>)}</select></label></div> : scriptPlatform === "xiaohongshu" ? <div className="script-generate-options single"><details className="script-materials-details"><summary>素材（可选）</summary><textarea value={materials} onChange={(e) => setMaterials(e.target.value)} disabled={generating} placeholder="粘贴素材原文、参考链接或要点，生成时会尝试真实引用进正文" /></details></div> : null}<div className="script-generate-actions"><select value={scriptPlatform} onChange={(e) => { setScriptPlatform(e.target.value as ContentPlatform); setTitleHint(""); lastCheckedTitleRef.current = ""; resetScriptGenerationState(); }} disabled={generating || scriptActionPending} aria-label="生成平台" style={{ height: 34, borderRadius: 9 }}>{CONTENT_PLATFORMS.map((value) => <option key={value} value={value}>{CONTENT_PLATFORM_LABEL[value]}</option>)}</select><button type="button" className="ai-button small" disabled={generating || scriptActionPending} onClick={handleGenerateScript}><Icon name="spark" />{generating ? "生成中…" : "用 AI 写脚本"}</button></div><StageScheduleField item={item} stage="script" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{sections ? <ScriptSectionsPanel sections={sections} research={research} researchDegraded={researchDegraded} hooks={hooks} pickedHookIdx={pickedHookIdx} hookPending={pickHookPending} onPickHook={handlePickHook} allInstruction={allInstruction} onAllInstructionChange={setAllInstruction} onRefineAll={handleRefineAll} refiningAll={refiningAll} openSectionIdx={openSectionIdx} onToggleSection={(idx) => { setOpenSectionIdx(openSectionIdx === idx ? null : idx); setSectionInstruction(""); }} sectionInstruction={sectionInstruction} onSectionInstructionChange={setSectionInstruction} onRefineSection={handleRefineSection} refiningSectionIdx={refiningSectionIdx} generating={generating} imgGenerating={imgGenerating} /> : xhsIntro !== null && xhsBody !== null ? <XhsScriptPanel research={research} researchDegraded={researchDegraded} intro={xhsIntro} body={xhsBody} tags={xhsTags} shotIdeas={xhsShotIdeas} instruction={xhsInstruction} onInstructionChange={setXhsInstruction} onRefineAll={handleRefineXhsAll} refining={xhsRefining} generating={generating} imagePlan={imagePlan} images={xhsImages} imgGenerating={imgGenerating} failedImageIdxs={failedImgIdxs} onGenerateImages={handleGenerateImages} onRetryImage={handleRetryImage} archiveHref={scriptDraftId ? `/api/v1/scripts/${scriptDraftId}/images/archive` : null} /> : null}{[["标题方向", "headline"], ["开头 3 秒", "hook"], ["一句话结论", "conclusion"], ["内容结构", "body"], ["案例 / 演示", "example"], ["结尾行动 / 观点", "ending"]].map(([label, key]) => <label key={key} className="field full"><span>{label}</span><textarea className={key === "body" ? "large" : ""} value={item.script[key as keyof typeof item.script]} onChange={(e) => updateScript({ [key]: e.target.value })} onBlur={key === "headline" ? handleHeadlineBlur : undefined} />{key === "headline" && titleHint ? <small className="field-hint">{titleHint}</small> : null}</label>)}</div> : null}
     {tab === "recording" ? <div className="drawer-section"><div className="stage-detail-strip"><span>录制阶段</span><Badge tone="recording" color={stageColors.recording}>录制</Badge><small>完成后进入剪辑</small></div><StageScheduleField item={item} stage="recording" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} /><label className="field full"><span>录制备注</span><textarea className="large" value={item.recordingNotes} onChange={(e) => update({ recordingNotes: e.target.value })} placeholder="记录机位、口播、录屏、演示路径和补拍素材…" /></label><div className="checklist"><strong>录制完成清单</strong>{["机位与画面可用", "收音清晰", "口播或演示路径完整", "必要素材与补拍镜头齐全"].map((text) => <label key={text}><input type="checkbox" />{text}</label>)}</div></div> : null}
     {tab === "editing" ? <div className="drawer-section"><div className="stage-detail-strip"><span>剪辑阶段</span><Badge tone="editing" color={stageColors.editing}>剪辑</Badge><small>完成后进入发布</small></div><StageScheduleField item={item} stage="editing" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} /><label className="field full"><span>剪辑备注</span><textarea className="large" value={item.editingNotes} onChange={(e) => update({ editingNotes: e.target.value })} placeholder="记录结构删改、字幕、包装、素材替换和导出要求…" /></label><div className="checklist"><strong>剪辑完成清单</strong>{["开头 5 秒直接进入场景", "案例或演示重点清楚", "字幕清楚可读", "封面与标题已确认", `${item.tier}档制作投入已控制`].map((text) => <label key={text}><input type="checkbox" />{text}</label>)}</div></div> : null}
     {tab === "publish" ? <div className="drawer-section"><StageScheduleField item={item} stage="publishing" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} label="计划发布日期" /><div className="form-grid"><label className="field"><span>发布状态</span><select value={item.publicationStatus} disabled><option value="draft">未排期</option><option value="scheduled">已排期</option><option value="published">已发布</option></select><small>由发布档期和实际发布记录自动更新。</small></label><label className="field"><span>实际发布时间</span><input type="date" value={item.publishedAt} onChange={(e) => update({ publishedAt: e.target.value })} /></label></div><label className="field full"><span>封面文案</span><input value={item.coverCopy} onChange={(e) => update({ coverCopy: e.target.value })} /></label><label className="field full"><span>发布正文</span><textarea className="large" value={item.publishCopy} onChange={(e) => update({ publishCopy: e.target.value })} /></label><label className="field full"><span>小红书链接</span><input value={item.xhsLink} onChange={(e) => update({ xhsLink: e.target.value })} placeholder="https://www.xiaohongshu.com/..." /></label>{item.publicationStatus !== "published" ? <><button className="primary-button full-button" disabled={!item.publishedAt} onClick={markPublished}>标记为已发布</button>{!item.publishedAt ? <p className="validation-note">先填写实际发布时间，系统才会计入大目标。</p> : null}</> : <div className="published-banner"><span>已发布于 {item.publishedAt} · 已进入待复盘列表</span><button onClick={unmarkPublished}>撤销发布记录</button></div>}</div> : null}
