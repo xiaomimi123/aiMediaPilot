@@ -1,0 +1,286 @@
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+
+const llmMock = vi.hoisted(() => ({ callStructured: vi.fn() }));
+vi.mock('@/lib/llm/deepseek', () => ({
+  DeepSeekTextLLM: vi.fn(() => llmMock),
+}));
+
+vi.mock('@/lib/user', () => ({
+  getOrCreateDefaultUser: vi.fn(async () => ({ id: 'user1' })),
+}));
+
+// resolveDeepSeekApiKey 内部查 AIConfig(+decrypt); 单测已在别处覆盖, 这里只关心
+// route 是否正确消费其返回值 — 直接代理 env (与 generate.test.ts 一致的写法)。
+vi.mock('@/lib/llm/resolve-key', () => ({
+  resolveDeepSeekApiKey: vi.fn(async () => process.env.DEEPSEEK_API_KEY ?? null),
+}));
+
+const prismaMock = vi.hoisted(() => ({
+  scriptDraft: {
+    findUnique: vi.fn(),
+    update: vi.fn(),
+  },
+}));
+vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
+
+const getStyleContextMock = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/script/style', () => ({ getStyleContext: getStyleContextMock }));
+
+import { POST } from '@/app/api/v1/scripts/[id]/refine/route';
+
+function reqJSON(body: unknown) {
+  return new Request('http://t/api/v1/scripts/draft1/refine', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+const ctx = { params: Promise.resolve({ id: 'draft1' }) };
+
+const baseSections = [
+  { role: 'hook', startSec: 0, endSec: 3, text: '你还在为周报发愁吗？这三个技巧帮你搞定。' },
+  { role: 'main', startSec: 3, endSec: 40, text: '第一步先打开 ChatGPT, 把你的素材丢进去。' },
+  { role: 'cta', startSec: 40, endSec: 45, text: '记得点赞关注, 我们下期见。' },
+];
+
+const researchBrief = {
+  points: [{ fact: '某数据 42%', source: 'https://example.com/a', usage: '作为 hook 部分的反差数据' }],
+};
+
+const styleContext = { mode: 'description' as const, description: '语速快, 短句多', samples: [] };
+
+function baseDraft(overrides: Partial<{ userId: string; platform: string; output: unknown }> = {}) {
+  return {
+    id: 'draft1',
+    userId: 'user1',
+    niche: 'ai-knowledge',
+    platform: 'douyin',
+    output: {
+      research: researchBrief,
+      script: { sections: baseSections },
+      hooks: [{ text: '钩子一', rationale: '痛点反差' }],
+      titles: [{ text: '标题一', hookType: '数字' }],
+      cover: { textOverlay: '3 分钟', shotIdea: '屏幕特写', colorTone: '白底红字' },
+      durationSec: 45,
+    },
+    ...overrides,
+  };
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  process.env.DEEPSEEK_API_KEY = 'sk-test';
+  getStyleContextMock.mockResolvedValue(styleContext);
+  prismaMock.scriptDraft.findUnique.mockResolvedValue(baseDraft());
+  prismaMock.scriptDraft.update.mockResolvedValue({});
+});
+
+describe('POST /api/v1/scripts/[id]/refine — scope=section', () => {
+  it('合法改写 (只有目标块 text 变了) → 200, 整体替换 output.script.sections 持久化', async () => {
+    const newSections = [
+      baseSections[0],
+      { ...baseSections[1], text: '第一步先打开豆包, 把你的素材丢进去, 三分钟出稿。' },
+      baseSections[2],
+    ];
+    llmMock.callStructured.mockResolvedValueOnce({
+      result: { sections: newSections },
+      usage: { model: 'deepseek', promptTokens: 10, completionTokens: 10, estCostUSD: 0 },
+    });
+
+    const res = await POST(reqJSON({ scope: 'section', sectionIdx: 1, instruction: '换个更接地气的说法' }), ctx);
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.data.sections).toEqual(newSections);
+
+    expect(prismaMock.scriptDraft.update).toHaveBeenCalledWith({
+      where: { id: 'draft1' },
+      data: {
+        output: expect.objectContaining({
+          research: researchBrief,
+          script: { sections: newSections },
+          hooks: expect.anything(),
+          titles: expect.anything(),
+          cover: expect.anything(),
+          durationSec: 45,
+        }),
+      },
+    });
+  });
+
+  it('复用 output.research 传给 SCRIPT_REFINE, 不重新搜索', async () => {
+    llmMock.callStructured.mockResolvedValueOnce({
+      result: { sections: baseSections },
+      usage: { model: 'deepseek', promptTokens: 10, completionTokens: 10, estCostUSD: 0 },
+    });
+    await POST(reqJSON({ scope: 'section', sectionIdx: 0, instruction: '更简洁一点' }), ctx);
+    expect(llmMock.callStructured).toHaveBeenCalledTimes(1);
+    const call = llmMock.callStructured.mock.calls[0][0];
+    const userText = (call.userMessage[0] as { text: string }).text;
+    expect(userText).toContain('某数据 42%');
+  });
+
+  it('AI 改动了未指定的段落 → 502, 且不写库', async () => {
+    const newSections = [
+      { ...baseSections[0], text: '被越权改动的 hook 文本, 不应该被改。' },
+      { ...baseSections[1], text: '这一块才是目标块, 允许改。' },
+      baseSections[2],
+    ];
+    llmMock.callStructured.mockResolvedValueOnce({
+      result: { sections: newSections },
+      usage: { model: 'deepseek', promptTokens: 10, completionTokens: 10, estCostUSD: 0 },
+    });
+
+    const res = await POST(reqJSON({ scope: 'section', sectionIdx: 1, instruction: '换个说法' }), ctx);
+    expect(res.status).toBe(502);
+    const json = await res.json();
+    expect(json.success).toBe(false);
+    expect(json.message).toBe('AI 修改了未指定的段落, 请重试');
+    expect(prismaMock.scriptDraft.update).not.toHaveBeenCalled();
+  });
+
+  it('AI 返回块数与原稿不一致 → 502, 且不写库', async () => {
+    llmMock.callStructured.mockResolvedValueOnce({
+      result: { sections: [baseSections[0], baseSections[1]] },
+      usage: { model: 'deepseek', promptTokens: 10, completionTokens: 10, estCostUSD: 0 },
+    });
+    const res = await POST(reqJSON({ scope: 'section', sectionIdx: 1, instruction: '换个说法' }), ctx);
+    expect(res.status).toBe(502);
+    const json = await res.json();
+    expect(json.message).toBe('AI 修改了未指定的段落, 请重试');
+    expect(prismaMock.scriptDraft.update).not.toHaveBeenCalled();
+  });
+
+  it('sectionIdx 越界 → 400, 不调用 LLM', async () => {
+    const res = await POST(reqJSON({ scope: 'section', sectionIdx: 99, instruction: '换个说法' }), ctx);
+    expect(res.status).toBe(400);
+    expect(llmMock.callStructured).not.toHaveBeenCalled();
+  });
+
+  it('sectionIdx 缺失 (scope=section) → 400', async () => {
+    const res = await POST(reqJSON({ scope: 'section', instruction: '换个说法' }), ctx);
+    expect(res.status).toBe(400);
+    expect(llmMock.callStructured).not.toHaveBeenCalled();
+  });
+
+  it('负数 sectionIdx → 400', async () => {
+    const res = await POST(reqJSON({ scope: 'section', sectionIdx: -1, instruction: '换个说法' }), ctx);
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /api/v1/scripts/[id]/refine — scope=all', () => {
+  it('合法重写全稿 (块数 3-6, 首块 role=hook) → 200, 整体替换持久化', async () => {
+    const newSections = [
+      { role: 'hook', startSec: 0, endSec: 3, text: '全新开场白, 更抓人。' },
+      { role: 'main', startSec: 3, endSec: 40, text: '全新的主体内容, 更口语化。' },
+      { role: 'cta', startSec: 40, endSec: 45, text: '全新的结尾引导关注。' },
+    ];
+    llmMock.callStructured.mockResolvedValueOnce({
+      result: { sections: newSections },
+      usage: { model: 'deepseek', promptTokens: 10, completionTokens: 10, estCostUSD: 0 },
+    });
+    const res = await POST(reqJSON({ scope: 'all', instruction: '整体口语化一点' }), ctx);
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.data.sections).toEqual(newSections);
+    expect(prismaMock.scriptDraft.update).toHaveBeenCalledWith({
+      where: { id: 'draft1' },
+      data: {
+        output: expect.objectContaining({ script: { sections: newSections } }),
+      },
+    });
+  });
+
+  it('首块 role 不是 hook → 502, 不写库', async () => {
+    const newSections = [
+      { role: 'main', startSec: 0, endSec: 3, text: '不该是 main 打头, 首块必须是 hook。' },
+      { role: 'main', startSec: 3, endSec: 40, text: '中间内容。' },
+      { role: 'cta', startSec: 40, endSec: 45, text: '结尾引导关注。' },
+    ];
+    llmMock.callStructured.mockResolvedValueOnce({
+      result: { sections: newSections },
+      usage: { model: 'deepseek', promptTokens: 10, completionTokens: 10, estCostUSD: 0 },
+    });
+    const res = await POST(reqJSON({ scope: 'all', instruction: '整体口语化一点' }), ctx);
+    expect(res.status).toBe(502);
+    expect(prismaMock.scriptDraft.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/v1/scripts/[id]/refine — 公共校验', () => {
+  it('scope 非法值 → 400', async () => {
+    const res = await POST(reqJSON({ scope: 'bogus', instruction: '换个说法' }), ctx);
+    expect(res.status).toBe(400);
+  });
+
+  it('instruction 空 → 400', async () => {
+    const res = await POST(reqJSON({ scope: 'all', instruction: '' }), ctx);
+    expect(res.status).toBe(400);
+  });
+
+  it('instruction 超过 200 字 → 400', async () => {
+    const res = await POST(reqJSON({ scope: 'all', instruction: '啊'.repeat(201) }), ctx);
+    expect(res.status).toBe(400);
+  });
+
+  it('请求体不是合法 JSON → 400', async () => {
+    const res = await POST(
+      new Request('http://t/api/v1/scripts/draft1/refine', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{not json',
+      }),
+      ctx,
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('脚本不存在 → 404', async () => {
+    prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(null);
+    const res = await POST(reqJSON({ scope: 'all', instruction: '换个说法' }), ctx);
+    expect(res.status).toBe(404);
+  });
+
+  it('跨用户 → 404', async () => {
+    prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(baseDraft({ userId: 'other' }));
+    const res = await POST(reqJSON({ scope: 'all', instruction: '换个说法' }), ctx);
+    expect(res.status).toBe(404);
+  });
+
+  it('platform 非 douyin → 400', async () => {
+    prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(baseDraft({ platform: 'xiaohongshu' }));
+    const res = await POST(reqJSON({ scope: 'all', instruction: '换个说法' }), ctx);
+    expect(res.status).toBe(400);
+  });
+
+  it('旧稿没有 output.script.sections → 400', async () => {
+    prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(
+      baseDraft({ output: { titles: [{ text: '老结构标题' }] } }),
+    );
+    const res = await POST(reqJSON({ scope: 'all', instruction: '换个说法' }), ctx);
+    expect(res.status).toBe(400);
+  });
+
+  it('无 DEEPSEEK_API_KEY → 503', async () => {
+    delete process.env.DEEPSEEK_API_KEY;
+    const res = await POST(reqJSON({ scope: 'all', instruction: '换个说法' }), ctx);
+    expect(res.status).toBe(503);
+  });
+
+  it('LLM 抛错 → 500', async () => {
+    llmMock.callStructured.mockRejectedValueOnce(new Error('LLM down'));
+    const res = await POST(reqJSON({ scope: 'all', instruction: '换个说法' }), ctx);
+    expect(res.status).toBe(500);
+  });
+
+  it('getStyleContext 被以 (userId, "douyin") 调用', async () => {
+    llmMock.callStructured.mockResolvedValueOnce({
+      result: { sections: baseSections },
+      usage: { model: 'deepseek', promptTokens: 10, completionTokens: 10, estCostUSD: 0 },
+    });
+    await POST(reqJSON({ scope: 'all', instruction: '换个说法' }), ctx);
+    expect(getStyleContextMock).toHaveBeenCalledWith('user1', 'douyin');
+  });
+});
