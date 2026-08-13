@@ -50,3 +50,6 @@ export { JSON_STRICTNESS } from './base';
 
 // 人设定位驱动选题 (八期): 人设档案 → 注入段
 export * from './persona-section';
+
+// 人设定位驱动选题 (八期): AI 访谈式建档 → 起草 prompt
+export * from './persona-draft';
