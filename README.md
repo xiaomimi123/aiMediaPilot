@@ -2,7 +2,7 @@
 
 > AI 自媒体工作台 — 自用创作闭环: 选题灵感 → 写稿改稿 → 拍摄/发布追踪 → 数据复盘。 主阵地抖音, 其他平台 (B站/YouTube/推特/小红书/公众号/快手/微博) 走分发登记。 设计预留 SaaS 扩展空间 (`userId` 隔离已在 schema, 未接 auth/计费)。
 
-**当前状态:** 单用户 MVP。 经历三次定位调整: "个人视频分析工具" → "小白向导式智能体" → "自用自媒体工作台" → **"Creator Cockpit 整体移植"** (2026-08-04, 详见 `docs/superpowers/specs/2026-08-04-cockpit-adoption-design.md`)。 首页 `/` 与全站外壳已换成移植自开源项目 [creator-cockpit](https://github.com/AverrryHu/creator-cockpit) 的纸质编辑部风格操作台; 紧接着完成**二期「平台页面融入驾驶舱」** (2026-08-05, 详见 `docs/superpowers/specs/2026-08-05-platform-pages-fusion-design.md`)——把一期挂壳的创作/数据/设置页面功能长进驾驶舱视图, 侧栏「平台」组解散; 再完成**三期「产出优先信息架构重组」** (2026-08-06, 详见 `docs/superpowers/specs/2026-08-06-platform-first-ia-design.md`)——侧栏从「流程优先」六视图重排为「产出优先」按平台组织; 又完成**四期「AI 深度采集 · 热点雷达」** (2026-08-13, 详见 `docs/superpowers/specs/2026-08-13-radar-deep-collection-design.md`)——新增服务端热点雷达管线 (关键词 → Tavily 搜索 → AI 逐篇阅读评分 → 热度排行), 独立「热点雷达」侧栏视图 + 设置「雷达配置」卡, 零 Claude 额度消耗 (阅读评分走用户自己的 AI provider); 又完成**五期「创作质量深化」** (2026-08-13, 详见 `docs/superpowers/specs/2026-08-13-script-quality-design.md`)——抖音脚本生成从单次大 prompt 升级为「研究→写作」两阶段管线, 产出可直接口播的完整逐字稿 (`script.sections[]`), 叠加 Tavily 联网研究打底 + 抽屉素材框, 定稿自动沉淀为风格样本供后续生成 few-shot 参照, 新增分块/整稿两级改稿。 本文档 §3 为当前实际 IA。
+**当前状态:** 单用户 MVP。 经历三次定位调整: "个人视频分析工具" → "小白向导式智能体" → "自用自媒体工作台" → **"Creator Cockpit 整体移植"** (2026-08-04, 详见 `docs/superpowers/specs/2026-08-04-cockpit-adoption-design.md`)。 首页 `/` 与全站外壳已换成移植自开源项目 [creator-cockpit](https://github.com/AverrryHu/creator-cockpit) 的纸质编辑部风格操作台; 紧接着完成**二期「平台页面融入驾驶舱」** (2026-08-05, 详见 `docs/superpowers/specs/2026-08-05-platform-pages-fusion-design.md`)——把一期挂壳的创作/数据/设置页面功能长进驾驶舱视图, 侧栏「平台」组解散; 再完成**三期「产出优先信息架构重组」** (2026-08-06, 详见 `docs/superpowers/specs/2026-08-06-platform-first-ia-design.md`)——侧栏从「流程优先」六视图重排为「产出优先」按平台组织; 又完成**四期「AI 深度采集 · 热点雷达」** (2026-08-13, 详见 `docs/superpowers/specs/2026-08-13-radar-deep-collection-design.md`)——新增服务端热点雷达管线 (关键词 → Tavily 搜索 → AI 逐篇阅读评分 → 热度排行), 独立「热点雷达」侧栏视图 + 设置「雷达配置」卡, 零 Claude 额度消耗 (阅读评分走用户自己的 AI provider); 又完成**五期「创作质量深化」** (2026-08-13, 详见 `docs/superpowers/specs/2026-08-13-script-quality-design.md`)——抖音脚本生成从单次大 prompt 升级为「研究→写作」两阶段管线, 产出可直接口播的完整逐字稿 (`script.sections[]`), 叠加 Tavily 联网研究打底 + 抽屉素材框, 定稿自动沉淀为风格样本供后续生成 few-shot 参照, 新增分块/整稿两级改稿; 又完成**六期「抽屉改稿闭环 + 小红书两阶段接入」** (2026-08-14, 详见 `docs/superpowers/specs/2026-08-14-drawer-closure-xhs-design.md`)——补齐五期两个已知限制 (抽屉关闭后改稿 UI 不可恢复、定稿自动推进阶段失效), 同时把小红书从旧单阶段生成升级为与抖音同款的「研究→写作」两阶段管线, 抽屉新增小红书素材简报/正文渲染 + 整稿指令框。 本文档 §3 为当前实际 IA。
 
 ---
 
@@ -160,9 +160,11 @@
 
 **抽屉交互** (内容详情抽屉「脚本」tab, `src/components/cockpit/content-drawer.tsx`): 生成前可折叠「素材(可选)」文本域 + 时长下拉(30/45/60s); 生成后素材简报折叠区(要点+来源链接) + 逐字稿分块渲染(块头角色中文标签+秒段, 块内「换一版」+ 一句话指令输入) + 页顶「整体指令」+ hook 块 3 候选切换(沿用既有 picked 机制)。
 
-**抽屉懒加载拉回改稿 UI (六期)**: 五期的分块改稿面板只存在于抽屉自己的前端 state, 重开抽屉(或刷新页面后重开)后消失, 只剩六个文本框(见上文 spec §6(c) 限制)。六期起: 打开抽屉挂载时若本地无生成态且 `item.scriptDraftId`(`CockpitContent` 服务端字段, 由上面 `cockpitContentId` 回写关联, `server-store.ts` 只读下发给前端, `PUT /api/v1/cockpit/workspace` 仍不接收) 非空, 懒加载 `GET /api/v1/scripts/{id}` 拉回 `output`, 用窄化解析纯函数 `parseDraftOutput` (`src/lib/cockpit/draft-restore.ts`) 恢复 sections/research/hooks/时长; 解析不出合法 `sections`(旧 `retentionBeats` 形态、非 douyin 输出、请求失败等)一律静默保持现状, 不阻断六个文本框编辑。
+**抽屉懒加载拉回改稿 UI (六期)**: 五期的分块改稿面板只存在于抽屉自己的前端 state, 重开抽屉(或刷新页面后重开)后消失, 只剩六个文本框(见上文 spec §6(c) 限制)。六期起: 打开抽屉挂载时若本地无生成态且 `item.scriptDraftId`(`CockpitContent` 服务端字段, 由上面 `cockpitContentId` 回写关联, `server-store.ts` 只读下发给前端, `PUT /api/v1/cockpit/workspace` 仍不接收) 非空, 懒加载 `GET /api/v1/scripts/{id}` 拉回 `output`, 用窄化解析纯函数 `parseDraftOutput` (`src/lib/cockpit/draft-restore.ts`) 恢复 sections/research/hooks/时长(douyin)或 intro/body/tags/配图建议(xiaohongshu, 见下方专门段落); 两种形态都解析不出(旧 `retentionBeats` 形态、intro/body 缺一个、请求失败等)一律静默保持现状, 不阻断六个文本框编辑。
 
 **xiaohongshu 分支两阶段化 (六期)**: 上文「本期仅抖音」是五期交付时的范围——六期起 `xiaohongshu` 分支同样走 `runResearch` → `getStyleContext(userId, 'xiaohongshu')` → `SCRIPT_WRITE_XHS`(专家人设+风格上下文+素材简报+主题) 两阶段管线, 落库 `ScriptDraft.output = { research, titles, coverText, intro, body, tags, shotIdeas }`(与五期 douyin 的 `{ research, script.sections[], hooks, titles, cover, durationSec }` 形状并列, 键名不同); `durationSec` 请求参数仍校验但 xhs 分支不消费。`depositStyleSample`(`src/lib/script/style.ts`) 相应按 `draft.platform` 分支取定稿文本源: douyin 沿用 `sections` 拼接, xiaohongshu 取 `intro + '\n' + body`, 其余平台(含 gongzhonghao、未知值)防御性返回 `false` 不写入。`gongzhonghao` 分支未改动, 仍是单次生成、不落库 `ScriptDraft`。
+
+**xiaohongshu 抽屉交互 + 落库去重 (六期)**: 抽屉「脚本」tab 生成平台选小红书时不再是六个空文本框——生成后展示素材简报折叠区(与 douyin 分块面板共用同一个 `ResearchBriefDetails` 子组件)+ 页顶「整稿指令」框(只有 scope:'all', 小红书不支持分块改稿) + intro/正文/标签/配图建议只读渲染; 素材（可选）折叠框对小红书开放(时长下拉仍只有 douyin 有, `durationSec` 后端不消费); 整稿指令成功后本地替换 intro/body, 并按 `mapGeneratedToScript('xiaohongshu', {intro, body})`(即 `mapXiaohongshu`)同款语义回填六字段骨架的 `hook`/`body`(不触碰 `headline`/`conclusion`/`example`/`ending`)。生成/整稿指令/hook 相关动作(douyin 专属)四类互斥、生成中禁用, 沿用五期 T9 的 busy 开关模式。`src/lib/cockpit/generate-flow.ts` 里「生成成功后是否二次 `POST /api/v1/scripts` 保存」的分支条件从只判断 `platform === 'douyin'` 扩到 `douyin || xiaohongshu`——五期收尾曾修过 douyin 的同类孤儿 `ScriptDraft` 问题, T4 把 xhs 的 generate 路由也改成落库后这个坑对 xhs 原样重现(旧代码仍会二次保存产生一条孤儿草稿, 且把 `CockpitContent.scriptDraftId` 覆盖指向孤儿记录), 六期一并修掉, `gongzhonghao` 的生成路由仍不落库、继续走二次保存。`parseDraftOutput`(`src/lib/cockpit/draft-restore.ts`) 相应扩展形状嗅探: 先找 douyin 的 `script.sections`, 找不到再找顶层 `intro`+`body`(双非空字符串) 判定为 xiaohongshu 形态, 两种形态互斥, 判别口径与 refine 路由的 `XhsOutputReadSchema` 一致——抽屉懒加载拉回改稿 UI 因此对两个平台都生效。
 
 **设置「风格档案」卡** (`src/components/cockpit/settings-cards/style-profile-card.tsx`): 上半编辑 `StyleProfile.description`(口吻/句式/口头禅/忌讳); 下半只读样本列表(平台 badge + 预览 + 创建时间), 单条可删, 不提供手动新增入口(样本只经由脚本定稿沉淀, 避免两条写入路径)。
 
@@ -329,8 +331,8 @@ API: `POST/GET /api/v1/topics`、`PATCH /api/v1/topics/[id]`、`POST/GET /api/v1
 
 ### 测试覆盖
 
-- 943 tests 大多是 API 单测 + 纯函数 + mock prisma (含 Cockpit `model/workflow/schedule/calculations`/迁移映射的原版测试; 四期新增雷达搜索层/热度合成/阅读 prompt/API 路由测试; 五期新增研究层/风格层/两阶段生成/两级改稿/风格档案 API 的 mock 测试; 六期新增 `draft-restore.ts` 窄化解析纯函数测试 + xiaohongshu 分支两阶段化/`depositStyleSample` 平台分支沉淀测试)
-- UI 一律走手动 E2E (是有意识的取舍); 五期收尾用真实 DeepSeek+Tavily key 额外跑了一轮全链路真实 E2E (非 mock), 见 `.superpowers/sdd/2026-08-13-script-quality/task-8-report.md`
+- 954 tests 大多是 API 单测 + 纯函数 + mock prisma (含 Cockpit `model/workflow/schedule/calculations`/迁移映射的原版测试; 四期新增雷达搜索层/热度合成/阅读 prompt/API 路由测试; 五期新增研究层/风格层/两阶段生成/两级改稿/风格档案 API 的 mock 测试; 六期新增 `draft-restore.ts` 窄化解析纯函数测试(含新增的 xiaohongshu 形状嗅探用例) + xiaohongshu 分支两阶段化/`depositStyleSample` 平台分支沉淀测试 + `generate-flow.ts` xiaohongshu 跳过二次保存的回归用例)
+- UI 一律走手动 E2E (是有意识的取舍); 五期收尾用真实 DeepSeek+Tavily key 额外跑了一轮全链路真实 E2E (非 mock), 见 `.superpowers/sdd/2026-08-13-script-quality/task-8-report.md`; 六期收尾同样用真实 key 跑通抖音懒加载恢复+`picked`自动推进/小红书两阶段生成+整稿改稿+定稿沉淀样本, 并额外用浏览器走查确认了抽屉小红书面板渲染、页顶整稿指令回填六字段骨架、关抽屉重开(不刷新)恢复三处 UI 行为, 详见 `.superpowers/sdd/2026-08-14-drawer-closure-xhs/task-6-report.md`
 - Worker 集成测试缺 (auto-sync-worker, content-analyze-worker, radar-worker 的每日 repeat 调度层)
 
 ---
@@ -423,12 +425,12 @@ src/
 │   │   ├── settings-cards/         # ai-provider-card, baseline-card (二期 T5) + radar-config-card (四期 T6) + style-profile-card (五期新增)
 │   │   ├── sidebar.tsx             # 全站共用侧栏 (cockpit 模式 + external 模式), 二期起「平台」外链组已移除, 四期新增「热点雷达」项
 │   │   ├── external-shell.tsx      # 站外页面外壳 (侧栏 + mobile-nav + 主题同步), 仅剩 /accounts /agent/discover /content/* 使用
-│   │   ├── content-drawer.tsx      # 内容详情抽屉, 二期 (T2) 脚本 tab 加入就地 AI 生成 + 标题实时建议; 五期新增素材框/时长/简报折叠区/分块渲染/换一版/整体指令; 六期新增挂载时懒加载拉回改稿 UI (parseDraftOutput)
+│   │   ├── content-drawer.tsx      # 内容详情抽屉, 二期 (T2) 脚本 tab 加入就地 AI 生成 + 标题实时建议; 五期新增素材框/时长/简报折叠区/分块渲染/换一版/整体指令; 六期新增挂载时懒加载拉回改稿 UI (parseDraftOutput) + 小红书两阶段面板(`XhsScriptPanel`, 与 douyin 分块面板共用 `ResearchBriefDetails` 素材简报子组件) + 素材框对小红书开放 + 生成/改稿/hook 动作四类互斥扩到小红书整稿指令
 │   │   ├── onboarding.tsx / shared.tsx
 │   ├── content/                   # script-form, script-result (深度写稿入口用), publish-checklist, prediction-card, 分发登记弹窗 etc
 │   └── layout/                    # main-layout.tsx (按路径决定是否套 ExternalShell)
 ├── lib/
-│   ├── cockpit/                   # model/workflow/schedule/calculations (纯函数, 零改动移植) + storage.ts(API 适配器) + migrations.ts(migrateWorkspace) + migrate-mapping.ts(存量数据映射) + script-mapping.ts(二期 T1: 生成结果→脚本骨架映射纯函数, 五期扩展 sections→body/hook 映射) + draft-restore.ts(六期: `ScriptDraft.output` → 抽屉改稿 UI 恢复字段的窄化解析纯函数) + extras.ts/extras-types.ts(复盘/大目标额外数据, 含二期新增 account/settings) + view-routing.ts(`NavView` 定义, 四期新增 `radar`)
+│   ├── cockpit/                   # model/workflow/schedule/calculations (纯函数, 零改动移植) + storage.ts(API 适配器) + migrations.ts(migrateWorkspace) + migrate-mapping.ts(存量数据映射) + script-mapping.ts(二期 T1: 生成结果→脚本骨架映射纯函数, 五期扩展 sections→body/hook 映射) + draft-restore.ts(六期: `ScriptDraft.output` → 抽屉改稿 UI 恢复字段的窄化解析纯函数, 形状嗅探同时覆盖 douyin `script.sections` 与 xiaohongshu 顶层 `intro`+`body` 两种形态) + generate-flow.ts(六期: 跳过二次保存的分支条件从只判 douyin 扩到 douyin/xiaohongshu, gongzhonghao 仍走二次保存) + extras.ts/extras-types.ts(复盘/大目标额外数据, 含二期新增 account/settings) + view-routing.ts(`NavView` 定义, 四期新增 `radar`)
 │   ├── radar/                     # 四期新增: search.ts(SearchProvider 抽象 + Tavily 实现) / config.ts(RadarConfig 读写+加解密) / scoring.ts(titleFingerprint/clusterByTopic/composeHeat/applyTimeDecay 纯函数) / run.ts(runRadarScan 管线主体)
 │   ├── script/                    # 五期新增: research.ts(runResearch 两阶段生成的阶段一, 雷达种子+Tavily+素材框合并→DeepSeek 提炼简报) / style.ts(getStyleContext 风格上下文切换 + depositStyleSample 定稿沉淀)
 │   ├── llm/                       # DeepSeekTextLLM + OpenAIVisionLLM + prompts/ (四期新增 radar-read.ts; 五期新增 research-brief.ts / script-write-douyin.ts / script-refine.ts)

@@ -52,3 +52,22 @@ runResearch(userId, {topic, niche, userMaterials})   ← 五期库原样复用�
 | 两平台样本互串 | getStyleContext/depositStyleSample 均按 platform 过滤，五期已有边界测试，扩展用例到 xiaohongshu |
 | cockpitContentId 回写失败 | best-effort：console.warn 不阻断，生成结果照常返回（关联缺失只是回到五期现状，不更坏） |
 | 真实 E2E | 收尾用真实 key 跑：抖音懒加载恢复改稿、picked 自动推进、小红书两阶段生成+整稿改稿+样本沉淀 |
+
+## 5. 实际实施结论（T1-T6 落地后回写，2026-08-14）
+
+设计文档写于实施前，以下是与草稿假设有出入、或草稿未覆盖、需要落盘存档的实际决策，逐条对应 `.superpowers/sdd/2026-08-14-drawer-closure-xhs/task-*-report.md` 里的记录：
+
+**(a) xiaohongshu 二次保存孤儿 ScriptDraft——T4 交接、T6 修复的真实 bug**：草稿 §1「关联回写」只讲了 douyin 的落库+关联，未预见 T4 把 xiaohongshu 也改成落库后会在前端复现五期修过的同一个坑。`src/lib/cockpit/generate-flow.ts` 的「生成成功后是否二次 `POST /api/v1/scripts` 保存」分支在 T6 之前只判断 `platform === 'douyin'`——T4 report 明确交接：xiaohongshu 的 `/api/v1/scripts/generate` 已经 `prisma.scriptDraft.create` 一条草稿 A（且带 `cockpitContentId` 时已把 `CockpitContent.scriptDraftId` 指向 A），但 `generate-flow.ts` 没跟着改，仍会对同一次生成结果再 `POST /api/v1/scripts` 产生第二条草稿 B，并把 `CockpitContent.scriptDraftId` 覆盖指向 B——A 变成永久孤儿记录，且前端此后所有 refine/改稿请求都对着 B 走。T6 把分支条件扩到 `platform === 'douyin' || platform === 'xiaohongshu'`，`gongzhonghao` 的生成路由仍不落库、继续走二次保存路径不变。真实 E2E（见下方 (e)）验证修复后同一次生成只产生 1 条 `ScriptDraft`。
+
+**(b) parseDraftOutput 按形状嗅探而非按 platform 参数区分——用户裁决 + 向后兼容优先**：简报 §1 items 明确把这个决定权交给实施（"按 platform 或按形状嗅探——你定，报告说明"）。T6 选择**形状嗅探**、不改动 `parseDraftOutput(output: unknown)` 的现有签名（不新增 `platform` 参数）：先尝试解析 douyin 形态（`output.script.sections` 非空数组），失败再尝试 xiaohongshu 形态（顶层 `intro`+`body` 都是非空字符串）。理由：(1) 两种形态在结构上天然互斥（一个有 `script` 包裹层、一个没有），嗅探不会有歧义；(2) 判别口径直接照抄 `refine/route.ts` 里 `XhsOutputReadSchema` 对 xhs 的最小校验（intro/body 双非空字符串），两处口径保持一致；(3) 不改函数签名对 T2 已交付的 10 个既有单测零影响，新增的 4 个 xhs 形态单测独立于原有用例，`ParsedDraftOutput` 只是新增了几个可选字段，douyin 分支返回值结构字符不变。调用方 (`content-drawer.tsx` 懒加载 effect) 按 `parsed.sections` 是否存在分流到对应的恢复分支，两条分支互斥、不会同时触发。
+
+**(c) 素材简报折叠区的「复用五期组件」落地为提取公共子组件，而非复制粘贴**：简报字面用词是「复用」。`ScriptSectionsPanel`（五期 douyin 分块面板）里渲染素材简报的 JSX 原本内联在组件顶部，T6 把它抽成独立的 `ResearchBriefDetails({ research, researchDegraded })` 子组件，`ScriptSectionsPanel` 与新增的 `XhsScriptPanel`（六期小红书面板）都调用同一个子组件——不是两处各写一份视觉相同的 JSX，改一处两处生效，符合「复用」的字面要求且降低后续维护成本。
+
+**(d) 素材（可选）折叠框对 xiaohongshu 开放，用一个新 CSS 修饰类而非改动共享布局**：`.script-generate-options` 原本是两列 grid（素材 + 时长下拉），专为 douyin 设计。xiaohongshu 没有时长下拉（`durationSec` 服务端不消费该分支），若直接复用两列布局会在右侧留一块空白。T6 新增 `.script-generate-options.single { grid-template-columns: 1fr }` 修饰类，xiaohongshu 分支渲染时只挂一个 `<details className="script-materials-details">`（不含时长 `<label>`）并套用 `single` 类，douyin 分支渲染逻辑字符未改。
+
+**(e) 真实 E2E 验证方式：curl 建 CockpitContent + 命中真实 API，浏览器走查补验 UI 渲染路径**：简报要求「curl + DB 查询」。用户的开发数据库在生成前只有 3 条真实 douyin 内容、无 `stage='script'` 的内容可直接拿来测——T6 用 `GET/PUT /api/v1/cockpit/workspace`（真实 API，非绕过）新增 2 条 `stage='script'` 的测试内容（1 条 douyin、1 条 xiaohongshu），跑完全部五项 curl 断言后**删除了这 2 条测试内容及其派生的 `ScriptDraft`/`StyleSample`/`CockpitStageEvent`**，把数据库还原到测试前的 3 条真实内容——因为 `depositStyleSample` 会把测试生成的样本计入该平台「最近 3 篇」few-shot 池，不清理会让用户后续真实生成的小红书稿子被测试数据污染文风参照。curl 验证之外，额外用 `claude-in-chrome` 走查了一遍真实浏览器交互（点击「用 AI 写脚本」→ 面板渲染 → 页顶整稿指令 → 关抽屉重开(不刷新)恢复），确认：curl 直接调用 `/api/v1/scripts/generate` 能验证草稿落库/研究简报/6 区块合规，但**不会**触发 `mergeScript` 回填六字段骨架（`headline`/`hook`/`conclusion`/`body`/`example`/`ending`）——`mergeScript` 只在 `generate-flow.ts` 的浏览器端调用链里发生，纯 curl 生成的草稿六字段骨架仍是空文本框，这不是 bug，是 curl 测试方法本身绕过了前端这一层，浏览器走查确认走 UI 点击「用 AI 写脚本」按钮时六个字段全部正确回填（含 `mapXiaohongshu` 的 titles→headline/intro→hook/coverText→conclusion/body→body/shotIdeas→example/tags→ending 六个映射逐一核对），整稿指令成功后只有 `hook`/`body` 两个字段更新、其余四个字段原样不变，与设计一致。详见 `task-6-report.md`。
+
+**(f) 其余实际偏差（详见各 Task report）**：
+- `GET /api/v1/scripts/[id]` 路由在六期开工前已存在（Phase 5 交付), T1/T2 均确认未新建，简报自评的「已知不确定点」之一就此澄清（T1 report 明确记录）。
+- `depositStyleSample`/`getStyleContext` 对 xiaohongshu 的支持在 T4 就已完整交付（防御性读取 `intro`/`body`，按 platform 过滤 few-shot 池），T6 的 `PUT /api/v1/scripts/[id]/picked` 定稿路由本身零改动即可对小红书生效——「④xhs 定稿 → StyleSample 落库」这一项 E2E 因此不需要新增任何抽屉 UI（没有独立的「定稿」按钮），直接复用已有的 `picked` 接口语义（douyin 靠选 hook 候选触发，xiaohongshu 目前没有等价的 UI 触发点，六期收尾用 curl 直接命中该接口验证服务端行为；若后续要在小红书面板加一个显式「定稿」按钮留待下期，本期未做，YAGNI）。
+- `mapXiaohongshu`（`script-mapping.ts`）在 T4/T6 全程**零改动**——T4 report 已验证响应新形状对它零影响，T6 复用它处理整稿指令的局部回填（只传 `{intro, body}` 两键）时同样验证了未出现的键不会在返回对象里产出对应字段，不会误覆盖骨架里 `headline`/`conclusion`/`example`/`ending` 已有的用户内容。
