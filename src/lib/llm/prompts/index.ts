@@ -39,9 +39,10 @@ export * from './research-brief';
 export * from './script-write-douyin';
 export * from './script-refine';
 
-// 创作质量深化 (小红书): 两阶段写稿 → 整稿改稿
+// 创作质量深化 (小红书): 两阶段写稿 → 整稿改稿 → 出图计划
 export * from './script-write-xhs';
 export * from './xhs-refine';
+export * from './image-plan';
 
 // 通用: expert persona / JSON strictness
 export * from './expert-persona';
