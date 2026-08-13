@@ -1,11 +1,9 @@
 import { ok, fail } from '@/lib/api';
 import { getDeepSeekTextLLM } from '@/lib/llm/clients';
 import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
-import {
-  SCRIPT_GENERATE_XIAOHONGSHU,
-  SCRIPT_GENERATE_GONGZHONGHAO,
-} from '@/lib/llm/prompts';
+import { SCRIPT_GENERATE_GONGZHONGHAO } from '@/lib/llm/prompts';
 import { SCRIPT_WRITE_DOUYIN } from '@/lib/llm/prompts/script-write-douyin';
+import { SCRIPT_WRITE_XHS } from '@/lib/llm/prompts/script-write-xhs';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import type { InspirationStyleHints } from '@/lib/llm/prompts';
@@ -16,7 +14,6 @@ import { runResearch } from '@/lib/script/research';
 import { getStyleContext } from '@/lib/script/style';
 
 const PROMPT_BY_PLATFORM = {
-  xiaohongshu: SCRIPT_GENERATE_XIAOHONGSHU,
   gongzhonghao: SCRIPT_GENERATE_GONGZHONGHAO,
 } as const;
 
@@ -164,6 +161,52 @@ export async function POST(req: Request) {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error('[POST scripts/generate douyin]', e);
+      return fail(`生成失败: ${msg}`, 500);
+    }
+  }
+
+  if (platform === 'xiaohongshu') {
+    try {
+      const research = await runResearch(user.id, { topic, niche, userMaterials: materials });
+      const style = await getStyleContext(user.id, 'xiaohongshu');
+      const llm = getDeepSeekTextLLM(apiKey);
+      const out = await llm.callStructured({
+        systemPrompt: SCRIPT_WRITE_XHS.buildSystemPrompt(niche, style),
+        userMessage: SCRIPT_WRITE_XHS.buildUserMessage({ topic, brief: research }),
+        responseSchema: SCRIPT_WRITE_XHS.responseSchema,
+      });
+      const { titles, coverText, intro, body, tags, shotIdeas } = out.result;
+
+      const draft = await prisma.scriptDraft.create({
+        data: {
+          userId: user.id,
+          topic,
+          niche,
+          platform: 'xiaohongshu',
+          output: { research, titles, coverText, intro, body, tags, shotIdeas },
+        },
+        select: { id: true },
+      });
+
+      if (cockpitContentId) {
+        await linkCockpitContent(user.id, cockpitContentId, draft.id);
+      }
+
+      return ok({
+        platform,
+        scriptDraftId: draft.id,
+        research,
+        researchDegraded: research === null,
+        titles,
+        coverText,
+        intro,
+        body,
+        tags,
+        shotIdeas,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[POST scripts/generate xiaohongshu]', e);
       return fail(`生成失败: ${msg}`, 500);
     }
   }

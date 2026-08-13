@@ -71,6 +71,23 @@ const douyinScriptResult = {
   cover: { textOverlay: '3 分钟', shotIdea: '屏幕特写', colorTone: '白底红字' },
 };
 
+const xhsScriptResult = {
+  titles: [
+    { text: '✨打工人秒变效率怪', hookType: '情感' },
+    { text: '老板都夸的周报秘籍', hookType: '反差' },
+    { text: '3 个 ChatGPT 周报 prompt', hookType: '数字' },
+  ],
+  coverText: '周报 3 分钟搞定',
+  intro: '你是不是也每周写周报花 2 小时? 上周我发现了 3 个 prompt, 从此告别加班写周报。',
+  body: '第一步, 把工作记录喂进去...\n\n第二步, 让 AI 提炼要点...\n\n第三步, 让 AI 用你的口吻改写...',
+  tags: ['ChatGPT', 'AI 工具', '打工人', '效率', '副业'],
+  shotIdeas: [
+    { idx: 1, description: 'ChatGPT 输入框截图, prompt 示范' },
+    { idx: 2, description: '工作记录 vs 周报 对比图' },
+    { idx: 3, description: '最终周报截图' },
+  ],
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.DEEPSEEK_API_KEY = 'sk-test';
@@ -272,35 +289,183 @@ describe('POST /api/v1/scripts/generate — douyin cockpitContentId 关联回写
   });
 });
 
-describe('POST /api/v1/scripts/generate — xiaohongshu/gongzhonghao 回归 (代码未改, 响应形状不变)', () => {
-  it.each(['xiaohongshu', 'gongzhonghao'] as const)(
-    '%s: 200, data = { platform, inspirationApplied, ...result }, 不碰 research/style/scriptDraft',
-    async (platform) => {
-      llmMock.callStructured.mockResolvedValueOnce({
-        result: legacyPlatformResponse,
-        usage: { model: 'deepseek', promptTokens: 100, completionTokens: 200, estCostUSD: 0.001 },
-      });
-      const res = await POST(makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge', platform }));
-      expect(res.status).toBe(200);
-      const json = await res.json();
-      expect(json.success).toBe(true);
-      expect(json.data.platform).toBe(platform);
-      expect(json.data.inspirationApplied).toBe(false);
-      expect(json.data.titles).toEqual(legacyPlatformResponse.titles);
-      expect(json.data.body).toBe(legacyPlatformResponse.body);
-      // 没有 douyin 两阶段字段
-      expect(json.data.research).toBeUndefined();
-      expect(json.data.researchDegraded).toBeUndefined();
-      expect(json.data.scriptDraftId).toBeUndefined();
+describe('POST /api/v1/scripts/generate — xiaohongshu (两阶段: research → style → 写稿, output 落库)', () => {
+  beforeEach(() => {
+    llmMock.callStructured.mockResolvedValue({
+      result: xhsScriptResult,
+      usage: { model: 'deepseek', promptTokens: 100, completionTokens: 200, estCostUSD: 0.001 },
+    });
+  });
 
-      expect(runResearchMock).not.toHaveBeenCalled();
-      expect(getStyleContextMock).not.toHaveBeenCalled();
-      expect(prismaMock.scriptDraft.create).not.toHaveBeenCalled();
-    },
-  );
+  it('正常 topic+niche → 200, 两阶段顺序编排: runResearch → getStyleContext(userId, "xiaohongshu") → callStructured', async () => {
+    const res = await POST(
+      makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge', platform: 'xiaohongshu' }),
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+
+    expect(runResearchMock).toHaveBeenCalledWith('user1', {
+      topic: '如何用 ChatGPT 写周报',
+      niche: 'ai-knowledge',
+      userMaterials: undefined,
+    });
+    expect(getStyleContextMock).toHaveBeenCalledWith('user1', 'xiaohongshu');
+    expect(llmMock.callStructured).toHaveBeenCalledTimes(1);
+  });
+
+  it('materials 透传给 runResearch 作为 userMaterials (durationSec 对 xhs 无意义, 不校验/不透传)', async () => {
+    await POST(
+      makeReq({
+        topic: '如何用 ChatGPT 写周报',
+        niche: 'ai-knowledge',
+        platform: 'xiaohongshu',
+        materials: '我自己的素材文本',
+        durationSec: 60,
+      }),
+    );
+    expect(runResearchMock).toHaveBeenCalledWith('user1', {
+      topic: '如何用 ChatGPT 写周报',
+      niche: 'ai-knowledge',
+      userMaterials: '我自己的素材文本',
+    });
+  });
+
+  it('响应 data 含 research/researchDegraded=false (research 命中) + 6 区块字段', async () => {
+    const res = await POST(
+      makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge', platform: 'xiaohongshu' }),
+    );
+    const json = await res.json();
+    expect(json.data.platform).toBe('xiaohongshu');
+    expect(json.data.research).toEqual(researchBrief);
+    expect(json.data.researchDegraded).toBe(false);
+    expect(json.data.titles).toEqual(xhsScriptResult.titles);
+    expect(json.data.coverText).toBe(xhsScriptResult.coverText);
+    expect(json.data.intro).toBe(xhsScriptResult.intro);
+    expect(json.data.body).toBe(xhsScriptResult.body);
+    expect(json.data.tags).toEqual(xhsScriptResult.tags);
+    expect(json.data.shotIdeas).toEqual(xhsScriptResult.shotIdeas);
+  });
+
+  it('research 返回 null (降级) 时仍正常写稿, researchDegraded=true, research=null', async () => {
+    runResearchMock.mockResolvedValueOnce(null);
+    const res = await POST(
+      makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge', platform: 'xiaohongshu' }),
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.data.research).toBeNull();
+    expect(json.data.researchDegraded).toBe(true);
+    expect(json.data.titles).toEqual(xhsScriptResult.titles);
+    expect(prismaMock.scriptDraft.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ output: expect.objectContaining({ research: null }) }) }),
+    );
+  });
+
+  it('响应含 scriptDraftId, 且已把新形状 output 持久化到 ScriptDraft: { research, titles, coverText, intro, body, tags, shotIdeas }', async () => {
+    const res = await POST(
+      makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge', platform: 'xiaohongshu' }),
+    );
+    const json = await res.json();
+    expect(json.data.scriptDraftId).toBe('draft1');
+
+    expect(prismaMock.scriptDraft.create).toHaveBeenCalledWith({
+      data: {
+        userId: 'user1',
+        topic: '如何用 ChatGPT 写周报',
+        niche: 'ai-knowledge',
+        platform: 'xiaohongshu',
+        output: {
+          research: researchBrief,
+          titles: xhsScriptResult.titles,
+          coverText: xhsScriptResult.coverText,
+          intro: xhsScriptResult.intro,
+          body: xhsScriptResult.body,
+          tags: xhsScriptResult.tags,
+          shotIdeas: xhsScriptResult.shotIdeas,
+        },
+      },
+      select: { id: true },
+    });
+  });
+
+  it('cockpitContentId 归属正确 → cockpitContent.update 被调, 参数为 { scriptDraftId: draft.id }', async () => {
+    prismaMock.cockpitContent.findUnique.mockResolvedValueOnce({ id: 'content1', userId: 'user1' });
+    const res = await POST(
+      makeReq({
+        topic: '如何用 ChatGPT 写周报',
+        niche: 'ai-knowledge',
+        platform: 'xiaohongshu',
+        cockpitContentId: 'content1',
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(prismaMock.cockpitContent.update).toHaveBeenCalledWith({
+      where: { id: 'content1' },
+      data: { scriptDraftId: 'draft1' },
+    });
+  });
+
+  it('styleHints/inspirationApplied 不再被调 (即使传 inspirationId 也不查 InspirationInsight)', async () => {
+    const res = await POST(
+      makeReq({
+        topic: '如何用 ChatGPT 写周报',
+        niche: 'ai-knowledge',
+        platform: 'xiaohongshu',
+        inspirationId: 'insight1',
+      }),
+    );
+    const json = await res.json();
+    expect(res.status).toBe(200);
+    expect(json.data.inspirationApplied).toBeUndefined();
+    expect(json.data.styleHints).toBeUndefined();
+    expect(prismaMock.inspirationInsight.findFirst).not.toHaveBeenCalled();
+  });
 
   it('topic 空 → 400 (与 douyin 共用校验)', async () => {
     const res = await POST(makeReq({ topic: '', niche: 'ai-knowledge', platform: 'xiaohongshu' }));
+    expect(res.status).toBe(400);
+  });
+
+  it('LLM 抛错 → 500', async () => {
+    llmMock.callStructured.mockRejectedValueOnce(new Error('LLM down'));
+    const res = await POST(
+      makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge', platform: 'xiaohongshu' }),
+    );
+    expect(res.status).toBe(500);
+    const json = await res.json();
+    expect(json.success).toBe(false);
+  });
+});
+
+describe('POST /api/v1/scripts/generate — gongzhonghao 回归 (分支代码字符级不动, 响应形状不变)', () => {
+  it('200, data = { platform, inspirationApplied, ...result }, 不碰 research/style/scriptDraft', async () => {
+    llmMock.callStructured.mockResolvedValueOnce({
+      result: legacyPlatformResponse,
+      usage: { model: 'deepseek', promptTokens: 100, completionTokens: 200, estCostUSD: 0.001 },
+    });
+    const res = await POST(
+      makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge', platform: 'gongzhonghao' }),
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.data.platform).toBe('gongzhonghao');
+    expect(json.data.inspirationApplied).toBe(false);
+    expect(json.data.titles).toEqual(legacyPlatformResponse.titles);
+    expect(json.data.body).toBe(legacyPlatformResponse.body);
+    // 没有 douyin/xiaohongshu 两阶段字段
+    expect(json.data.research).toBeUndefined();
+    expect(json.data.researchDegraded).toBeUndefined();
+    expect(json.data.scriptDraftId).toBeUndefined();
+
+    expect(runResearchMock).not.toHaveBeenCalled();
+    expect(getStyleContextMock).not.toHaveBeenCalled();
+    expect(prismaMock.scriptDraft.create).not.toHaveBeenCalled();
+  });
+
+  it('topic 空 → 400 (与 douyin 共用校验)', async () => {
+    const res = await POST(makeReq({ topic: '', niche: 'ai-knowledge', platform: 'gongzhonghao' }));
     expect(res.status).toBe(400);
   });
 
@@ -329,7 +494,7 @@ describe('POST /api/v1/scripts/generate — xiaohongshu/gongzhonghao 回归 (代
         makeReq({
           topic: '主题示例',
           niche: 'ai-knowledge',
-          platform: 'xiaohongshu',
+          platform: 'gongzhonghao',
           inspirationId: 'insight1',
         }),
       );
@@ -380,7 +545,7 @@ describe('POST /api/v1/scripts/generate — xiaohongshu/gongzhonghao 回归 (代
         usage: { model: 'deepseek', promptTokens: 100, completionTokens: 200, estCostUSD: 0.001 },
       });
       const res = await POST(
-        makeReq({ topic: '主题示例', niche: 'ai-knowledge', platform: 'xiaohongshu' }),
+        makeReq({ topic: '主题示例', niche: 'ai-knowledge', platform: 'gongzhonghao' }),
       );
       expect(res.status).toBe(200);
       expect(prismaMock.inspirationInsight.findFirst).not.toHaveBeenCalled();

@@ -53,6 +53,25 @@ function extractSectionTexts(output: unknown): string[] | null {
 }
 
 /**
+ * 六期任务四: 按 draft.platform 取「定稿文本源」——douyin 沿用 sections 拼接,
+ * xiaohongshu 取两阶段写稿新形状的 intro + '\n' + body, 其余平台 (含未知平台)
+ * 一律返回 null (防御读取, 不写入样本)。
+ */
+function extractTextForPlatform(platform: string, output: unknown): string | null {
+  if (platform === 'douyin') {
+    const texts = extractSectionTexts(output);
+    return texts ? texts.join('\n') : null;
+  }
+  if (platform === 'xiaohongshu') {
+    if (!output || typeof output !== 'object') return null;
+    const { intro, body } = output as Record<string, unknown>;
+    if (typeof intro !== 'string' || typeof body !== 'string') return null;
+    return `${intro}\n${body}`;
+  }
+  return null;
+}
+
+/**
  * 定稿(或改稿后再定稿)时沉淀/刷新一条风格样本。
  *
  * 同一 sourceScriptDraftId 已有样本时**覆盖更新其 content**为最新 sections 拼接文本
@@ -66,10 +85,9 @@ export async function depositStyleSample(userId: string, scriptDraftId: string):
   const draft = await prisma.scriptDraft.findFirst({ where: { id: scriptDraftId, userId } });
   if (!draft) return false;
 
-  const sectionTexts = extractSectionTexts(draft.output);
-  if (!sectionTexts) return false;
+  const content = extractTextForPlatform(draft.platform, draft.output);
+  if (!content) return false;
 
-  const content = sectionTexts.join('\n');
   const existing = await prisma.styleSample.findFirst({
     where: { userId, sourceScriptDraftId: scriptDraftId },
   });

@@ -162,11 +162,13 @@
 
 **抽屉懒加载拉回改稿 UI (六期)**: 五期的分块改稿面板只存在于抽屉自己的前端 state, 重开抽屉(或刷新页面后重开)后消失, 只剩六个文本框(见上文 spec §6(c) 限制)。六期起: 打开抽屉挂载时若本地无生成态且 `item.scriptDraftId`(`CockpitContent` 服务端字段, 由上面 `cockpitContentId` 回写关联, `server-store.ts` 只读下发给前端, `PUT /api/v1/cockpit/workspace` 仍不接收) 非空, 懒加载 `GET /api/v1/scripts/{id}` 拉回 `output`, 用窄化解析纯函数 `parseDraftOutput` (`src/lib/cockpit/draft-restore.ts`) 恢复 sections/research/hooks/时长; 解析不出合法 `sections`(旧 `retentionBeats` 形态、非 douyin 输出、请求失败等)一律静默保持现状, 不阻断六个文本框编辑。
 
+**xiaohongshu 分支两阶段化 (六期)**: 上文「本期仅抖音」是五期交付时的范围——六期起 `xiaohongshu` 分支同样走 `runResearch` → `getStyleContext(userId, 'xiaohongshu')` → `SCRIPT_WRITE_XHS`(专家人设+风格上下文+素材简报+主题) 两阶段管线, 落库 `ScriptDraft.output = { research, titles, coverText, intro, body, tags, shotIdeas }`(与五期 douyin 的 `{ research, script.sections[], hooks, titles, cover, durationSec }` 形状并列, 键名不同); `durationSec` 请求参数仍校验但 xhs 分支不消费。`depositStyleSample`(`src/lib/script/style.ts`) 相应按 `draft.platform` 分支取定稿文本源: douyin 沿用 `sections` 拼接, xiaohongshu 取 `intro + '\n' + body`, 其余平台(含 gongzhonghao、未知值)防御性返回 `false` 不写入。`gongzhonghao` 分支未改动, 仍是单次生成、不落库 `ScriptDraft`。
+
 **设置「风格档案」卡** (`src/components/cockpit/settings-cards/style-profile-card.tsx`): 上半编辑 `StyleProfile.description`(口吻/句式/口头禅/忌讳); 下半只读样本列表(平台 badge + 预览 + 创建时间), 单条可删, 不提供手动新增入口(样本只经由脚本定稿沉淀, 避免两条写入路径)。
 
 **数据模型** (2 张新表, 零迁移): `StyleProfile`(userId 单行) / `StyleSample`(定稿沉淀, `platform` + `content` + `sourceScriptDraftId` 溯源, `@@index([userId, platform, createdAt])`); `ScriptDraft.output` Json 内新增 `research`/`script.sections[]` 两键, 旧稿没有这两键时抽屉按旧结构原样渲染。
 
-**API**: `POST /api/v1/scripts/generate`(douyin 分支两阶段化, 请求体新增 `materials?`/`durationSec?`/`cockpitContentId?`, 响应新增 `scriptDraftId`/`research`/`researchDegraded`/`sections`; 无 DeepSeek key → 500; `cockpitContentId` 六期新增, douyin 分支落库 `ScriptDraft` 后 best-effort 回写 `CockpitContent.scriptDraftId`——归属校验/写入失败仅 `console.warn` 不阻断响应, 供抽屉重开恢复改稿 UI; xiaohongshu/gongzhonghao 分支目前不落库 `ScriptDraft`, 该参数暂不生效)、`POST /api/v1/scripts/[id]/refine`(无 DeepSeek key → 503——与 generate 路由同场景的 500 状态码不同, 两条路由各自独立裁决, 未回头统一口径)、`GET/PUT /api/v1/style/profile`、`GET /api/v1/style/samples`、`DELETE /api/v1/style/samples/[id]`。
+**API**: `POST /api/v1/scripts/generate`(douyin/xiaohongshu 分支两阶段化, 请求体新增 `materials?`/`durationSec?`/`cockpitContentId?`, 响应新增 `scriptDraftId`/`research`/`researchDegraded` + 各自的产出字段(douyin: `sections`/`hooks`/`titles`/`cover`; xiaohongshu: `titles`/`coverText`/`intro`/`body`/`tags`/`shotIdeas`); 无 DeepSeek key → 500; `cockpitContentId` 六期新增, douyin/xiaohongshu 分支落库 `ScriptDraft` 后 best-effort 回写 `CockpitContent.scriptDraftId`——归属校验/写入失败仅 `console.warn` 不阻断响应, 供抽屉重开恢复改稿 UI; gongzhonghao 分支目前仍不落库 `ScriptDraft`, 该参数暂不生效, `styleHints`/`inspirationApplied` 仅 gongzhonghao 分支保留)、`POST /api/v1/scripts/[id]/refine`(无 DeepSeek key → 503——与 generate 路由同场景的 500 状态码不同, 两条路由各自独立裁决, 未回头统一口径)、`GET/PUT /api/v1/style/profile`、`GET /api/v1/style/samples`、`DELETE /api/v1/style/samples/[id]`。
 
 **配置依赖(不新增配置项, 复用既有两张卡)**: DeepSeek key 走设置「AI 服务配置」卡(同全站其它 LLM 调用点), Tavily key 走设置「雷达配置」卡(同四期热点雷达)——两者任一缺失时研究阶段静默降级(不联网研究, 不影响写稿本身), 只有 DeepSeek key 缺失才会让整个生成/改稿请求失败。
 
@@ -327,7 +329,7 @@ API: `POST/GET /api/v1/topics`、`PATCH /api/v1/topics/[id]`、`POST/GET /api/v1
 
 ### 测试覆盖
 
-- 895 tests 大多是 API 单测 + 纯函数 + mock prisma (含 Cockpit `model/workflow/schedule/calculations`/迁移映射的原版测试; 四期新增雷达搜索层/热度合成/阅读 prompt/API 路由测试; 五期新增研究层/风格层/两阶段生成/两级改稿/风格档案 API 的 mock 测试; 六期新增 `draft-restore.ts` 窄化解析纯函数测试)
+- 943 tests 大多是 API 单测 + 纯函数 + mock prisma (含 Cockpit `model/workflow/schedule/calculations`/迁移映射的原版测试; 四期新增雷达搜索层/热度合成/阅读 prompt/API 路由测试; 五期新增研究层/风格层/两阶段生成/两级改稿/风格档案 API 的 mock 测试; 六期新增 `draft-restore.ts` 窄化解析纯函数测试 + xiaohongshu 分支两阶段化/`depositStyleSample` 平台分支沉淀测试)
 - UI 一律走手动 E2E (是有意识的取舍); 五期收尾用真实 DeepSeek+Tavily key 额外跑了一轮全链路真实 E2E (非 mock), 见 `.superpowers/sdd/2026-08-13-script-quality/task-8-report.md`
 - Worker 集成测试缺 (auto-sync-worker, content-analyze-worker, radar-worker 的每日 repeat 调度层)
 

@@ -181,4 +181,101 @@ describe('depositStyleSample', () => {
 
     expect(out).toBe(false);
   });
+
+  describe('平台分支沉淀 (六期任务四: 按 draft.platform 取文本源)', () => {
+    it('xiaohongshu: 未存过 → 拼接 intro + "\\n" + body 存样本, 返回 true', async () => {
+      prismaMock.scriptDraft.findFirst.mockResolvedValue({
+        id: 'd1',
+        userId: 'u1',
+        platform: 'xiaohongshu',
+        output: {
+          research: null,
+          titles: [{ text: '标题', hookType: '数字' }],
+          coverText: '封面字',
+          intro: '开头钩子文本',
+          body: '正文文本',
+          tags: ['a', 'b'],
+          shotIdeas: [{ idx: 1, description: '图 1' }],
+        },
+      });
+      prismaMock.styleSample.findFirst.mockResolvedValue(null);
+      prismaMock.styleSample.create.mockResolvedValue({ id: 'new-sample' });
+
+      const out = await depositStyleSample('u1', 'd1');
+
+      expect(out).toBe(true);
+      expect(prismaMock.styleSample.create).toHaveBeenCalledWith({
+        data: {
+          userId: 'u1',
+          platform: 'xiaohongshu',
+          content: '开头钩子文本\n正文文本',
+          sourceScriptDraftId: 'd1',
+        },
+      });
+    });
+
+    it('xiaohongshu: 已存过同 sourceScriptDraftId → 覆盖更新 content', async () => {
+      prismaMock.scriptDraft.findFirst.mockResolvedValue({
+        id: 'd1',
+        userId: 'u1',
+        platform: 'xiaohongshu',
+        output: { intro: '改稿后的开头', body: '改稿后的正文' },
+      });
+      prismaMock.styleSample.findFirst.mockResolvedValue({ id: 'existing-sample', content: '旧文本' });
+      prismaMock.styleSample.update.mockResolvedValue({ id: 'existing-sample' });
+
+      const out = await depositStyleSample('u1', 'd1');
+
+      expect(out).toBe(true);
+      expect(prismaMock.styleSample.create).not.toHaveBeenCalled();
+      expect(prismaMock.styleSample.update).toHaveBeenCalledWith({
+        where: { id: 'existing-sample' },
+        data: { content: '改稿后的开头\n改稿后的正文' },
+      });
+    });
+
+    it('xiaohongshu: intro/body 缺失或非字符串 (防御读取) → false, 不写入', async () => {
+      prismaMock.scriptDraft.findFirst.mockResolvedValue({
+        id: 'd1',
+        userId: 'u1',
+        platform: 'xiaohongshu',
+        output: { intro: '只有开头, 没有正文' },
+      });
+
+      const out = await depositStyleSample('u1', 'd1');
+
+      expect(out).toBe(false);
+      expect(prismaMock.styleSample.create).not.toHaveBeenCalled();
+      expect(prismaMock.styleSample.update).not.toHaveBeenCalled();
+    });
+
+    it('其余平台 (gongzhonghao) → 一律 false, 不写入', async () => {
+      prismaMock.scriptDraft.findFirst.mockResolvedValue({
+        id: 'd1',
+        userId: 'u1',
+        platform: 'gongzhonghao',
+        output: { titles: [], abstract: '摘要', outline: ['一', '二'], body: '正文', cta: 'cta' },
+      });
+
+      const out = await depositStyleSample('u1', 'd1');
+
+      expect(out).toBe(false);
+      expect(prismaMock.styleSample.create).not.toHaveBeenCalled();
+      expect(prismaMock.styleSample.update).not.toHaveBeenCalled();
+    });
+
+    it('未知平台 → 一律 false, 不写入 (防御读取)', async () => {
+      prismaMock.scriptDraft.findFirst.mockResolvedValue({
+        id: 'd1',
+        userId: 'u1',
+        platform: 'bilibili',
+        output: { intro: 'x', body: 'y' },
+      });
+
+      const out = await depositStyleSample('u1', 'd1');
+
+      expect(out).toBe(false);
+      expect(prismaMock.styleSample.create).not.toHaveBeenCalled();
+    });
+  });
 });
