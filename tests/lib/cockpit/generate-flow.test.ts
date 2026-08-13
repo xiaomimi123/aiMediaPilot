@@ -109,6 +109,27 @@ describe("runGenerateScript", () => {
     expect(genBody2).not.toHaveProperty("durationSec");
   });
 
+  it("douyin: 请求体透传 cockpitContentId (未提供时不出现在请求体里)", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({ json: async () => ({ success: true, data: { titles: [] } }) });
+
+    await runGenerateScript(
+      { itemId: "content-1", title: "标题", platform: "douyin", cockpitContentId: "content-1" },
+      baseDeps({ fetch: fetchMock as unknown as typeof fetch }),
+    );
+
+    const genBody = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(genBody.cockpitContentId).toBe("content-1");
+
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValueOnce({ json: async () => ({ success: true, data: { titles: [] } }) });
+    await runGenerateScript(
+      { itemId: "content-1", title: "标题", platform: "douyin" },
+      baseDeps({ fetch: fetchMock as unknown as typeof fetch }),
+    );
+    const genBody2 = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(genBody2).not.toHaveProperty("cockpitContentId");
+  });
+
   it("非 douyin 平台 (如 xiaohongshu): 沿用生成 + 二次保存两阶段流程, mergeScript 收到映射字段, onGenerated 带上保存后的 scriptDraftId", async () => {
     const setGenerating = vi.fn();
     const notify = vi.fn();

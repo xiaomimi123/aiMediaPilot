@@ -269,7 +269,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
     // 迟到的响应可能覆盖掉新草稿, 或改稿请求会打到已经不存在的旧草稿上。
     if (generating || refiningAll || refiningSectionIdx !== null || pickHookPending) return;
     await runGenerateScript(
-      { itemId: item.id, title: item.title, platform: scriptPlatform, materials: scriptPlatform === "douyin" ? (materials.trim() || undefined) : undefined, durationSec: scriptPlatform === "douyin" ? durationSec : undefined },
+      { itemId: item.id, title: item.title, platform: scriptPlatform, materials: scriptPlatform === "douyin" ? (materials.trim() || undefined) : undefined, durationSec: scriptPlatform === "douyin" ? durationSec : undefined, cockpitContentId: item.id },
       {
         // 不能直接把裸的 `fetch` 引用传下去: 原生 fetch 依赖 `this === window`
         // 的隐式绑定, 脱离 window 对象单独调用会抛 "Illegal invocation"。

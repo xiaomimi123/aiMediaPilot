@@ -164,7 +164,7 @@
 
 **数据模型** (2 张新表, 零迁移): `StyleProfile`(userId 单行) / `StyleSample`(定稿沉淀, `platform` + `content` + `sourceScriptDraftId` 溯源, `@@index([userId, platform, createdAt])`); `ScriptDraft.output` Json 内新增 `research`/`script.sections[]` 两键, 旧稿没有这两键时抽屉按旧结构原样渲染。
 
-**API**: `POST /api/v1/scripts/generate`(douyin 分支两阶段化, 请求体新增 `materials?`/`durationSec?`, 响应新增 `scriptDraftId`/`research`/`researchDegraded`/`sections`; 无 DeepSeek key → 500)、`POST /api/v1/scripts/[id]/refine`(无 DeepSeek key → 503——与 generate 路由同场景的 500 状态码不同, 两条路由各自独立裁决, 未回头统一口径)、`GET/PUT /api/v1/style/profile`、`GET /api/v1/style/samples`、`DELETE /api/v1/style/samples/[id]`。
+**API**: `POST /api/v1/scripts/generate`(douyin 分支两阶段化, 请求体新增 `materials?`/`durationSec?`/`cockpitContentId?`, 响应新增 `scriptDraftId`/`research`/`researchDegraded`/`sections`; 无 DeepSeek key → 500; `cockpitContentId` 六期新增, douyin 分支落库 `ScriptDraft` 后 best-effort 回写 `CockpitContent.scriptDraftId`——归属校验/写入失败仅 `console.warn` 不阻断响应, 供抽屉重开恢复改稿 UI; xiaohongshu/gongzhonghao 分支目前不落库 `ScriptDraft`, 该参数暂不生效)、`POST /api/v1/scripts/[id]/refine`(无 DeepSeek key → 503——与 generate 路由同场景的 500 状态码不同, 两条路由各自独立裁决, 未回头统一口径)、`GET/PUT /api/v1/style/profile`、`GET /api/v1/style/samples`、`DELETE /api/v1/style/samples/[id]`。
 
 **配置依赖(不新增配置项, 复用既有两张卡)**: DeepSeek key 走设置「AI 服务配置」卡(同全站其它 LLM 调用点), Tavily key 走设置「雷达配置」卡(同四期热点雷达)——两者任一缺失时研究阶段静默降级(不联网研究, 不影响写稿本身), 只有 DeepSeek key 缺失才会让整个生成/改稿请求失败。
 

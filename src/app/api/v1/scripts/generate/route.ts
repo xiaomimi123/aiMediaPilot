@@ -27,6 +27,32 @@ function isValidDuration(value: unknown): value is DurationSec {
   return typeof value === 'number' && (VALID_DURATIONS as readonly number[]).includes(value);
 }
 
+/**
+ * best-effort 把新生成的 ScriptDraft 关联回抽屉打开时的 CockpitContent —— 抽屉重开靠
+ * `CockpitContent.scriptDraftId` 恢复改稿 UI (T2)。归属校验/写入失败都不阻断生成响应,
+ * 逻辑照抄 `src/app/api/v1/scripts/route.ts` 里 POST /api/v1/scripts 的同名处理。
+ */
+async function linkCockpitContent(
+  userId: string,
+  cockpitContentId: string,
+  scriptDraftId: string,
+): Promise<void> {
+  try {
+    const content = await prisma.cockpitContent.findUnique({
+      where: { id: cockpitContentId },
+      select: { id: true, userId: true },
+    });
+    if (content && content.userId === userId) {
+      await prisma.cockpitContent.update({
+        where: { id: cockpitContentId },
+        data: { scriptDraftId },
+      });
+    }
+  } catch (e) {
+    console.warn('[POST scripts/generate] cockpit linkage failed', e);
+  }
+}
+
 async function loadStyleHints(inspirationId: string): Promise<InspirationStyleHints | null> {
   try {
     const user = await getOrCreateDefaultUser();
@@ -56,6 +82,7 @@ export async function POST(req: Request) {
     inspirationId?: unknown;
     materials?: unknown;
     durationSec?: unknown;
+    cockpitContentId?: unknown;
   };
   try {
     body = await req.json();
@@ -87,6 +114,8 @@ export async function POST(req: Request) {
   }
   const materials =
     typeof body.materials === 'string' && body.materials.trim() !== '' ? body.materials : undefined;
+  const cockpitContentId =
+    typeof body.cockpitContentId === 'string' ? body.cockpitContentId.trim() : '';
 
   const user = await getOrCreateDefaultUser();
   const apiKey = await resolveDeepSeekApiKey(user.id);
@@ -116,6 +145,10 @@ export async function POST(req: Request) {
         },
         select: { id: true },
       });
+
+      if (cockpitContentId) {
+        await linkCockpitContent(user.id, cockpitContentId, draft.id);
+      }
 
       return ok({
         platform,

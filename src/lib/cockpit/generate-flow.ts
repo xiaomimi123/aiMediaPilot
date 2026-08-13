@@ -9,6 +9,12 @@ export interface GenerateScriptRequest {
   materials?: string;
   /** T4 五期: 目标时长秒数 (30/45/60)，仅 douyin 消费，其它平台忽略 */
   durationSec?: number;
+  /**
+   * 六期: 抽屉打开时对应的 CockpitContent.id，透传给 /scripts/generate 供其
+   * best-effort 回写 CockpitContent.scriptDraftId（抽屉重开靠这个字段恢复改稿
+   * UI）。调用处传 item.id。
+   */
+  cockpitContentId?: string;
 }
 
 export interface GenerateScriptDeps {
@@ -49,7 +55,7 @@ export async function runGenerateScript(
   request: GenerateScriptRequest,
   deps: GenerateScriptDeps,
 ): Promise<void> {
-  const { itemId, title, platform, materials, durationSec } = request;
+  const { itemId, title, platform, materials, durationSec, cockpitContentId } = request;
   deps.setGenerating(true);
   try {
     const niche = await deps.resolveDefaultNiche();
@@ -62,6 +68,7 @@ export async function runGenerateScript(
         platform,
         ...(materials ? { materials } : {}),
         ...(durationSec !== undefined ? { durationSec } : {}),
+        ...(cockpitContentId ? { cockpitContentId } : {}),
       }),
     });
     const genJson = await genRes.json();

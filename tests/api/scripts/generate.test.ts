@@ -19,6 +19,7 @@ vi.mock('@/lib/llm/resolve-key', () => ({
 const prismaMock = vi.hoisted(() => ({
   inspirationInsight: { findFirst: vi.fn() },
   scriptDraft: { create: vi.fn() },
+  cockpitContent: { findUnique: vi.fn(), update: vi.fn() },
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
@@ -79,6 +80,8 @@ beforeEach(() => {
   });
   prismaMock.inspirationInsight.findFirst.mockResolvedValue(null);
   prismaMock.scriptDraft.create.mockResolvedValue({ id: 'draft1' });
+  prismaMock.cockpitContent.findUnique.mockResolvedValue(null);
+  prismaMock.cockpitContent.update.mockResolvedValue({});
   runResearchMock.mockResolvedValue(researchBrief);
   getStyleContextMock.mockResolvedValue(styleContext);
 });
@@ -203,6 +206,69 @@ describe('POST /api/v1/scripts/generate — douyin (两阶段: research → styl
     runResearchMock.mockResolvedValueOnce(null);
     const res = await POST(makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge' }));
     expect(res.status).toBe(200);
+  });
+});
+
+describe('POST /api/v1/scripts/generate — douyin cockpitContentId 关联回写', () => {
+  it('带 cockpitContentId 且归属正确 → cockpitContent.update 被调, 参数为 { scriptDraftId: draft.id }, 响应仍 200', async () => {
+    prismaMock.cockpitContent.findUnique.mockResolvedValueOnce({ id: 'content1', userId: 'user1' });
+    const res = await POST(
+      makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge', cockpitContentId: 'content1' }),
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.data.scriptDraftId).toBe('draft1');
+
+    expect(prismaMock.cockpitContent.findUnique).toHaveBeenCalledWith({
+      where: { id: 'content1' },
+      select: { id: true, userId: true },
+    });
+    expect(prismaMock.cockpitContent.update).toHaveBeenCalledWith({
+      where: { id: 'content1' },
+      data: { scriptDraftId: 'draft1' },
+    });
+  });
+
+  it('cockpitContentId 不属于当前用户 → 不调 update, console.warn 不触发 (静默跳过), 生成响应仍 200', async () => {
+    prismaMock.cockpitContent.findUnique.mockResolvedValueOnce({ id: 'content1', userId: 'other-user' });
+    const res = await POST(
+      makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge', cockpitContentId: 'content1' }),
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(prismaMock.cockpitContent.update).not.toHaveBeenCalled();
+  });
+
+  it('cockpitContentId 不存在 → 不调 update, 生成响应仍 200', async () => {
+    prismaMock.cockpitContent.findUnique.mockResolvedValueOnce(null);
+    const res = await POST(
+      makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge', cockpitContentId: 'ghost' }),
+    );
+    expect(res.status).toBe(200);
+    expect(prismaMock.cockpitContent.update).not.toHaveBeenCalled();
+  });
+
+  it('cockpitContent 归属校验/写入抛错 → 仅 console.warn 不阻断生成响应, 仍 200 且带 scriptDraftId', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    prismaMock.cockpitContent.findUnique.mockRejectedValueOnce(new Error('db down'));
+    const res = await POST(
+      makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge', cockpitContentId: 'content1' }),
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.data.scriptDraftId).toBe('draft1');
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('不带 cockpitContentId → 不查/不调 cockpitContent', async () => {
+    const res = await POST(makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge' }));
+    expect(res.status).toBe(200);
+    expect(prismaMock.cockpitContent.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.cockpitContent.update).not.toHaveBeenCalled();
   });
 });
 
