@@ -365,10 +365,23 @@ describe('POST /api/v1/scripts/[id]/refine — 公共校验', () => {
     expect(res.status).toBe(404);
   });
 
-  it('platform 非 douyin → 400', async () => {
+  // 注意: platform 覆盖成 'xiaohongshu' 但 output 仍是 baseDraft 的 douyin 形状
+  // (script.sections, 没有顶层 intro/body)——route 先按 platform 分流进
+  // handleXhsRefine (route.ts:92), 命中的是 xhs 分支自己的「旧稿没有 intro/body」
+  // 400 校验, 不是下面 platform !== 'douyin' 分支 (route.ts:95) 的「不支持平台」
+  // 400。用例名如实反映实际命中的分支, 「不支持平台」语义由下一个用例单独覆盖。
+  it('platform=xiaohongshu 但旧稿是 douyin 输出形状 (无 intro/body) → 400', async () => {
     prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(baseDraft({ platform: 'xiaohongshu' }));
     const res = await POST(reqJSON({ scope: 'all', instruction: '换个说法' }), ctx);
     expect(res.status).toBe(400);
+    expect(llmMock.callStructured).not.toHaveBeenCalled();
+  });
+
+  it('platform 不支持 (非 douyin/xiaohongshu) → 400', async () => {
+    prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(baseDraft({ platform: 'gongzhonghao' }));
+    const res = await POST(reqJSON({ scope: 'all', instruction: '换个说法' }), ctx);
+    expect(res.status).toBe(400);
+    expect(llmMock.callStructured).not.toHaveBeenCalled();
   });
 
   it('旧稿没有 output.script.sections → 400', async () => {
