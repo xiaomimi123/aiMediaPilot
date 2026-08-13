@@ -65,6 +65,75 @@ describe("mapGeneratedToScript — douyin", () => {
   });
 });
 
+describe("mapGeneratedToScript — douyin (五期 sections 逐字稿形态)", () => {
+  const validSectionsResult = {
+    hooks: [
+      { text: "旧版钩子 (应被忽略)", rationale: "sections 存在时不回退到 hooks[]" },
+      { text: "钩子二", rationale: "第二个理由" },
+      { text: "钩子三", rationale: "第三个理由" },
+    ],
+    sections: [
+      { role: "hook", startSec: 0, endSec: 3, text: "你还在为周报发愁吗？" },
+      { role: "main", startSec: 3, endSec: 15, text: "教你三个 prompt。" },
+      { role: "cta", startSec: 15, endSec: 20, text: "记得点赞关注。" },
+    ],
+    titles: [
+      { text: "3 个 prompt 让 AI 帮你写周报", hookType: "数字" },
+      { text: "标题二", hookType: "反差" },
+      { text: "标题三", hookType: "问题" },
+    ],
+    cover: {
+      textOverlay: "周报救星",
+      shotIdea: "屏幕录制 ChatGPT 输入框",
+      colorTone: "白底红字",
+    },
+  };
+
+  it("有 sections 时 body 由 sections 拼接, hook 取 role==='hook' 块的 text", () => {
+    const draft = mapGeneratedToScript("douyin", validSectionsResult);
+
+    expect(draft.headline).toBe("3 个 prompt 让 AI 帮你写周报");
+    expect(draft.hook).toBe("你还在为周报发愁吗？");
+    expect(draft.body).toBe(
+      "[hook 0-3s]\n你还在为周报发愁吗？\n\n[main 3-15s]\n教你三个 prompt。\n\n[cta 15-20s]\n记得点赞关注。"
+    );
+    expect(draft.example).toBe(
+      "封面文字：周报救星\n镜头创意：屏幕录制 ChatGPT 输入框\n色调：白底红字"
+    );
+  });
+
+  it("sections 存在时不回退到旧 hooks[]/retentionBeats[] 逻辑", () => {
+    const draft = mapGeneratedToScript("douyin", validSectionsResult);
+    expect(draft.hook).not.toContain("旧版钩子");
+  });
+
+  it("单块 section 畸形 (缺 text) 时该块丢弃, 其它块与 hook 仍解析成功 — 单字段畸形不炸整体", () => {
+    const malformed = {
+      ...validSectionsResult,
+      sections: [
+        { role: "hook", startSec: 0, endSec: 3 }, // 缺 text, 整块丢弃
+        { role: "main", startSec: 3, endSec: 15, text: "教你三个 prompt。" },
+        { role: "cta", startSec: 15, endSec: 20, text: "记得点赞关注。" },
+      ],
+    };
+    const draft = mapGeneratedToScript("douyin", malformed);
+    expect(draft.body).toBe("[main 3-15s]\n教你三个 prompt。\n\n[cta 15-20s]\n记得点赞关注。");
+    // hook 块本身畸形被丢弃, 没有其它 role='hook' 的合法块 → hook 字段不出现
+    expect(draft.hook).toBeUndefined();
+  });
+
+  it("sections 是空数组时按 '无 sections' 走旧逻辑 (hooks[]/retentionBeats[])", () => {
+    const result = {
+      ...validSectionsResult,
+      sections: [],
+      retentionBeats: [{ startSec: 0, endSec: 5, beat: "旧节奏" }],
+    };
+    const draft = mapGeneratedToScript("douyin", result);
+    expect(draft.hook).toBe("旧版钩子 (应被忽略)\n// sections 存在时不回退到 hooks[]");
+    expect(draft.body).toBe("0-5s：旧节奏");
+  });
+});
+
 describe("mapGeneratedToScript — xiaohongshu", () => {
   const validResult = {
     titles: [

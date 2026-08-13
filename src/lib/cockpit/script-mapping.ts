@@ -20,9 +20,22 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
+/** 窄化解析单个 section: role/startSec/endSec/text 齐全才算合法, 否则整块丢弃(不影响其它块)。 */
+function isValidSection(
+  value: unknown
+): value is { role: unknown; startSec: number; endSec: number; text: string } {
+  return (
+    isPlainObject(value) &&
+    typeof value.startSec === "number" &&
+    typeof value.endSec === "number" &&
+    isNonEmptyString(value.text)
+  );
+}
+
 // ---------------------------------------------------------------------------
-// douyin: hooks[{text,rationale}] / retentionBeats[{startSec,endSec,beat}] /
+// douyin (五期逐字稿形态): hooks[{text,rationale}] / sections[{role,startSec,endSec,text}] /
 //         titles[{text,hookType}] / cover{textOverlay,shotIdea,colorTone}
+// 旧形态 (五期以前, 无 sections 时走完全不变的旧逻辑): retentionBeats[{startSec,endSec,beat}]
 // ---------------------------------------------------------------------------
 function mapDouyin(result: Record<string, unknown>): Partial<ScriptDraft> {
   const draft: Partial<ScriptDraft> = {};
@@ -35,28 +48,43 @@ function mapDouyin(result: Record<string, unknown>): Partial<ScriptDraft> {
     }
   }
 
-  const hooks = result.hooks;
-  if (Array.isArray(hooks) && hooks.length > 0) {
-    const first = hooks[0];
-    if (isPlainObject(first) && isNonEmptyString(first.text)) {
-      const rationale = isNonEmptyString(first.rationale) ? first.rationale : undefined;
-      draft.hook = rationale ? `${first.text}\n// ${rationale}` : first.text;
+  const rawSections = result.sections;
+  if (Array.isArray(rawSections) && rawSections.length > 0) {
+    // 新形态: 有 sections 数组 → body 由 sections 拼接, hook 取 role==='hook' 块的 text。
+    // 单块畸形直接丢弃该块 (窄化解析防御风格), 不回退到旧的 hooks[]/retentionBeats[] 逻辑。
+    const sections = rawSections.filter(isValidSection);
+    if (sections.length > 0) {
+      draft.body = sections.map((s) => `[${s.role} ${s.startSec}-${s.endSec}s]\n${s.text}`).join("\n\n");
     }
-  }
+    const hookSection = sections.find((s) => s.role === "hook");
+    if (hookSection) {
+      draft.hook = hookSection.text;
+    }
+  } else {
+    // 旧形态: 无 sections → 完全不变的旧逻辑 (hooks[] → hook, retentionBeats[] → body)。
+    const hooks = result.hooks;
+    if (Array.isArray(hooks) && hooks.length > 0) {
+      const first = hooks[0];
+      if (isPlainObject(first) && isNonEmptyString(first.text)) {
+        const rationale = isNonEmptyString(first.rationale) ? first.rationale : undefined;
+        draft.hook = rationale ? `${first.text}\n// ${rationale}` : first.text;
+      }
+    }
 
-  const beats = result.retentionBeats;
-  if (Array.isArray(beats) && beats.length > 0) {
-    const lines = beats
-      .filter(
-        (beat): beat is { startSec: number; endSec: number; beat: string } =>
-          isPlainObject(beat) &&
-          typeof beat.startSec === "number" &&
-          typeof beat.endSec === "number" &&
-          isNonEmptyString(beat.beat)
-      )
-      .map((beat) => `${beat.startSec}-${beat.endSec}s：${beat.beat}`);
-    if (lines.length > 0) {
-      draft.body = lines.join("\n");
+    const beats = result.retentionBeats;
+    if (Array.isArray(beats) && beats.length > 0) {
+      const lines = beats
+        .filter(
+          (beat): beat is { startSec: number; endSec: number; beat: string } =>
+            isPlainObject(beat) &&
+            typeof beat.startSec === "number" &&
+            typeof beat.endSec === "number" &&
+            isNonEmptyString(beat.beat)
+        )
+        .map((beat) => `${beat.startSec}-${beat.endSec}s：${beat.beat}`);
+      if (lines.length > 0) {
+        draft.body = lines.join("\n");
+      }
     }
   }
 

@@ -2,22 +2,30 @@ import { ok, fail } from '@/lib/api';
 import { getDeepSeekTextLLM } from '@/lib/llm/clients';
 import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
 import {
-  SCRIPT_GENERATE_DOUYIN,
   SCRIPT_GENERATE_XIAOHONGSHU,
   SCRIPT_GENERATE_GONGZHONGHAO,
 } from '@/lib/llm/prompts';
+import { SCRIPT_WRITE_DOUYIN } from '@/lib/llm/prompts/script-write-douyin';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import type { InspirationStyleHints } from '@/lib/llm/prompts';
 import { normalizeNiche } from '@/lib/niche';
 import { isContentPlatform, type ContentPlatform } from '@/lib/platform';
 import { readInspirationInsight } from '@/lib/json-readers';
+import { runResearch } from '@/lib/script/research';
+import { getStyleContext } from '@/lib/script/style';
 
 const PROMPT_BY_PLATFORM = {
-  douyin: SCRIPT_GENERATE_DOUYIN,
   xiaohongshu: SCRIPT_GENERATE_XIAOHONGSHU,
   gongzhonghao: SCRIPT_GENERATE_GONGZHONGHAO,
 } as const;
+
+const VALID_DURATIONS = [30, 45, 60] as const;
+type DurationSec = (typeof VALID_DURATIONS)[number];
+
+function isValidDuration(value: unknown): value is DurationSec {
+  return typeof value === 'number' && (VALID_DURATIONS as readonly number[]).includes(value);
+}
 
 async function loadStyleHints(inspirationId: string): Promise<InspirationStyleHints | null> {
   try {
@@ -41,7 +49,14 @@ async function loadStyleHints(inspirationId: string): Promise<InspirationStyleHi
 }
 
 export async function POST(req: Request) {
-  let body: { topic?: unknown; niche?: unknown; platform?: unknown; inspirationId?: unknown };
+  let body: {
+    topic?: unknown;
+    niche?: unknown;
+    platform?: unknown;
+    inspirationId?: unknown;
+    materials?: unknown;
+    durationSec?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
@@ -63,10 +78,61 @@ export async function POST(req: Request) {
     return fail('niche 不能为空', 400);
   }
 
+  let durationSec: DurationSec = 45;
+  if (body.durationSec !== undefined) {
+    if (!isValidDuration(body.durationSec)) {
+      return fail('durationSec 必须是 30/45/60', 400);
+    }
+    durationSec = body.durationSec;
+  }
+  const materials =
+    typeof body.materials === 'string' && body.materials.trim() !== '' ? body.materials : undefined;
+
   const user = await getOrCreateDefaultUser();
   const apiKey = await resolveDeepSeekApiKey(user.id);
   if (!apiKey) {
     return fail('DEEPSEEK_API_KEY 未配置', 500);
+  }
+
+  if (platform === 'douyin') {
+    try {
+      const research = await runResearch(user.id, { topic, niche, userMaterials: materials });
+      const style = await getStyleContext(user.id, 'douyin');
+      const llm = getDeepSeekTextLLM(apiKey);
+      const out = await llm.callStructured({
+        systemPrompt: SCRIPT_WRITE_DOUYIN.buildSystemPrompt(niche, style),
+        userMessage: SCRIPT_WRITE_DOUYIN.buildUserMessage({ topic, durationSec, brief: research }),
+        responseSchema: SCRIPT_WRITE_DOUYIN.responseSchema,
+      });
+      const { sections, hooks, titles, cover } = out.result;
+
+      const draft = await prisma.scriptDraft.create({
+        data: {
+          userId: user.id,
+          topic,
+          niche,
+          platform: 'douyin',
+          output: { research, script: { sections }, hooks, titles, cover, durationSec },
+        },
+        select: { id: true },
+      });
+
+      return ok({
+        platform,
+        scriptDraftId: draft.id,
+        research,
+        researchDegraded: research === null,
+        sections,
+        hooks,
+        titles,
+        cover,
+        durationSec,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[POST scripts/generate douyin]', e);
+      return fail(`生成失败: ${msg}`, 500);
+    }
   }
 
   const styleHints = inspirationId ? await loadStyleHints(inspirationId) : null;
