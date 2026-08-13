@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Status = { kind: "idle" } | { kind: "ok"; msg: string } | { kind: "err"; msg: string };
 
@@ -81,6 +81,19 @@ export function PersonaCard() {
 
   const dirty = !sameProfile(profile, savedProfile);
 
+  // handleDraft 的 confirm 判断需要「点击那一刻」和「异步请求返回那一刻」两个时间点的
+  // 最新 dirty 值，而闭包里的 `dirty` 只反映 handleDraft 定义时那次渲染的值。用 ref 镜像
+  // 最新 profile/savedProfile，读取时始终拿到最新 state，避免起草等待期间用户改表单后被静默覆盖。
+  const profileRef = useRef(profile);
+  const savedProfileRef = useRef(savedProfile);
+  useEffect(() => {
+    profileRef.current = profile;
+  }, [profile]);
+  useEffect(() => {
+    savedProfileRef.current = savedProfile;
+  }, [savedProfile]);
+  const isDirtyNow = () => !sameProfile(profileRef.current, savedProfileRef.current);
+
   const updateField = <K extends keyof PersonaProfileData>(key: K, value: PersonaProfileData[K]) =>
     setProfile((prev) => ({ ...prev, [key]: value }));
 
@@ -100,7 +113,7 @@ export function PersonaCard() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (saving || !dirty) return;
+    if (saving || drafting || !dirty) return;
     setStatus({ kind: "idle" });
     setSaving(true);
     try {
@@ -132,7 +145,9 @@ export function PersonaCard() {
   };
 
   const handleDraft = async () => {
-    if (drafting) return;
+    if (drafting || saving) return;
+    // confirm 提前到发请求之前：点击时若已脏，先确认是否愿意覆盖，取消就不发 LLM 请求（不花钱）。
+    if (isDirtyNow() && !window.confirm("将覆盖当前未保存内容，是否继续？")) return;
     setDraftStatus({ kind: "idle" });
     setDrafting(true);
     try {
@@ -153,7 +168,9 @@ export function PersonaCard() {
         return;
       }
       const draft = json.data.draft as PersonaProfileData;
-      if (dirty && !window.confirm("将覆盖当前未保存内容，是否继续？")) return;
+      // 二次核对：请求返回时用最新 state 重新判断 dirty（等待期间用户可能又改了表单，
+      // 即便点击那一刻已经确认过一次也要再问一遍，否则会静默覆盖用户新改动）。
+      if (isDirtyNow() && !window.confirm("将覆盖当前未保存内容，是否继续？")) return;
       setProfile({
         audience: draft.audience ?? "",
         targetFans: draft.targetFans ?? "",
@@ -177,7 +194,7 @@ export function PersonaCard() {
       <p>写清楚「你是谁、想吸引谁、擅长讲什么」，热点雷达打分、选题推荐和生成角度都会参考它，让内容更贴合你的定位。不确定怎么写？点「AI 帮我起草」回答几个问题，AI 会帮你起草初稿。</p>
 
       <div className="persona-draft-trigger">
-        <button type="button" className="text-button" disabled={drafting} onClick={() => setInterviewOpen((v) => !v)}>
+        <button type="button" className="text-button" disabled={drafting || saving} onClick={() => setInterviewOpen((v) => !v)}>
           {interviewOpen ? "收起访谈 ↑" : "AI 帮我起草 →"}
         </button>
       </div>
@@ -193,7 +210,7 @@ export function PersonaCard() {
           />
         </label>)}
         <div className="ai-provider-form-actions">
-          <button type="button" className="secondary-button" disabled={drafting} onClick={handleDraft}>{drafting ? "起草中..." : "生成草稿"}</button>
+          <button type="button" className="secondary-button" disabled={drafting || saving} onClick={handleDraft}>{drafting ? "起草中..." : "生成草稿"}</button>
           {draftStatus.kind === "ok" ? <span className="ai-provider-status ok">{draftStatus.msg}</span> : null}
           {draftStatus.kind === "err" ? <span className="ai-provider-status err">{draftStatus.msg}</span> : null}
         </div>
@@ -277,7 +294,7 @@ export function PersonaCard() {
         </label>
 
         <div className="ai-provider-form-actions">
-          <button type="submit" className="secondary-button" disabled={saving || loading || !dirty}>{saving ? "保存中..." : "保存"}</button>
+          <button type="submit" className="secondary-button" disabled={saving || loading || drafting || !dirty}>{saving ? "保存中..." : "保存"}</button>
           {status.kind === "ok" ? <span className="ai-provider-status ok">{status.msg}</span> : null}
           {status.kind === "err" ? <span className="ai-provider-status err">{status.msg}</span> : null}
         </div>
