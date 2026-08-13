@@ -2,7 +2,7 @@
 
 > AI 自媒体工作台 — 自用创作闭环: 选题灵感 → 写稿改稿 → 拍摄/发布追踪 → 数据复盘。 主阵地抖音, 其他平台 (B站/YouTube/推特/小红书/公众号/快手/微博) 走分发登记。 设计预留 SaaS 扩展空间 (`userId` 隔离已在 schema, 未接 auth/计费)。
 
-**当前状态:** 单用户 MVP。 经历三次定位调整: "个人视频分析工具" → "小白向导式智能体" → "自用自媒体工作台" → **"Creator Cockpit 整体移植"** (2026-08-04, 详见 `docs/superpowers/specs/2026-08-04-cockpit-adoption-design.md`)。 首页 `/` 与全站外壳已换成移植自开源项目 [creator-cockpit](https://github.com/AverrryHu/creator-cockpit) 的纸质编辑部风格操作台; 紧接着完成**二期「平台页面融入驾驶舱」** (2026-08-05, 详见 `docs/superpowers/specs/2026-08-05-platform-pages-fusion-design.md`)——把一期挂壳的创作/数据/设置页面功能长进驾驶舱视图, 侧栏「平台」组解散; 再完成**三期「产出优先信息架构重组」** (2026-08-06, 详见 `docs/superpowers/specs/2026-08-06-platform-first-ia-design.md`)——侧栏从「流程优先」六视图重排为「产出优先」按平台组织; 又完成**四期「AI 深度采集 · 热点雷达」** (2026-08-13, 详见 `docs/superpowers/specs/2026-08-13-radar-deep-collection-design.md`)——新增服务端热点雷达管线 (关键词 → Tavily 搜索 → AI 逐篇阅读评分 → 热度排行), 独立「热点雷达」侧栏视图 + 设置「雷达配置」卡, 零 Claude 额度消耗 (阅读评分走用户自己的 AI provider); 又完成**五期「创作质量深化」** (2026-08-13, 详见 `docs/superpowers/specs/2026-08-13-script-quality-design.md`)——抖音脚本生成从单次大 prompt 升级为「研究→写作」两阶段管线, 产出可直接口播的完整逐字稿 (`script.sections[]`), 叠加 Tavily 联网研究打底 + 抽屉素材框, 定稿自动沉淀为风格样本供后续生成 few-shot 参照, 新增分块/整稿两级改稿; 又完成**六期「抽屉改稿闭环 + 小红书两阶段接入」** (2026-08-14, 详见 `docs/superpowers/specs/2026-08-14-drawer-closure-xhs-design.md`)——补齐五期两个已知限制 (抽屉关闭后改稿 UI 不可恢复、定稿自动推进阶段失效), 同时把小红书从旧单阶段生成升级为与抖音同款的「研究→写作」两阶段管线, 抽屉新增小红书素材简报/正文渲染 + 整稿指令框。 本文档 §3 为当前实际 IA。
+**当前状态:** 单用户 MVP。 经历三次定位调整: "个人视频分析工具" → "小白向导式智能体" → "自用自媒体工作台" → **"Creator Cockpit 整体移植"** (2026-08-04, 详见 `docs/superpowers/specs/2026-08-04-cockpit-adoption-design.md`)。 首页 `/` 与全站外壳已换成移植自开源项目 [creator-cockpit](https://github.com/AverrryHu/creator-cockpit) 的纸质编辑部风格操作台; 紧接着完成**二期「平台页面融入驾驶舱」** (2026-08-05, 详见 `docs/superpowers/specs/2026-08-05-platform-pages-fusion-design.md`)——把一期挂壳的创作/数据/设置页面功能长进驾驶舱视图, 侧栏「平台」组解散; 再完成**三期「产出优先信息架构重组」** (2026-08-06, 详见 `docs/superpowers/specs/2026-08-06-platform-first-ia-design.md`)——侧栏从「流程优先」六视图重排为「产出优先」按平台组织; 又完成**四期「AI 深度采集 · 热点雷达」** (2026-08-13, 详见 `docs/superpowers/specs/2026-08-13-radar-deep-collection-design.md`)——新增服务端热点雷达管线 (关键词 → Tavily 搜索 → AI 逐篇阅读评分 → 热度排行), 独立「热点雷达」侧栏视图 + 设置「雷达配置」卡, 零 Claude 额度消耗 (阅读评分走用户自己的 AI provider); 又完成**五期「创作质量深化」** (2026-08-13, 详见 `docs/superpowers/specs/2026-08-13-script-quality-design.md`)——抖音脚本生成从单次大 prompt 升级为「研究→写作」两阶段管线, 产出可直接口播的完整逐字稿 (`script.sections[]`), 叠加 Tavily 联网研究打底 + 抽屉素材框, 定稿自动沉淀为风格样本供后续生成 few-shot 参照, 新增分块/整稿两级改稿; 又完成**六期「抽屉改稿闭环 + 小红书两阶段接入」** (2026-08-14, 详见 `docs/superpowers/specs/2026-08-14-drawer-closure-xhs-design.md`)——补齐五期两个已知限制 (抽屉关闭后改稿 UI 不可恢复、定稿自动推进阶段失效), 同时把小红书从旧单阶段生成升级为与抖音同款的「研究→写作」两阶段管线, 抽屉新增小红书素材简报/正文渲染 + 整稿指令框; 又完成**七期「小红书 AI 配图生成」** (2026-08-14, 详见 `docs/superpowers/specs/2026-08-14-xhs-image-generation-design.md`)——把小红书图文笔记里的 `shotIdeas` 配图建议升级为 gpt-image-1 真实生成的图片, 抽屉内一键全生成 (封面+全部配图), 单张失败可单独重试, 完成后打包 zip (png + 发布文案) 一键下载, 实现"定稿即成品"。 本文档 §3 为当前实际 IA。
 
 ---
 
@@ -178,6 +178,35 @@
 
 **真实验证**: 收尾任务用已配置的真实 DeepSeek + Tavily key 跑通全链路(雷达已采纳选题作种子生成一篇、素材框生成一篇、对其做一次分块改稿+一次整稿改稿、定稿沉淀样本后再生成第三篇确认样本数 ≥2 时切换 few-shot), 过程中发现并修复了一处真实 bug(素材过长截断会把用户素材框内容整段丢弃, 见上文「雷达种子与用户素材优先于搜索正文保留」), 详见 `.superpowers/sdd/2026-08-13-script-quality/task-8-report.md`。
 
+### 小红书 AI 配图生成 (七期新增)
+
+一句话: 小红书图文笔记定稿后, shotIdeas 配图建议从"文字建议"升级成"真图"——两步链路(出图计划 → 逐张生图) + gpt-image-1, 抽屉一键全生成, 完成后打包下载即可直接发布。
+
+**两步链路**(`src/app/api/v1/scripts/[id]/images/{plan,route}.ts`):
+
+```
+① POST .../images/plan  (幂等, 已有 imagePlan 直接返回既有计划, 重新规划需 ?force=1)
+   输入 = ScriptDraft.output 的 coverText/intro/body/shotIdeas
+   DeepSeek 输出 { style: 全篇统一视觉风格描述, images: [{idx, prompt}] }
+   idx=0 为封面(prompt 要求把 coverText 原文渲染为海报大字), idx 1..N 对应 shotIdeas
+   总数 = 1+shotIdeas 数且 ≤10(成本护栏); 落 output.imagePlan
+
+② POST .../images  body {idx, quality?}  (逐张, 前端并发 2 调用)
+   GptImageProvider.generate() → POST api.openai.com/v1/images/generations
+   (model gpt-image-1, size 1024x1536 竖版, quality 默认 medium, b64_json)
+   写盘 public/generated/<draftId>/<idx>.png, 落 output.images[idx] = {path,prompt,createdAt}
+```
+
+抽屉「配图」区块 (`XhsScriptPanel`, `content-drawer.tsx`): 常亮「生成配图」按钮, 无本地 imagePlan 先幂等调 plan, 无 key (503) 时提示引导去设置卡配置; 否则并发 2 逐张调用 images, 生成一张渲染一张(缩略图网格), 单张失败该格显示「重试」; 生成动作并入既有互斥矩阵(生图中不可改稿); 至少 1 张成图后出现「打包下载」链接。关抽屉重开靠 `draft-restore.ts` 的 `imagePlan`/`images` 窄化解析恢复缩略图与下载入口(六期懒加载机制的自然延伸)。
+
+**打包下载**: `GET .../images/archive` 把已生成的 png + `note.txt`(标题+正文+标签, 可直接粘贴发布)打成 zip, 文件名 `<topic>-发布包.zip`; 单张配图文件缺失时跳过(console.warn), 全部缺失才 400。用 `jszip` 打包(见下方决策记录), 二进制 zip 响应不走全站 `ok()` JSON 包裹, 与图片二进制响应路由同一先例。
+
+**key 配置**: 设置 → 「AI 服务配置」卡新增 provider「OpenAI 生图」(`gpt-image`, 模型 `gpt-image-1`), key 保存/AES 加密/掩码全走既有 `AIConfig` 机制; 生图客户端**硬编码**直连 `https://api.openai.com/v1`(不读 `.env` 的 `OPENAI_BASE_URL`, 那个指向百炼视觉模型), 需保证本地网络能直达 OpenAI 官方端点; 连通性测试按钮对该 provider 不支持(同 deepseek 现状, 显示友好提示)。
+
+**成本**: 出图计划 1 次 DeepSeek(几厘) + 每张 gpt-image-1 约 ¥0.1-0.6(按 quality 档), 单篇全生成(封面+数张配图)约 1-3 元。
+
+**真实生图验证(用户裁决, 七期收尾未做)**: 生图需要用户自己的 OpenAI 官方 key(与站内其余 LLM 调用点不同, 这个 key 没有 `.env` 回退), 收尾时用户尚未配置, 按 DeepSeek/Tavily 先例降级——核心链路(plan prompt/schema、逐张生图路由、写盘、archive 打包)全部 mock 测试覆盖, 真实成图/打包留待用户配置 key 后自验, 步骤: ① 设置→AI 服务配置卡保存「OpenAI 生图」key ② 打开一篇小红书稿的抽屉, 点「生成配图」③ 确认封面+配图渲染出来、单张重试可用 ④ 点「打包下载」解压确认 png+note.txt。
+
 ### `/accounts` `/agent/discover` `/content/*` — 挂入 Cockpit 外壳
 
 根布局 (`src/components/layout/main-layout.tsx`) 按路径判断: 非 `/` 时用 `ExternalShell` (`src/components/cockpit/external-shell.tsx`) 包一层, 复用同一个 `Sidebar`(`mode="external"`) + `.main-area` 容器 + 移动端 `.mobile-nav`, 主题/风格从 cockpit 写入的 localStorage 同步。 二期起 `ExternalShell` 仅剩 `/accounts`、`/agent/discover`(及其未挂导航的兄弟页 `inspiration`/`patterns`)、`/content/preflight|script|retro-sync` 使用 (`/agent` `/dashboard` `/settings` 三个壳页已删除)。 这些存留页面二期 (T7) 已做纸质风重塑 (样式层改动, 业务逻辑零改动)。
@@ -331,8 +360,8 @@ API: `POST/GET /api/v1/topics`、`PATCH /api/v1/topics/[id]`、`POST/GET /api/v1
 
 ### 测试覆盖
 
-- 955 tests 大多是 API 单测 + 纯函数 + mock prisma (含 Cockpit `model/workflow/schedule/calculations`/迁移映射的原版测试; 四期新增雷达搜索层/热度合成/阅读 prompt/API 路由测试; 五期新增研究层/风格层/两阶段生成/两级改稿/风格档案 API 的 mock 测试; 六期新增 `draft-restore.ts` 窄化解析纯函数测试(含新增的 xiaohongshu 形状嗅探用例) + xiaohongshu 分支两阶段化/`depositStyleSample` 平台分支沉淀测试 + `generate-flow.ts` xiaohongshu 跳过二次保存的回归用例)
-- UI 一律走手动 E2E (是有意识的取舍); 五期收尾用真实 DeepSeek+Tavily key 额外跑了一轮全链路真实 E2E (非 mock), 见 `.superpowers/sdd/2026-08-13-script-quality/task-8-report.md`; 六期收尾同样用真实 key 跑通抖音懒加载恢复+`picked`自动推进/小红书两阶段生成+整稿改稿+定稿沉淀样本, 并额外用浏览器走查确认了抽屉小红书面板渲染、页顶整稿指令回填六字段骨架、关抽屉重开(不刷新)恢复三处 UI 行为, 详见 `.superpowers/sdd/2026-08-14-drawer-closure-xhs/task-6-report.md`
+- 1043 tests 大多是 API 单测 + 纯函数 + mock prisma (含 Cockpit `model/workflow/schedule/calculations`/迁移映射的原版测试; 四期新增雷达搜索层/热度合成/阅读 prompt/API 路由测试; 五期新增研究层/风格层/两阶段生成/两级改稿/风格档案 API 的 mock 测试; 六期新增 `draft-restore.ts` 窄化解析纯函数测试(含新增的 xiaohongshu 形状嗅探用例) + xiaohongshu 分支两阶段化/`depositStyleSample` 平台分支沉淀测试 + `generate-flow.ts` xiaohongshu 跳过二次保存的回归用例; 七期新增 `GptImageProvider`/`resolveImageApiKey` 单测 + 出图计划 prompt/schema 与 `images/plan`、`images`、`images/archive` 三条路由的 mock 测试(含 idx 字段匹配/写盘容错/zip 打包缺文件跳过等边界) + `draft-restore.ts` 的 `imagePlan`/`images` 窄化解析用例)
+- UI 一律走手动 E2E (是有意识的取舍); 五期收尾用真实 DeepSeek+Tavily key 额外跑了一轮全链路真实 E2E (非 mock), 见 `.superpowers/sdd/2026-08-13-script-quality/task-8-report.md`; 六期收尾同样用真实 key 跑通抖音懒加载恢复+`picked`自动推进/小红书两阶段生成+整稿改稿+定稿沉淀样本, 并额外用浏览器走查确认了抽屉小红书面板渲染、页顶整稿指令回填六字段骨架、关抽屉重开(不刷新)恢复三处 UI 行为, 详见 `.superpowers/sdd/2026-08-14-drawer-closure-xhs/task-6-report.md`; **七期收尾未跑真实生图 E2E**(用户尚未配置 OpenAI 生图 key, 与 DeepSeek/Tavily 先例同样的降级——mock 全过, 真实成图/打包验证责任转移给用户配 key 后自验), 详见 `.superpowers/sdd/2026-08-14-xhs-image-generation/task-6-report.md`
 - Worker 集成测试缺 (auto-sync-worker, content-analyze-worker, radar-worker 的每日 repeat 调度层)
 
 ---
@@ -363,11 +392,13 @@ npm run worker:dev   # BullMQ workers (analyze / retro / auto-sync / radar 四�
 
 抖音口播逐字稿 (五期, 见 §3「抖音口播逐字稿」小节) 不新增配置项, 直接复用上面两张卡的 key: 研究阶段的 Tavily 搜索缺 key 时静默降级 (跳过联网研究, 不报错); DeepSeek key 缺失会让生成/改稿请求直接失败 (`/scripts/generate` 500, `/scripts/[id]/refine` 503)。
 
+小红书 AI 配图生成 (七期, 见 §3「小红书 AI 配图生成」小节) 需要一个额外的 key: 设置视图「AI 服务配置」卡新增服务商「OpenAI 生图」(provider `gpt-image`), 保存用户自己的 OpenAI 官方 key (无 `.env` 回退); 生图客户端硬编码直连 `https://api.openai.com/v1`, 需保证本地网络能直达该端点 (不支持代理/自定义网关)。未配置该 key 时「生成配图」按钮走 503 引导文案, 不阻断其余功能; 出图计划阶段仍只需要 DeepSeek key。成本: 出图计划几厘 + 每张 gpt-image-1 约 ¥0.1-0.6, 单篇全生成约 1-3 元。
+
 ### 测试
 
 ```bash
 npm run typecheck    # tsc --noEmit
-npm test             # vitest, 955 tests across 90 files (含 Cockpit 纯逻辑层原版测试)
+npm test             # vitest, 1043 tests across 96 files (含 Cockpit 纯逻辑层原版测试)
 npm test -- <filter> # 跑某个 file
 ```
 
@@ -416,7 +447,7 @@ src/
 │   │   ├── script/                # 脚本生成详情页 (E) + 分发登记, `script/new` 为深度写稿入口
 │   │   └── retro-sync/            # 抖音半自动复盘 (C)
 │   ├── accounts/                  # 账号绑定, 挂 ExternalShell (双入口之一)
-│   └── api/v1/                    # 所有 API routes (含 topics/ distributions/ cockpit/workspace/ cockpit/inspirations/ douyin/auto-sync/trigger/ radar/{items,keywords,config,trigger,runs/latest}/ scripts/generate(五期 douyin 两阶段化)/ scripts/[id]/refine(五期新增)/ style/{profile,samples}(五期新增))
+│   └── api/v1/                    # 所有 API routes (含 topics/ distributions/ cockpit/workspace/ cockpit/inspirations/ douyin/auto-sync/trigger/ radar/{items,keywords,config,trigger,runs/latest}/ scripts/generate(五期 douyin 两阶段化)/ scripts/[id]/refine(五期新增)/ style/{profile,samples}(五期新增)/ scripts/[id]/images/{plan,route,archive}(七期新增: 出图计划/逐张生图/zip 打包))
 ├── components/
 │   ├── cockpit/                   # Creator Cockpit 移植主体
 │   │   ├── Cockpit.tsx             # 顶层组件: state + view 路由 (`NavView`, 三期起见 `lib/cockpit/view-routing.ts`) + 主题/onboarding (侧栏拖拽排序三期已移除)
@@ -425,7 +456,7 @@ src/
 │   │   ├── settings-cards/         # ai-provider-card, baseline-card (二期 T5) + radar-config-card (四期 T6) + style-profile-card (五期新增)
 │   │   ├── sidebar.tsx             # 全站共用侧栏 (cockpit 模式 + external 模式), 二期起「平台」外链组已移除, 四期新增「热点雷达」项
 │   │   ├── external-shell.tsx      # 站外页面外壳 (侧栏 + mobile-nav + 主题同步), 仅剩 /accounts /agent/discover /content/* 使用
-│   │   ├── content-drawer.tsx      # 内容详情抽屉, 二期 (T2) 脚本 tab 加入就地 AI 生成 + 标题实时建议; 五期新增素材框/时长/简报折叠区/分块渲染/换一版/整体指令; 六期新增挂载时懒加载拉回改稿 UI (parseDraftOutput) + 小红书两阶段面板(`XhsScriptPanel`, 与 douyin 分块面板共用 `ResearchBriefDetails` 素材简报子组件) + 素材框对小红书开放 + 生成/改稿/hook 动作四类互斥扩到小红书整稿指令
+│   │   ├── content-drawer.tsx      # 内容详情抽屉, 二期 (T2) 脚本 tab 加入就地 AI 生成 + 标题实时建议; 五期新增素材框/时长/简报折叠区/分块渲染/换一版/整体指令; 六期新增挂载时懒加载拉回改稿 UI (parseDraftOutput) + 小红书两阶段面板(`XhsScriptPanel`, 与 douyin 分块面板共用 `ResearchBriefDetails` 素材简报子组件) + 素材框对小红书开放 + 生成/改稿/hook 动作四类互斥扩到小红书整稿指令; 七期新增「配图」区块 (一键全生成 + 并发 2 逐张渲染 + 单张重试 + 打包下载链接), 生图动作并入同一互斥矩阵
 │   │   ├── onboarding.tsx / shared.tsx
 │   ├── content/                   # script-form, script-result (深度写稿入口用), publish-checklist, prediction-card, 分发登记弹窗 etc
 │   └── layout/                    # main-layout.tsx (按路径决定是否套 ExternalShell)
@@ -433,7 +464,8 @@ src/
 │   ├── cockpit/                   # model/workflow/schedule/calculations (纯函数, 零改动移植) + storage.ts(API 适配器) + migrations.ts(migrateWorkspace) + migrate-mapping.ts(存量数据映射) + script-mapping.ts(二期 T1: 生成结果→脚本骨架映射纯函数, 五期扩展 sections→body/hook 映射) + draft-restore.ts(六期: `ScriptDraft.output` → 抽屉改稿 UI 恢复字段的窄化解析纯函数, 形状嗅探同时覆盖 douyin `script.sections` 与 xiaohongshu 顶层 `intro`+`body` 两种形态) + generate-flow.ts(六期: 跳过二次保存的分支条件从只判 douyin 扩到 douyin/xiaohongshu, gongzhonghao 仍走二次保存) + extras.ts/extras-types.ts(复盘/大目标额外数据, 含二期新增 account/settings) + view-routing.ts(`NavView` 定义, 四期新增 `radar`)
 │   ├── radar/                     # 四期新增: search.ts(SearchProvider 抽象 + Tavily 实现) / config.ts(RadarConfig 读写+加解密) / scoring.ts(titleFingerprint/clusterByTopic/composeHeat/applyTimeDecay 纯函数) / run.ts(runRadarScan 管线主体)
 │   ├── script/                    # 五期新增: research.ts(runResearch 两阶段生成的阶段一, 雷达种子+Tavily+素材框合并→DeepSeek 提炼简报) / style.ts(getStyleContext 风格上下文切换 + depositStyleSample 定稿沉淀)
-│   ├── llm/                       # DeepSeekTextLLM + OpenAIVisionLLM + prompts/ (四期新增 radar-read.ts; 五期新增 research-brief.ts / script-write-douyin.ts / script-refine.ts)
+│   ├── image/                     # 七期新增: provider.ts(ImageProvider 抽象 + GptImageProvider, 直连 api.openai.com, b64_json 返回)
+│   ├── llm/                       # DeepSeekTextLLM + OpenAIVisionLLM + prompts/ (四期新增 radar-read.ts; 五期新增 research-brief.ts / script-write-douyin.ts / script-refine.ts; 七期新增 image-plan.ts / resolve-image-key.ts(gpt-image key 解析, 无 .env 回退))
 │   ├── pipeline/                  # deriveStage 纯函数 + platforms.ts 分发平台注册表
 │   ├── prediction/                # L1 formula + baseline
 │   ├── dashboard/                 # aggregate + calibration + prediction-accuracy (聚合逻辑零改动, 仍是 cockpit/analytics 面板与 `/api/v1/dashboard/summary` 的数据源)

@@ -64,3 +64,21 @@
 | public/generated 膨胀 | 单稿上限 10 张+覆盖重写；清理策略 YAGNI（自用量级） |
 | key 泄露面 | AES 加密存储、掩码返回、生图客户端不打日志 prompt 外的任何 key 信息（沿既有纪律） |
 | 真实 E2E 花钱 | 收尾真实跑 1 篇（计划+2-3 张图+zip），约 1 元内；其余走 mock |
+
+## 6. 实际实施结论（T1-T6 落地后回写，2026-08-14）
+
+设计文档写于实施前，以下是与草稿假设有出入、或草稿未覆盖、需要落盘存档的实际决策，逐条对应 `.superpowers/sdd/2026-08-14-xhs-image-generation/task-*-report.md` 里的记录：
+
+**(a) idx 字段匹配双侧校验——T3 修复轮，"LLM 输出顺序不可信"的教训**：草稿 §1 只说了 `imagePlan.images` 每个元素带 `idx` 字段，未强调数组顺序与 `idx` 字段可能不一致。T3 初版消费侧（`images/route.ts`）用 `imagePlan.images[idx].prompt` 数组下标直接取值，审查发现一旦 LLM 输出顺序与 idx 错位（如返回 `[{idx:2},{idx:0},{idx:1}]`），客户端请求 `idx=0` 会**静默**拿到 idx=2 那张的 prompt——不报错、不出提示，纯粹生成一张错的图。修复分两层：①消费侧改 `imagePlan.images.find(img => img.idx === idx)` 按字段匹配，找不到统一按"idx 越界"处理（400，文案「出图计划中没有第 N 张」）；②落盘侧（`images/plan/route.ts`）在原有"张数校验"（`length !== expectedCount`）旁新增 idx 完整性校验——把 `idx` 集合成 `Set`，要求 `size === length` 且恰好覆盖 `{0..length-1}`（无重复/无缺失/无跳号），不符直接 502 拒绝落盘，不让错位的计划有机会进数据库。两层校验都不新增文案分支，复用既有的"数量不对，请重试"话术。这是本项目再一次遇到"LLM 数组输出顺序不可信，必须按业务字段而非数组下标消费"的教训，值得作为通用心智记入：**任何 LLM 结构化输出里若元素自带唯一标识字段，消费方一律按字段匹配，禁止假设数组顺序 = 业务顺序**。详见 `task-3-report.md` 修复轮 1。
+
+**(b) 写盘 try/catch 补 500——同一修复轮的 Minor 项**：`images/route.ts` 的 `mkdir`/`writeFile` 最初未包 try/catch，失败时会走 Next.js 默认非结构化 500 页面，与本路由统一的 `fail()` 响应风格不一致。修复后包一层 try/catch，失败返回 `fail('图片写入失败, 请重试', 500)`，且**不进入**后续的 `prisma.scriptDraft.update`——避免写盘失败但数据库仍记了一条指向不存在文件的 `output.images[idx]` 记录（脏数据）。详见 `task-3-report.md`。
+
+**(c) Content-Disposition 用 RFC 5987 编码整个文件名——T4 落地细节**：zip 下载文件名含中文（`<topic>-发布包.zip`），`Content-Disposition` header 用 `filename*=UTF-8''<percent-encoded>` 语法。关键细节：**编码对象是整个文件名字符串**（`${topic}-发布包.zip` 整体 `encodeURIComponent`），而不是只编码 `topic` 变量部分再拼接未编码的中文字面量 `-发布包.zip`——后者会产出不合规的响应头（RFC 5987 的 `ext-value` 要求非 token 字符全部 percent-encode，中文字面量部分不能漏掉）。单测 `images-archive.test.ts` 显式断言了这个编码结果。详见 `task-4-report.md`。
+
+**(d) `Response(buffer as any)` 类型冲突——沿用仓库既有先例，非本期新造**：zip 二进制响应 `new Response(buffer, {...})` 里 `BodyInit`（lib.dom 类型定义）与 Node `Buffer`/`Uint8Array` 的 TypedArray 泛型参数不兼容，会报 TS 类型错误；尝试过用 `new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)` 转换仍报同类错误（`@types/node` 与 lib.dom 的 TypedArray 泛型定义天然冲突，非本项目配置问题）。最终对齐仓库里唯一的同类先例 `content/analyses/[id]/cover/[idx]/route.ts`（同样 `buf as any`），`archive/route.ts` 头部注释里写明了这层类型冲突的成因与先例援引，避免后来者以为是随手加的 `any`。
+
+**(e) `ImageGenConfig` 死模型未动——按 spec 走 `AIConfig` 泛化表，未触碰专用模型**：`prisma/schema.prisma` 里已存在一个独立的 `ImageGenConfig` 模型（`provider: ImageProvider` 枚举 + `modelId` + `baseUrl` 等字段，形状上明显是为"多生图厂商、自定义网关"设计的专用表），但**没有任何代码引用它**——T1 严格按本文档 §3 的决策（"走既有 AIConfig 体系新增 provider `gpt-image`"）实现，key 解析、设置卡、连通性测试全部复用泛化的 `AIConfig`（`provider` 是字符串而非枚举），`ImageGenConfig` 保持原样未删除也未接入。这是一处已知的模型冗余（两套生图配置模型并存），T1 report 里已记录并建议：若未来真要支持自定义网关/多生图厂商（`ImageGenConfig.baseUrl` 暗示的场景），需要先在 `AIConfig` 泛化路线与 `ImageGenConfig` 专用路线之间做一次选型，而不是两条路都留着；本期严格遵照 spec 决策不越权处理，`ImageGenConfig` 留作后续候选清理项（同 README §9「遗留清理候选」的记账方式）。
+
+**(f) `ai-provider-card.tsx` 文案顺手修——补六期遗留账本，非生图新引入的问题**：T5 走查时发现设置卡「测试」按钮对非 openai provider（`deepseek`/`gpt-image`）会打后端 `/api/v1/ai/config/test`，但该路由目前只实现了 openai 的连通性探测，其余一律 400 兜底拒绝，前端把这句生硬拒绝原样显示，容易被用户误读成"保存失败"。这**不是生图新引入的 bug**——deepseek 用户此前测试同样会撞上这句话，只是六期收尾时没顺手修。T5 借着新增 `gpt-image` provider 的机会一并修掉：前端对非 openai provider 直接短路，不发请求，改显示一句面向用户的中性提示「该服务商暂不支持在线连通性测试，保存后可在实际生成时验证是否可用」；卡片说明文案同时从「配置文本生成用的 AI 服务商 API Key」改为「配置 AI 服务商（文本 / 生图）API Key」，反映新 provider 的存在。
+
+**(g) 真实成图 E2E——用户裁决跳过，验证责任转移给用户配 key 后自验**：本期真实生图需要用户自己的 OpenAI 官方 key（§3 已注明"无 env 回退"），收尾时用户尚未配置该 key，用户明确裁决按 DeepSeek/Tavily 先例降级——**不为跑通真实 E2E 而临时借用/硬凑 key**。已完成的验证：①核心链路（`GptImageProvider`/`resolveImageApiKey`/出图计划 prompt+schema/逐张生图路由/写盘/zip 打包，含上述 (a)(b)(c) 三处边界修复）全部有 mock 单测覆盖，1043 个用例全绿；②T5 用浏览器手工走查了**无 key 的 503 全流程**（引导 toast、并发池 abort、pending 复位、关抽屉重开懒加载恢复缩略图网格的"待生成"态、幂等跳过已有计划只补齐缺张）；③**未覆盖**：实际调用 gpt-image-1 成功出图后的缩略图渲染与"打包下载"点击效果，这部分只做了代码走读确认（`onGenerateImages`/`generateOneImage` 成功分支写 `xhsImages`、`archiveHref` 的出现条件），未做端到端浏览器验证。验证责任转移给用户，配置 key 后自验步骤：① 设置 → 「AI 服务配置」卡保存「OpenAI 生图」provider 的 key；② 打开任意一篇已生成的小红书稿抽屉，点「生成配图」，确认封面 + 各张 shotIdeas 配图逐张渲染出缩略图、命中失败的格子「重试」按钮可用；③ 至少 1 张成图后点「打包下载」，解压确认 zip 内含对应张数的 png + `note.txt`（标题+正文+标签），文件名含中文不乱码。详见 `task-5-report.md`「未覆盖项」与 `task-6-report.md`。
