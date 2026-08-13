@@ -52,6 +52,16 @@ function extractSectionTexts(output: unknown): string[] | null {
   return texts;
 }
 
+/**
+ * 定稿(或改稿后再定稿)时沉淀/刷新一条风格样本。
+ *
+ * 同一 sourceScriptDraftId 已有样本时**覆盖更新其 content**为最新 sections 拼接文本
+ * (而非跳过) —— refine 改稿后再次定稿要让样本跟着最新文本走, 不冻结在初稿。
+ * 不会为同一 scriptDraftId 产生重复条目。
+ *
+ * 返回值语义: 本次是否真的写入了(新建或覆盖) StyleSample; 无 sections 或草稿不属于
+ * 该用户时返回 false, 不做任何写入。
+ */
 export async function depositStyleSample(userId: string, scriptDraftId: string): Promise<boolean> {
   const draft = await prisma.scriptDraft.findFirst({ where: { id: scriptDraftId, userId } });
   if (!draft) return false;
@@ -59,16 +69,21 @@ export async function depositStyleSample(userId: string, scriptDraftId: string):
   const sectionTexts = extractSectionTexts(draft.output);
   if (!sectionTexts) return false;
 
+  const content = sectionTexts.join('\n');
   const existing = await prisma.styleSample.findFirst({
     where: { userId, sourceScriptDraftId: scriptDraftId },
   });
-  if (existing) return false;
+
+  if (existing) {
+    await prisma.styleSample.update({ where: { id: existing.id }, data: { content } });
+    return true;
+  }
 
   await prisma.styleSample.create({
     data: {
       userId,
       platform: draft.platform,
-      content: sectionTexts.join('\n'),
+      content,
       sourceScriptDraftId: scriptDraftId,
     },
   });

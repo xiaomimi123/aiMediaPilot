@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
   styleProfile: { findUnique: vi.fn() },
-  styleSample: { findMany: vi.fn(), count: vi.fn(), findFirst: vi.fn(), create: vi.fn() },
+  styleSample: { findMany: vi.fn(), count: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
   scriptDraft: { findFirst: vi.fn() },
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
@@ -111,7 +111,7 @@ describe('depositStyleSample', () => {
     expect(prismaMock.styleSample.create).not.toHaveBeenCalled();
   });
 
-  it('已存在同 sourceScriptDraftId 样本 → false (幂等)', async () => {
+  it('已存在同 sourceScriptDraftId 样本 → 覆盖更新 content, 不 create, 返回 true (用户裁决: 覆盖而非跳过)', async () => {
     prismaMock.scriptDraft.findFirst.mockResolvedValue({
       id: 'd1',
       userId: 'u1',
@@ -119,18 +119,23 @@ describe('depositStyleSample', () => {
       output: {
         script: {
           sections: [
-            { role: 'hook', startSec: 0, endSec: 3, text: '开场白' },
-            { role: 'cta', startSec: 3, endSec: 6, text: '点赞关注' },
+            { role: 'hook', startSec: 0, endSec: 3, text: '改稿后的开场白' },
+            { role: 'cta', startSec: 3, endSec: 6, text: '改稿后的点赞关注' },
           ],
         },
       },
     });
-    prismaMock.styleSample.findFirst.mockResolvedValue({ id: 'existing-sample' });
+    prismaMock.styleSample.findFirst.mockResolvedValue({ id: 'existing-sample', content: '旧的初稿文本' });
+    prismaMock.styleSample.update.mockResolvedValue({ id: 'existing-sample' });
 
     const out = await depositStyleSample('u1', 'd1');
 
-    expect(out).toBe(false);
+    expect(out).toBe(true);
     expect(prismaMock.styleSample.create).not.toHaveBeenCalled();
+    expect(prismaMock.styleSample.update).toHaveBeenCalledWith({
+      where: { id: 'existing-sample' },
+      data: { content: '改稿后的开场白\n改稿后的点赞关注' },
+    });
   });
 
   it('正常路径: 有 sections 且未存过 → 拼接 text 存样本, 返回 true', async () => {
