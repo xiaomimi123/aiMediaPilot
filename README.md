@@ -479,6 +479,7 @@ docs/superpowers/
 | 二期: 账号入口做双入口 (大目标状态条 + 设置视图 + 移动端导航) 而非单一入口 | 吸取一期教训 (侧栏入口消失曾导致功能不可达), 拆掉常驻侧栏项前必须确保至少两条可达路径 |
 | 二期: `/content/script/new` (ScriptForm/ScriptResult) 保留为独立深度写稿入口, 不随 `/agent` 一起退役 | 抽屉内就地生成偏「快速起草」, 深度写稿页仍是唯一支持 `?ideaId=` 遗留链路兼容与完整多区块编辑的入口 |
 | 二期: `/api/v1/dashboard/summary` 端点保留未退役 (偏离 spec 原计划) | 迁移进复盘实验室/大目标的 widget 面板仍靠它取数, 实施时判断"仅剩 dashboard 使用则退役"的前提不成立 |
+| 七期: 新增 `jszip` 运行时依赖 (本项目首个"为单一功能引入"的第三方包, 而非框架基础设施) | zip 发布包下载 (`images/archive/route.ts`) 要把多张 PNG + note.txt 打成一个 zip 供用户下载; Node 无内置 zip 打包能力, 手写 zip 格式成本远高于引入成熟库 |
 
 ---
 
