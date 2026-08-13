@@ -181,7 +181,7 @@ function StageStatusPanel({ item, stageColors, setStageStatus }: {
   </section>;
 }
 
-export function ContentDrawer({ item, initialTab, stageEvents, stageColors, contentTypes, close, update, mergeScript, changeStage, setStageStatus, schedule, unschedule, remove, markPublished, unmarkPublished, saveReview, ruleDeposited, addRule, notify }: { item: ContentItem; initialTab: ContentDrawerTab; stageEvents: StageEvent[]; stageColors: WorkspaceState["stageColors"]; contentTypes: string[]; close: () => void; update: (patch: Partial<ContentItem>) => void; mergeScript: (id: string, partial: Partial<ContentItem["script"]>) => void; changeStage: (stage: ContentStage) => void; setStageStatus: (stage: WorkStage, completed: boolean) => void; schedule: (stage: WorkStage, plannedDate: string) => void; unschedule: (stage: WorkStage) => void; remove: () => void; markPublished: () => void; unmarkPublished: () => void; saveReview: () => void; ruleDeposited: boolean; addRule: (text: string) => void; notify: (message: string) => void }) {
+export function ContentDrawer({ item, initialTab, stageEvents, stageColors, contentTypes, scriptDraftIdOverride, onScriptDraftLinked, close, update, mergeScript, changeStage, setStageStatus, schedule, unschedule, remove, markPublished, unmarkPublished, saveReview, ruleDeposited, addRule, notify }: { item: ContentItem; initialTab: ContentDrawerTab; stageEvents: StageEvent[]; stageColors: WorkspaceState["stageColors"]; contentTypes: string[]; /** T2 六期修复轮 1: Cockpit.tsx 维护的同会话客户端覆盖表, 优先于 item.scriptDraftId (服务端字段, 只有下次 workspace GET 才会刷新) */ scriptDraftIdOverride?: string; onScriptDraftLinked?: (contentId: string, scriptDraftId: string) => void; close: () => void; update: (patch: Partial<ContentItem>) => void; mergeScript: (id: string, partial: Partial<ContentItem["script"]>) => void; changeStage: (stage: ContentStage) => void; setStageStatus: (stage: WorkStage, completed: boolean) => void; schedule: (stage: WorkStage, plannedDate: string) => void; unschedule: (stage: WorkStage) => void; remove: () => void; markPublished: () => void; unmarkPublished: () => void; saveReview: () => void; ruleDeposited: boolean; addRule: (text: string) => void; notify: (message: string) => void }) {
   const [tab, setTab] = useState<ContentDrawerTab>(initialTab);
   const score = Object.values(item.topic.score).reduce((sum, value) => sum + value, 0);
   const updateTopic = (patch: Partial<ContentItem["topic"]>) => update({ topic: { ...item.topic, ...patch } });
@@ -253,22 +253,31 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
   // resetScriptGenerationState() 清空, 抽屉重开后分块改稿面板 (ScriptSectionsPanel)
   // 消失、只剩六个文本框, 五期 spec §6(c) 描述的限制。
   //
+  // effectiveScriptDraftId 优先取 scriptDraftIdOverride (Cockpit.tsx 维护的同会话
+  // 客户端覆盖表, handleGenerateScript 生成成功时写入), 兜底 item.scriptDraftId
+  // (T1 回写的服务端字段, server-store.ts 只读下发, 只有下次 GET
+  // /api/v1/cockpit/workspace 才会刷新)。修复轮 1: 若只认 item.scriptDraftId,
+  // 同一浏览器会话里「生成→关抽屉→立即重开」拿到的还是生成前那份 workspace 快照,
+  // 恢复不了——因为 /api/v1/scripts/generate 的 linkCockpitContent 按 T1 设计
+  // 特意不调 bumpCockpitRev (避免这种高频动作触发 409)。覆盖表让抽屉自己刚生成
+  // 出来的 scriptDraftId 在同会话内立即可见, 不用等下一次整页刷新。
+  //
   // 触发条件: 本地无生成态 (scriptDraftId state 仍是 null——上面 reset 效果刚清空,
-  // 或本次是全新挂载) 且 item.scriptDraftId (T1 回写的服务端字段, server-store.ts
-  // 只读下发) 非空。effect 依赖里带上本地 scriptDraftId: reset 效果与本 effect
-  // 在同一次 item.id 变化的 effect flush 里按声明顺序各自触发, 若 reset 效果确实
-  // 把上一个 item 残留的非空 scriptDraftId 清成 null, 这次 flush 里读到的仍是
-  // React 还没应用的旧值——但那次 setState 会触发一次新的渲染, 本 effect 因为
-  // scriptDraftId 出现在依赖数组里会跟着重新求值一次, 那时读到的就是清空后的
-  // null, 不会漏拉取。
+  // 或本次是全新挂载) 且 effectiveScriptDraftId 非空。effect 依赖里带上本地
+  // scriptDraftId: reset 效果与本 effect 在同一次 item.id 变化的 effect flush 里
+  // 按声明顺序各自触发, 若 reset 效果确实把上一个 item 残留的非空 scriptDraftId
+  // 清成 null, 这次 flush 里读到的仍是 React 还没应用的旧值——但那次 setState 会
+  // 触发一次新的渲染, 本 effect 因为 scriptDraftId 出现在依赖数组里会跟着重新
+  // 求值一次, 那时读到的就是清空后的 null, 不会漏拉取。
   //
   // 拉回失败/该草稿不是这篇内容当前平台的形状 (parseDraftOutput 解析不出合法
   // sections, 例如旧 retentionBeats 形态或非 douyin 输出) 一律静默保持现状——
   // 不 notify、不阻断骨架文本框编辑 (没有额外的 loading 态去 disable 任何输入)。
+  const effectiveScriptDraftId = scriptDraftIdOverride ?? item.scriptDraftId ?? null;
   useEffect(() => {
-    if (scriptDraftId || !item.scriptDraftId) return;
+    if (scriptDraftId || !effectiveScriptDraftId) return;
     const requestedItemId = item.id;
-    const draftId = item.scriptDraftId;
+    const draftId = effectiveScriptDraftId;
     (async () => {
       try {
         const res = await fetch(`/api/v1/scripts/${draftId}`);
@@ -288,7 +297,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
         // 网络失败等: 静默保持现状, 不打扰用户
       }
     })();
-  }, [item.id, item.scriptDraftId, scriptDraftId]);
+  }, [item.id, effectiveScriptDraftId, scriptDraftId]);
 
   // T7: 上一个 item / 上一次生成留下的 sections/research/scriptDraftId 等派生
   // state 全部清空——切换 item 或手动改 scriptPlatform 下拉都要调用, 否则会把
@@ -327,12 +336,17 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
         isMounted: () => mountedRef.current,
         isCurrentItem: (id) => currentItemIdRef.current === id,
         onGenerated: (data) => {
-          setScriptDraftId(typeof data.scriptDraftId === "string" ? data.scriptDraftId : null);
+          const newDraftId = typeof data.scriptDraftId === "string" ? data.scriptDraftId : null;
+          setScriptDraftId(newDraftId);
           setSections(parseSections(data.sections));
           setResearch(parseResearch(data.research));
           setResearchDegraded(Boolean(data.researchDegraded));
           setHooks(parseHooks(data.hooks));
           setPickedHookIdx(null);
+          // 修复轮 1: 生成成功即把新 scriptDraftId 记进 Cockpit.tsx 的同会话覆盖表,
+          // 让「关抽屉→立即重开」也能走上面的懒加载拉回效果——不用等下次整页刷新
+          // 才能从 workspace GET 里看到 item.scriptDraftId。
+          if (newDraftId) onScriptDraftLinked?.(item.id, newDraftId);
         },
       },
     );

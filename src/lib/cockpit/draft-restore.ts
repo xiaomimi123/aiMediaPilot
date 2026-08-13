@@ -80,6 +80,12 @@ function parseHooks(raw: unknown): RestoredHook[] | undefined {
   return hooks.length > 0 ? hooks : undefined;
 }
 
+// titles 目前在 content-drawer.tsx 里没有消费点 (没有标题候选切换 UI, headline
+// 已经通过 item.script.headline 持久化), 这里仍然解析出来是为了 output 形状的
+// 完整性——parseDraftOutput 对外承诺"能解析出 generate 响应里的哪些字段就带出
+// 哪些", 不因调用方暂时不用某个字段就在解析层预先砍掉。小红书两阶段接入 (T6)
+// 落库同样带 titles 数组时, 若届时抽屉需要标题候选 UI, 可以直接复用这里而不必
+// 再补一遍窄化解析。
 export interface RestoredTitle {
   text: string;
 }
