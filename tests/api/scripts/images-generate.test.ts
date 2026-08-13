@@ -57,8 +57,12 @@ function baseXhsDraft(overrides: Partial<Record<string, unknown>> = {}) {
 
 // $executeRaw 以 tagged template 形式调用: prisma.$executeRaw`...${a}...${b}...${c}`
 // 在 mock 下等价于 prismaMock.$executeRaw(stringsArray, a, b, c) —— 本文件里
-// SQL 固定是 `UPDATE ... jsonb_set(output, ARRAY['images', ${idxParam}], ${jsonParam}::jsonb, true) WHERE id = ${idParam}`,
+// SQL 固定是
+// `UPDATE ... SET output = output || jsonb_build_object('images', coalesce(output->'images','{}'::jsonb) || jsonb_build_object(${idxParam}, ${jsonParam}::jsonb)) WHERE id = ${idParam}`,
 // 所以每次调用的参数数组形状固定为 [strings, idxParam(string), jsonParam(string), idParam(string)]。
+// (用 `||` + `coalesce(output->'images','{}')` 而不是 `jsonb_set(..., true)` 是因为
+// jsonb_set 的 create_missing 只对 path 最后一级生效, 父键 images 不存在时会静默
+// no-op —— 见路由文件头注释, 这是本轮修复的核心 bug。)
 function rawCallArgs(call: unknown[]) {
   const [, idxParam, jsonParam, idParam] = call as [unknown, string, string, string];
   return { idxParam, record: JSON.parse(jsonParam), idParam };
@@ -73,7 +77,7 @@ beforeEach(() => {
 });
 
 describe('POST /api/v1/scripts/[id]/images — 成功', () => {
-  it('生成成功: 写盘路径正确, $executeRaw 原子写 jsonb_set 参数形状正确, ok 响应 { idx, path }', async () => {
+  it('生成成功: 写盘路径正确, $executeRaw 原子写参数形状正确, ok 响应 { idx, path }', async () => {
     const res = await POST(reqPOST({ idx: 1 }), ctx);
     expect(res.status).toBe(200);
     const json = await res.json();
@@ -119,7 +123,7 @@ describe('POST /api/v1/scripts/[id]/images — 成功', () => {
 
   it('原子写不 spread 生成前读到的快照: SQL 参数只含当前 idx 的单条 record, 不携带其他 idx 或整份 output', async () => {
     // 读到的快照里 idx 0 已有记录 —— 旧实现会把这份快照 spread 进 update data,
-    // 新实现的写路径必须完全不依赖这份快照的 images 内容 (由 DB 端 jsonb_set
+    // 新实现的写路径必须完全不依赖这份快照的 images 内容 (由 DB 端原子表达式
     // 基于行内当前值合并, 而不是应用层 merge)。
     prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(
       baseXhsDraft({
@@ -145,7 +149,7 @@ describe('POST /api/v1/scripts/[id]/images — 成功', () => {
     expect(JSON.stringify(prismaMock.$executeRaw.mock.calls[0])).not.toContain('old prompt');
   });
 
-  it('output 其余键不受影响: jsonb_set 只作用于 images[idx] 这一路径, SQL 参数不携带 output 整体', async () => {
+  it('output 其余键不受影响: 原子表达式只作用于 images[idx] 这一路径, SQL 参数不携带 output 整体', async () => {
     prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(
       baseXhsDraft({ output: { coverText: 'x', tags: ['#a'], imagePlan: validPlan } }),
     );
@@ -211,8 +215,7 @@ describe('POST /api/v1/scripts/[id]/images — 并发写 (竞态回归)', () => 
     // 先落库请求刚写入的 idx 整个覆盖掉 (因为它的 existingImages 快照里根本没有
     // 对方那条记录)。
     //
-    // 新实现: 写库改成 `$executeRaw` + `jsonb_set(output, ARRAY['images', idx], record, true)`,
-    // 断言点 —— 每次调用的 SQL 参数只包含"自己这个 idx 的单条 record", 完全不
+    // 新实现: 写库改成 `$executeRaw` 原子单键写入 (见路由文件内 SQL), 断言点 —— 每次调用的 SQL 参数只包含"自己这个 idx 的单条 record", 完全不
     // 引用另一个 idx 或整份 images/output 快照。只要参数形状证明了这一点, 就说明
     // 两次写入在应用层是互相独立的原子单键操作, 由 Postgres 行锁保证串行化,
     // 不存在互相覆盖的可能 —— 竞态在写路径设计上被消除, 而不是靠碰运气不撞车。

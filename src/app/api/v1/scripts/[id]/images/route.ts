@@ -5,6 +5,7 @@ import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { getImageProvider } from '@/lib/image/provider';
+import { writeGeneratedImage } from '@/lib/image/write-generated-image';
 import { resolveImageApiKey } from '@/lib/llm/resolve-image-key';
 import { ImagePlanSchema } from '@/lib/llm/prompts/image-plan';
 
@@ -17,9 +18,9 @@ import { ImagePlanSchema } from '@/lib/llm/prompts/image-plan';
  * draftId 的多个 idx 会并发调用本路由 (池并发 2) —— provider.generate() 耗时
  * 30-120s, 若写库时用"生成前读到的 output 快照" spread 拼装, 两个并发请求都会
  * 拼着同一份陈旧快照, 后落库的会把先落库那张的 images[idx] 记录静默覆盖掉。
- * 因此落库不用 update + spread, 改用 `$executeRaw` + `jsonb_set` 对
- * output.images[idx] 做数据库层原子单键写入 (基于行内当前值, Postgres 行锁
- * 天然串行化并发 UPDATE), 生成前的快照读取只用于 plan/idx 存在性校验。
+ * 因此落库不用 update + spread, 改用 `writeGeneratedImage` (数据库层原子单键
+ * 写入, 见 `src/lib/image/write-generated-image.ts` 顶部注释了解为何不能直接用
+ * `jsonb_set`), 生成前的快照读取只用于 plan/idx 存在性校验。
  */
 
 const BodySchema = z.object({
@@ -100,7 +101,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const record = { path: relPath, prompt, createdAt: new Date().toISOString() };
   // 原子写: 基于行内当前值单键更新 output.images[idx], 不依赖生成前读到的快照,
   // 消除并发生图请求互相覆盖对方落库结果的竞态 (见文件头注释)。
-  await prisma.$executeRaw`UPDATE "ScriptDraft" SET output = jsonb_set(output, ARRAY['images', ${String(idx)}], ${JSON.stringify(record)}::jsonb, true) WHERE id = ${id}`;
+  await writeGeneratedImage(prisma, id, idx, record);
 
   return ok({ idx, path: relPath });
 }
