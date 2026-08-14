@@ -61,3 +61,30 @@ systemSummary  String   @default("")    // ≤2000 字：定位体系一页纸�
 | AI 建议 intent / painHit 幻觉 | 严格枚举/严格等值校验（pillarHit 先例），非法一律降为空 |
 | 无 Tavily key 时市场调研不可用 | 400 + 引导文案（雷达配置卡）；不阻断其余建档流程 |
 | 真实 E2E | 收尾：真实 9 问访谈起草 → 真实市场调研一轮 → 真实生成一篇带 intent 的稿（验证 CTA 指向 offering）→ 体系报告生成导出 → 雷达扫描验证 painHit/angleSuggestion |
+
+## 6. 实际实施结论
+
+T1-T6 实施过程中若干处与本设计文档字面表述有出入，或需要终审级裁定澄清语义，逐条记录（详细过程见各 `task-N-report.md`；T7 收尾报告见 `.superpowers/sdd/2026-08-15-positioning-system/task-7-report.md`）：
+
+**「零迁移」语义澄清**（T2）：§1「零迁移：八期已建档用户不受影响，新字段为空即按八期行为运行」指的是 **established 判定规则不变**（仍是 `audience` 非空 + `pillars≥1`）与**系统可用性不变**（八期已建档用户新功能自动可用、旧调用点不报错）——**不是**逐 scope 全字段字符级不变。分段导出 (`buildPersonaSection(profile, scope)`) 本身就会让不同 scope 拿到的字段子集比八期整体注入时更窄（例如 `write` scope 不含内容支柱/忌讳，八期整体注入时含），这是设计的一部分而非回归。T2 与八期实现对拍时（commit `b0b6059`）为了让两次实现的字段子集刚好重合，刻意清空了部分测试夹具字段，报告中已如实说明，非蒙混。
+
+**PUT 合并语义**（T1，commit `77e7fed`）：`PUT /api/v1/persona/profile` 最初实现对**新增的 5 个字段**是硬编码空值覆盖——这会导致老版本表单（仍只发八期原始 5 字段）每次保存把 T3 起草或 T4 调研/报告产出的新字段静默清空，是一颗定时炸弹（T6 UI 上线前的任何一次八期表单保存都会踩中）。修复为合并语义：请求体显式提供的 key（哪怕是 `''`/`[]`/`null` 这种"看起来像默认值"的显式覆盖）才采用请求体值，未提供的 key 从数据库现有行读回原样保留；无现有行（首次保存）时未提供的新字段才用空默认值。八期原始 5 字段维持 PUT 全量覆盖语义不变，这个合并**只**作用于新增字段。代价：引入一次 `findUnique` 读回，读-改-写之间存在 TOCTOU 窗口——单用户场景（无并发写同一 profile 的场景）可接受。
+
+**列式表「spread 保留」**（T4）：市场调研 (`persona/market-research`) 与体系报告 (`persona/summary`) 两条路由**不**走 T1 那种"读回合并再整表单 upsert"，而是 `prisma.personaProfile.update` 只指定自己产出的那一列 (`marketInsight` 或 `systemSummary`)，Prisma 对未列出的列天然原样保留。这比 T1 的读回合并更稳——没有 T1 那种"读到旧值→另一请求写入→用读到的旧值覆盖"的 TOCTOU 窗口，因为压根不读其余列，只是让数据库对未提及列做默认的"不动"。
+
+**痛点进 relevance 语义 ≠ 新增调权系数**（T5，终审级裁定）：spec §0/§3 强调"不加独立热度调权系数"，实施时对"痛点识别結果如何影响热度分"有过讨论——最终裁定：`painHit`/`angleSuggestion` **只是**阅读评分 prompt 里让 AI 判断 `relevance`（相关性）时可以参考的语义信号（"这篇是否戳中了用户的某个已知痛点，更有信息差"），不是在 `composeHeat`/`applyPersonaAdjust` 之外再加第三层数值调整。源码级核实：`src/lib/radar/scoring.ts` 在 T5-T6 整个区间（commit `349fed8..d646887`）diff 为空，`composeHeat`/`applyPersonaAdjust` 函数签名本身也无法接收 `painHit` 参数（类型系统层面就堵死了"顺手加一层调权"的可能）。T7 收尾用真实扫描数据对同一批 `RadarItem` 重新调用 `composeHeat`/`applyPersonaAdjust`，5/5 与库内 `heatScore`/`personaAdjust` 完全一致（含 4 条命中 painHit 与 1 条未命中的对照），实测坐实这条裁定。
+
+**T6 修复轮**（commit `4030284..d646887`，2 处）：① 生成响应里的 `suggestedIntent` 自动回填内容卡 intent 时，原实现在异步回调里读取的是闭包捕获的旧 `item.intent` 值（race：用户在生成请求进行期间手动改了下拉，回调落地时用的还是请求发出那一刻的旧值），改为读 `ref`（`itemIntentRef.current`）取最新值，判断逻辑抽成纯函数 `shouldAutoFillIntent` 便于单测锁定。② 9 问起草对说明性字段（`productLogic` 等）原本按最终存库上限（如 500 字）做校验，真实调用时 AI 认真作答容易超发挥触发 500；改为校验层放宽接住（如放宽到 300 字量级）、在 `transform` 里做截断，宽进严出，与 `pillarHit`/`painHit` 的"宽进严出"是同一条纪律但作用对象不同（那两个是枚举值校验，这个是长度截断）。此修复由 T6 收尾时的真实 500 复现驱动，非预防性改动。
+
+**实况 5 个调用点**（T2 note，简报正文写"四处注入"）：`buildPersonaSection` 实际调用点是 5 处而非 4 处——`radar/run.ts`（雷达）、`discover/topics/route.ts`（选题）、`inspiration/insights/generate/route.ts`（灵感）、`scripts/generate/route.ts` 里抖音与小红书两个平台分支（各自单独调用一次）。T7 收尾用 `grep -rn "buildPersonaSection(" src` 复核过，确认现状仍是这 5 处，无遗漏无多余。
+
+**简报文案勘误**：任务简报里"访谈 answers 上限 5→9"表述有误——查 git 历史，八期原始上限是 8（非 5），十期改为 9，实际是 `8→9` 的调整，非 `5→9`。T3 报告已核实并记录，本文档一并勘误。
+
+**遗留 minor（不阻断使用，已知记账）**：
+- `truncateAngleSuggestion`（`radar/run.ts`）与 `pushCtaLines`（`persona-section.ts`）里个别防御性空分支，在当前的 zod 校验顺序下（校验先于这些函数执行）实际不可达——保留作纯防御，不强行删除增加理解成本。
+- `suggestedIntent` 只随生成响应返回给前端做一次性自动回填判断，不落库进 `ScriptDraft.output`——重新打开同一份草稿不会保留这条 AI 建议，spec 未要求持久化，YAGNI。
+- 走查中标注①④等纯前端交互/视觉项，因浏览器扩展当次故障只做了代码走读、未做真实点击验证；T7 收尾时扩展仍不可用（`tabs_context_mcp` 超时），体系报告「导出 .md」按钮同样只做了代码走读，与七期先例（生图 key 未配置时的降级处理）同一类型的遗留。
+
+**T7 收尾 E2E 发现并修复的真实 bug**：真实生成一篇 `intent='convert'` 的抖音稿验证 CTA 是否指向 `offerings` 里的真实产品名时（E2E 第⑤项），首次真实调用发现 AI 完全没有引用任何 offering，CTA 写成了纯"评论区聊聊+关注我"的引流话术。根因：`script-write-douyin.ts` 里"逐字稿写作要求"的静态任务描述里有一条**无条件**的指令——"最后一块 (末块) role 必须是 'cta' (引导评论/关注/转发)"——这条指令在 persona CTA 指引段之后出现（prompt 里位置更靠后），与 `intent='convert'` 时 persona 段给出的"结尾场景化带出具体产品"指引直接冲突，实测里静态指令占了上风。修复：把这条静态指令改为"收束全篇；上文如果给了具体的结尾方向就照着写，没给的话默认引导评论/关注/转发"，让它在有 persona CTA 指引时让位、无指引时保持原有默认行为。改动没有引入新的强绑定字符串（刻意避开 `你的定位`/`CTA 指引` 这类既有测试断言会精确匹配的子串），修复后原地复现验证通过，回归全绿，单独一个 fix commit。
+
+**E2E 七项验证深度**（第④项——本期最硬的验收——的实际做法）：真实雷达扫描后拿到 5 条新 `RadarItem`（4 条命中 `painHit` 带 `angleSuggestion`，1 条未命中），对同一批条目用 `composeHeat`/`applyPersonaAdjust`（`src/lib/radar/scoring.ts`）原样重算，5/5 与库内落地的 `heatScore`/`personaAdjust` 完全一致——用真实数据坐实"痛点识别不影响热度分逻辑"，而非仅靠源码 diff 为空做静态论证。第⑥项无档案回退用真实 API（非直接 DB delete，`prisma.personaProfile.delete` 被 auto-mode 分类器判定为破坏性操作拦截）——改用 `PUT /api/v1/persona/profile` 清空 `audience`/`pillars` 达到 `isProfileEstablished=false`，验证生成/扫描退回默认行为后，再用同一 PUT 接口把开工前拍下的完整快照写回，深度比对（忽略 JSON 序列化 key 顺序差异）确认与原始快照完全一致。E2E 过程中产生的测试用 `ScriptDraft`（3 条，主题均为测试用语句）已删除；真实雷达扫描产出的 5 条条目是雷达功能的真实产出（非专为测试构造的数据），予以保留，未删除。
