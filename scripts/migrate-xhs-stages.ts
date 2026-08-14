@@ -14,11 +14,15 @@
  *   CockpitContent.platform === 'xiaohongshu' && stage in ['recording', 'editing'] → stage = 'script'
  *
  * 写库时单事务:
- *   逐卡 stage → 'script' + 清理该卡 CockpitStageEvent 里 stage 为 recording/editing 的排期记录
- *   (StageEvent 历史记录本身不做修改/删除, 只删本次要清理的两种死阶段排期) + 按去重后的
- *   userId 逐个 bumpCockpitRev(userId, tx) —— 与 migrate-cockpit.ts / picked route 等既有钩子
- *   同一套"写完 cockpit 表就敲一下 prefs.updatedAt"约定, 避免已打开标签页的整页保存用旧
- *   state 覆盖掉这次归并的结果。
+ *   逐卡 stage → 'script' + 清理该卡 CockpitStageEvent 里 stage 为 recording/editing 且
+ *   completedAt === '' (未完成) 的排期记录 + 按去重后的 userId 逐个 bumpCockpitRev(userId, tx)
+ *   —— 与 migrate-cockpit.ts / picked route 等既有钩子同一套"写完 cockpit 表就敲一下
+ *   prefs.updatedAt"约定, 避免已打开标签页的整页保存用旧 state 覆盖掉这次归并的结果。
+ *
+ *   StageEvent 历史不动: completedAt 非空的行是"已完成"的历史记录 (workflow.ts 的阶段推进/
+ *   撤销、picked route 的阶段前进钩子都是原地 set completedAt, 不新建行) —— 卡在 editing 的
+ *   小红书卡片几乎必然带一条 completedAt 非空的 recording 历史 (录制已完成才会推进到剪辑)，
+ *   只删 completedAt === '' 的未完成排期, 已完成历史必须原样保留。
  */
 import "dotenv/config";
 import { prisma } from "@/lib/prisma";
@@ -102,8 +106,11 @@ export async function applyMigration(plan: XhsStagePlanItem[]) {
         where: { id: item.id },
         data: { stage: item.to, updatedAt: today },
       });
+      // completedAt === '' 是「未完成排期」的标记 (workflow.ts 的阶段推进/撤销、picked route
+      // 的阶段前进钩子都是原地 set completedAt, 不新建行) —— 非空 completedAt 是已完成的历史
+      // 记录, 硬约束「StageEvent 历史不动」要求这里只删未完成的死阶段排期, 已完成的历史必须保留。
       await tx.cockpitStageEvent.deleteMany({
-        where: { contentId: item.id, stage: { in: [...DEAD_STAGES_FOR_XHS] } },
+        where: { contentId: item.id, stage: { in: [...DEAD_STAGES_FOR_XHS] }, completedAt: "" },
       });
     }
     for (const userId of affectedUserIds) {

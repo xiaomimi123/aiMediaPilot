@@ -81,12 +81,26 @@ describe('applyMigration — 单事务写库', () => {
 
     expect(prismaMock.cockpitStageEvent.deleteMany).toHaveBeenCalledTimes(3);
     expect(prismaMock.cockpitStageEvent.deleteMany).toHaveBeenCalledWith({
-      where: { contentId: 'c1', stage: { in: ['recording', 'editing'] } },
+      where: { contentId: 'c1', stage: { in: ['recording', 'editing'] }, completedAt: '' },
     });
 
     // userId 去重: u1 出现两次(c1,c2), u2 一次(c3) → bump 应各只调用一次
     expect(bumpCockpitRevMock).toHaveBeenCalledTimes(2);
     expect(bumpCockpitRevMock).toHaveBeenCalledWith('u1', txMock);
     expect(bumpCockpitRevMock).toHaveBeenCalledWith('u2', txMock);
+  });
+
+  it('只清 completedAt="" 的未完成排期, 不动 completedAt 非空的历史排期 (硬约束: StageEvent 历史不动)', async () => {
+    // 场景: 卡在 editing 的小红书卡片, 带一条 completedAt 非空的 recording 历史(录制已完成才会
+    // 推进到剪辑)+ 一条 completedAt="" 的 editing 未完成排期 — deleteMany 的 where 必须显式带
+    // completedAt: "" 过滤条件, 否则会把 recording 历史一并误删。
+    const plan = [{ id: 'c1', title: 'A', from: 'editing' as const, to: 'script' as const, userId: 'u1' }];
+
+    await applyMigration(plan);
+
+    expect(prismaMock.cockpitStageEvent.deleteMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.cockpitStageEvent.deleteMany).toHaveBeenCalledWith({
+      where: { contentId: 'c1', stage: { in: ['recording', 'editing'] }, completedAt: '' },
+    });
   });
 });
