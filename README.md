@@ -438,6 +438,20 @@ npx tsx scripts/migrate-cockpit.ts --apply  # 人工确认 dry-run 输出无误�
 不经过全量保存的 compare-and-set，若 onboarding 未完成就先写库，页面之后触发的第一次自动保存会用
 "空白开始"的全量状态把刚迁移进去的数据整个覆盖清空；`--apply` 会检测该顺序并主动中止。
 
+### xhs 存量阶段归并 (一次性)
+
+```bash
+npm run migrate:xhs-stages          # dry-run (默认): 打印候选卡片 id/title/stage, 不写库
+npm run migrate:xhs-stages -- --apply  # 人工确认 dry-run 输出无误后再写库
+```
+
+九期引入平台差异化流水线后，小红书 (`xiaohongshu`) 的 `recording`/`editing` 两个阶段被从它的
+流程 (`PLATFORM_STAGE_FLOW`, `src/lib/cockpit/platform-stages.ts`) 中剔除，对小红书永远是死阶段。
+本脚本一次性归并特性上线前遗留、卡在这两个阶段的小红书存量卡片：单事务内逐卡
+`stage → 'script'` + 清理该卡在 `CockpitStageEvent` 里 `recording`/`editing` 的排期记录（历史排期
+不动）+ 按去重后的 `userId` 逐个 `bumpCockpitRev`。归并逻辑纯函数见 `planXhsStageMigration`
+(`scripts/migrate-xhs-stages.ts`)。
+
 ---
 
 ## 7. 目录结构 (重要文件)
@@ -484,7 +498,8 @@ src/
 │   ├── queue.ts                   # 6 BullMQ queues (四期新增 radar)
 │   └── workers/                   # 5 workers (bind, analyze, retro, auto-sync, radar 四期新增)
 scripts/
-└── migrate-cockpit.ts             # 存量数据 → Cockpit 表, dry-run 默认 / --apply 写库
+├── migrate-cockpit.ts             # 存量数据 → Cockpit 表, dry-run 默认 / --apply 写库
+└── migrate-xhs-stages.ts          # 九期: xhs 存量 recording/editing 归并回 script, dry-run 默认 / --apply 写库
 prisma/
 └── schema.prisma                  # User / ContentAnalysis / ActualMetric / ScriptDraft / TopicIdea / Distribution / Cockpit* (10 张) / Radar*(4 张, 四期新增) / StyleProfile / StyleSample (五期新增) 等
 vendor/
