@@ -15,7 +15,10 @@ import { PERSONA_DRAFT } from '@/lib/llm/prompts';
  * 给前端表单回填。
  *
  * niche 硬编码 'ai-knowledge': 产品当前只服务 AI 知识赛道创作者 (同 radar-read 先例),
- * 访谈本身也不收集 niche —— 5 问里没有"你是什么赛道", 没有别的来源可取。
+ * 访谈本身也不收集 niche —— 9 问里没有"你是什么赛道", 没有别的来源可取。
+ *
+ * 十期 T3: 访谈从 5 问扩展到 9 问 (新增痛点/变现/转化路径/竞争格局四问), answers 上限
+ * 随之从 8 提到 9; 起草仍然不落库 (八期语义不变, 见下方 POST 内注释)。
  */
 const DEFAULT_NICHE = 'ai-knowledge';
 const RECENT_SAMPLE_COUNT = 3;
@@ -27,7 +30,7 @@ const AnswerSchema = z.object({
 });
 
 const DraftRequestSchema = z.object({
-  answers: z.array(AnswerSchema).min(1).max(8),
+  answers: z.array(AnswerSchema).min(1).max(9),
 });
 
 export async function POST(req: Request) {

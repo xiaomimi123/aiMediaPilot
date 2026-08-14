@@ -26,6 +26,35 @@ describe('PERSONA_DRAFT.buildSystemPrompt', () => {
   it('要求 3-5 条支柱', () => {
     expect(PERSONA_DRAFT.buildSystemPrompt('ai-knowledge')).toMatch(/3\s*-\s*5/);
   });
+
+  it('要求痛点具体可验证, 拒绝空泛表述', () => {
+    const prompt = PERSONA_DRAFT.buildSystemPrompt('ai-knowledge');
+    expect(prompt).toContain('痛点');
+    expect(prompt).toContain('具体');
+    expect(prompt).toContain('可验证');
+    expect(prompt).toContain('想变得更好');
+  });
+
+  it('给出痛点的反例 → 正例对照示例', () => {
+    const prompt = PERSONA_DRAFT.buildSystemPrompt('ai-knowledge');
+    expect(prompt).toMatch(/反例\s*→\s*正例/);
+  });
+
+  it('要求 offerings 每项对应到 painPoints 中的某一条', () => {
+    const prompt = PERSONA_DRAFT.buildSystemPrompt('ai-knowledge');
+    expect(prompt).toContain('targetPain');
+    expect(prompt).toContain('painPoints');
+  });
+
+  it('要求 productLogic 写清刷到→关注→信任→付费的路径, 而非一句口号', () => {
+    const prompt = PERSONA_DRAFT.buildSystemPrompt('ai-knowledge');
+    expect(prompt).toContain('路径');
+    expect(prompt).toContain('刷到');
+    expect(prompt).toContain('关注');
+    expect(prompt).toContain('信任');
+    expect(prompt).toContain('付费');
+    expect(prompt).toContain('口号');
+  });
 });
 
 describe('PERSONA_DRAFT.buildUserMessage', () => {
@@ -91,6 +120,15 @@ describe('PersonaDraftResponseSchema', () => {
     ],
     angle: '只讲能落地的方法',
     avoid: '不做标题党',
+    painPoints: [
+      { pain: '装了很多 AI 工具但不会用', evidence: '访谈原话' },
+      { pain: '刷资讯拼不成判断', evidence: '访谈原话' },
+      { pain: '不知道该学哪个工具', evidence: '私信高频问题' },
+    ],
+    offerings: [
+      { name: '工具选型咨询', type: 'service', description: '一对一帮忙选工具', targetPain: '不知道该学哪个工具' },
+    ],
+    productLogic: '刷到实测视频觉得敢说真话, 关注是为了追更, 连续验证准确后建立信任, 遇到选型难题时付费咨询。',
   };
 
   it('合法输入 (3 条支柱) 解析通过', () => {
@@ -126,5 +164,50 @@ describe('PersonaDraftResponseSchema', () => {
   it('缺少必填字段 → 拒绝', () => {
     const { audience, ...rest } = valid;
     expect(() => PersonaDraftResponseSchema.parse(rest)).toThrow();
+  });
+
+  it('painPoints 少于 3 条 → 拒绝', () => {
+    const painPoints = valid.painPoints.slice(0, 2);
+    expect(() => PersonaDraftResponseSchema.parse({ ...valid, painPoints })).toThrow();
+  });
+
+  it('painPoints 超过 6 条 → 拒绝', () => {
+    const painPoints = Array.from({ length: 7 }, (_, i) => ({ pain: `痛点${i}`, evidence: '证据' }));
+    expect(() => PersonaDraftResponseSchema.parse({ ...valid, painPoints })).toThrow();
+  });
+
+  it('painPoints 3-6 条区间内解析通过', () => {
+    const painPoints = Array.from({ length: 6 }, (_, i) => ({ pain: `痛点${i}`, evidence: '证据' }));
+    expect(() => PersonaDraftResponseSchema.parse({ ...valid, painPoints })).not.toThrow();
+  });
+
+  it('offerings 为空数组 → 拒绝', () => {
+    expect(() => PersonaDraftResponseSchema.parse({ ...valid, offerings: [] })).toThrow();
+  });
+
+  it('offerings 超过 5 条 → 拒绝', () => {
+    const offerings = Array.from({ length: 6 }, (_, i) => ({
+      name: `产品${i}`,
+      type: 'tool' as const,
+      description: '描述',
+      targetPain: '装了很多 AI 工具但不会用',
+    }));
+    expect(() => PersonaDraftResponseSchema.parse({ ...valid, offerings })).toThrow();
+  });
+
+  it('offerings type 非法枚举 → 拒绝', () => {
+    const offerings = [{ name: '产品', type: 'subscription', description: '描述', targetPain: '痛点' }];
+    expect(() => PersonaDraftResponseSchema.parse({ ...valid, offerings })).toThrow();
+  });
+
+  it('productLogic 少于 20 字 → 拒绝', () => {
+    expect(() =>
+      PersonaDraftResponseSchema.parse({ ...valid, productLogic: '一二三四五六七八九十一二三四五六七八九' }),
+    ).toThrow();
+  });
+
+  it('productLogic 恰好 20 字 → 解析通过', () => {
+    const productLogic = '一'.repeat(20);
+    expect(() => PersonaDraftResponseSchema.parse({ ...valid, productLogic })).not.toThrow();
   });
 });

@@ -47,6 +47,15 @@ const validDraft = {
   ],
   angle: '只讲能落地的方法',
   avoid: '不做标题党',
+  painPoints: [
+    { pain: '装了很多 AI 工具但不会用', evidence: '访谈原话' },
+    { pain: '刷资讯拼不成判断', evidence: '访谈原话' },
+    { pain: '不知道该学哪个工具', evidence: '私信高频问题' },
+  ],
+  offerings: [
+    { name: '工具选型咨询', type: 'service', description: '一对一帮忙选工具', targetPain: '不知道该学哪个工具' },
+  ],
+  productLogic: '刷到实测视频觉得敢说真话, 关注是为了追更, 连续验证准确后建立信任, 遇到选型难题时付费咨询。',
 };
 
 beforeEach(() => {
@@ -82,10 +91,17 @@ describe('POST /api/v1/persona/draft', () => {
     expect(llmMock.callStructured).not.toHaveBeenCalled();
   });
 
-  it('answers 超过 8 条 → 400', async () => {
+  it('answers 9 条 (9 问访谈全答) → 200', async () => {
     const answers = Array.from({ length: 9 }, (_, i) => ({ q: `问题${i}`, a: '答案' }));
     const res = await POST(reqJSON({ answers }));
+    expect(res.status).toBe(200);
+  });
+
+  it('answers 超过 9 条 → 400', async () => {
+    const answers = Array.from({ length: 10 }, (_, i) => ({ q: `问题${i}`, a: '答案' }));
+    const res = await POST(reqJSON({ answers }));
     expect(res.status).toBe(400);
+    expect(llmMock.callStructured).not.toHaveBeenCalled();
   });
 
   it('answers 缺失 → 400', async () => {
