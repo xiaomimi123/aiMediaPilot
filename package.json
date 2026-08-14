@@ -11,6 +11,7 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
+    "migrate:xhs-stages": "tsx scripts/migrate-xhs-stages.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "worker:dev": "tsx src/jobs/workers/index.ts",
