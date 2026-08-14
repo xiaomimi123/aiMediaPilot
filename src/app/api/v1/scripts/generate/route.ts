@@ -128,7 +128,7 @@ export async function POST(req: Request) {
       const style = await getStyleContext(user.id, 'douyin');
       // 人设定位注入 (T4): 未建立档案时 personaSection 为空串, buildSystemPrompt 保持字符级一致
       const profile = await loadPersonaProfile(user.id);
-      const personaSection = buildPersonaSection(profile);
+      const personaSection = buildPersonaSection(profile, 'write');
       const llm = getDeepSeekTextLLM(apiKey);
       const out = await llm.callStructured({
         systemPrompt: SCRIPT_WRITE_DOUYIN.buildSystemPrompt(niche, style, personaSection),
@@ -176,7 +176,7 @@ export async function POST(req: Request) {
       const style = await getStyleContext(user.id, 'xiaohongshu');
       // 人设定位注入 (T4): 未建立档案时 personaSection 为空串, buildSystemPrompt 保持字符级一致
       const profile = await loadPersonaProfile(user.id);
-      const personaSection = buildPersonaSection(profile);
+      const personaSection = buildPersonaSection(profile, 'write');
       const llm = getDeepSeekTextLLM(apiKey);
       const out = await llm.callStructured({
         systemPrompt: SCRIPT_WRITE_XHS.buildSystemPrompt(niche, style, personaSection),

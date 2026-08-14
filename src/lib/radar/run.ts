@@ -88,7 +88,7 @@ export async function runRadarScan(userId: string): Promise<RadarRunStats | null
   // 未建立档案 (profile === null) 时 personaSection 为空串, RADAR_READ.buildSystemPrompt
   // 保持与未接入人设前字符级一致, applyPersonaAdjust 也原样不调权。
   const profile = await loadPersonaProfile(userId);
-  const personaSection = buildPersonaSection(profile);
+  const personaSection = buildPersonaSection(profile, 'radar');
   const hasProfile = profile !== null;
   const personaPillars = profile?.pillars ?? [];
 

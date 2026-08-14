@@ -458,13 +458,15 @@ describe('POST /api/v1/scripts/generate — 人设定位注入 (T4)', () => {
     expect(systemPrompt).not.toContain('你的定位');
   });
 
-  it('douyin: 有档案 → systemPrompt 含人设定位内容 (受众/支柱)', async () => {
+  it("douyin: 有档案 → systemPrompt 含人设定位内容 (受众/角度, scope='write' 不含支柱)", async () => {
     prismaMock.personaProfile.findUnique.mockResolvedValue(personaRow);
     const res = await POST(makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge' }));
     expect(res.status).toBe(200);
     const systemPrompt = llmMock.callStructured.mock.calls[0][0].systemPrompt as string;
     expect(systemPrompt).toContain('25-35 岁互联网从业者');
-    expect(systemPrompt).toContain('工具评测');
+    expect(systemPrompt).toContain('只讲能落地的方法');
+    // 十期: 写稿走 scope='write', 不再包含支柱列表 (见 buildPersonaSection 分段设计)
+    expect(systemPrompt).not.toContain('工具评测');
     expect(prismaMock.personaProfile.findUnique).toHaveBeenCalledWith({ where: { userId: 'user1' } });
   });
 
@@ -482,7 +484,7 @@ describe('POST /api/v1/scripts/generate — 人设定位注入 (T4)', () => {
     expect(systemPrompt).not.toContain('你的定位');
   });
 
-  it('xiaohongshu: 有档案 → systemPrompt 含人设定位内容 (受众/支柱)', async () => {
+  it("xiaohongshu: 有档案 → systemPrompt 含人设定位内容 (受众/角度, scope='write' 不含支柱)", async () => {
     llmMock.callStructured.mockResolvedValue({
       result: xhsScriptResult,
       usage: { model: 'deepseek', promptTokens: 100, completionTokens: 200, estCostUSD: 0.001 },
@@ -494,7 +496,9 @@ describe('POST /api/v1/scripts/generate — 人设定位注入 (T4)', () => {
     expect(res.status).toBe(200);
     const systemPrompt = llmMock.callStructured.mock.calls[0][0].systemPrompt as string;
     expect(systemPrompt).toContain('25-35 岁互联网从业者');
-    expect(systemPrompt).toContain('工具评测');
+    expect(systemPrompt).toContain('只讲能落地的方法');
+    // 十期: 写稿走 scope='write', 不再包含支柱列表 (见 buildPersonaSection 分段设计)
+    expect(systemPrompt).not.toContain('工具评测');
     expect(prismaMock.personaProfile.findUnique).toHaveBeenCalledWith({ where: { userId: 'user1' } });
   });
 
