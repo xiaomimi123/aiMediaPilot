@@ -53,3 +53,7 @@ export * from './persona-section';
 
 // 人设定位驱动选题 (八期): AI 访谈式建档 → 起草 prompt
 export * from './persona-draft';
+
+// 账号定位体系 (十期 T4): 市场调研 → 体系报告
+export * from './market-research';
+export * from './persona-summary';
