@@ -8,7 +8,7 @@ import {
   type WorkStage,
   type WorkspaceState,
 } from "./model";
-import { isStageInFlow } from "./platform-stages";
+import { isStageInFlow, nextStageFor } from "./platform-stages";
 
 const PUBLISH_PROGRESS: Record<ContentStage, number> = {
   inbox: 0.05,
@@ -228,7 +228,10 @@ export function toggleStageEvent(
   const content = state.contents.find((item) => item.id === event?.contentId);
   if (!event || !content) return state;
   const undoing = Boolean(event.completedAt);
-  const nextStage = nextContentStage(event.stage);
+  // 九期修复: 按内容所属平台的阶段流推进, 而非 8 阶段全集——否则 xhs 完成
+  // 「文案」会被错误推进到平台流外的 recording, 导致卡片从平台看板消失。
+  // 流尾 (null) 停在原地, 不越界。
+  const nextStage = nextStageFor(content.platform, event.stage) ?? event.stage;
   const hasLaterCompletion = state.stageEvents.some(
     (item) =>
       item.contentId === content.id &&
@@ -419,7 +422,8 @@ export function setContentStageCompletion(
     ...state,
     contents: state.contents.map((item) => item.id === contentId ? {
       ...item,
-      stage: nextContentStage(stage),
+      // 九期修复: 同上——按平台阶段流推进, 流尾 (null) 停在原地。
+      stage: nextStageFor(content.platform, stage) ?? stage,
       publicationStatus: completesPublishing ? "published" : item.publicationStatus,
       publishedAt,
       metrics: item.metrics,

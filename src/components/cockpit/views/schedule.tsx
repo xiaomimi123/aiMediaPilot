@@ -12,7 +12,7 @@ import {
 } from "@/lib/cockpit/model";
 import { startOfWeekISO } from "@/lib/cockpit/calculations";
 import { sortStageEvents, stageProgress } from "@/lib/cockpit/workflow";
-import { isStageInFlow, stageLabelFor } from "@/lib/cockpit/platform-stages";
+import { schedulableStagesFor, stageLabelFor } from "@/lib/cockpit/platform-stages";
 import { Badge, Empty, date, shiftDate } from "../shared";
 
 function scheduleTypeIcon(kind: ScheduleObjectType["kind"]) {
@@ -349,9 +349,13 @@ export function ScheduleView({
       <div className="schedule-content-section-title"><div><strong>内容阶段</strong><small>复盘不再针对单条内容排期</small></div></div>
       <div className="schedule-content-list">{unscheduledContents.map((item) => {
         const firstStage = item.stage === "inbox" ? "topic" : item.stage as WorkStage;
-        // 九期: 平台阶段流内的可排阶段——xhs 无录制/剪辑, 这里过滤掉, 拖拽入口
-        // (下方 schedule-stage-chips) 就不会再产出 recording/editing 的 stageEvent。
-        const remainingStages = SCHEDULABLE_STAGES.slice(SCHEDULABLE_STAGES.indexOf(firstStage)).filter((stage) => isStageInFlow(item.platform, stage));
+        // 九期: 平台阶段流内的可排阶段——xhs 无录制/剪辑, schedulableStagesFor 是
+        // 唯一权威函数, 直调它而非自行拼 SCHEDULABLE_STAGES.filter(isStageInFlow)。按
+        // 全集顺序取 firstStage 之后 (含) 的阶段, 再与平台流求交集, 保持原有语义。
+        const firstStageIndex = SCHEDULABLE_STAGES.indexOf(firstStage);
+        const remainingStages = schedulableStagesFor(item.platform).filter(
+          (stage) => SCHEDULABLE_STAGES.indexOf(stage) >= firstStageIndex,
+        );
         const progress = Math.round(stageProgress(item.stage) * 100);
         return <article key={item.id} className="schedule-content-card" style={{ "--stage-color": state.stageColors[item.stage] } as React.CSSProperties}>
           <button className="schedule-content-heading" onClick={() => open(item.id)}>

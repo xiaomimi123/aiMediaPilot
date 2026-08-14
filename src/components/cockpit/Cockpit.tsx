@@ -62,7 +62,6 @@ import {
   completedPublishingEvents,
   moveStageEventToDate,
   moveStageEvent,
-  nextContentStage,
   overdueStageEvents,
   removeStageEvent,
   scheduleContentForDate,
@@ -72,6 +71,7 @@ import {
   toggleStageEvent,
   transitionContentStage,
 } from "@/lib/cockpit/workflow";
+import { nextStageFor } from "@/lib/cockpit/platform-stages";
 import { Icon, creatorMark, dashboardTitle, date, normalizeGoalQuotas, shiftDate } from "./shared";
 import { MOBILE_NAV_ITEMS, Sidebar } from "./sidebar";
 import {
@@ -973,7 +973,10 @@ export default function Cockpit() {
     }
     const completed = Boolean(event.completedAt);
     setState((prev) => toggleStageEvent(prev, eventId, new Date().toISOString()));
-    setToast(completed ? `已撤销，恢复到${STAGE_LABELS[event.stage]}阶段` : `${STAGE_LABELS[event.stage]}已完成，进入${STAGE_LABELS[nextContentStage(event.stage)]}`);
+    // 九期修复: 提示文案里的「下一步」也要按内容所属平台的阶段流算, 否则会和
+    // toggleStageEvent 实际推进到的阶段对不上 (例如 xhs 完成文案后提示却说"进入录制")。
+    const nextStage = nextStageFor(item.platform, event.stage) ?? event.stage;
+    setToast(completed ? `已撤销，恢复到${STAGE_LABELS[event.stage]}阶段` : `${STAGE_LABELS[event.stage]}已完成，进入${STAGE_LABELS[nextStage]}`);
   }
 
   function removeFromToday(eventId: string) {

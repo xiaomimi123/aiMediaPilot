@@ -248,6 +248,45 @@ describe('calculations', () => {
     expect(scheduleStageForDate(douyinState, douyinItem.id, "recording", "2026-07-20").stageEvents.length).toBe(1);
   });
 
+  // 九期修复: 复审发现 setContentStageCompletion (抽屉「完成」按钮 + 今日推进完成
+  // 勾选共同调用) 与 toggleStageEvent (今日推进完成勾选) 仍按 8 阶段全集
+  // (nextContentStage) 推进——xhs 卡 stage='script' 点「完成文案」被错误推进到
+  // 'recording', 而 xhs 平台看板已收窄为 5 列不含 recording, 导致卡片从看板消失。
+  // 两处推进改为 nextStageFor(platform, stage) ?? stage, 用本测试锁定回归。
+  it("完成文案按平台阶段流推进: xhs 停在发布 (不落到看板外的录制), douyin 不受影响", () => {
+    const xhsItem = content({ id: "xhs-2", platform: "xiaohongshu", stage: "script", publicationStatus: "draft", publishedAt: "" });
+    const xhsCompletedViaButton = setContentStageCompletion(
+      workspace(xhsItem),
+      xhsItem.id,
+      "script",
+      true,
+      "2026-07-20",
+      "2026-07-20T09:00:00.000Z",
+    );
+    expect(xhsCompletedViaButton.contents[0].stage).toBe("publishing");
+
+    const xhsEvent: StageEvent = { id: "xhs-script-event", contentId: xhsItem.id, stage: "script", plannedDate: "2026-07-18", rank: 1, completedAt: "" };
+    const xhsCompletedViaToday = toggleStageEvent(workspace(xhsItem, [xhsEvent]), xhsEvent.id, "2026-07-18T09:00:00.000Z");
+    expect(xhsCompletedViaToday.contents[0].stage).toBe("publishing");
+    const xhsUndone = toggleStageEvent(xhsCompletedViaToday, xhsEvent.id, "unused");
+    expect(xhsUndone.contents[0].stage).toBe("script");
+
+    const douyinItem = content({ id: "douyin-2", platform: "douyin", stage: "script", publicationStatus: "draft", publishedAt: "" });
+    const douyinCompletedViaButton = setContentStageCompletion(
+      workspace(douyinItem),
+      douyinItem.id,
+      "script",
+      true,
+      "2026-07-20",
+      "2026-07-20T09:00:00.000Z",
+    );
+    expect(douyinCompletedViaButton.contents[0].stage).toBe("recording");
+
+    const douyinEvent: StageEvent = { id: "douyin-script-event", contentId: douyinItem.id, stage: "script", plannedDate: "2026-07-18", rank: 1, completedAt: "" };
+    const douyinCompletedViaToday = toggleStageEvent(workspace(douyinItem, [douyinEvent]), douyinEvent.id, "2026-07-18T09:00:00.000Z");
+    expect(douyinCompletedViaToday.contents[0].stage).toBe("recording");
+  });
+
   it("manual stage completion cascades backward and undo cascades forward", () => {
     const item = content({ stage: "topic", publicationStatus: "draft", publishedAt: "" });
     const completed = setContentStageCompletion(
