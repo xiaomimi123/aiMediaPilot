@@ -111,7 +111,18 @@ function UseScriptCard({ result, niche, draftId }: { result: DouyinScriptRespons
   );
 }
 
+// 五期 (script-quality) 起, 抖音 generate 路由存的 output 形状从这里的 legacy
+// DouyinScriptResponse (`retentionBeats[]`) 换成两阶段研究/写稿管线的
+// `{ script: { sections[] }, hooks, titles, cover }` (`script-write-douyin.ts`
+// 的 DouyinFullScriptSchema) —— hooks/titles/cover 两种形状字段名一致, 唯独
+// "完播节奏" 卡片读的 retentionBeats 在新形状里不存在, 此前会直接 `.map` 崩溃
+// (九期 Task 5 E2E 走查 `/content/script/[id]` 时发现, 五期上线后从未被验证过)。
+// 这里按形状分岔渲染, 老稿仍走 retentionBeats 表格, 新稿改渲染 sections 列表。
+type DouyinSection = { role: 'hook' | 'main' | 'cta'; startSec: number; endSec: number; text: string };
+const SECTION_ROLE_LABEL: Record<DouyinSection['role'], string> = { hook: '钩子', main: '正文', cta: '结尾' };
+
 function DouyinView({ data }: { data: DouyinScriptResponse }) {
+  const sections = (data as unknown as { script?: { sections?: DouyinSection[] } }).script?.sections;
   return (
     <>
       <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
@@ -135,23 +146,46 @@ function DouyinView({ data }: { data: DouyinScriptResponse }) {
         </CardContent>
       </Card>
 
-      <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
-        <CardContent className="space-y-2 pt-6">
-          <h3 className="font-semibold">⏱ 完播节奏</h3>
-          <table className="w-full text-sm">
-            <tbody>
-              {data.retentionBeats.map((b, i) => (
-                <tr key={i} className="border-b">
-                  <td className="py-2 font-mono text-xs text-[var(--muted)]">
-                    {pad(Math.floor(b.startSec / 60))}:{pad(b.startSec % 60)}-{pad(Math.floor(b.endSec / 60))}:{pad(b.endSec % 60)}
-                  </td>
-                  <td className="py-2">{b.beat}</td>
-                </tr>
+      {Array.isArray(data.retentionBeats) ? (
+        <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
+          <CardContent className="space-y-2 pt-6">
+            <h3 className="font-semibold">⏱ 完播节奏</h3>
+            <table className="w-full text-sm">
+              <tbody>
+                {data.retentionBeats.map((b, i) => (
+                  <tr key={i} className="border-b">
+                    <td className="py-2 font-mono text-xs text-[var(--muted)]">
+                      {pad(Math.floor(b.startSec / 60))}:{pad(b.startSec % 60)}-{pad(Math.floor(b.endSec / 60))}:{pad(b.endSec % 60)}
+                    </td>
+                    <td className="py-2">{b.beat}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      ) : Array.isArray(sections) ? (
+        <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
+          <CardContent className="space-y-3 pt-6">
+            <h3 className="font-semibold">逐字稿</h3>
+            <ol className="space-y-3 text-sm">
+              {sections.map((s, i) => (
+                <li key={i} className="border-b pb-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1">
+                      <p className="mb-1 font-mono text-xs text-[var(--muted)]">
+                        {SECTION_ROLE_LABEL[s.role]} · {pad(Math.floor(s.startSec / 60))}:{pad(s.startSec % 60)}-{pad(Math.floor(s.endSec / 60))}:{pad(s.endSec % 60)}
+                      </p>
+                      <p>{s.text}</p>
+                    </div>
+                    <CopyButton text={s.text} />
+                  </div>
+                </li>
               ))}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
+            </ol>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
         <CardContent className="space-y-3 pt-6">
