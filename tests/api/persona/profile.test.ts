@@ -128,13 +128,14 @@ describe('PUT /api/v1/persona/profile', () => {
     });
   });
 
-  it('八期旧调用方只发 5 个原始字段 → 缺省新字段自动补空值, 通过校验并落库', async () => {
+  it('无现有行 (首次保存) 时只 PUT 5 个原始字段 → 新字段用空默认值补齐, 不炸', async () => {
+    // beforeEach 默认 findUnique 解析为 null (无现有行)
     const res = await putProfile(reqJSON(legacyBody));
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.data).toEqual({ ...legacyBody, ...emptyExtension, established: true });
     const upsertArgs = prismaMock.personaProfile.upsert.mock.calls[0][0];
-    // marketInsight null → Prisma.JsonNull (可空 Json 字段写入约定), 其余新字段照原样落库
+    // marketInsight null → Prisma.JsonNull (可空 Json 字段写入约定), 其余新字段照空默认值落库
     expect(upsertArgs).toEqual({
       where: { userId: 'user1' },
       update: { ...legacyBody, ...emptyExtension, marketInsight: upsertArgs.update.marketInsight },
@@ -142,6 +143,54 @@ describe('PUT /api/v1/persona/profile', () => {
     });
     expect(upsertArgs.update.marketInsight).not.toBeNull();
     expect(upsertArgs.create.marketInsight).not.toBeNull();
+  });
+
+  it('已有新字段的行, 只 PUT 八期 5 字段 (不带新字段 key) → 现有行的新字段原样保留, 不被清空', async () => {
+    // 现有行已经由 T3 起草/保存过完整的十期新字段
+    prismaMock.personaProfile.findUnique.mockResolvedValueOnce({ userId: 'user1', ...fullBody });
+    // upsert mock 按真实 DB 语义返回"写入后的行" (即合并后的数据), 而不是写死的空扩展
+    prismaMock.personaProfile.upsert.mockResolvedValueOnce({
+      userId: 'user1', ...fullBody, avoid: '改了一下 avoid',
+    });
+    // 旧版 PersonaCard 表单只提交八期 5 字段 (哪怕只改了 avoid), 请求体里根本没有新字段的 key
+    const res = await putProfile(reqJSON({ ...legacyBody, avoid: '改了一下 avoid' }));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.data.painPoints).toEqual(fullBody.painPoints);
+    expect(json.data.offerings).toEqual(fullBody.offerings);
+    expect(json.data.productLogic).toBe(fullBody.productLogic);
+    expect(json.data.marketInsight).toEqual(fullBody.marketInsight);
+    expect(json.data.systemSummary).toBe(fullBody.systemSummary);
+    expect(json.data.avoid).toBe('改了一下 avoid');
+
+    const upsertArgs = prismaMock.personaProfile.upsert.mock.calls[0][0];
+    expect(upsertArgs.update.painPoints).toEqual(fullBody.painPoints);
+    expect(upsertArgs.update.offerings).toEqual(fullBody.offerings);
+    expect(upsertArgs.update.productLogic).toBe(fullBody.productLogic);
+    expect(upsertArgs.update.marketInsight).toEqual(fullBody.marketInsight);
+    expect(upsertArgs.update.systemSummary).toBe(fullBody.systemSummary);
+  });
+
+  it('已有新字段的行, 显式传 painPoints: [] (其余新字段缺省) → painPoints 真的被清空, 其余仍从现有行保留', async () => {
+    prismaMock.personaProfile.findUnique.mockResolvedValueOnce({ userId: 'user1', ...fullBody });
+    // upsert mock 按真实 DB 语义返回"写入后的行": painPoints 被清空, 其余新字段沿用现有行
+    prismaMock.personaProfile.upsert.mockResolvedValueOnce({
+      userId: 'user1', ...fullBody, painPoints: [],
+    });
+    const res = await putProfile(reqJSON({ ...legacyBody, painPoints: [] }));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    // 显式传的空数组 → 真的清空, 不是被 fallback 覆盖回去
+    expect(json.data.painPoints).toEqual([]);
+    // 没在请求体里出现的新字段 → 仍从现有行保留, 不受这次显式清空影响
+    expect(json.data.offerings).toEqual(fullBody.offerings);
+    expect(json.data.productLogic).toBe(fullBody.productLogic);
+    expect(json.data.marketInsight).toEqual(fullBody.marketInsight);
+    expect(json.data.systemSummary).toBe(fullBody.systemSummary);
+
+    const upsertArgs = prismaMock.personaProfile.upsert.mock.calls[0][0];
+    expect(upsertArgs.update.painPoints).toEqual([]);
+    expect(upsertArgs.update.offerings).toEqual(fullBody.offerings);
   });
 
   it('marketInsight 显式传 null → 写入 Prisma.JsonNull (可空 Json 字段约定)', async () => {
