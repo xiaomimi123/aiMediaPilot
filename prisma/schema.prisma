@@ -674,6 +674,7 @@ model CockpitContent {
   contentType       String  @default("")
   tier              String  @default("B") // A | B | C
   platform          String  @default("douyin") // 三期 IA 演化: platform 字段 — douyin|xiaohongshu|bilibili|x|youtube|gongzhonghao
+  intent            String  @default("") // 十期: 内容意图 — ''|reach|trust|convert
   stage             String  @default("inbox") // inbox|topic|script|recording|editing|publishing|review|archived
   publicationStatus String  @default("draft") // draft|scheduled|published
   priority          String  @default("normal")
@@ -918,11 +919,17 @@ model StyleSample {
 // PersonaProfile 是 userId 单行配置，学 StyleProfile/RadarConfig 先例：不建 User 反向关系。
 
 model PersonaProfile {
-  userId      String   @id
-  audience    String   @default("") // 目标受众
-  targetFans  String   @default("") // 想吸引的粉丝画像
-  pillars     Json     @default("[]") // PersonaPillar[]
-  angle       String   @default("") // 差异化角度
-  avoid       String   @default("") // 忌讳
-  updatedAt   DateTime @updatedAt
+  userId        String   @id
+  audience      String   @default("") // 目标受众
+  targetFans    String   @default("") // 想吸引的粉丝画像
+  pillars       Json     @default("[]") // PersonaPillar[]
+  angle         String   @default("") // 差异化角度
+  avoid         String   @default("") // 忌讳
+  // 十期: 账号定位体系扩展 — 全部可选, 八期已建档用户新字段为空时行为完全不变
+  painPoints    Json     @default("[]") // PersonaPain[]
+  offerings     Json     @default("[]") // PersonaOffering[]
+  productLogic  String   @default("") // 产品逻辑自述
+  marketInsight Json? // PersonaMarketInsight | null
+  systemSummary String   @default("") // 定位体系摘要
+  updatedAt     DateTime @updatedAt
 }

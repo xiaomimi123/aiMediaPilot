@@ -168,6 +168,7 @@ describe("backfillStageEvents — StageEvent 补齐计数", () => {
       contentType: "",
       tier: "B",
       platform: "douyin",
+      intent: "",
       stage,
       publicationStatus: "draft",
       priority: "normal",

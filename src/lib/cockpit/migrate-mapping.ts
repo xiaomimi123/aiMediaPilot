@@ -254,6 +254,8 @@ export function mapDraftToCockpit(
     tier: "B",
     // 三期 IA 演化: platform 字段 —— 存量数据迁移只覆盖抖音短视频, 统一标 'douyin'。
     platform: "douyin",
+    // 十期: intent 字段 —— 存量数据迁移未知意图, 回退 '' (未设置)。
+    intent: "",
     stage,
     publicationStatus,
     priority: "normal",
@@ -308,6 +310,8 @@ export function mapTopicToCockpit(topic: SourceTopicIdea): ContentItem | null {
     tier: "B",
     // 三期 IA 演化: platform 字段 —— 存量数据迁移只覆盖抖音短视频, 统一标 'douyin'。
     platform: "douyin",
+    // 十期: intent 字段 —— 存量数据迁移未知意图, 回退 '' (未设置)。
+    intent: "",
     stage: "topic",
     publicationStatus: "draft",
     priority: "normal",

@@ -57,6 +57,8 @@ export async function loadWorkspaceFromDb(userId: string) {
       ...rest, tags: rest.tags as string[],
       // 三期 IA 演化: platform 字段 — 防御性回退, 兼容列刚上线前写入 / 未过 db:push 默认值的存量行
       platform: rest.platform ?? 'douyin',
+      // 十期: intent 字段 — 与 platform 同属可写字段, 同样防御性回退兼容存量行
+      intent: rest.intent ?? '',
       topic: rest.topic as any, script: rest.script as any,
       metrics: rest.metrics as any, review: rest.review as any,
     })) as WorkspaceState['contents'],
@@ -149,6 +151,8 @@ export async function saveWorkspaceToDb(
         tier: item.tier,
         // 三期 IA 演化: platform 字段
         platform: item.platform,
+        // 十期: intent 字段 — 与 platform 同属可写字段
+        intent: item.intent,
         stage: item.stage,
         publicationStatus: item.publicationStatus,
         priority: item.priority,

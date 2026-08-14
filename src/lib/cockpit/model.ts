@@ -30,6 +30,16 @@ export const PLATFORM_LABELS: Record<ContentPlatformEx, string> = {
   gongzhonghao: "公众号",
 };
 
+// 十期: 账号定位体系 — 内容意图字段, 与 platform 同属可写字段
+// (随 workspace PUT 落库, 见 server-store.ts)。'' 代表未设置, 宽进严出交给 validateIntent。
+export const CONTENT_INTENTS = ["reach", "trust", "convert"] as const;
+export type ContentIntent = "" | (typeof CONTENT_INTENTS)[number];
+export const INTENT_LABELS: Record<Exclude<ContentIntent, "">, string> = {
+  reach: "引流",
+  trust: "建立信任",
+  convert: "转化",
+};
+
 export type ContentStage =
   | "inbox"
   | "topic"
@@ -109,6 +119,8 @@ export interface ContentItem {
   tier: ContentTier;
   // 三期 IA 演化: platform 字段 —— 内容归属的目标平台, 驱动侧栏按平台分区。
   platform: ContentPlatformEx;
+  // 十期: 账号定位体系 —— 内容意图 (引流/建立信任/转化), 可写字段, 处理方式照 platform。
+  intent: ContentIntent;
   stage: ContentStage;
   publicationStatus: "draft" | "scheduled" | "published";
   priority: "high" | "normal" | "low";

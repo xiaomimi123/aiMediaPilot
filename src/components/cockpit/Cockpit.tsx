@@ -188,6 +188,8 @@ function createContent(partial: Partial<ContentItem> & Pick<ContentItem, "id" | 
     // 三期 IA 演化: platform 字段 —— 调用方 (createBlankContent/createContentFromInspiration)
     // 按 profile.primaryPlatform 映射后传入; demo/blank 骨架数据没有 profile 上下文, 回退 'douyin'。
     platform: partial.platform ?? "douyin",
+    // 十期: intent 字段 —— 可写字段, 处理方式照 platform, 未指定时回退 '' (未设置)。
+    intent: partial.intent ?? "",
     stage: partial.stage ?? "inbox",
     publicationStatus: partial.publicationStatus ?? "draft",
     priority: partial.priority ?? "normal",

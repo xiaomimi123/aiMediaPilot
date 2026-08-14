@@ -9,6 +9,11 @@ function makeProfile(overrides: Partial<PersonaProfileData> = {}): PersonaProfil
     pillars: [{ name: '工具评测', description: '拆解 AI 工具实际效果' }],
     angle: '只讲能落地的方法',
     avoid: '不做标题党',
+    painPoints: [],
+    offerings: [],
+    productLogic: '',
+    marketInsight: null,
+    systemSummary: '',
     ...overrides,
   };
 }
@@ -62,13 +67,13 @@ describe('buildPersonaSection', () => {
   });
 
   it('所有字段皆空 (含空 pillars) → 空串', () => {
-    const out = buildPersonaSection({
+    const out = buildPersonaSection(makeProfile({
       audience: '',
       targetFans: '',
       pillars: [],
       angle: '',
       avoid: '',
-    });
+    }));
     expect(out).toBe('');
   });
 

@@ -144,6 +144,32 @@ describe('GET /api/v1/cockpit/workspace', () => {
     expect(json.data.state.contents[0].platform).toBe('douyin');
   });
 
+  it('十期: intent 字段 — contents 组装带出 intent', async () => {
+    prismaMock.cockpitContent.findMany.mockResolvedValue([{
+      id: 'content1', userId: 'user1', title: 'T', idea: 'I', contentType: 'ct', tier: 'A',
+      platform: 'douyin', intent: 'convert', stage: 'inbox', publicationStatus: 'draft', priority: 'normal',
+      tags: [], publishedAt: '', xhsLink: '', coverCopy: '', publishCopy: '',
+      topic: {}, script: {}, recordingNotes: '', editingNotes: '', metrics: {}, review: {},
+      scriptDraftId: null, analysisId: null, createdAt: 'c', updatedAt: 'u',
+    }]);
+    const res = await GET();
+    const json = await res.json();
+    expect(json.data.state.contents[0].intent).toBe('convert');
+  });
+
+  it("十期: intent 字段 — 存量行缺失 intent 时防御性回退 ''", async () => {
+    prismaMock.cockpitContent.findMany.mockResolvedValue([{
+      id: 'content1', userId: 'user1', title: 'T', idea: 'I', contentType: 'ct', tier: 'A',
+      platform: 'douyin', stage: 'inbox', publicationStatus: 'draft', priority: 'normal',
+      tags: [], publishedAt: '', xhsLink: '', coverCopy: '', publishCopy: '',
+      topic: {}, script: {}, recordingNotes: '', editingNotes: '', metrics: {}, review: {},
+      scriptDraftId: null, analysisId: null, createdAt: 'c', updatedAt: 'u',
+    }]);
+    const res = await GET();
+    const json = await res.json();
+    expect(json.data.state.contents[0].intent).toBe('');
+  });
+
   it('六期 T2: scriptDraftId 只读下发 — contents 组装带出 scriptDraftId (供抽屉懒加载拉回改稿 UI)', async () => {
     prismaMock.cockpitContent.findMany.mockResolvedValue([{
       id: 'content1', userId: 'user1', title: 'T', idea: 'I', contentType: 'ct', tier: 'A',
@@ -284,7 +310,7 @@ describe('PUT /api/v1/cockpit/workspace', () => {
         id: 'insp1', text: '灵感', createdAt: 'c', updatedAt: 'u', convertedContentIds: [],
       }],
       contents: [{
-        id: 'content1', title: 'T', idea: 'I', contentType: 'ct', tier: 'A', platform: 'douyin', stage: 'inbox',
+        id: 'content1', title: 'T', idea: 'I', contentType: 'ct', tier: 'A', platform: 'douyin', intent: 'trust', stage: 'inbox',
         publicationStatus: 'draft', priority: 'normal', tags: [], createdAt: 'c', updatedAt: 'u',
         publishedAt: '', xhsLink: '', coverCopy: '', publishCopy: '',
         topic: {
@@ -334,6 +360,9 @@ describe('PUT /api/v1/cockpit/workspace', () => {
     // 三期 IA 演化: platform 字段 — update/create 两个分支都要写入
     expect(contentUpsertArgs.update.platform).toBe('douyin');
     expect(contentUpsertArgs.create.platform).toBe('douyin');
+    // 十期: intent 字段 — 与 platform 同属可写字段, update/create 两个分支都要写入
+    expect(contentUpsertArgs.update.intent).toBe('trust');
+    expect(contentUpsertArgs.create.intent).toBe('trust');
 
     // 空表 (stageEvents 等) 仍然要 deleteMany, 且不 upsert
     expect(prismaMock.cockpitStageEvent.deleteMany).toHaveBeenCalledWith({

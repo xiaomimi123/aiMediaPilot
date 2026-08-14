@@ -10,8 +10,19 @@ import type { ContentPart } from '@/lib/llm/vision';
  * 只收紧 pillars: 起草场景要求给够 3-5 条 (PersonaProfileSchema 本身只约束 ≤5, 允许
  * 保存时留空/单条; 起草是"帮用户从 0 想清楚", 给太少等于没帮上忙), 且 description
  * 不允许空串 (起草不像保存那样容许半填状态)。
+ *
+ * 十期: PersonaProfileSchema 扩展了 painPoints/offerings/productLogic/marketInsight/
+ * systemSummary 五个字段 (账号定位体系), 但本起草 prompt (系统提示词里明确写死"输出
+ * schema 五个字段") 不涉及它们 —— 先 omit 掉再 extend, 避免 LLM 输出必须凭空多出这五个
+ * 字段才能通过校验 (那五个字段的起草在后续任务里单独收口)。
  */
-export const PersonaDraftResponseSchema = PersonaProfileSchema.extend({
+export const PersonaDraftResponseSchema = PersonaProfileSchema.omit({
+  painPoints: true,
+  offerings: true,
+  productLogic: true,
+  marketInsight: true,
+  systemSummary: true,
+}).extend({
   pillars: z
     .array(
       z.object({
