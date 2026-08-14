@@ -47,6 +47,10 @@ type RadarItemDTO = {
      * 徽标渲染走 `pickPersonaBadge`, 缺字段一律不展示 (零迁移)。 */
     pillarHit?: string | null;
     personaAdjust?: number;
+    /** 十期 T5: 雷达痛点识别——老条目 (本期上线前采集) 没有这两个键, 展示层缺字段
+     * 一律不渲染「戳中痛点」块 (同 pillarHit/personaAdjust 零迁移先例)。 */
+    painHit?: string | null;
+    angleSuggestion?: string | null;
   } | null;
   status: string;
   inspirationId: string | null;
@@ -322,6 +326,10 @@ function RadarItemCard({ item, pending, onAction }: {
       </div>
       {item.aiSummary ? <p className="radar-item-summary">{item.aiSummary}</p> : null}
       {item.aiAngle ? <p className="radar-item-angle"><strong>可做角度：</strong>{item.aiAngle}</p> : null}
+      {/* 十期 T5: 痛点识别——painHit/angleSuggestion 各自独立判空渲染 (老条目缺字段/
+          未命中痛点都是 null), 不是"两者都有才展示"。 */}
+      {item.heatFactors?.painHit ? <p className="radar-item-painhit"><strong>戳中痛点：</strong>{item.heatFactors.painHit}</p> : null}
+      {item.heatFactors?.angleSuggestion ? <p className="radar-item-angle"><strong>差异化角度建议：</strong>{item.heatFactors.angleSuggestion}</p> : null}
     </div>
     <div className="radar-item-actions">
       <button type="button" className="secondary-button" disabled={pending} onClick={() => onAction(item.id, "adopt")}>{pending ? "处理中…" : "收入灵感库"}</button>

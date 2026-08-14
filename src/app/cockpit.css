@@ -684,12 +684,23 @@ textarea { resize: vertical; }
 .radar-item-title:hover { text-decoration: underline; }
 .radar-item-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
 .radar-item-source { color: var(--muted); font-size: 9px; }
-.radar-item-summary, .radar-item-angle { margin: 0 0 6px; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.radar-item-summary, .radar-item-angle, .radar-item-painhit { margin: 0 0 6px; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.radar-item-painhit strong { color: var(--ink); font-weight: 600; }
 .radar-item-angle strong { color: var(--ink); font-weight: 600; }
 .radar-item-actions { display: flex; flex-direction: column; gap: 8px; align-self: center; }
 .radar-scan-panel { padding: 20px 22px; }
 .radar-scan-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
 .radar-run-summary { margin: 0; }
+/* 十期 T6: 内容组合比例——只展示 + 一句静态提示, 不做自动纠偏 (spec §3)。放在
+   page-heading 与 tab 切换条之间, 平台视图/总览共用同一份样式。 */
+.intent-mix-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; padding: 9px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); font-size: 10px; }
+.intent-mix-label { color: var(--muted); font-weight: 700; letter-spacing: .03em; }
+.intent-mix-item { color: var(--ink); font-weight: 600; }
+.intent-mix-item.untagged { color: var(--muted); font-weight: 500; }
+.intent-mix-hint { margin-left: auto; color: var(--muted); font-style: italic; }
+.intent-badge.intent-reach { background: color-mix(in srgb, var(--olive) 18%, transparent); color: var(--olive); }
+.intent-badge.intent-trust { background: color-mix(in srgb, #5d7b9c 18%, transparent); color: #3f5f7d; }
+.intent-badge.intent-convert { background: color-mix(in srgb, var(--clay) 18%, transparent); color: var(--clay); }
 .content-overview-tabs { display: inline-flex; gap: 4px; margin-bottom: 14px; padding: 4px; border: 1px solid var(--line); border-radius: 11px; background: var(--glass-bg); }
 .content-overview-tabs button { display: flex; min-width: 112px; align-items: baseline; justify-content: center; gap: 6px; padding: 9px 13px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); }
 .content-overview-tabs button.active { background: var(--surface); color: var(--ink); box-shadow: 0 4px 13px rgba(52,48,39,.07); }
@@ -999,6 +1010,17 @@ textarea { resize: vertical; }
 .persona-pillars-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .04em; }
 .persona-pillar-list > li { align-items: center; }
 .persona-pillar-inputs { display: grid; flex: 1; grid-template-columns: 120px 1fr; gap: 10px; min-width: 0; }
+/* 十期 T6: 痛点 / 商品服务增删列表 —— 沿用上面 .persona-pillar-* 同一套排版, 商品服务
+   四列 (名称/类型/描述/解决痛点) 比支柱多一列, 单独定义 grid-template-columns。 */
+.persona-pain-list > li, .persona-offering-list > li { align-items: center; }
+.persona-pain-inputs { display: grid; flex: 1; grid-template-columns: 140px 1fr; gap: 10px; min-width: 0; }
+.persona-offering-inputs { display: grid; flex: 1; grid-template-columns: 110px 100px 1fr 1fr; gap: 10px; min-width: 0; }
+.persona-market-panel, .persona-summary-panel { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.market-insight-block { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.market-insight-block p { margin: 0; color: var(--ink); font-size: 10px; line-height: 1.65; }
+.market-insight-block p strong { color: var(--clay); font-weight: 650; }
+.market-insight-stale { color: #a23f24 !important; }
+.system-summary-body { max-height: 420px; margin: 8px 0 0; padding: 14px 16px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); color: var(--ink); font-family: "Songti SC", serif; font-size: 11px; line-height: 1.75; white-space: pre-wrap; }
 .baseline-auto-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 8px; background: var(--surface-soft); font-size: 10px !important; }
 .baseline-override-hint { margin-top: 12px; padding: 9px 12px; border-radius: 8px; background: var(--clay-soft); color: #8f3f28; font-size: 9px !important; }
 .design-style-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 9px; margin-top: 17px; }

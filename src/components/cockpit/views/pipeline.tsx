@@ -4,6 +4,7 @@ import { useState, type DragEvent } from "react";
 import {
   CONTENT_STAGES,
   DEFAULT_PAGE_TITLES,
+  INTENT_LABELS,
   PLATFORM_LABELS,
   STAGE_LABELS,
   type ContentPlatformEx,
@@ -11,6 +12,7 @@ import {
   type WorkspaceState,
 } from "@/lib/cockpit/model";
 import { stageFlowFor, stageLabelFor, nextActionFor } from "@/lib/cockpit/platform-stages";
+import { computeIntentMix } from "@/lib/cockpit/intent-stats";
 import { Badge, EditablePageTitle, Empty, Icon, date } from "../shared";
 
 // 三期 T5: platformFilter/hideHeading —— 平台流水线页 (PlatformView) 内嵌同一份组件
@@ -29,6 +31,9 @@ export function ContentOverviewView({ state, pageTitle, updateTitle, query, setQ
   // 不再和总览共用同一份超集列——两态在这一处分岔, 之后的看板/列表逻辑不变。
   const stages = platformFilter ? stageFlowFor(platformFilter) : CONTENT_STAGES;
   const platformScoped = platformFilter ? state.contents.filter((item) => item.platform === platformFilter) : state.contents;
+  // 十期: 内容组合比例——平台视图按该平台内容统计，总览按全量，两者共用同一个
+  // platformScoped（不受搜索/阶段等筛选影响，展示"这个视图范围内"的整体配比）。
+  const intentMix = computeIntentMix(platformScoped);
   const baseFiltered = platformScoped.filter((item) =>
     (type === "全部类型" || item.contentType === type)
     && `${item.title} ${item.idea} ${item.tags.join(" ")}`.toLowerCase().includes(query.trim().toLowerCase()),
@@ -55,6 +60,15 @@ export function ContentOverviewView({ state, pageTitle, updateTitle, query, setQ
     .sort((a, b) => a.plannedDate.localeCompare(b.plannedDate) || a.rank - b.rank)[0];
   return <section className="page pipeline-page">
     {!hideHeading ? <div className="page-heading"><span className="eyebrow">CONTENT OVERVIEW</span><EditablePageTitle value={pageTitle} fallback={DEFAULT_PAGE_TITLES.pipeline} onChange={updateTitle} /><p>在流程中推动阶段，在列表中快速搜索、筛选和查看全部内容。</p></div> : null}
+    {/* 十期: 内容组合比例——只展示 + 一句静态提示，不做自动纠偏或算法建议 (spec §3)。 */}
+    <div className="intent-mix-bar">
+      <span className="intent-mix-label">内容组合比例</span>
+      <span className="intent-mix-item reach">引流 {intentMix.reach}%</span>
+      <span className="intent-mix-item trust">信任 {intentMix.trust}%</span>
+      <span className="intent-mix-item convert">转化 {intentMix.convert}%</span>
+      <span className="intent-mix-item untagged">未标注 {intentMix.untagged} 条</span>
+      <span className="intent-mix-hint">转化内容长期为 0 时，专业信任无法变现</span>
+    </div>
     <div className="content-overview-tabs" role="tablist" aria-label="内容总览显示方式"><button className={mode === "pipeline" ? "active" : ""} onClick={() => setMode("pipeline")} role="tab" aria-selected={mode === "pipeline"}><span>流程</span><small>Pipeline</small></button><button className={mode === "list" ? "active" : ""} onClick={() => setMode("list")} role="tab" aria-selected={mode === "list"}><span>列表</span><small>List</small></button></div>
     <div className={`pipeline-toolbar ${mode === "list" ? "list-toolbar" : ""}`}>
       <label className="search-field"><Icon name="search" /><input id="content-overview-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索标题、原始想法或标签" /></label>
@@ -78,7 +92,7 @@ export function ContentOverviewView({ state, pageTitle, updateTitle, query, setQ
             .filter((event) => event.contentId === item.id && !event.completedAt)
             .sort((a, b) => a.plannedDate.localeCompare(b.plannedDate) || a.rank - b.rank)[0];
           return <article key={item.id} draggable onDragStart={(e) => e.dataTransfer.setData("text/content-id", item.id)} className="kanban-card">
-            <button className="kanban-card-main" onClick={() => open(item.id)}><div className="card-tags"><Badge tone={`tier-${item.tier.toLowerCase()}`}>{item.tier}档</Badge><span className="badge">{PLATFORM_LABELS[item.platform]}</span><span>{item.contentType}</span></div><h3>{item.title}</h3><p>{item.idea}</p><footer><span>{nextActionFor(item.platform, item.stage)}</span>{nextPlanned ? <time>{stageLabelFor(item.platform, nextPlanned.stage)} · {nextPlanned.plannedDate.slice(5)}</time> : null}</footer></button>
+            <button className="kanban-card-main" onClick={() => open(item.id)}><div className="card-tags"><Badge tone={`tier-${item.tier.toLowerCase()}`}>{item.tier}档</Badge><span className="badge">{PLATFORM_LABELS[item.platform]}</span>{item.intent ? <span className={`badge intent-badge intent-${item.intent}`}>{INTENT_LABELS[item.intent]}</span> : null}<span>{item.contentType}</span></div><h3>{item.title}</h3><p>{item.idea}</p><footer><span>{nextActionFor(item.platform, item.stage)}</span>{nextPlanned ? <time>{stageLabelFor(item.platform, nextPlanned.stage)} · {nextPlanned.plannedDate.slice(5)}</time> : null}</footer></button>
             {stage === "archived" ? <span className="card-today archived">已归档</span> : stage === "inbox" ? <span className="card-today archived">灵感无需排期 · 先推进到大纲</span> : !todayEvent ? <button className="card-today" onClick={() => addToday(item.id)}>＋ 当前阶段安排今天</button> : <span className="card-today added">{todayEvent.completedAt ? "今日阶段已完成" : `今日 #${todayEvent.rank}`}</span>}
           </article>;
         })}</div>

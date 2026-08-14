@@ -2,8 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  CONTENT_INTENTS,
+  INTENT_LABELS,
   SCHEDULABLE_STAGES,
   STAGE_LABELS,
+  type ContentIntent,
   type ContentItem,
   type ContentStage,
   type StageEvent,
@@ -97,6 +100,12 @@ function parseXhsShotIdeas(raw: unknown): XhsShotIdea[] {
 
 function parseXhsTags(raw: unknown): string[] {
   return Array.isArray(raw) ? raw.filter((v): v is string => typeof v === "string" && v.length > 0) : [];
+}
+
+/** 十期: 生成响应新增 `suggestedIntent` (douyin/xiaohongshu 才有, 已在路由层过 validateIntent
+ * 宽进严出, 非法值降为 null) —— 这里只做类型窄化, 不重复校验合法性。 */
+function isValidContentIntent(value: unknown): value is Exclude<ContentIntent, ""> {
+  return typeof value === "string" && (CONTENT_INTENTS as readonly string[]).includes(value);
 }
 
 // ---- T5 七期: 出图计划 / 逐张生图结果的窄化解析 —— 消费 POST .../images/plan
@@ -553,6 +562,12 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
           // 让「关抽屉→立即重开」也能走上面的懒加载拉回效果——不用等下次整页刷新
           // 才能从 workspace GET 里看到 item.scriptDraftId。
           if (newDraftId) onScriptDraftLinked?.(item.id, newDraftId);
+          // 十期: 生成响应新增 suggestedIntent —— 只在内容卡 intent 当前为空时自动回填
+          // 并 notify 提示 (裁决: 非空时不覆盖用户已选择的意图, 尊重用户的手动标注)。
+          if (!item.intent && isValidContentIntent(data.suggestedIntent)) {
+            update({ intent: data.suggestedIntent });
+            notify(`已按选题建议意图：${INTENT_LABELS[data.suggestedIntent]}`);
+          }
         },
       },
     );
@@ -864,7 +879,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
     {/* 九期: 「全局当前阶段」下拉是数据层的手动逃生舱——刻意保留 CONTENT_STAGES
         全 8 阶段超集 (含平台流外的值), 不走 stageLabelFor, 允许把内容手动改到
         任意原始阶段值 (含脏值/纠错场景)。其余显示态文案仍走 stageLabelFor。 */}
-    {activeTab === "overview" ? <div className="drawer-section"><StageStatusPanel item={item} stageColors={stageColors} setStageStatus={setStageStatus} /><div className="form-grid"><label className="field"><span>全局当前阶段</span><select value={item.stage} onChange={(e) => changeStage(e.target.value as ContentStage)}>{Object.entries(STAGE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><small>修改后会同步到内容总览和 Todo。</small></label><label className="field"><span>内容档位</span><select value={item.tier} onChange={(e) => update({ tier: e.target.value as ContentItem["tier"] })}><option value="C">C档快发</option><option value="B">B档常规</option><option value="A">A档精品</option></select></label><label className="field"><span>主要类型</span><select value={item.contentType} onChange={(e) => update({ contentType: e.target.value })}>{contentTypes.map((type) => <option key={type}>{type}</option>)}</select></label><label className="field"><span>优先级</span><select value={item.priority} onChange={(e) => update({ priority: e.target.value as ContentItem["priority"] })}><option value="high">高</option><option value="normal">普通</option><option value="low">低</option></select></label></div>{SCHEDULABLE_STAGES.includes(item.stage as WorkStage) ? <StageScheduleField item={item} stage={item.stage as WorkStage} stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} label="当前阶段计划完成" /> : item.stage === "inbox" ? <p className="stage-no-schedule-note">灵感只用于收集，不需要设置完成日期；进入大纲后再开始排期。</p> : item.stage === "review" ? <p className="stage-no-schedule-note">单篇内容不再安排复盘日期；可以在档期规划中放置统一的“复盘日”。</p> : null}<label className="field full"><span>原始 idea</span><textarea value={item.idea} onChange={(e) => update({ idea: e.target.value })} /></label><label className="field full"><span>标签（用顿号分隔）</span><input value={item.tags.join("、")} onChange={(e) => update({ tags: e.target.value.split(/[、,，]/).map((tag) => tag.trim()).filter(Boolean) })} /></label><div className="next-action-card"><span>下一步动作</span><strong>{nextActionFor(item.platform, item.stage)}</strong><p>上次更新：{item.updatedAt}</p></div></div> : null}
+    {activeTab === "overview" ? <div className="drawer-section"><StageStatusPanel item={item} stageColors={stageColors} setStageStatus={setStageStatus} /><div className="form-grid"><label className="field"><span>全局当前阶段</span><select value={item.stage} onChange={(e) => changeStage(e.target.value as ContentStage)}>{Object.entries(STAGE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><small>修改后会同步到内容总览和 Todo。</small></label><label className="field"><span>内容档位</span><select value={item.tier} onChange={(e) => update({ tier: e.target.value as ContentItem["tier"] })}><option value="C">C档快发</option><option value="B">B档常规</option><option value="A">A档精品</option></select></label><label className="field"><span>主要类型</span><select value={item.contentType} onChange={(e) => update({ contentType: e.target.value })}>{contentTypes.map((type) => <option key={type}>{type}</option>)}</select></label><label className="field"><span>优先级</span><select value={item.priority} onChange={(e) => update({ priority: e.target.value as ContentItem["priority"] })}><option value="high">高</option><option value="normal">普通</option><option value="low">低</option></select></label><label className="field"><span>内容意图</span><select value={item.intent} onChange={(e) => update({ intent: e.target.value as ContentIntent })}><option value="">未标注</option>{CONTENT_INTENTS.map((value) => <option key={value} value={value}>{INTENT_LABELS[value]}</option>)}</select><small>引流 / 建立信任 / 转化——看板顶部按此统计内容组合比例。</small></label></div>{SCHEDULABLE_STAGES.includes(item.stage as WorkStage) ? <StageScheduleField item={item} stage={item.stage as WorkStage} stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} label="当前阶段计划完成" /> : item.stage === "inbox" ? <p className="stage-no-schedule-note">灵感只用于收集，不需要设置完成日期；进入大纲后再开始排期。</p> : item.stage === "review" ? <p className="stage-no-schedule-note">单篇内容不再安排复盘日期；可以在档期规划中放置统一的“复盘日”。</p> : null}<label className="field full"><span>原始 idea</span><textarea value={item.idea} onChange={(e) => update({ idea: e.target.value })} /></label><label className="field full"><span>标签（用顿号分隔）</span><input value={item.tags.join("、")} onChange={(e) => update({ tags: e.target.value.split(/[、,，]/).map((tag) => tag.trim()).filter(Boolean) })} /></label><div className="next-action-card"><span>下一步动作</span><strong>{nextActionFor(item.platform, item.stage)}</strong><p>上次更新：{item.updatedAt}</p></div></div> : null}
     {/* “AI 体检”按钮（调 /api/ai/analyze）已在 Task 14 移除：该路由未移植，AI 相关能力统一走 /agent。 */}
     {activeTab === "topic" ? <div className="drawer-section"><div className="section-title-row"><div><span className="eyebrow">TOPIC GATE</span><h3>大纲卡</h3></div></div><StageScheduleField item={item} stage="topic" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{[["目标受众", "audience"], ["具体痛点", "painPoint"], ["一句话观点", "pointOfView"], ["大家通常怎么讲", "commonAngle"], ["我的反差角度", "contrastAngle"], ["可展示素材", "assets"], ["最低成本拍法", "minimumProduction"]].map(([label, key]) => <label key={key} className="field full"><span>{label}</span><textarea value={String(item.topic[key as keyof typeof item.topic] ?? "")} onChange={(e) => updateTopic({ [key]: e.target.value })} /></label>)}<div className="score-card"><div><span>六维总分</span><strong>{score}<small> / 30</small></strong></div><div className="score-grid">{Object.entries({ audience: "受众", pain: "痛点", scene: "场景", demonstrable: "可展示", distribution: "传播", efficiency: "性价比" }).map(([key, label]) => <label key={key}><span>{label}</span><input type="range" min="0" max="5" value={item.topic.score[key as keyof typeof item.topic.score]} onChange={(e) => updateTopic({ score: { ...item.topic.score, [key]: Number(e.target.value) } })} /><strong>{item.topic.score[key as keyof typeof item.topic.score]}</strong></label>)}</div></div></div> : null}
     {/* “AI 质检”按钮（调 /api/ai/analyze）已在 Task 14 移除：该路由未移植；“用 AI 写脚本”自 Task 2 起改为抽屉内就地生成，不再跳转 /agent。 */}
