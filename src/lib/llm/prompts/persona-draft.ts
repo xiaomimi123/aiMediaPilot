@@ -21,6 +21,18 @@ import type { ContentPart } from '@/lib/llm/vision';
  * PersonaProfileSchema 保存态那样允许留空)。marketInsight (赛道调研, 需要联网/额外调用)
  * 与 systemSummary (对全部字段的归纳, 依赖前面字段先写完) 两项不是访谈能直接问出来的,
  * 继续 omit, 起草在后续任务里单独收口。
+ *
+ * 十期 T6 修复轮 1: 说明性字段 (pillars[].description / painPoints[].evidence /
+ * offerings[].description) 从严格 `.max(N)` 改为「宽收 + transform 截断到 N」——
+ * DeepSeek 偶尔在这几个字段上多写几个字就超过原 60/60/80 上限, 导致
+ * `callStructured` 的 `responseSchema.parse()` 直接抛错、整条起草请求 500 (走查中
+ * 真实复现过一次)。改成宽进严出 (同 `validatePillarHit`/`validatePainHit`/
+ * `validateIntent` 一贯纪律): 校验时放宽到 300 字接住 AI 的超发挥, `transform` 里
+ * 截到原展示上限, 落库/回填表单的值仍然严格不超限。**主键性字段不放宽**——
+ * `pain`(≤30)/`offering.name`(≤20)/`pillar.name`(≤10) 继续严格 `.max()` 拒绝：
+ * 这几个字段本身就该简短, 超限说明 AI 理解偏了, 该拒绝而不是截断掩盖。
+ * `productLogic` 是唯一一段长文字段, min20/max500 维持不变 (500 字本身已经很宽松,
+ * 未观察到真实超限)。
  */
 export const PersonaDraftResponseSchema = PersonaProfileSchema.omit({
   marketInsight: true,
@@ -30,7 +42,11 @@ export const PersonaDraftResponseSchema = PersonaProfileSchema.omit({
     .array(
       z.object({
         name: z.string().min(1).max(10),
-        description: z.string().min(1).max(60),
+        description: z
+          .string()
+          .min(1)
+          .max(300)
+          .transform((s) => s.slice(0, 60)),
       }),
     )
     .min(3)
@@ -39,7 +55,10 @@ export const PersonaDraftResponseSchema = PersonaProfileSchema.omit({
     .array(
       z.object({
         pain: z.string().min(1).max(30),
-        evidence: z.string().max(60),
+        evidence: z
+          .string()
+          .max(300)
+          .transform((s) => s.slice(0, 60)),
       }),
     )
     .min(3)
@@ -49,7 +68,10 @@ export const PersonaDraftResponseSchema = PersonaProfileSchema.omit({
       z.object({
         name: z.string().min(1).max(20),
         type: z.enum(['tool', 'service', 'course']),
-        description: z.string().max(80),
+        description: z
+          .string()
+          .max(300)
+          .transform((s) => s.slice(0, 80)),
         targetPain: z.string().max(30),
       }),
     )

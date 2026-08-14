@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeIntentMix } from '@/lib/cockpit/intent-stats';
+import { computeIntentMix, shouldAutoFillIntent } from '@/lib/cockpit/intent-stats';
 
 /**
  * `computeIntentMix` — 内容组合比例的纯函数统计 (十期 T6, spec §3「内容组合比例」)。
@@ -83,5 +83,42 @@ describe('computeIntentMix', () => {
       expect(result.total).toBe(reach + trust + convert + untagged);
       expect(result.untagged).toBe(untagged);
     }
+  });
+});
+
+/**
+ * `shouldAutoFillIntent` — 生成响应 `suggestedIntent` 自动回填判断 (十期 T6 修复轮 1,
+ * spec §3「生成响应新增 suggestedIntent」)。锁定「非空不覆盖」裁决 + 修复轮 1 的竞态
+ * 场景：调用方必须传入落笔前最新的 currentIntent (ref)，不是生成发起时刻的闭包快照。
+ */
+describe('shouldAutoFillIntent', () => {
+  it('当前意图为空 + suggestedIntent 合法 → true (应回填)', () => {
+    expect(shouldAutoFillIntent('', 'reach')).toBe(true);
+    expect(shouldAutoFillIntent('', 'trust')).toBe(true);
+    expect(shouldAutoFillIntent('', 'convert')).toBe(true);
+  });
+
+  it('当前意图非空 (用户已手动标注) → 恒 false, 不管 suggestedIntent 是什么 (非空不覆盖裁决)', () => {
+    expect(shouldAutoFillIntent('reach', 'trust')).toBe(false);
+    expect(shouldAutoFillIntent('trust', 'reach')).toBe(false);
+    expect(shouldAutoFillIntent('convert', 'convert')).toBe(false);
+  });
+
+  it('修复轮 1 竞态场景: 生成发起时为空、返回前用户已手动选定 → 调用方应传入最新值, 此处得 false', () => {
+    // 模拟 content-drawer.tsx 的 itemIntentRef：生成发起时 currentIntent 是 ''，
+    // 但落笔前 (onGenerated 触发时) 读到的已经是用户中途选的 'trust'——传最新值应挡住回填。
+    const currentIntentAtGenerateStart = '';
+    const currentIntentAtOnGenerated = 'trust'; // 用户在等待期间手动改了
+    // 若误用发起时刻的旧快照 (回归到闭包 bug):
+    expect(shouldAutoFillIntent(currentIntentAtGenerateStart, 'reach')).toBe(true); // 旧 bug 会覆盖
+    // 用最新值 (ref) 判断——正确行为：不回填
+    expect(shouldAutoFillIntent(currentIntentAtOnGenerated, 'reach')).toBe(false);
+  });
+
+  it('suggestedIntent 非法值 (null/undefined/未知字符串/非字符串) → false', () => {
+    expect(shouldAutoFillIntent('', null)).toBe(false);
+    expect(shouldAutoFillIntent('', undefined)).toBe(false);
+    expect(shouldAutoFillIntent('', 'unknown')).toBe(false);
+    expect(shouldAutoFillIntent('', 42)).toBe(false);
   });
 });

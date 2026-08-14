@@ -13,6 +13,7 @@ import {
   type WorkStage,
   type WorkspaceState,
 } from "@/lib/cockpit/model";
+import { shouldAutoFillIntent } from "@/lib/cockpit/intent-stats";
 import { todayISO } from "@/lib/cockpit/calculations";
 import { stageIndex } from "@/lib/cockpit/workflow";
 import { isStageInFlow, nextActionFor, stageFlowFor, stageLabelFor } from "@/lib/cockpit/platform-stages";
@@ -102,11 +103,6 @@ function parseXhsTags(raw: unknown): string[] {
   return Array.isArray(raw) ? raw.filter((v): v is string => typeof v === "string" && v.length > 0) : [];
 }
 
-/** 十期: 生成响应新增 `suggestedIntent` (douyin/xiaohongshu 才有, 已在路由层过 validateIntent
- * 宽进严出, 非法值降为 null) —— 这里只做类型窄化, 不重复校验合法性。 */
-function isValidContentIntent(value: unknown): value is Exclude<ContentIntent, ""> {
-  return typeof value === "string" && (CONTENT_INTENTS as readonly string[]).includes(value);
-}
 
 // ---- T5 七期: 出图计划 / 逐张生图结果的窄化解析 —— 消费 POST .../images/plan
 // (`ok({plan})`, plan = `{style, images:[{idx,prompt}]}`) 与 POST .../images
@@ -376,6 +372,14 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
   const mountedRef = useRef(true);
   const currentItemIdRef = useRef(item.id);
   currentItemIdRef.current = item.id;
+  // 修复轮 1: 生成是数秒级异步, 用户可能在等待期间把「内容意图」下拉从未标注手动
+  // 改成某个值——onGenerated 回调若用闭包捕获的 item.intent 判断"是否为空", 拿到
+  // 的是发起生成那一刻的旧快照, 会用 AI 建议覆盖掉用户刚选的值 (违反"非空不覆盖"
+  // 裁决)。isCurrentItem 只挡"切到另一篇内容"这一种陈旧结果, 挡不住"同一篇内容
+  // 的字段在等待期间被改"。与 currentItemIdRef 同一模式, 每次渲染同步最新值,
+  // onGenerated 落笔前读 ref 而不是闭包参数。
+  const itemIntentRef = useRef(item.intent);
+  itemIntentRef.current = item.intent;
   // T9 终审修复波: 与 scriptDraftId state 同步维护的 ref —— 懒加载 effect 的
   // fetch 是异步的, await 期间用户可能已经点了「用 AI 写脚本」并通过
   // onGenerated 拿到了新草稿 (newDraftId), 但懒加载回调手里捕获的仍是 effect
@@ -564,7 +568,10 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
           if (newDraftId) onScriptDraftLinked?.(item.id, newDraftId);
           // 十期: 生成响应新增 suggestedIntent —— 只在内容卡 intent 当前为空时自动回填
           // 并 notify 提示 (裁决: 非空时不覆盖用户已选择的意图, 尊重用户的手动标注)。
-          if (!item.intent && isValidContentIntent(data.suggestedIntent)) {
+          // 修复轮 1: 判断抽成纯函数 shouldAutoFillIntent (见 intent-stats.ts 与其单测)，
+          // 传入 itemIntentRef.current (落笔前最新值) 而不是闭包参数 item.intent (发起生成
+          // 那一刻的旧快照)——避免生成等待期间用户手动选了意图又被 AI 建议覆盖。
+          if (shouldAutoFillIntent(itemIntentRef.current, data.suggestedIntent)) {
             update({ intent: data.suggestedIntent });
             notify(`已按选题建议意图：${INTENT_LABELS[data.suggestedIntent]}`);
           }

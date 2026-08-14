@@ -67,3 +67,21 @@ export function computeIntentMix(items: IntentTagged[]): IntentMix {
 
   return { reach: result.reach, trust: result.trust, convert: result.convert, untagged, total };
 }
+
+/**
+ * 生成响应 `suggestedIntent` 自动回填判断 (十期 T6 修复轮 1)。抽成纯函数方便单测锁定
+ * 「非空不覆盖」裁决——`currentIntent` 非空 (用户已手动标注) 时恒不回填，不管
+ * `suggestedIntent` 是什么；`currentIntent` 为空且 `suggestedIntent` 是合法枚举值
+ * (`reach`/`trust`/`convert`) 时才回填。
+ *
+ * 调用方 (`content-drawer.tsx` 的 `onGenerated`) 必须传入**落笔前最新的** `currentIntent`
+ * (用 ref 读取，而不是生成发起那一刻的闭包快照)——生成是数秒级异步，用户可能在等待期间
+ * 把意图从「未标注」手动改成某个值，若判断用的是旧快照，会用 AI 建议覆盖掉用户刚选的值。
+ */
+export function shouldAutoFillIntent(
+  currentIntent: ContentIntent,
+  suggestedIntent: unknown,
+): suggestedIntent is Exclude<ContentIntent, ''> {
+  if (currentIntent) return false;
+  return suggestedIntent === 'reach' || suggestedIntent === 'trust' || suggestedIntent === 'convert';
+}
