@@ -8,7 +8,7 @@ import {
   type WorkStage,
   type WorkspaceState,
 } from "./model";
-import { isStageInFlow, nextStageFor } from "./platform-stages";
+import { isStageInFlow, nextStageFor, schedulableStagesFor } from "./platform-stages";
 
 const PUBLISH_PROGRESS: Record<ContentStage, number> = {
   inbox: 0.05,
@@ -273,10 +273,14 @@ export function transitionContentStage(
   let stageEvents = state.stageEvents;
 
   if (movingForward && oldStage !== "archived") {
+    // 九期修复: 按内容所属平台的阶段流过滤跨过的阶段——否则 xhs 从「文案」
+    // 拖到「发布」会为 recording/editing (平台流外的死阶段) 补写伪造的已完成
+    // stageEvent, 被 migrate 脚本当真历史永久保留, 周视图也会误显示 ✓录制。
+    const platformSchedulable = schedulableStagesFor(content.platform);
     const crossedStages = WORK_STAGES.slice(
       WORK_STAGES.indexOf(oldStage),
       Math.min(stageIndex(stage), WORK_STAGES.length),
-    ).filter((crossedStage) => SCHEDULABLE_STAGES.includes(crossedStage));
+    ).filter((crossedStage) => platformSchedulable.includes(crossedStage));
     for (const crossedStage of crossedStages) {
       const openEvent = stageEvents.find(
         (event) =>
@@ -387,7 +391,8 @@ export function setContentStageCompletion(
   }
 
   let stageEvents = [...state.stageEvents];
-  for (const completingStage of SCHEDULABLE_STAGES.filter((candidate) => stageIndex(candidate) <= targetIndex)) {
+  // 九期修复: 同上——按平台阶段流补齐已完成阶段, 不为 xhs 补写 recording/editing 伪造历史。
+  for (const completingStage of schedulableStagesFor(content.platform).filter((candidate) => stageIndex(candidate) <= targetIndex)) {
     const completedEvent = stageEvents.find(
       (event) => event.contentId === contentId && event.stage === completingStage && Boolean(event.completedAt),
     );

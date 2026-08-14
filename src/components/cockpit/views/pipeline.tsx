@@ -60,7 +60,7 @@ export function ContentOverviewView({ state, pageTitle, updateTitle, query, setQ
       <label className="search-field"><Icon name="search" /><input id="content-overview-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索标题、原始想法或标签" /></label>
       <select value={type} onChange={(e) => setType(e.target.value)}><option>全部类型</option>{state.contentTypes.map((item) => <option key={item}>{item}</option>)}</select>
       {mode === "list" ? <>
-        <select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)}><option>全部阶段</option>{CONTENT_STAGES.map((stage) => <option key={stage} value={stage}>{STAGE_LABELS[stage]}</option>)}</select>
+        <select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)}><option>全部阶段</option>{stages.map((stage) => <option key={stage} value={stage}>{platformFilter ? stageLabelFor(platformFilter, stage) : STAGE_LABELS[stage]}</option>)}</select>
         <select value={tierFilter} onChange={(event) => setTierFilter(event.target.value)}><option>全部档位</option><option value="A">A档</option><option value="B">B档</option><option value="C">C档</option></select>
         <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)}><option>全部优先级</option><option value="high">高优先级</option><option value="normal">普通优先级</option><option value="low">低优先级</option></select>
         <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option>全部状态</option><option value="draft">未排期</option><option value="scheduled">已排期</option><option value="published">已发布</option></select>

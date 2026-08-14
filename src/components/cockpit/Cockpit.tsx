@@ -71,7 +71,7 @@ import {
   toggleStageEvent,
   transitionContentStage,
 } from "@/lib/cockpit/workflow";
-import { nextStageFor } from "@/lib/cockpit/platform-stages";
+import { nextStageFor, stageLabelFor } from "@/lib/cockpit/platform-stages";
 import { Icon, creatorMark, dashboardTitle, date, normalizeGoalQuotas, shiftDate } from "./shared";
 import { MOBILE_NAV_ITEMS, Sidebar } from "./sidebar";
 import {
@@ -829,8 +829,9 @@ export default function Cockpit() {
       setToast("排期与前后阶段冲突，请按阶段顺序安排");
       return;
     }
+    const platform = state.contents.find((item) => item.id === contentId)?.platform;
     setState((prev) => scheduleStageForDate(prev, contentId, stage, plannedDate));
-    setToast(`${STAGE_LABELS[stage]}已安排到 ${plannedDate.slice(5)}`);
+    setToast(`${stageLabelFor(platform ?? "", stage)}已安排到 ${plannedDate.slice(5)}`);
   }
 
   function clearStagePlan(contentId: string, stage: WorkStage) {
@@ -838,8 +839,9 @@ export default function Cockpit() {
       (item) => item.contentId === contentId && item.stage === stage && !item.completedAt,
     );
     if (!event) return;
+    const platform = state.contents.find((item) => item.id === contentId)?.platform;
     setState((prev) => removeStageEvent(prev, event.id));
-    setToast(`已取消${STAGE_LABELS[stage]}排期`);
+    setToast(`已取消${stageLabelFor(platform ?? "", stage)}排期`);
   }
 
   function moveCalendarEvent(eventId: string, plannedDate: string) {
@@ -849,8 +851,9 @@ export default function Cockpit() {
       setToast("改期与前后阶段冲突，请按阶段顺序安排");
       return;
     }
+    const platform = state.contents.find((item) => item.id === event.contentId)?.platform;
     setState((prev) => moveStageEventToDate(prev, eventId, plannedDate));
-    setToast(`${STAGE_LABELS[event.stage]}已移动到 ${plannedDate.slice(5)}`);
+    setToast(`${stageLabelFor(platform ?? "", event.stage)}已移动到 ${plannedDate.slice(5)}`);
   }
 
   function createReviewDay(plannedDate: string) {
@@ -953,9 +956,10 @@ export default function Cockpit() {
         : prev;
       return setContentStageCompletion(withReviewStatus, contentId, stage, completed, date, completedAt);
     });
+    const label = stageLabelFor(content?.platform ?? "", stage);
     setToast(completed
-      ? `${STAGE_LABELS[stage]}已完成，前置阶段已同步`
-      : `${STAGE_LABELS[stage]}及后续阶段已恢复待完成`);
+      ? `${label}已完成，前置阶段已同步`
+      : `${label}及后续阶段已恢复待完成`);
   }
 
   function moveToday(eventId: string, direction: -1 | 1) {
@@ -976,7 +980,9 @@ export default function Cockpit() {
     // 九期修复: 提示文案里的「下一步」也要按内容所属平台的阶段流算, 否则会和
     // toggleStageEvent 实际推进到的阶段对不上 (例如 xhs 完成文案后提示却说"进入录制")。
     const nextStage = nextStageFor(item.platform, event.stage) ?? event.stage;
-    setToast(completed ? `已撤销，恢复到${STAGE_LABELS[event.stage]}阶段` : `${STAGE_LABELS[event.stage]}已完成，进入${STAGE_LABELS[nextStage]}`);
+    setToast(completed
+      ? `已撤销，恢复到${stageLabelFor(item.platform, event.stage)}阶段`
+      : `${stageLabelFor(item.platform, event.stage)}已完成，进入${stageLabelFor(item.platform, nextStage)}`);
   }
 
   function removeFromToday(eventId: string) {

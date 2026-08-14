@@ -723,4 +723,45 @@ describe('calculations', () => {
     expect(next.stageEvents.map((event) => event.stage)).toEqual(["script", "recording", "editing"]);
     expect(next.stageEvents.every((event) => Boolean(event.completedAt))).toBe(true);
   });
+
+  // 九期终审修复: transitionContentStage (看板拖拽/抽屉阶段下拉) 与
+  // setContentStageCompletion 的 completed=true 分支跨阶段补齐仍按全局
+  // WORK_STAGES/SCHEDULABLE_STAGES 计算——xhs 卡从「文案」拖到「发布」或标记
+  // 完成会被补写 recording/editing 两条伪造的已完成 stageEvent (migrate 脚本
+  // 会把它们当真历史永久保留, 周视图也会误显示 ✓录制)。改用
+  // schedulableStagesFor(platform) 后, xhs 只补文案/发布, douyin (走
+  // DEFAULT_STAGE_FLOW) 行为不变——用同一组用例对照锁定回归。
+  it("跨阶段补齐按平台阶段流过滤: xhs 拖拽/标记完成不补写录制剪辑, douyin 不受影响", () => {
+    const xhsDragItem = content({ id: "xhs-drag", platform: "xiaohongshu", stage: "script", publicationStatus: "draft", publishedAt: "" });
+    const xhsDragged = transitionContentStage(workspace(xhsDragItem), xhsDragItem.id, "publishing", "2026-07-18");
+    expect(xhsDragged.stageEvents.map((event) => event.stage)).toEqual(["script"]);
+    expect(xhsDragged.stageEvents.every((event) => Boolean(event.completedAt))).toBe(true);
+
+    const douyinDragItem = content({ id: "douyin-drag", platform: "douyin", stage: "script", publicationStatus: "draft", publishedAt: "" });
+    const douyinDragged = transitionContentStage(workspace(douyinDragItem), douyinDragItem.id, "publishing", "2026-07-18");
+    expect(douyinDragged.stageEvents.map((event) => event.stage)).toEqual(["script", "recording", "editing"]);
+
+    const xhsCompleteItem = content({ id: "xhs-complete", platform: "xiaohongshu", stage: "topic", publicationStatus: "draft", publishedAt: "" });
+    const xhsCompleted = setContentStageCompletion(
+      workspace(xhsCompleteItem),
+      xhsCompleteItem.id,
+      "publishing",
+      true,
+      "2026-07-20",
+      "2026-07-20T09:00:00.000Z",
+    );
+    expect(xhsCompleted.stageEvents.map((event) => event.stage).sort()).toEqual(["publishing", "script", "topic"]);
+    expect(xhsCompleted.stageEvents.some((event) => event.stage === "recording" || event.stage === "editing")).toBe(false);
+
+    const douyinCompleteItem = content({ id: "douyin-complete", platform: "douyin", stage: "topic", publicationStatus: "draft", publishedAt: "" });
+    const douyinCompleted = setContentStageCompletion(
+      workspace(douyinCompleteItem),
+      douyinCompleteItem.id,
+      "publishing",
+      true,
+      "2026-07-20",
+      "2026-07-20T09:00:00.000Z",
+    );
+    expect(douyinCompleted.stageEvents.map((event) => event.stage).sort()).toEqual(["editing", "publishing", "recording", "script", "topic"]);
+  });
 });
