@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { todayISO } from '@/lib/cockpit/calculations';
 import { bumpCockpitRev } from '@/lib/cockpit/server-store';
 import { depositStyleSample } from '@/lib/script/style';
+import { nextStageFor } from '@/lib/cockpit/platform-stages';
 import type { PickedState } from '@/lib/script-picked/types';
 
 function parsePicked(input: unknown): PickedState | null {
@@ -39,7 +40,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   const user = await getOrCreateDefaultUser();
   const draft = await prisma.scriptDraft.findUnique({
     where: { id },
-    select: { id: true, userId: true },
+    select: { id: true, userId: true, platform: true },
   });
   if (!draft || draft.userId !== user.id) return fail('脚本不存在', 404);
 
@@ -49,18 +50,21 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
       data: { picked: picked as any },
     });
 
-    // 定稿(picked)推进关联 cockpit content 阶段 — 仅当当前 stage 为 'script' 时,
-    // 语义同 setContentStageCompletion；失败不阻塞定稿本身
+    // 定稿(picked)推进关联 cockpit content 阶段 — 仅当当前 stage 为 'script' 且该平台流的下一站非
+    // null 时才推进 (九期: 按 T1 nextStageFor(platform, 'script') 取平台差异化目标阶段, 而非硬编码
+    // 'recording' — 小红书纯图文流 script 之后直接到 publishing, 其余平台/未知平台走 DEFAULT 到
+    // recording); 语义同 setContentStageCompletion；失败不阻塞定稿本身
     try {
       const content = await prisma.cockpitContent.findFirst({
         where: { scriptDraftId: id, userId: user.id },
         select: { id: true, stage: true },
       });
-      if (content && content.stage === 'script') {
+      const targetStage = nextStageFor(draft.platform, 'script');
+      if (content && content.stage === 'script' && targetStage) {
         const today = todayISO();
         await prisma.cockpitContent.update({
           where: { id: content.id },
-          data: { stage: 'recording', updatedAt: today },
+          data: { stage: targetStage, updatedAt: today },
         });
         await prisma.cockpitStageEvent.create({
           data: {

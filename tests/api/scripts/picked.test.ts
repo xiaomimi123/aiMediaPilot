@@ -37,7 +37,7 @@ const ctx = { params: Promise.resolve({ id: 'abc' }) };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  prismaMock.scriptDraft.findUnique.mockResolvedValue({ id: 'abc', userId: 'user1' });
+  prismaMock.scriptDraft.findUnique.mockResolvedValue({ id: 'abc', userId: 'user1', platform: 'douyin' });
   prismaMock.scriptDraft.update.mockResolvedValue({});
   prismaMock.cockpitContent.findFirst.mockResolvedValue(null);
   prismaMock.cockpitContent.update.mockResolvedValue({});
@@ -113,6 +113,42 @@ describe('PUT /api/v1/scripts/[id]/picked', () => {
     // 钩子写了 cockpit content/stage event → 必须敲一下 prefs.updatedAt (bumpCockpitRev)
     expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1);
     expect(prismaMock.$executeRaw.mock.calls[0]).toContain('user1');
+  });
+
+  it('douyin 定稿 → recording (DEFAULT 流回归)', async () => {
+    prismaMock.scriptDraft.findUnique.mockResolvedValueOnce({ id: 'abc', userId: 'user1', platform: 'douyin' });
+    prismaMock.cockpitContent.findFirst.mockResolvedValueOnce({ id: 'content1', stage: 'script' });
+    const res = await PUT(reqJSON({ reviewed: {} }), ctx);
+    expect(res.status).toBe(200);
+    expect(prismaMock.cockpitContent.update).toHaveBeenCalledWith({
+      where: { id: 'content1' },
+      data: expect.objectContaining({ stage: 'recording' }),
+    });
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it('xiaohongshu 定稿 → publishing (新语义, 录制/剪辑对小红书是死阶段)', async () => {
+    prismaMock.scriptDraft.findUnique.mockResolvedValueOnce({ id: 'abc', userId: 'user1', platform: 'xiaohongshu' });
+    prismaMock.cockpitContent.findFirst.mockResolvedValueOnce({ id: 'content1', stage: 'script' });
+    const res = await PUT(reqJSON({ reviewed: {} }), ctx);
+    expect(res.status).toBe(200);
+    expect(prismaMock.cockpitContent.update).toHaveBeenCalledWith({
+      where: { id: 'content1' },
+      data: expect.objectContaining({ stage: 'publishing' }),
+    });
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it('gongzhonghao 定稿 → recording (未收录平台走 DEFAULT 流)', async () => {
+    prismaMock.scriptDraft.findUnique.mockResolvedValueOnce({ id: 'abc', userId: 'user1', platform: 'gongzhonghao' });
+    prismaMock.cockpitContent.findFirst.mockResolvedValueOnce({ id: 'content1', stage: 'script' });
+    const res = await PUT(reqJSON({ reviewed: {} }), ctx);
+    expect(res.status).toBe(200);
+    expect(prismaMock.cockpitContent.update).toHaveBeenCalledWith({
+      where: { id: 'content1' },
+      data: expect.objectContaining({ stage: 'recording' }),
+    });
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1);
   });
 
   it('关联 cockpit content 但 stage !== script → 不推进, 也不 bump rev', async () => {
