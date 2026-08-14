@@ -39,6 +39,8 @@ export const DouyinFullScriptSchema = z.object({
     shotIdea: z.string().min(5).max(200),
     colorTone: z.string().min(2).max(50),
   }),
+  // 十期: AI 判断这条内容最适合的 CTA 意图 (供未指定 intent 时前端回填), 没有明显倾向则 null。
+  suggestedIntent: z.enum(['reach', 'trust', 'convert']).nullable().optional().default(null),
 });
 
 export type DouyinFullScript = z.infer<typeof DouyinFullScriptSchema>;
@@ -99,6 +101,7 @@ ${buildStyleSection(style)}
 - hooks: 3 个候选开场钩子, 风格与 sections[0] 一致, 供编辑挑选备用
 - titles: 3 个候选标题, ≤ 25 字
 - cover: 封面方案 (文字 / 镜头 / 配色)
+- suggestedIntent: 根据这条内容本身的性质, 判断最适合的结尾 CTA 意图 —— reach (引流互动) / trust (建立信任) / convert (转化), 没有明显倾向则填 null
 
 ${JSON_STRICTNESS}`;
   },

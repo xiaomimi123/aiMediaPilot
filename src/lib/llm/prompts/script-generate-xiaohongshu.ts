@@ -21,6 +21,9 @@ export const XHSScriptResponseSchema = z.object({
       description: z.string().min(5).max(100),
     })
   ).min(3).max(9),                            // 配图建议 (XHS 1-9 张图)
+  // 十期: AI 判断这条内容最适合的 CTA 意图 (供未指定 intent 时前端回填), 没有明显倾向则 null。
+  // 与 script-write-xhs.ts (SCRIPT_WRITE_XHS) 共用同一份 schema, 该处 buildSystemPrompt 会指引模型填写。
+  suggestedIntent: z.enum(['reach', 'trust', 'convert']).nullable().optional().default(null),
 });
 
 export type XHSScriptResponse = z.infer<typeof XHSScriptResponseSchema>;

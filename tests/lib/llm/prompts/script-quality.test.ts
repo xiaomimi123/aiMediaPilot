@@ -11,6 +11,8 @@ import {
   type StyleContext,
 } from '@/lib/llm/prompts/script-write-douyin';
 import { SCRIPT_REFINE } from '@/lib/llm/prompts/script-refine';
+import { buildPersonaSection } from '@/lib/llm/prompts/persona-section';
+import type { PersonaProfileData } from '@/lib/persona/profile';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -238,6 +240,27 @@ describe('DouyinFullScriptSchema', () => {
     const { cover, ...rest } = validFullScript;
     expect(() => DouyinFullScriptSchema.parse(rest)).toThrow();
   });
+
+  it('suggestedIntent 缺省 → 默认解析为 null', () => {
+    const parsed = DouyinFullScriptSchema.parse(validFullScript);
+    expect(parsed.suggestedIntent).toBeNull();
+  });
+
+  it('suggestedIntent 为 null → 通过', () => {
+    const parsed = DouyinFullScriptSchema.parse({ ...validFullScript, suggestedIntent: null });
+    expect(parsed.suggestedIntent).toBeNull();
+  });
+
+  it.each(['reach', 'trust', 'convert'] as const)('suggestedIntent=%s → 通过', (intent) => {
+    const parsed = DouyinFullScriptSchema.parse({ ...validFullScript, suggestedIntent: intent });
+    expect(parsed.suggestedIntent).toBe(intent);
+  });
+
+  it('suggestedIntent 非法枚举值 → 拒绝', () => {
+    expect(() =>
+      DouyinFullScriptSchema.parse({ ...validFullScript, suggestedIntent: 'unknown' })
+    ).toThrow();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -276,6 +299,14 @@ describe('SCRIPT_WRITE_DOUYIN.buildSystemPrompt', () => {
     expect(p).toMatch(/引用/);
   });
 
+  it('要求产出 suggestedIntent (reach/trust/convert 三选一或 null)', () => {
+    const p = SCRIPT_WRITE_DOUYIN.buildSystemPrompt('ai-knowledge', descStyle);
+    expect(p).toContain('suggestedIntent');
+    expect(p).toContain('reach');
+    expect(p).toContain('trust');
+    expect(p).toContain('convert');
+  });
+
   it('mode=description 时嵌入风格说明段', () => {
     const p = SCRIPT_WRITE_DOUYIN.buildSystemPrompt('ai-knowledge', descStyle);
     expect(p).toContain(descStyle.description);
@@ -310,6 +341,42 @@ describe('SCRIPT_WRITE_DOUYIN.buildSystemPrompt', () => {
     expect(personaIdx).toBeGreaterThan(-1);
     expect(taskIdx).toBeGreaterThan(-1);
     expect(personaIdx).toBeLessThan(taskIdx);
+  });
+
+  it('三种 intent 的 CTA 段透传进 system prompt, 且互不串场; convert 段含 offerings 名称', () => {
+    const profile: PersonaProfileData = {
+      audience: '25-35 岁互联网从业者',
+      targetFans: '',
+      pillars: [],
+      angle: '',
+      avoid: '',
+      painPoints: [],
+      offerings: [{ name: 'AI 选题工具', type: 'tool', description: '自动生成选题', targetPain: '' }],
+      productLogic: '',
+      marketInsight: null,
+      systemSummary: '',
+    };
+
+    const reachPrompt = SCRIPT_WRITE_DOUYIN.buildSystemPrompt(
+      'ai-knowledge', descStyle, buildPersonaSection(profile, 'write', 'reach'),
+    );
+    const trustPrompt = SCRIPT_WRITE_DOUYIN.buildSystemPrompt(
+      'ai-knowledge', descStyle, buildPersonaSection(profile, 'write', 'trust'),
+    );
+    const convertPrompt = SCRIPT_WRITE_DOUYIN.buildSystemPrompt(
+      'ai-knowledge', descStyle, buildPersonaSection(profile, 'write', 'convert'),
+    );
+
+    expect(reachPrompt).toContain('CTA 指引 (引流)');
+    expect(reachPrompt).not.toContain('CTA 指引 (建立信任)');
+    expect(reachPrompt).not.toContain('CTA 指引 (转化)');
+
+    expect(trustPrompt).toContain('CTA 指引 (建立信任)');
+    expect(trustPrompt).not.toContain('CTA 指引 (引流)');
+
+    expect(convertPrompt).toContain('CTA 指引 (转化)');
+    expect(convertPrompt).toContain('AI 选题工具');
+    expect(convertPrompt).not.toContain('CTA 指引 (引流)');
   });
 });
 

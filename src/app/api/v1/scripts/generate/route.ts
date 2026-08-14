@@ -12,7 +12,7 @@ import { isContentPlatform, type ContentPlatform } from '@/lib/platform';
 import { readInspirationInsight } from '@/lib/json-readers';
 import { runResearch } from '@/lib/script/research';
 import { getStyleContext } from '@/lib/script/style';
-import { loadPersonaProfile } from '@/lib/persona/profile';
+import { loadPersonaProfile, validateIntent } from '@/lib/persona/profile';
 import { buildPersonaSection } from '@/lib/llm/prompts/persona-section';
 
 const PROMPT_BY_PLATFORM = {
@@ -82,6 +82,7 @@ export async function POST(req: Request) {
     materials?: unknown;
     durationSec?: unknown;
     cockpitContentId?: unknown;
+    intent?: unknown;
   };
   try {
     body = await req.json();
@@ -115,6 +116,8 @@ export async function POST(req: Request) {
     typeof body.materials === 'string' && body.materials.trim() !== '' ? body.materials : undefined;
   const cockpitContentId =
     typeof body.cockpitContentId === 'string' ? body.cockpitContentId.trim() : '';
+  // 十期: 内容意图 — 宽进严出, 非法值/未指定一律降为 '' (validateIntent 语义), 不单独报 400。
+  const intent = validateIntent(body.intent);
 
   const user = await getOrCreateDefaultUser();
   const apiKey = await resolveDeepSeekApiKey(user.id);
@@ -127,15 +130,18 @@ export async function POST(req: Request) {
       const research = await runResearch(user.id, { topic, niche, userMaterials: materials });
       const style = await getStyleContext(user.id, 'douyin');
       // 人设定位注入 (T4): 未建立档案时 personaSection 为空串, buildSystemPrompt 保持字符级一致
+      // 十期: intent 透传给 buildPersonaSection, 非空时追加 CTA 指引段 (见 persona-section.ts)
       const profile = await loadPersonaProfile(user.id);
-      const personaSection = buildPersonaSection(profile, 'write');
+      const personaSection = buildPersonaSection(profile, 'write', intent);
       const llm = getDeepSeekTextLLM(apiKey);
       const out = await llm.callStructured({
         systemPrompt: SCRIPT_WRITE_DOUYIN.buildSystemPrompt(niche, style, personaSection),
         userMessage: SCRIPT_WRITE_DOUYIN.buildUserMessage({ topic, durationSec, brief: research }),
         responseSchema: SCRIPT_WRITE_DOUYIN.responseSchema,
       });
-      const { sections, hooks, titles, cover } = out.result;
+      const { sections, hooks, titles, cover, suggestedIntent: rawSuggestedIntent } = out.result;
+      // 十期: AI 自报的 suggestedIntent 同样过 validateIntent (宽进严出), 非法/未产出一律降为 null。
+      const suggestedIntent = validateIntent(rawSuggestedIntent) || null;
 
       const draft = await prisma.scriptDraft.create({
         data: {
@@ -162,6 +168,7 @@ export async function POST(req: Request) {
         titles,
         cover,
         durationSec,
+        suggestedIntent,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -175,15 +182,18 @@ export async function POST(req: Request) {
       const research = await runResearch(user.id, { topic, niche, userMaterials: materials });
       const style = await getStyleContext(user.id, 'xiaohongshu');
       // 人设定位注入 (T4): 未建立档案时 personaSection 为空串, buildSystemPrompt 保持字符级一致
+      // 十期: intent 透传给 buildPersonaSection, 非空时追加 CTA 指引段 (见 persona-section.ts)
       const profile = await loadPersonaProfile(user.id);
-      const personaSection = buildPersonaSection(profile, 'write');
+      const personaSection = buildPersonaSection(profile, 'write', intent);
       const llm = getDeepSeekTextLLM(apiKey);
       const out = await llm.callStructured({
         systemPrompt: SCRIPT_WRITE_XHS.buildSystemPrompt(niche, style, personaSection),
         userMessage: SCRIPT_WRITE_XHS.buildUserMessage({ topic, brief: research }),
         responseSchema: SCRIPT_WRITE_XHS.responseSchema,
       });
-      const { titles, coverText, intro, body, tags, shotIdeas } = out.result;
+      const { titles, coverText, intro, body, tags, shotIdeas, suggestedIntent: rawSuggestedIntent } = out.result;
+      // 十期: AI 自报的 suggestedIntent 同样过 validateIntent (宽进严出), 非法/未产出一律降为 null。
+      const suggestedIntent = validateIntent(rawSuggestedIntent) || null;
 
       const draft = await prisma.scriptDraft.create({
         data: {
@@ -211,6 +221,7 @@ export async function POST(req: Request) {
         body,
         tags,
         shotIdeas,
+        suggestedIntent,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

@@ -11,7 +11,7 @@ import {
 import { getDeepSeekTextLLM } from '@/lib/llm/clients';
 import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
 import { RADAR_READ, type RadarReadResponse } from '@/lib/llm/prompts/radar-read';
-import { loadPersonaProfile, validatePillarHit } from '@/lib/persona/profile';
+import { loadPersonaProfile, validatePillarHit, validatePainHit } from '@/lib/persona/profile';
 import { buildPersonaSection } from '@/lib/llm/prompts/persona-section';
 
 /**
@@ -24,6 +24,11 @@ import { buildPersonaSection } from '@/lib/llm/prompts/persona-section';
 const SEARCH_MAX_RESULTS = 8;
 const SEARCH_DAYS = 7;
 const RELEVANCE_GATE = 40;
+// 十期: angleSuggestion 截断兜底上限 — 与 radar-read.ts schema 的 max(40) 一致。schema 本身
+// 已经在结构化解析阶段拒绝超长值 (DeepSeekTextLLM 走 zod .parse), 这里是双保险: 万一未来 schema
+// 放宽或换用更宽松的解析路径, 也不会让一条过长的 angleSuggestion 意外整条丢弃或写坏展示。
+// 选择截断而非降 null: 截断后前 40 字依然是可用的角度建议, 比直接丢弃信息量更大。
+const ANGLE_SUGGESTION_MAX = 40;
 
 export interface RadarRunError {
   keyword?: string;
@@ -52,6 +57,14 @@ interface KeptItem {
   fingerprint: string;
   readOut: RadarReadResponse;
   pillarHit: string | null;
+  painHit: string | null;
+  angleSuggestion: string | null;
+}
+
+/** 防御性截断: 超过 ANGLE_SUGGESTION_MAX 字直接截断, 非字符串一律 null。 */
+function truncateAngleSuggestion(value: string | null): string | null {
+  if (typeof value !== 'string') return null;
+  return value.length > ANGLE_SUGGESTION_MAX ? value.slice(0, ANGLE_SUGGESTION_MAX) : value;
 }
 
 interface ClusterInput extends ClusterableItem {
@@ -91,6 +104,7 @@ export async function runRadarScan(userId: string): Promise<RadarRunStats | null
   const personaSection = buildPersonaSection(profile, 'radar');
   const hasProfile = profile !== null;
   const personaPillars = profile?.pillars ?? [];
+  const personaPains = profile?.painPoints ?? [];
 
   const run = await prisma.radarRun.create({
     data: {
@@ -206,12 +220,18 @@ export async function runRadarScan(userId: string): Promise<RadarRunStats | null
       for (const kw of readOut.suggestedKeywords) suggestedKeywordsAll.add(kw);
       // 严格校验 AI 声称命中的支柱是否真的存在于档案里 (防止编造), 无档案时 personaPillars=[] 恒为 null。
       const pillarHit = validatePillarHit(readOut.pillarHit, personaPillars);
+      // 十期: 痛点识别 — 同一先例校验, 无痛点档案时 personaPains=[] 恒为 null; angleSuggestion 只做
+      // 截断兜底, 不参与任何调权 (composeHeat/applyPersonaAdjust 逻辑不变, 见 scoring.ts)。
+      const painHit = validatePainHit(readOut.painHit, personaPains);
+      const angleSuggestion = truncateAngleSuggestion(readOut.angleSuggestion);
       keptItems.push({
         result: cand.result,
         matchedKeywords: cand.matchedKeywords,
         fingerprint: titleFingerprint(cand.result.title),
         readOut,
         pillarHit,
+        painHit,
+        angleSuggestion,
       });
     }
 
@@ -276,6 +296,8 @@ export async function runRadarScan(userId: string): Promise<RadarRunStats | null
           cooccurrenceSources: heat.cooccurrenceSources,
           personaAdjust: heat.personaAdjust,
           pillarHit: heat.pillarHit,
+          painHit: item.painHit,
+          angleSuggestion: item.angleSuggestion,
         },
         status: 'new',
         runId: run.id,

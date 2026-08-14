@@ -200,3 +200,14 @@ export function validatePillarHit(hit: unknown, pillars: PersonaPillar[]): strin
   const match = pillars.find((p) => p.name === hit);
   return match ? match.name : null;
 }
+
+/**
+ * 十期: 雷达痛点识别 — 与 validatePillarHit 同一先例, 严格校验 AI 声称戳中的用户痛点是否
+ * 真的存在于档案里 (只做 === 精确匹配, 大小写/前后空格不同都算不中), 防止 AI 编造一个听起来
+ * 像但实际不存在的痛点。命中则原样返回该 pain.pain, 否则 null。
+ */
+export function validatePainHit(hit: unknown, pains: PersonaPain[]): string | null {
+  if (typeof hit !== 'string') return null;
+  const match = pains.find((p) => p.pain === hit);
+  return match ? match.pain : null;
+}

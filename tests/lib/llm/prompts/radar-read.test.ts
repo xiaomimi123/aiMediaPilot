@@ -50,6 +50,34 @@ describe('RADAR_READ.buildSystemPrompt', () => {
     const prompt = RADAR_READ.buildSystemPrompt('目标受众: 测试受众');
     expect(prompt).toContain('pillarHit');
   });
+
+  it('personaSection 含痛点段 (无痛点) → 不提 painHit/angleSuggestion, relevance 语义句不含「是否戳中上述痛点」', () => {
+    const prompt = RADAR_READ.buildSystemPrompt('目标受众: 测试受众');
+    expect(prompt).not.toContain('painHit');
+    expect(prompt).not.toContain('angleSuggestion');
+    expect(prompt).not.toContain('是否戳中上述痛点');
+  });
+
+  it('personaSection 含「用户痛点:」段 → relevance 语义句补「是否戳中上述痛点」', () => {
+    const prompt = RADAR_READ.buildSystemPrompt(
+      '目标受众: 测试受众\n用户痛点:\n- 不知道拍什么: 选题卡壳超过 1 小时',
+    );
+    expect(prompt).toContain('是否戳中上述痛点');
+  });
+
+  it('personaSection 含「用户痛点:」段 → 要求输出 painHit/angleSuggestion', () => {
+    const prompt = RADAR_READ.buildSystemPrompt(
+      '目标受众: 测试受众\n用户痛点:\n- 不知道拍什么: 选题卡壳超过 1 小时',
+    );
+    expect(prompt).toContain('painHit');
+    expect(prompt).toContain('angleSuggestion');
+  });
+
+  it('personaSection 无「用户痛点:」段 (仅受众) → buildSystemPrompt 与不带痛点段的旧行为一致 (无 painHit/angleSuggestion 要求)', () => {
+    const withPillarOnly = RADAR_READ.buildSystemPrompt('目标受众: 测试受众\n内容支柱:\n- 工具评测: 拆解 AI 工具实际效果');
+    expect(withPillarOnly).not.toContain('painHit');
+    expect(withPillarOnly).not.toContain('angleSuggestion');
+  });
 });
 
 describe('RADAR_READ.buildUserMessage', () => {
@@ -177,6 +205,48 @@ describe('RadarReadResponseSchema', () => {
   it('pillarHit 超过 10 字 → 拒绝', () => {
     expect(() =>
       RadarReadResponseSchema.parse({ ...valid, pillarHit: '一'.repeat(11) })
+    ).toThrow();
+  });
+
+  it('painHit 缺省 → 默认解析为 null', () => {
+    const parsed = RadarReadResponseSchema.parse(valid);
+    expect(parsed.painHit).toBeNull();
+  });
+
+  it('painHit 为 null → 通过', () => {
+    const parsed = RadarReadResponseSchema.parse({ ...valid, painHit: null });
+    expect(parsed.painHit).toBeNull();
+  });
+
+  it('painHit 为合法字符串 (≤30 字) → 通过', () => {
+    const parsed = RadarReadResponseSchema.parse({ ...valid, painHit: '不知道拍什么' });
+    expect(parsed.painHit).toBe('不知道拍什么');
+  });
+
+  it('painHit 超过 30 字 → 拒绝', () => {
+    expect(() =>
+      RadarReadResponseSchema.parse({ ...valid, painHit: '一'.repeat(31) })
+    ).toThrow();
+  });
+
+  it('angleSuggestion 缺省 → 默认解析为 null', () => {
+    const parsed = RadarReadResponseSchema.parse(valid);
+    expect(parsed.angleSuggestion).toBeNull();
+  });
+
+  it('angleSuggestion 为 null → 通过', () => {
+    const parsed = RadarReadResponseSchema.parse({ ...valid, angleSuggestion: null });
+    expect(parsed.angleSuggestion).toBeNull();
+  });
+
+  it('angleSuggestion 为合法字符串 (≤40 字) → 通过', () => {
+    const parsed = RadarReadResponseSchema.parse({ ...valid, angleSuggestion: '从时间管理角度切入, 拍一期真实案例对比' });
+    expect(parsed.angleSuggestion).toBe('从时间管理角度切入, 拍一期真实案例对比');
+  });
+
+  it('angleSuggestion 超过 40 字 → 拒绝', () => {
+    expect(() =>
+      RadarReadResponseSchema.parse({ ...valid, angleSuggestion: '一'.repeat(41) })
     ).toThrow();
   });
 });

@@ -9,6 +9,7 @@ import {
   isProfileEstablished,
   loadPersonaProfile,
   validatePillarHit,
+  validatePainHit,
   validateIntent,
   parsePersonaPains,
   parsePersonaOfferings,
@@ -442,5 +443,39 @@ describe('validatePillarHit', () => {
 
   it('pillars 为空数组 → null', () => {
     expect(validatePillarHit('工具评测', [])).toBeNull();
+  });
+});
+
+describe('validatePainHit', () => {
+  const pains = [
+    { pain: '不知道拍什么', evidence: '选题卡壳超过 1 小时' },
+    { pain: '效率低', evidence: '' },
+  ];
+
+  it('严格等于某 pain.pain → 返回该 pain', () => {
+    expect(validatePainHit('不知道拍什么', pains)).toBe('不知道拍什么');
+  });
+
+  it('大小写不同 → null', () => {
+    const englishPains = [{ pain: 'No Idea', evidence: '' }];
+    expect(validatePainHit('no idea', englishPains)).toBeNull();
+  });
+
+  it('前后空格不同 → null', () => {
+    expect(validatePainHit(' 不知道拍什么 ', pains)).toBeNull();
+  });
+
+  it('不存在的痛点文本 → null', () => {
+    expect(validatePainHit('编造的痛点', pains)).toBeNull();
+  });
+
+  it('非字符串输入 → null', () => {
+    expect(validatePainHit(123, pains)).toBeNull();
+    expect(validatePainHit(null, pains)).toBeNull();
+    expect(validatePainHit(undefined, pains)).toBeNull();
+  });
+
+  it('pains 为空数组 → null', () => {
+    expect(validatePainHit('不知道拍什么', [])).toBeNull();
   });
 });

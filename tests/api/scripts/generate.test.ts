@@ -147,6 +147,12 @@ describe('POST /api/v1/scripts/generate — douyin (两阶段: research → styl
     expect(call.userMessage).toBeDefined();
   });
 
+  it('响应含 suggestedIntent (LLM 未产出该字段时默认为 null)', async () => {
+    const res = await POST(makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge' }));
+    const json = await res.json();
+    expect(json.data.suggestedIntent).toBeNull();
+  });
+
   it('响应含 scriptDraftId, 且已把完整 output 形状持久化到 ScriptDraft', async () => {
     const res = await POST(makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge' }));
     const json = await res.json();
@@ -349,6 +355,14 @@ describe('POST /api/v1/scripts/generate — xiaohongshu (两阶段: research →
     expect(json.data.shotIdeas).toEqual(xhsScriptResult.shotIdeas);
   });
 
+  it('响应含 suggestedIntent (LLM 未产出该字段时默认为 null)', async () => {
+    const res = await POST(
+      makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge', platform: 'xiaohongshu' }),
+    );
+    const json = await res.json();
+    expect(json.data.suggestedIntent).toBeNull();
+  });
+
   it('research 返回 null (降级) 时仍正常写稿, researchDegraded=true, research=null', async () => {
     runResearchMock.mockResolvedValueOnce(null);
     const res = await POST(
@@ -512,6 +526,92 @@ describe('POST /api/v1/scripts/generate — 人设定位注入 (T4)', () => {
     );
     expect(res.status).toBe(200);
     expect(prismaMock.personaProfile.findUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/v1/scripts/generate — intent 透传与 suggestedIntent (T5)', () => {
+  const personaRow = {
+    userId: 'user1',
+    audience: '25-35 岁互联网从业者',
+    targetFans: '想转行做 AI 的人',
+    pillars: [{ name: '工具评测', description: '拆解 AI 工具实际效果' }],
+    angle: '只讲能落地的方法',
+    avoid: '不做标题党',
+  };
+
+  it("douyin: intent='reach' 合法 → buildPersonaSection 透传 intent, systemPrompt 含对应 CTA 段", async () => {
+    prismaMock.personaProfile.findUnique.mockResolvedValue(personaRow);
+    const res = await POST(
+      makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge', intent: 'reach' }),
+    );
+    expect(res.status).toBe(200);
+    const systemPrompt = llmMock.callStructured.mock.calls[0][0].systemPrompt as string;
+    expect(systemPrompt).toContain('CTA 指引 (引流)');
+  });
+
+  it("douyin: intent='invalid-value' 非法 → 降空, 不含任何 CTA 段, 仍 200", async () => {
+    prismaMock.personaProfile.findUnique.mockResolvedValue(personaRow);
+    const res = await POST(
+      makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge', intent: 'invalid-value' }),
+    );
+    expect(res.status).toBe(200);
+    const systemPrompt = llmMock.callStructured.mock.calls[0][0].systemPrompt as string;
+    expect(systemPrompt).not.toContain('CTA 指引');
+  });
+
+  it('douyin: 未指定 intent → 不含 CTA 段, 响应 suggestedIntent 取自写稿 LLM 输出 (经 validateIntent 校验)', async () => {
+    prismaMock.personaProfile.findUnique.mockResolvedValue(personaRow);
+    llmMock.callStructured.mockResolvedValueOnce({
+      result: { ...douyinScriptResult, suggestedIntent: 'trust' },
+      usage: { model: 'deepseek', promptTokens: 100, completionTokens: 200, estCostUSD: 0.001 },
+    });
+    const res = await POST(makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge' }));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.data.suggestedIntent).toBe('trust');
+    const systemPrompt = llmMock.callStructured.mock.calls[0][0].systemPrompt as string;
+    expect(systemPrompt).not.toContain('CTA 指引');
+  });
+
+  it('douyin: LLM 产出的 suggestedIntent 是非法枚举值 (mock 越过 schema) → validateIntent 降为 null', async () => {
+    llmMock.callStructured.mockResolvedValueOnce({
+      result: { ...douyinScriptResult, suggestedIntent: 'not-a-real-intent' },
+      usage: { model: 'deepseek', promptTokens: 100, completionTokens: 200, estCostUSD: 0.001 },
+    });
+    const res = await POST(makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge' }));
+    const json = await res.json();
+    expect(json.data.suggestedIntent).toBeNull();
+  });
+
+  it("xiaohongshu: intent='convert' 合法 → systemPrompt 含转化 CTA 段", async () => {
+    prismaMock.personaProfile.findUnique.mockResolvedValue(personaRow);
+    llmMock.callStructured.mockResolvedValueOnce({
+      result: xhsScriptResult,
+      usage: { model: 'deepseek', promptTokens: 100, completionTokens: 200, estCostUSD: 0.001 },
+    });
+    const res = await POST(
+      makeReq({
+        topic: '如何用 ChatGPT 写周报',
+        niche: 'ai-knowledge',
+        platform: 'xiaohongshu',
+        intent: 'convert',
+      }),
+    );
+    expect(res.status).toBe(200);
+    const systemPrompt = llmMock.callStructured.mock.calls[0][0].systemPrompt as string;
+    expect(systemPrompt).toContain('CTA 指引 (转化)');
+  });
+
+  it('xiaohongshu: 响应 suggestedIntent 取自写稿 LLM 输出', async () => {
+    llmMock.callStructured.mockResolvedValueOnce({
+      result: { ...xhsScriptResult, suggestedIntent: 'reach' },
+      usage: { model: 'deepseek', promptTokens: 100, completionTokens: 200, estCostUSD: 0.001 },
+    });
+    const res = await POST(
+      makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge', platform: 'xiaohongshu' }),
+    );
+    const json = await res.json();
+    expect(json.data.suggestedIntent).toBe('reach');
   });
 });
 

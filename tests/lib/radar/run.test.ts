@@ -62,6 +62,8 @@ function readResult(overrides: Partial<RadarReadResponse> = {}): RadarReadRespon
     feasibility: 75,
     suggestedKeywords: [],
     pillarHit: null,
+    painHit: null,
+    angleSuggestion: null,
     ...overrides,
   };
 }
@@ -406,5 +408,94 @@ describe('runRadarScan — 人设注入 (T3)', () => {
     await runRadarScan('u1');
 
     expect(prismaMock.personaProfile.findUnique).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('runRadarScan — 痛点识别 (T5)', () => {
+  const personaRowWithPains = {
+    userId: 'u1',
+    audience: '25-35 岁互联网从业者',
+    targetFans: '想转行做 AI 的人',
+    pillars: [{ name: '工具评测', description: '拆解 AI 工具实际效果' }],
+    angle: '只讲能落地的方法',
+    avoid: '不做标题党',
+    painPoints: [{ pain: '不知道拍什么', evidence: '选题卡壳超过 1 小时' }],
+  };
+
+  it('无档案 → heatFactors.painHit/angleSuggestion 均为 null', async () => {
+    prismaMock.personaProfile.findUnique.mockResolvedValue(null);
+    searchProviderMock.search.mockResolvedValue([searchResult()]);
+    llmCallMock.mockResolvedValue({ result: readResult(), usage: {} });
+
+    await runRadarScan('u1');
+
+    const itemsData = prismaMock.radarItem.createMany.mock.calls[0][0].data;
+    expect(itemsData[0].heatFactors.painHit).toBeNull();
+    expect(itemsData[0].heatFactors.angleSuggestion).toBeNull();
+  });
+
+  it('有痛点档案且命中 → heatFactors.painHit/angleSuggestion 写入 AI 返回值', async () => {
+    prismaMock.personaProfile.findUnique.mockResolvedValue(personaRowWithPains);
+    searchProviderMock.search.mockResolvedValue([searchResult()]);
+    llmCallMock.mockResolvedValue({
+      result: readResult({ painHit: '不知道拍什么', angleSuggestion: '拍一期真实选题卡壳的对比案例' }),
+      usage: {},
+    });
+
+    await runRadarScan('u1');
+
+    const itemsData = prismaMock.radarItem.createMany.mock.calls[0][0].data;
+    expect(itemsData[0].heatFactors.painHit).toBe('不知道拍什么');
+    expect(itemsData[0].heatFactors.angleSuggestion).toBe('拍一期真实选题卡壳的对比案例');
+  });
+
+  it('有痛点档案但 AI 编造不存在的痛点文本 → validatePainHit 判为未命中 (null)', async () => {
+    prismaMock.personaProfile.findUnique.mockResolvedValue(personaRowWithPains);
+    searchProviderMock.search.mockResolvedValue([searchResult()]);
+    llmCallMock.mockResolvedValue({
+      result: readResult({ painHit: '编造的痛点', angleSuggestion: '某角度建议' }),
+      usage: {},
+    });
+
+    await runRadarScan('u1');
+
+    const itemsData = prismaMock.radarItem.createMany.mock.calls[0][0].data;
+    expect(itemsData[0].heatFactors.painHit).toBeNull();
+  });
+
+  it('angleSuggestion 超长 (防御性输入, 非经 schema 校验) → 截断到 40 字, 不整条丢弃', async () => {
+    prismaMock.personaProfile.findUnique.mockResolvedValue(personaRowWithPains);
+    searchProviderMock.search.mockResolvedValue([searchResult()]);
+    const overlong = '字'.repeat(50);
+    llmCallMock.mockResolvedValue({
+      result: readResult({ painHit: '不知道拍什么', angleSuggestion: overlong }),
+      usage: {},
+    });
+
+    await runRadarScan('u1');
+
+    const itemsData = prismaMock.radarItem.createMany.mock.calls[0][0].data;
+    expect(itemsData[0].heatFactors.angleSuggestion).toBe('字'.repeat(40));
+  });
+
+  it('痛点识别不影响 heatScore — 同一份输入下有/无 painHit+angleSuggestion, heatScore 完全相同 (八期基线对照)', async () => {
+    // 同一轮 personaProfile/搜索结果不变, 只有 LLM 阅读结果的 painHit/angleSuggestion 有无不同 —
+    // 分两次调用 runRadarScan (radarRun.create 每次都返回新 id, createMany 各调用一次), 分别取各自
+    // 那次调用写入的 heatScore 比较, 断言 composeHeat/applyPersonaAdjust 完全不受痛点字段影响。
+    prismaMock.personaProfile.findUnique.mockResolvedValue(personaRowWithPains);
+    searchProviderMock.search.mockResolvedValue([searchResult()]);
+
+    llmCallMock.mockResolvedValueOnce({ result: readResult(), usage: {} });
+    await runRadarScan('u1');
+    const heatWithoutPain = prismaMock.radarItem.createMany.mock.calls[0][0].data[0].heatScore;
+
+    llmCallMock.mockResolvedValueOnce({
+      result: readResult({ painHit: '不知道拍什么', angleSuggestion: '拍一期真实选题卡壳的对比案例' }),
+      usage: {},
+    });
+    await runRadarScan('u1');
+    const heatWithPain = prismaMock.radarItem.createMany.mock.calls[1][0].data[0].heatScore;
+
+    expect(heatWithPain).toBe(heatWithoutPain);
   });
 });

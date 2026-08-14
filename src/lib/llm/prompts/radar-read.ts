@@ -19,6 +19,10 @@ export const RadarReadResponseSchema = z.object({
   suggestedKeywords: z.array(z.string().min(1).max(20)).min(0).max(3), // 建议追加的雷达关键词, 0-3 个
   // 命中的人设内容支柱名 (与 PersonaPillar.name 精确匹配) 或 null (未命中/无人设档案时不产出该字段, 走 default)
   pillarHit: z.string().max(10).nullable().optional().default(null),
+  // 十期: 命中的用户痛点原文 (与 PersonaPain.pain 精确匹配) 或 null (未命中/无痛点档案时走 default)
+  painHit: z.string().max(30).nullable().optional().default(null),
+  // 十期: 结合命中痛点给出的具体切入角度建议, ≤40 字, 未命中痛点时为 null
+  angleSuggestion: z.string().max(40).nullable().optional().default(null),
 });
 
 export type RadarReadResponse = z.infer<typeof RadarReadResponseSchema>;
@@ -36,16 +40,25 @@ export const RADAR_READ = {
   /**
    * personaSection 缺省/空串时, 输出必须与不传参数时字符级一致 (兼容 T4 采集管线未接入人设档案的场景,
    * 以及现有测试断言)。非空时: 拼入人设定位 + relevance 语义句换成「对上述定位的价值」+ 要求判断 pillarHit。
+   *
+   * 十期: personaSection 里含「用户痛点:」段 (buildPersonaSection scope='radar' 在档案有 painPoints
+   * 时才会拼出这行) 时, 额外追加「是否戳中上述痛点」的语义句 + painHit/angleSuggestion 输出要求。
+   * 靠字符串探测而非结构化 profile 判断, 是因为这里只接收 T2 拼好的单一字符串 (与 pillarHit 一致的做法)。
    */
   buildSystemPrompt(personaSection?: string): string {
     const hasPersona = Boolean(personaSection && personaSection.trim());
+    const hasPainPoints = hasPersona && personaSection!.includes('用户痛点:');
 
     const relevanceLine = hasPersona
-      ? '- relevance (相关度): 对上述定位的价值 — 越贴近你的定位核心话题分越高, 擦边/无关话题分低'
+      ? `- relevance (相关度): 对上述定位的价值 — 越贴近你的定位核心话题分越高, 擦边/无关话题分低${hasPainPoints ? ', 是否戳中上述痛点也计入价值判断' : ''}`
       : '- relevance (相关度): 与用户关注的关键词 / AI 知识赛道的相关程度 — 越贴近赛道核心话题分越高, 擦边/无关话题分低';
 
+    const painBlock = hasPainPoints
+      ? '\n\n另外判断这篇内容是否戳中上述用户痛点之一: 命中则在 painHit 字段填写该痛点的准确文本 (须与列出的痛点完全一致), 未命中则填 null; 命中时结合该痛点在 angleSuggestion 字段给出一个具体的切入角度建议 (≤40 字), 未命中则 angleSuggestion 填 null。'
+      : '';
+
     const personaBlock = hasPersona
-      ? `\n\n你的定位:\n${personaSection}\n\n另外判断这篇内容是否命中上述内容支柱之一: 命中则在 pillarHit 字段填写该支柱的准确名称 (须与列出的支柱名完全一致), 未命中则填 null。`
+      ? `\n\n你的定位:\n${personaSection}\n\n另外判断这篇内容是否命中上述内容支柱之一: 命中则在 pillarHit 字段填写该支柱的准确名称 (须与列出的支柱名完全一致), 未命中则填 null。${painBlock}`
       : '';
 
     return `你是「AI 知识类抖音创作者」的选题雷达阅读助手。 你的任务: 阅读全网抓取到的一篇文章/资讯, 评估它作为下一条抖音短视频选题的价值。${personaBlock}

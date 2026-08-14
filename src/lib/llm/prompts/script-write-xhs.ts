@@ -56,6 +56,7 @@ export const SCRIPT_WRITE_XHS = {
 - 如果收到了素材简报, 简报里每条 fact 都要自然引进 intro 或 body 对应段落 (具体数字/案例照写, 不要转述得含糊, 也不要遗漏)
 - titles 保留含 emoji 的惯例 (例: "✨打工人秒变效率怪 | 这个 prompt 我藏不住了")
 - coverText / tags / shotIdeas 按 schema 要求产出
+- suggestedIntent: 根据这条内容本身的性质, 判断最适合的结尾 CTA 意图 —— reach (引流互动) / trust (建立信任) / convert (转化), 没有明显倾向则填 null
 
 ${buildXhsStyleSection(style)}
 
