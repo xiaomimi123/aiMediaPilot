@@ -4,7 +4,6 @@ import { useState, type DragEvent, type WheelEvent } from "react";
 import {
   DEFAULT_SCHEDULE_OBJECT_TYPES,
   SCHEDULABLE_STAGES,
-  STAGE_LABELS,
   type LiveSession,
   type ScheduleObject,
   type ScheduleObjectType,
@@ -13,6 +12,7 @@ import {
 } from "@/lib/cockpit/model";
 import { startOfWeekISO } from "@/lib/cockpit/calculations";
 import { sortStageEvents, stageProgress } from "@/lib/cockpit/workflow";
+import { isStageInFlow, stageLabelFor } from "@/lib/cockpit/platform-stages";
 import { Badge, Empty, date, shiftDate } from "../shared";
 
 function scheduleTypeIcon(kind: ScheduleObjectType["kind"]) {
@@ -241,10 +241,10 @@ export function ScheduleView({
       className={`schedule-calendar-event ${isDone ? "completed" : ""} ${overdue ? "overdue" : ""}`}
       style={{ "--stage-color": state.stageColors[event.stage] } as React.CSSProperties}
     >
-      <button className="schedule-event-main" onClick={() => open(item.id)} title={`${item.title} · ${STAGE_LABELS[event.stage]}`}>
-        <em>{STAGE_LABELS[event.stage]}</em><strong>{item.title}</strong>{isDone ? <i>✓</i> : null}
+      <button className="schedule-event-main" onClick={() => open(item.id)} title={`${item.title} · ${stageLabelFor(item.platform, event.stage)}`}>
+        <em>{stageLabelFor(item.platform, event.stage)}</em><strong>{item.title}</strong>{isDone ? <i>✓</i> : null}
       </button>
-      {!isDone ? <button className="schedule-event-remove" onClick={() => unschedule(item.id, event.stage)} aria-label={`取消${item.title}的${STAGE_LABELS[event.stage]}排期`}>×</button> : null}
+      {!isDone ? <button className="schedule-event-remove" onClick={() => unschedule(item.id, event.stage)} aria-label={`取消${item.title}的${stageLabelFor(item.platform, event.stage)}排期`}>×</button> : null}
     </article>;
   });
 
@@ -349,11 +349,13 @@ export function ScheduleView({
       <div className="schedule-content-section-title"><div><strong>内容阶段</strong><small>复盘不再针对单条内容排期</small></div></div>
       <div className="schedule-content-list">{unscheduledContents.map((item) => {
         const firstStage = item.stage === "inbox" ? "topic" : item.stage as WorkStage;
-        const remainingStages = SCHEDULABLE_STAGES.slice(SCHEDULABLE_STAGES.indexOf(firstStage));
+        // 九期: 平台阶段流内的可排阶段——xhs 无录制/剪辑, 这里过滤掉, 拖拽入口
+        // (下方 schedule-stage-chips) 就不会再产出 recording/editing 的 stageEvent。
+        const remainingStages = SCHEDULABLE_STAGES.slice(SCHEDULABLE_STAGES.indexOf(firstStage)).filter((stage) => isStageInFlow(item.platform, stage));
         const progress = Math.round(stageProgress(item.stage) * 100);
         return <article key={item.id} className="schedule-content-card" style={{ "--stage-color": state.stageColors[item.stage] } as React.CSSProperties}>
           <button className="schedule-content-heading" onClick={() => open(item.id)}>
-            <div className="schedule-content-heading-row"><div className="schedule-content-badges"><Badge tone={item.stage} color={state.stageColors[item.stage]}>当前 · {STAGE_LABELS[item.stage]}</Badge><Badge tone={`tier-${item.tier.toLowerCase()}`}>{item.tier}档</Badge></div><span className="schedule-content-percent">{progress}%</span></div>
+            <div className="schedule-content-heading-row"><div className="schedule-content-badges"><Badge tone={item.stage} color={state.stageColors[item.stage]}>当前 · {stageLabelFor(item.platform, item.stage)}</Badge><Badge tone={`tier-${item.tier.toLowerCase()}`}>{item.tier}档</Badge></div><span className="schedule-content-percent">{progress}%</span></div>
             <strong>{item.title}</strong>
             <span className="schedule-content-progress" aria-label={`内容完成度 ${progress}%`}><i style={{ width: `${progress}%` }} /></span>
           </button>
@@ -366,8 +368,8 @@ export function ScheduleView({
               onClick={() => open(item.id)}
               className={`${stage === item.stage ? "current" : ""} ${planned ? "scheduled" : ""}`}
               style={{ "--stage-color": state.stageColors[stage] } as React.CSSProperties}
-              title={planned ? `已安排到 ${planned.plannedDate}` : `拖动安排${STAGE_LABELS[stage]}`}
-            ><span>⠿</span>{STAGE_LABELS[stage]}{planned ? <small>{planned.plannedDate.slice(5)}</small> : null}</button>;
+              title={planned ? `已安排到 ${planned.plannedDate}` : `拖动安排${stageLabelFor(item.platform, stage)}`}
+            ><span>⠿</span>{stageLabelFor(item.platform, stage)}{planned ? <small>{planned.plannedDate.slice(5)}</small> : null}</button>;
           })}</div>
         </article>;
       })}</div>

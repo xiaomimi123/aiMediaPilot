@@ -8,6 +8,7 @@ import {
   type WorkStage,
   type WorkspaceState,
 } from "./model";
+import { isStageInFlow } from "./platform-stages";
 
 const PUBLISH_PROGRESS: Record<ContentStage, number> = {
   inbox: 0.05,
@@ -41,6 +42,10 @@ export function canScheduleStage(
 ) {
   const content = state.contents.find((item) => item.id === contentId);
   if (!content || content.stage === "archived" || !SCHEDULABLE_STAGES.includes(stage) || !plannedDate) return false;
+  // 九期: 平台阶段流——不在该内容平台流内的阶段 (如小红书的录制/剪辑) 永远不
+  // 可排期, 也就永远不会产出「今日推进」任务。这是任务生成的唯一入口
+  // (scheduleStageForDate/moveStageEventToDate 都先过这道闸)。
+  if (!isStageInFlow(content.platform, stage)) return false;
   if (stageIndex(content.stage) > stageIndex(stage)) return false;
   return !state.stageEvents.some((event) => {
     if (event.contentId !== contentId || event.completedAt || event.stage === stage) return false;

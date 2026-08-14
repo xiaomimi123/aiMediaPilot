@@ -1,9 +1,7 @@
 "use client";
 
 import {
-  NEXT_ACTIONS,
   SCHEDULABLE_STAGES,
-  STAGE_LABELS,
   type ContentItem,
   type LiveSession,
   type ScheduleObject,
@@ -14,6 +12,7 @@ import {
 } from "@/lib/cockpit/model";
 import { percent, startOfWeekISO } from "@/lib/cockpit/calculations";
 import { stageIndex, stageProgress } from "@/lib/cockpit/workflow";
+import { nextActionFor, stageLabelFor } from "@/lib/cockpit/platform-stages";
 // MomentumPeriod 的唯一定义在 view-routing.ts（和 `resolveInitialMomentumTab` 配套，
 // 供纯逻辑单测复用），这里只做 type-only import。
 import type { MomentumPeriod } from "@/lib/cockpit/view-routing";
@@ -37,16 +36,16 @@ function TodoCard({ entry, index, overdue = false, stageColors, open, openSchedu
   const isDone = Boolean(event.completedAt);
   const waiting = !isDone && stageIndex(item.stage) < stageIndex(event.stage);
   return <article className={`${isDone ? "today-card completed" : "today-card"} ${waiting ? "waiting" : ""} ${overdue ? "overdue-todo-card" : ""}`}>
-    <label className="today-check" title={waiting ? `先完成${STAGE_LABELS[item.stage]}阶段` : isDone ? "取消完成并恢复原阶段" : `完成${STAGE_LABELS[event.stage]}阶段`}>
-      <input type="checkbox" checked={isDone} disabled={waiting} onChange={() => toggleComplete(event.id)} aria-label={isDone ? `撤销完成：${item.title}·${STAGE_LABELS[event.stage]}` : `完成：${item.title}·${STAGE_LABELS[event.stage]}`} />
+    <label className="today-check" title={waiting ? `先完成${stageLabelFor(item.platform, item.stage)}阶段` : isDone ? "取消完成并恢复原阶段" : `完成${stageLabelFor(item.platform, event.stage)}阶段`}>
+      <input type="checkbox" checked={isDone} disabled={waiting} onChange={() => toggleComplete(event.id)} aria-label={isDone ? `撤销完成：${item.title}·${stageLabelFor(item.platform, event.stage)}` : `完成：${item.title}·${stageLabelFor(item.platform, event.stage)}`} />
       <span aria-hidden="true">✓</span>
     </label>
     <div className={overdue ? "rank overdue-date" : "rank"}>{overdue ? <><small>原定</small><span>{event.plannedDate.slice(5).replace("-", "/")}</span></> : String(event.rank || index + 1).padStart(2, "0")}</div>
     <button className="today-main" onClick={() => open(item.id)}>
-      {isDone ? <div className="completed-copy"><h3>{item.title}</h3><p>{STAGE_LABELS[event.stage]}已完成 · 当前进入{STAGE_LABELS[item.stage]}</p></div> : <><div><Badge tone={event.stage} color={stageColors[event.stage]}>{STAGE_LABELS[event.stage]}</Badge><Badge tone={`tier-${item.tier.toLowerCase()}`}>{item.tier}档</Badge>{overdue ? <Badge tone="clay">逾期</Badge> : null}{waiting ? <Badge tone="neutral">等待前置阶段</Badge> : null}</div><h3>{item.title}</h3><p><Icon name="arrow" />{waiting ? `先完成${STAGE_LABELS[item.stage]}` : NEXT_ACTIONS[event.stage]}</p></>}
+      {isDone ? <div className="completed-copy"><h3>{item.title}</h3><p>{stageLabelFor(item.platform, event.stage)}已完成 · 当前进入{stageLabelFor(item.platform, item.stage)}</p></div> : <><div><Badge tone={event.stage} color={stageColors[event.stage]}>{stageLabelFor(item.platform, event.stage)}</Badge><Badge tone={`tier-${item.tier.toLowerCase()}`}>{item.tier}档</Badge>{overdue ? <Badge tone="clay">逾期</Badge> : null}{waiting ? <Badge tone="neutral">等待前置阶段</Badge> : null}</div><h3>{item.title}</h3><p><Icon name="arrow" />{waiting ? `先完成${stageLabelFor(item.platform, item.stage)}` : nextActionFor(item.platform, event.stage)}</p></>}
     </button>
     {!isDone ? overdue
-      ? <div className="today-controls overdue-controls"><button onClick={openSchedule} aria-label={`调整${item.title}的${STAGE_LABELS[event.stage]}排期`}>改期</button><button onClick={() => removeFromToday(event.id)} aria-label="取消逾期排期">×</button></div>
+      ? <div className="today-controls overdue-controls"><button onClick={openSchedule} aria-label={`调整${item.title}的${stageLabelFor(item.platform, event.stage)}排期`}>改期</button><button onClick={() => removeFromToday(event.id)} aria-label="取消逾期排期">×</button></div>
       : <div className="today-controls"><button onClick={() => moveToday(event.id, -1)} aria-label="上移">↑</button><button onClick={() => moveToday(event.id, 1)} aria-label="下移">↓</button><button onClick={() => removeFromToday(event.id)} aria-label="取消今日排期">×</button></div>
       : <span className="done-status">阶段完成</span>}
   </article>;
@@ -134,12 +133,12 @@ export function WeekOverview({ state, open, openSchedule }: {
         const progress = Math.round(stageProgress(item.stage) * 100);
         return <article key={item.id} className={`week-content-card ${allDone ? "completed" : ""}`} style={{ "--stage-color": state.stageColors[item.stage] } as React.CSSProperties}>
           <button onClick={() => open(item.id)}>
-            <header><div><Badge tone={item.stage} color={state.stageColors[item.stage]}>当前 · {STAGE_LABELS[item.stage]}</Badge><Badge tone={`tier-${item.tier.toLowerCase()}`}>{item.tier}档</Badge></div><span>{progress}%</span></header>
+            <header><div><Badge tone={item.stage} color={state.stageColors[item.stage]}>当前 · {stageLabelFor(item.platform, item.stage)}</Badge><Badge tone={`tier-${item.tier.toLowerCase()}`}>{item.tier}档</Badge></div><span>{progress}%</span></header>
             <h3>{item.title}</h3>
             <div className="week-stage-list">{events.map((event) => {
               const isDone = Boolean(event.completedAt);
               const overdue = !isDone && event.plannedDate < date;
-              return <span key={event.id} className={`${isDone ? "completed" : ""} ${overdue ? "overdue" : ""}`} style={{ "--stage-color": state.stageColors[event.stage] } as React.CSSProperties}><i>{isDone ? "✓" : ""}</i><strong>{STAGE_LABELS[event.stage]}</strong><time>{formatStageDate(event.plannedDate)}</time></span>;
+              return <span key={event.id} className={`${isDone ? "completed" : ""} ${overdue ? "overdue" : ""}`} style={{ "--stage-color": state.stageColors[event.stage] } as React.CSSProperties}><i>{isDone ? "✓" : ""}</i><strong>{stageLabelFor(item.platform, event.stage)}</strong><time>{formatStageDate(event.plannedDate)}</time></span>;
             })}</div>
             <footer><span>{item.contentType}</span><strong>{completed} / {events.length} 阶段完成</strong></footer>
           </button>

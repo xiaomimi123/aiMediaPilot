@@ -226,6 +226,28 @@ describe('calculations', () => {
     expect(promoted.stageEvents.length).toBe(0);
   });
 
+  // 九期: 平台阶段流——canScheduleStage 是「今日推进」任务生成的唯一入口闸门
+  // (scheduleStageForDate/moveStageEventToDate 都先过它), 小红书没有录制/剪辑
+  // 环节, 这两个阶段永远不该产出可排期的任务；douyin (走 DEFAULT_STAGE_FLOW)
+  // 行为保持不变, 用同一组断言对照验证没有误伤默认平台流。
+  it("xiaohongshu 卡片不产出录制/剪辑任务, douyin 不受影响", () => {
+    const xhsItem = content({ id: "xhs-1", platform: "xiaohongshu", stage: "script", publicationStatus: "draft", publishedAt: "" });
+    const xhsState = workspace(xhsItem);
+    expect(canScheduleStage(xhsState, xhsItem.id, "recording", "2026-07-20")).toBe(false);
+    expect(canScheduleStage(xhsState, xhsItem.id, "editing", "2026-07-20")).toBe(false);
+    expect(scheduleStageForDate(xhsState, xhsItem.id, "recording", "2026-07-20").stageEvents.length).toBe(0);
+    expect(scheduleStageForDate(xhsState, xhsItem.id, "editing", "2026-07-20").stageEvents.length).toBe(0);
+    // 流内阶段不受影响：topic/script/publishing 仍可正常排期。
+    expect(canScheduleStage(xhsState, xhsItem.id, "script", "2026-07-20")).toBe(true);
+    expect(canScheduleStage(xhsState, xhsItem.id, "publishing", "2026-07-25")).toBe(true);
+
+    const douyinItem = content({ id: "douyin-1", platform: "douyin", stage: "script", publicationStatus: "draft", publishedAt: "" });
+    const douyinState = workspace(douyinItem);
+    expect(canScheduleStage(douyinState, douyinItem.id, "recording", "2026-07-20")).toBe(true);
+    expect(canScheduleStage(douyinState, douyinItem.id, "editing", "2026-07-20")).toBe(true);
+    expect(scheduleStageForDate(douyinState, douyinItem.id, "recording", "2026-07-20").stageEvents.length).toBe(1);
+  });
+
   it("manual stage completion cascades backward and undo cascades forward", () => {
     const item = content({ stage: "topic", publicationStatus: "draft", publishedAt: "" });
     const completed = setContentStageCompletion(

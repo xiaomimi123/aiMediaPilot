@@ -4,13 +4,13 @@ import { useState, type DragEvent } from "react";
 import {
   CONTENT_STAGES,
   DEFAULT_PAGE_TITLES,
-  NEXT_ACTIONS,
   PLATFORM_LABELS,
   STAGE_LABELS,
   type ContentPlatformEx,
   type ContentStage,
   type WorkspaceState,
 } from "@/lib/cockpit/model";
+import { stageFlowFor, stageLabelFor, nextActionFor } from "@/lib/cockpit/platform-stages";
 import { Badge, EditablePageTitle, Empty, Icon, date } from "../shared";
 
 // 三期 T5: platformFilter/hideHeading —— 平台流水线页 (PlatformView) 内嵌同一份组件
@@ -24,7 +24,10 @@ export function ContentOverviewView({ state, pageTitle, updateTitle, query, setQ
   const [tierFilter, setTierFilter] = useState("全部档位");
   const [priorityFilter, setPriorityFilter] = useState("全部优先级");
   const [statusFilter, setStatusFilter] = useState("全部状态");
-  const stages = CONTENT_STAGES;
+  // 九期: 总览 (无 platformFilter) 保持 8 阶段超集不变；平台视图 (platformFilter
+  // 非空, 由 PlatformView 内嵌本组件传入) 改用该平台的阶段流 (xhs 5 列/其余 7 列),
+  // 不再和总览共用同一份超集列——两态在这一处分岔, 之后的看板/列表逻辑不变。
+  const stages = platformFilter ? stageFlowFor(platformFilter) : CONTENT_STAGES;
   const platformScoped = platformFilter ? state.contents.filter((item) => item.platform === platformFilter) : state.contents;
   const baseFiltered = platformScoped.filter((item) =>
     (type === "全部类型" || item.contentType === type)
@@ -68,14 +71,14 @@ export function ContentOverviewView({ state, pageTitle, updateTitle, query, setQ
     {mode === "pipeline" ? <div className="kanban">{stages.map((stage) => {
       const items = baseFiltered.filter((item) => item.stage === stage);
       return <section key={stage} className="kanban-column" onDragOver={(e) => e.preventDefault()} onDrop={(e) => dropStage(e, stage)}>
-        <header><div><i className="stage-dot" style={{ background: state.stageColors[stage] }} /><h2>{STAGE_LABELS[stage]}</h2></div><span>{items.length}</span></header>
+        <header><div><i className="stage-dot" style={{ background: state.stageColors[stage] }} /><h2>{platformFilter ? stageLabelFor(platformFilter, stage) : STAGE_LABELS[stage]}</h2></div><span>{items.length}</span></header>
         <div className="kanban-list">{items.map((item) => {
           const todayEvent = state.stageEvents.find((event) => event.contentId === item.id && event.stage === item.stage && event.plannedDate === date);
           const nextPlanned = state.stageEvents
             .filter((event) => event.contentId === item.id && !event.completedAt)
             .sort((a, b) => a.plannedDate.localeCompare(b.plannedDate) || a.rank - b.rank)[0];
           return <article key={item.id} draggable onDragStart={(e) => e.dataTransfer.setData("text/content-id", item.id)} className="kanban-card">
-            <button className="kanban-card-main" onClick={() => open(item.id)}><div className="card-tags"><Badge tone={`tier-${item.tier.toLowerCase()}`}>{item.tier}档</Badge><span className="badge">{PLATFORM_LABELS[item.platform]}</span><span>{item.contentType}</span></div><h3>{item.title}</h3><p>{item.idea}</p><footer><span>{NEXT_ACTIONS[item.stage]}</span>{nextPlanned ? <time>{STAGE_LABELS[nextPlanned.stage]} · {nextPlanned.plannedDate.slice(5)}</time> : null}</footer></button>
+            <button className="kanban-card-main" onClick={() => open(item.id)}><div className="card-tags"><Badge tone={`tier-${item.tier.toLowerCase()}`}>{item.tier}档</Badge><span className="badge">{PLATFORM_LABELS[item.platform]}</span><span>{item.contentType}</span></div><h3>{item.title}</h3><p>{item.idea}</p><footer><span>{nextActionFor(item.platform, item.stage)}</span>{nextPlanned ? <time>{stageLabelFor(item.platform, nextPlanned.stage)} · {nextPlanned.plannedDate.slice(5)}</time> : null}</footer></button>
             {stage === "archived" ? <span className="card-today archived">已归档</span> : stage === "inbox" ? <span className="card-today archived">灵感无需排期 · 先推进到大纲</span> : !todayEvent ? <button className="card-today" onClick={() => addToday(item.id)}>＋ 当前阶段安排今天</button> : <span className="card-today added">{todayEvent.completedAt ? "今日阶段已完成" : `今日 #${todayEvent.rank}`}</span>}
           </article>;
         })}</div>
@@ -87,11 +90,11 @@ export function ContentOverviewView({ state, pageTitle, updateTitle, query, setQ
           const nextPlanned = nextPlannedFor(item.id);
           return <tr key={item.id}>
             <td><button className="content-list-title" onClick={() => open(item.id)}><strong>{item.title}</strong><small>{item.tags.length ? item.tags.slice(0, 3).join(" · ") : item.idea || "尚未补充原始想法"}</small></button></td>
-            <td><Badge tone={item.stage} color={state.stageColors[item.stage]}>{STAGE_LABELS[item.stage]}</Badge></td>
+            <td><Badge tone={item.stage} color={state.stageColors[item.stage]}>{stageLabelFor(item.platform, item.stage)}</Badge></td>
             <td><span className="content-list-type">{item.contentType}</span><Badge tone={`tier-${item.tier.toLowerCase()}`}>{item.tier}档</Badge></td>
             <td><span className={`priority-label priority-${item.priority}`}>{priorityLabels[item.priority]}</span></td>
             <td><span className={`publication-label publication-${item.publicationStatus}`}>{statusLabels[item.publicationStatus]}</span>{item.publishedAt ? <small className="publication-date">{item.publishedAt}</small> : null}</td>
-            <td>{nextPlanned ? <button className="next-schedule-link" onClick={() => open(item.id)}><strong>{STAGE_LABELS[nextPlanned.stage]}</strong><small>{nextPlanned.plannedDate}</small></button> : <span className="table-empty">—</span>}</td>
+            <td>{nextPlanned ? <button className="next-schedule-link" onClick={() => open(item.id)}><strong>{stageLabelFor(item.platform, nextPlanned.stage)}</strong><small>{nextPlanned.plannedDate}</small></button> : <span className="table-empty">—</span>}</td>
             <td><time>{item.updatedAt || item.createdAt}</time></td>
           </tr>;
         })}</tbody>
