@@ -660,6 +660,15 @@ textarea { resize: vertical; }
 .platform-distribution-card a { overflow: hidden; color: var(--clay); font-size: 9px; text-decoration: underline; text-overflow: ellipsis; white-space: nowrap; }
 .platform-distribution-card time { color: var(--muted); font-size: 8px; }
 
+/* 十一期 T2: 账号定位视图 (体系报告 / 人设定位卡 / 风格档案卡三段, 见 views/positioning.tsx)。
+   .positioning-page 沿用 .radar-page 的单列 grid+gap 手法把三段纵向排开——PersonaCard/
+   StyleProfileCard 自带 .panel.settings-card.wide, 单列网格下 wide 修饰符是无操作的 no-op,
+   不影响样式。 */
+.positioning-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.positioning-summary-panel { padding-bottom: 20px; }
+.positioning-summary-panel .system-summary-body { margin: 8px 22px 0; }
+.positioning-summary-panel > p { margin: 0 22px; }
+
 /* 四期 T6: 热点雷达视图 (候选词审批条 / 热度排行 / 立即扫描三块, 见 views/radar.tsx)。
    .radar-page 用与 .platform-page 一致的单列 grid+gap 手法把三块 panel 垂直排开。 */
 .radar-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }

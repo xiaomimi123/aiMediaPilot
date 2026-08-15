@@ -83,6 +83,7 @@ import {
   type MomentumPeriod,
   type NavView,
 } from "@/lib/cockpit/view-routing";
+import { PositioningView } from "./views/positioning";
 import { InspirationPoolView } from "./views/inspirations";
 import { RadarView } from "./views/radar";
 import { MomentumView, type DailyStageEntry } from "./views/momentum";
@@ -1124,6 +1125,9 @@ export default function Cockpit() {
         </header>
 
         <div className="page-scroll">
+          {/* 十一期 T2: 账号定位——自取数视图, 不消费/不写 WorkspaceState (与 RadarView 同类,
+              但更轻: persona/style 与 cockpit workspace 完全独立, 不需要 refreshWorkspace)。 */}
+          {view === "positioning" ? <PositioningView /> : null}
           {view === "inspirations" ? <InspirationPoolView state={state} pageTitle={state.pageTitles.inspirations} updateTitle={(value) => updatePageTitle("inspirations", value)} add={addInspiration} update={updateInspiration} createContent={createContentFromInspiration} remove={removeInspiration} openContent={openContent} /> : null}
           {/* T6: 热点雷达 —— 自取数视图, 不消费 WorkspaceState (见 radar.tsx 顶部注释), 只需要 setView 用于未配置空态的「去设置」跳转。 */}
           {view === "radar" ? <RadarView setView={setView} refreshWorkspace={refreshWorkspace} /> : null}

@@ -12,9 +12,7 @@ import { getExtras } from "@/lib/cockpit/storage";
 import { EditablePageTitle, creatorMark, dashboardTitle, normalizeGoalQuotas } from "../shared";
 import { AIProviderCard } from "../settings-cards/ai-provider-card";
 import { BaselineCard } from "../settings-cards/baseline-card";
-import { PersonaCard } from "../settings-cards/persona-card";
 import { RadarConfigCard } from "../settings-cards/radar-config-card";
-import { StyleProfileCard } from "../settings-cards/style-profile-card";
 
 const DESIGN_STYLE_OPTIONS: ReadonlyArray<{
   id: DesignStyle;
@@ -99,11 +97,12 @@ export function SettingsView({ state, pageTitle, updateTitle, updateDesignStyle,
       <div className="panel settings-card wide"><div className="settings-icon">#</div><div><h2>内容类型</h2><p>每条内容只能有一个主要类型。类型会用于大目标配额和复盘对比。</p><div className="type-chips">{state.contentTypes.map((type) => <span key={type}>{type}<button aria-label={`删除${type}`} onClick={() => setState((prev) => { const quotas = normalizeGoalQuotas(prev.goal.outputTarget, prev.goal.quotas.filter((item) => item.contentType !== type)); return { ...prev, contentTypes: prev.contentTypes.filter((item) => item !== type), goal: { ...prev.goal, quotas } }; })}>×</button></span>)}</div><div className="add-type"><input value={newType} onChange={(e) => setNewType(e.target.value)} placeholder="添加新的内容类型" /><button onClick={() => { const value = newType.trim(); if (!value || value === "其他" || state.contentTypes.includes(value)) return; setState((prev) => { const quotas = normalizeGoalQuotas(prev.goal.outputTarget, [...prev.goal.quotas, { contentType: value, target: 0 }]); return { ...prev, contentTypes: [...prev.contentTypes, value], goal: { ...prev.goal, quotas } }; }); setNewType(""); }}>添加</button></div></div></div>
       <div className="panel settings-card danger-card"><div className="settings-icon">!</div><div><h2>清空工作台</h2><p>删除当前浏览器中的全部内容与目标数据，保留创作者档案。操作前请先导出备份。</p><button className="danger-button" onClick={onReset}>清空内容与目标</button></div></div>
 
+      {/* 十一期 T2: 人设定位卡 / 风格档案卡迁至独立的「账号定位」视图 (侧栏工作台组
+          第一项, src/components/cockpit/views/positioning.tsx)——两者是内容战略资产,
+          与本页剩下的三张配置卡 (AI 服务配置/雷达配置/基线) 语义不同, 不再并列。 */}
       <AIProviderCard />
       <BaselineCard baselinePlays={settings.baselinePlays} retroMedian={settings.retroMedian} retroCount={settings.retroCount} />
-      <PersonaCard />
       <RadarConfigCard />
-      <StyleProfileCard />
       <div className="panel settings-card"><div className="settings-icon">⇄</div><div><h2>账号管理</h2><p>绑定抖音 / 小红书账号、查看登录状态与手动同步，都在独立的账号管理页完成——这里只是第二个入口。</p><Link className="text-button" href="/accounts">前往账号管理 →</Link></div></div>
     </div>
   </section>;
