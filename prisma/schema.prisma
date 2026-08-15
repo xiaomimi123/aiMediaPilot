@@ -933,3 +933,29 @@ model PersonaProfile {
   systemSummary String   @default("") // 定位体系摘要
   updatedAt     DateTime @updatedAt
 }
+
+// 十二期: 人物志 —「你是谁」的结构化自述, 与 PersonaProfile(「你做什么生意」) 分表。
+// 语言层(口吻/句式/口头禅)不在这里, 完全归 StyleProfile —— 两处都写会让 prompt 自相矛盾。
+model CreatorVoice {
+  userId      String   @id
+  origin      String   @default("") // ≤500 来路故事
+  identity    String   @default("") // ≤200 具体身份(非品类标签)
+  notIdentity String   @default("") // ≤200 我不是什么 —— 防 AI 写成专家的护栏
+  stances     Json     @default("[]") // VoiceStance[] 0-5 条立场主张
+  energy      String   @default("") // ≤200 情绪基调
+  updatedAt   DateTime @updatedAt
+}
+
+// 十二期: 个人经历库 —「你凭什么这么说」, 写稿前按关键词检索, 优先于外部搜索资料。
+model CreatorExperience {
+  id        String   @id @default(cuid())
+  userId    String
+  content   String // ≤500 原文(用户随手记的原话, 不改写)
+  topic     String   @default("") // ≤20 AI 提炼主题标签
+  kind      String   @default("") // '' | practice | failure | insight | result
+  keywords  Json     @default("[]") // string[] 3-5 个检索关键词(AI 提取, 可人工编辑)
+  usedCount Int      @default(0) // 被写稿命中引用次数
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
