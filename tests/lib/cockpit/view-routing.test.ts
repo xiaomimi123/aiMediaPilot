@@ -38,6 +38,10 @@ describe('resolveInitialView', () => {
     expect(resolveInitialView(paramsFrom('view=radar'))).toBe('radar');
   });
 
+  it('十一期新增 `positioning` 固定视图放行 (T1)', () => {
+    expect(resolveInitialView(paramsFrom('view=positioning'))).toBe('positioning');
+  });
+
   it('合法平台 id (platform-douyin) 放行', () => {
     expect(resolveInitialView(paramsFrom('view=platform-douyin'))).toBe('platform-douyin');
   });

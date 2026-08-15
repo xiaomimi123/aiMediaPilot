@@ -10,13 +10,16 @@ import { Icon } from "./shared";
 // 今日推进 + 内容总览。与桌面侧栏一致地回到 `/?view=<id>`。
 //
 // 四期 T6 起 WORKBENCH_NAV_ITEMS 新插入了「热点雷达」(inspirations 之后、momentum
-// 之前)，按 id 查找而非数组下标 —— 下标写法在新增项插到中间时会静默错位 (曾经的
-// `[1]` 从指向 momentum 变成指向 radar)。故意**不**把 radar 加进这两个移动端捷径：
-// 站外落地页 (`/accounts` 等) 屏幕小、导航位有限，radar 属于 Cockpit 内部工作流，
-// 这里保持原有 3 项 (今日推进 + 内容总览 + 账号) 不扩张。
+// 之前)，十一期 T1 又在首位插入了「账号定位」——按 id 查找而非数组下标 —— 下标写法在
+// 新增项插到中间/前面时会静默错位 (曾经的 `[1]` 从指向 momentum 变成指向 radar；
+// `OVERVIEW_NAV_ITEMS[0]` 这类写法虽然本次改动没动 OVERVIEW_NAV_ITEMS 的顺序而未被
+// 影响，但同一个坑沿用下去迟早会踩，T1 复核时一并改成按 id 查找)。故意**不**把
+// radar/positioning 加进这两个移动端捷径：站外落地页 (`/accounts` 等) 屏幕小、
+// 导航位有限，两者都属于 Cockpit 内部工作流，这里保持原有 3 项
+// (今日推进 + 内容总览 + 账号) 不扩张。
 const MOBILE_COCKPIT_SHORTCUTS = [
   WORKBENCH_NAV_ITEMS.find((item) => item.id === "momentum")!,
-  OVERVIEW_NAV_ITEMS[0],
+  OVERVIEW_NAV_ITEMS.find((item) => item.id === "pipeline")!,
 ];
 
 // 二期 T6 起 /agent /dashboard /settings 壳页退役, 桌面侧栏「平台」分组整段移除

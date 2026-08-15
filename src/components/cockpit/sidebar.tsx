@@ -14,10 +14,14 @@ import { Icon, ProgressBar } from "./shared";
 export type FixedNavId = Exclude<NavView, "settings">;
 export type SidebarNavItem = { id: FixedNavId; label: string; icon: string };
 
-// 工作台组 —— ✣ 灵感库选题 / ◉ 热点雷达 (四期新增, T6) / ◫ 今日推进。
-// 「热点雷达」紧跟在「灵感库选题」下面: 采纳雷达条目就是写进灵感库 (见 items/[id]
-// PATCH adopt), 两者是同一条数据管线的前后段, 放在一起符合心智。
+// 工作台组 —— ◌ 账号定位 (十一期新增, T1) / ✣ 灵感库选题 / ◉ 热点雷达 (四期新增, T6) /
+// ◫ 今日推进。「账号定位」放在最前面: 定位是内容战略资产, 是选题/写稿一切动作的前提,
+// 十期把它塞进设置页与 API key 并列造成语义错位, 用户明确要求独立成侧栏第一栏
+// (见 docs/superpowers/specs/2026-08-15-positioning-view-design.md)。视图组件本身在 T2
+// 落地, 这里先占住导航位置。「热点雷达」紧跟在「灵感库选题」下面: 采纳雷达条目就是写进
+// 灵感库 (见 items/[id] PATCH adopt), 两者是同一条数据管线的前后段, 放在一起符合心智。
 export const WORKBENCH_NAV_ITEMS: ReadonlyArray<SidebarNavItem> = [
+  { id: "positioning", label: "账号定位", icon: "positioning" },
   { id: "inspirations", label: "灵感库选题", icon: "inspiration" },
   { id: "radar", label: "热点雷达", icon: "radar" },
   { id: "momentum", label: "今日推进", icon: "momentum" },

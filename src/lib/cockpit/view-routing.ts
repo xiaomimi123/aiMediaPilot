@@ -18,7 +18,12 @@ export type PlatformNavId = `platform-${RoutingPlatform}`;
 // 四期 T6: 新增 "radar" 固定视图 (热点雷达), 挂在工作台组「灵感库选题」正下方
 // (侧栏顺序见 sidebar.tsx WORKBENCH_NAV_ITEMS)。该视图自取数 (不进 WorkspaceState,
 // 见 radar.tsx 顶部注释), 与其余固定视图一样只是多一个合法 `?view=` 目的地。
+// 十一期 T1: 新增 "positioning" 固定视图 (账号定位), 挂在工作台组**第一项**——定位
+// 是内容战略资产, 是一切选题/写稿的前提, 语义上不该和设置页的配置项并列 (十期教训)。
+// 视图组件本身在 T2 落地 (src/components/cockpit/views/positioning.tsx), 这里先只开
+// 合法的 `?view=` 目的地, 供 T2 挂载消费。
 export type NavView =
+  | "positioning"
   | "inspirations"
   | "radar"
   | "momentum"
@@ -34,6 +39,7 @@ export function isPlatformNavView(view: NavView): view is PlatformNavId {
 // 与 sidebar.tsx 的 ALL_NAV_ITEMS (WORKBENCH_NAV_ITEMS + PLATFORM_NAV_ITEMS + OVERVIEW_NAV_ITEMS)
 // id 集合原样对应, 只取 id 不取 label/icon, 避免依赖 sidebar.tsx (见上方模块注释)。
 const FIXED_VIEW_IDS: ReadonlyArray<string> = [
+  "positioning",
   "inspirations",
   "radar",
   "momentum",

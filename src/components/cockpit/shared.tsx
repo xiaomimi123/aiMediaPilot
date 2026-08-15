@@ -64,7 +64,11 @@ export function EditablePageTitle({ value, fallback, onChange }: { value: string
 }
 
 export function Icon({ name }: { name: string }) {
-  const icons: Record<string, string> = { inspiration: "✣", momentum: "◫", schedule: "▤", pipeline: "▦", goals: "◎", analytics: "◎", review: "◌", settings: "⚙", plus: "＋", search: "⌕", spark: "✦", arrow: "→", backup: "⇩", version: "↻", platform: "▸", radar: "◉" };
+  // "positioning" (账号定位, 十一期 T1) 复用既有字形集里的 ◌ (review 键下未被任何视图
+  // 渲染引用的圆环字符, 见 view-routing.ts positioning 注释) —— 不新增图标资源;
+  // ◉ (radar) / ◎ (analytics) 已被同侧栏其它项占用, 相邻复用会造成视觉混淆, ◌ 是
+  // 唯一在当前渲染路径里空闲、且圆环形状最接近「靶心外圈」意象的既有字形。
+  const icons: Record<string, string> = { positioning: "◌", inspiration: "✣", momentum: "◫", schedule: "▤", pipeline: "▦", goals: "◎", analytics: "◎", review: "◌", settings: "⚙", plus: "＋", search: "⌕", spark: "✦", arrow: "→", backup: "⇩", version: "↻", platform: "▸", radar: "◉" };
   return <span aria-hidden="true" className="icon">{icons[name] ?? "·"}</span>;
 }
 
