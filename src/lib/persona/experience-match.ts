@@ -24,21 +24,51 @@ function itemTerms(item: ExperienceItem): string[] {
   return terms.map((t) => t.trim().toLowerCase()).filter((t) => t.length > 0);
 }
 
+/** 是否为纯 ASCII 词 (英文/数字/工具名) —— 中英文匹配策略不同, 见 hitCount。 */
+function isAscii(text: string): boolean {
+  return /^[\x00-\x7F]+$/.test(text);
+}
+
 /**
- * 命中数 = 「主题分词 + 主题整串」与「条目词集合」的双向包含匹配数。
+ * 单个词是否命中主题。
  *
- * 双向包含而非严格相等: 主题「AI 工具提效」的分词是 ["ai","工具提效"], 条目关键词
- * 可能是「效率工具」——严格相等会漏掉大量真实场景。用 includes 双向判断可以接住
- * 中文不分词带来的粒度差异。代价是可能多召回, 由 limit 截断 + prompt 护栏兜住。
+ * **中文不分词是这里最大的坑**: 真实数据里主题是「为什么很多人用AI效率没提升——你可能
+ * 一直在用错的方式提问」, 经历关键词是「提问技巧」。二者互不包含 (关键词不是主题的子串,
+ * 主题也不是关键词的子串), 纯 includes 匹配会 0 命中 —— 十二期收尾 E2E 真实复现过, 整个
+ * 经历库因此形同虚设。
+ *
+ * 所以中文词改用 **2 字滑窗**: 只要关键词的任意连续 2 字出现在主题里就算命中
+ * (「提问技巧」→ 含「提问」→ 命中)。2 字是中文最小语义单位, 再短 (单字) 会过度召回。
+ * 过度召回的兜底不在这里, 而在 limit 截断 + 写稿 prompt 的「不相关就别用」护栏。
+ *
+ * ASCII 词 (如 "Claude"/"GPT"/"AI") 走**词边界**匹配而非子串 —— 子串会让 "AI" 命中
+ * "detail"/"maintain" (E2E 中真实误伤过)。中文字符在 JS 正则里算非单词字符, 所以
+ * "用AI效率" 里的 AI 两侧仍有词边界, 中英混排主题不受影响。
  */
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function termHits(queries: string[], haystack: string, term: string): boolean {
+  if (isAscii(term)) {
+    return new RegExp(`\\b${escapeRegExp(term)}\\b`, 'i').test(haystack);
+  }
+  if (term.length <= 2) return haystack.includes(term);
+  for (let i = 0; i + 2 <= term.length; i += 1) {
+    if (haystack.includes(term.slice(i, i + 2))) return true;
+  }
+  return false;
+}
+
+/** 命中数 = 条目词集合里有多少个词命中了主题。 */
 function hitCount(topic: string, item: ExperienceItem): number {
-  const queries = [...tokenize(topic), topic.trim().toLowerCase()].filter((q) => q.length > 0);
+  const haystack = topic.trim().toLowerCase();
+  const queries = [...tokenize(topic), haystack].filter((q) => q.length > 0);
   const terms = itemTerms(item);
   if (queries.length === 0 || terms.length === 0) return 0;
   let hits = 0;
   for (const term of terms) {
-    const matched = queries.some((q) => q.includes(term) || term.includes(q));
-    if (matched) hits += 1;
+    if (termHits(queries, haystack, term)) hits += 1;
   }
   return hits;
 }

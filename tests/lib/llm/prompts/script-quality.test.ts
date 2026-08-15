@@ -514,3 +514,16 @@ describe('SCRIPT_REFINE.responseSchema', () => {
     expect(() => SCRIPT_REFINE.responseSchema.parse({ sections: seven })).toThrow();
   });
 });
+
+describe('RESEARCH_BRIEF 认识「我的亲身经历」来源 (十二期 T6 E2E 驱动)', () => {
+  const sys = RESEARCH_BRIEF.buildSystemPrompt('ai-knowledge');
+
+  it('source 词表包含「我的亲身经历」—— 否则 AI 无法归类会直接丢掉这类素材', () => {
+    expect(sys).toContain('我的亲身经历');
+  });
+
+  it('明确要求亲身经历优先保留, 不被外部资料挤掉', () => {
+    expect(sys).toContain('优先保留');
+    expect(sys).toContain('挤掉');
+  });
+});

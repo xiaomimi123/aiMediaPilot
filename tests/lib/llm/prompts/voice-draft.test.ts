@@ -92,3 +92,20 @@ describe('VOICE_DRAFT.buildSystemPrompt', () => {
     expect(taskBody).toContain('归风格档案'); // 反向确认: 明确声明了语言层不归自己管
   });
 });
+
+describe('VOICE_DRAFT energy 约束 (T6 真实 E2E 驱动的修复)', () => {
+  const sys = VOICE_DRAFT.buildSystemPrompt('ai-knowledge');
+
+  it('明确 energy 只能从用户原话提取, 不许发明', () => {
+    expect(sys).toContain('不许发明');
+  });
+
+  it('明确区分「观众的感受」与「他的表达风格」, 防止反推出相反特质', () => {
+    expect(sys).toContain('观众的');
+    expect(sys).toContain('不要反推成');
+  });
+
+  it('明确 energy 不得与 notIdentity 冲突', () => {
+    expect(sys).toContain('不得与 notIdentity 冲突');
+  });
+});

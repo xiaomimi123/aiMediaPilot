@@ -276,6 +276,34 @@
 
 **收尾真实 E2E** (无 mock, 真花 DeepSeek+Tavily key 额度几毛钱, 详见 `.superpowers/sdd/2026-08-15-positioning-system/task-7-report.md`): ①真实 9 问作答起草 (5 条痛点/3 条 offerings/productLogic 均在 spec 上限内) → 保存 → GET 校验一致 ②真实市场调研一轮, `marketInsight` 四段均非空 + `researchedAt` ③真实体系报告生成 (1839 字 markdown) + 导出逻辑代码走读确认 (浏览器扩展当次不可用, 未做真实点击下载走查, 与七期先例同样降级) ④真实雷达扫描产出 5 条新条目, 4 条命中 `painHit`/带 `angleSuggestion`——用 `composeHeat`/`applyPersonaAdjust` 对同一批条目原样重算, 5/5 与库内 `heatScore`/`personaAdjust` 完全一致, 实测验证"痛点识别不影响热度分"⑤真实生成一篇 `intent='convert'` 的抖音稿, CTA 确认指向 `offerings` 里的真实产品名⑥临时清空 `audience`/`pillars` 触发无档案回退, 真实生成/雷达扫描确认不报错且退回默认文案, 随后完整恢复原档案 (三份新旧字段深度比对完全一致, 详见报告)⑦`typecheck`+`test`(1376)+`build` 全绿。 过程中④→⑤走查发现一个真实 bug 并修复: 抖音写稿 prompt (`src/lib/llm/prompts/script-write-douyin.ts`) 里"最后一块必须引导评论/关注/转发"是无条件的写作要求, 会盖过 persona 段按 `intent='convert'` 给出的 CTA 指引 (真实生成验证到 AI 完全没有引用任何 offering), 改为"上文如果给了具体的结尾方向就照着写, 没给的话默认引导评论/关注/转发"后原地复现验证通过, 单独一个 fix commit。 E2E 过程中产生的测试用 `ScriptDraft`(3 条) 已清理; 雷达真实扫描产出的条目属于真实产品输出 (非测试专用数据) 予以保留; 用户真实定位档案原样保留未受影响。
 
+### 人物志 + 个人经历库 (十二期新增)
+
+一句话: 定位体系的每个字段都是商业策略维度(受众/支柱/痛点/商品/产品逻辑/市场), 是一份营销
+brief 而不是一个人——用户实际使用后评价"只能是一个没有灵魂的博主, 缺少真人的灵动性和个人
+魅力"。十二期补两块: **人物志**(你是谁)与**个人经历库**(你凭什么这么说)。详见
+`docs/superpowers/specs/2026-08-16-creator-voice-design.md`。
+
+**人物志** (`CreatorVoice`, userId 单行, 独立于 `PersonaProfile`): 身份(具体的人而非品类
+标签) / **我不是什么**(护栏, 防 AI 把你包装成你不是的专家) / 表达能量 / 来路故事 / 立场主张
+0-5 条。**不含语言风格字段**——口吻句式口头禅归「风格档案」, 两处都写会让写稿 prompt 收到
+自相矛盾的指令。建档走 6 问 AI 访谈(`POST /api/v1/voice/draft`, 起草不落库, 改完保存才 PUT)。
+
+**个人经历库** (`CreatorExperience`, 多条目): 「随手记一笔」零门槛录入(不需分类不需起标题),
+DeepSeek 自动打主题/类型(实践/翻车/认知刷新/成果)/检索关键词; keywords 可人工编辑——AI 提取
+质量不稳而它直接决定能否被检索到。**打标签失败不丢内容**(LLM 挂了仍原文入库, 响应 tagged:false)。
+
+**检索与注入**: 写稿前 `matchExperiences(topic, items, 3)` 纯函数按关键词命中数+新鲜度取
+top3, 注入两处——①研究层 `curatedParts` **最前**(亲身经历 > 用户贴的资料 > 搜索正文)
+②写稿 prompt 原文注入 + 护栏句「不相关就别用, 不要硬凑」。命中条目 `usedCount+1`(best-effort)。
+体系报告也吃人物志, 否则那份一页纸仍是营销 brief。无人物志/空库时全链路降级为十二期之前行为(零迁移)。
+
+**中文检索的坑(收尾 E2E 真实复现)**: 主题「…用错的方式提问」与关键词「提问技巧」互不为子串,
+纯 `includes` 匹配 0 命中, 经历库一度形同虚设。现中文走 **2 字滑窗**、ASCII 走**词边界正则**
+(避免 `AI` 命中 `detail`)。另修 `RESEARCH_BRIEF` 的 source 词表——原本只认「URL/用户素材」,
+标注为「我的亲身经历」的素材无法归类被整条丢弃。
+
+**成本**: 6 问起草约几分钱; 随手记每条打标签约几厘; 检索与注入零额外调用。
+
 ### 账号定位独立视图 (十一期新增)
 
 一句话: 定位体系(人设定位+风格档案)从「设置」页搬出来, 独立成侧栏工作台组**第一项**, 顶部新增体系报告置顶区。 详见 `docs/superpowers/specs/2026-08-15-positioning-view-design.md`。

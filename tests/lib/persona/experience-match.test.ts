@@ -80,3 +80,45 @@ describe('matchExperiences', () => {
     expect(matchExperiences('任何主题', items, 3)).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 十二期 T6 真实 E2E 驱动的回归 —— 这两条在收尾走查里真实复现过, 曾让整个经历库形同虚设
+// ---------------------------------------------------------------------------
+describe('中文不分词场景 (真实数据回归)', () => {
+  it('关键词不是主题子串但语义相关时仍命中 (2 字滑窗)', () => {
+    const items = [
+      item({ id: 'real1', topic: '提问能力', keywords: ['AI使用心得', '提问技巧', '思考方式'] }),
+      item({
+        id: 'real2',
+        topic: '学AI改变思维',
+        keywords: ['学AI', '效率提升', '思维方式', '非技术背景'],
+        createdAt: '2026-08-16T00:00:01.000Z',
+      }),
+    ];
+    // E2E 真实主题: 关键词「提问技巧」不是它的子串, 旧的纯 includes 匹配在这里 0 命中
+    const got = matchExperiences('为什么很多人用AI效率没提升——你可能一直在用错的方式提问', items, 3);
+    expect(got.length).toBeGreaterThan(0);
+  });
+
+  it('主题确实无关时仍然不命中(滑窗没有放宽到乱匹配)', () => {
+    const items = [item({ id: 'a', keywords: ['提问技巧', '思考方式'] })];
+    expect(matchExperiences('如何挑选一台家用咖啡机', items, 3)).toEqual([]);
+  });
+});
+
+describe('ASCII 词走词边界而非子串 (真实误伤回归)', () => {
+  it('「AI」不该命中 detail / maintain 这类含 ai 的英文词', () => {
+    const items = [item({ id: 'a', keywords: ['AI'] })];
+    expect(matchExperiences('detail maintain', items, 3)).toEqual([]);
+  });
+
+  it('中英混排主题里的 AI 仍能命中(中文字符不构成单词字符, 词边界成立)', () => {
+    const items = [item({ id: 'a', keywords: ['AI'] })];
+    expect(matchExperiences('很多人用AI效率没提升', items, 3).map((i) => i.id)).toEqual(['a']);
+  });
+
+  it('工具名大小写不敏感', () => {
+    const items = [item({ id: 'a', keywords: ['Claude'] })];
+    expect(matchExperiences('用 claude 写小红书文案', items, 3).map((i) => i.id)).toEqual(['a']);
+  });
+});
