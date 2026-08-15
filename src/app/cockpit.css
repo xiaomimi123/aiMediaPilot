@@ -1895,3 +1895,21 @@ html[data-style="bauhaus"] .review-kpi-grid > article:nth-child(4) {
 }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
+
+/* 十二期: 人物志立场行与访谈区 —— 沿用 .ai-provider-* 体系, 只补两处布局 */
+.voice-stance-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.voice-stance-row input {
+  flex: 1;
+  min-width: 0;
+}
+.voice-interview,
+.voice-candidates {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}

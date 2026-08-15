@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ExperienceCard } from "../settings-cards/experience-card";
 import { PersonaCard } from "../settings-cards/persona-card";
 import { StyleProfileCard } from "../settings-cards/style-profile-card";
+import { VoiceCard } from "../settings-cards/voice-card";
 
 /**
  * 「账号定位」视图 — 十一期 T2, spec `docs/superpowers/specs/2026-08-15-positioning-view-design.md`。
@@ -11,9 +13,14 @@ import { StyleProfileCard } from "../settings-cards/style-profile-card";
  *   1. 顶部体系报告——本视图**自行** `GET /api/v1/persona/profile` 取 `systemSummary`
  *      展示 + 导出，与下方 `PersonaCard` 内部各自取数会有一次重复请求，接受（YAGNI，
  *      不为省一次 GET 引入跨组件状态提升；见 task-2-brief.md 裁决）。
- *   2. `<PersonaCard />`（十期原样迁移，props 不变，内部起草/保存互斥、confirm 前置等
+ *   2. `<VoiceCard />`（十二期新增，人物志「你是谁」）
+ *   3. `<ExperienceCard />`（十二期新增，个人经历库「你凭什么这么说」）
+ *   4. `<PersonaCard />`（十期原样迁移，props 不变，内部起草/保存互斥、confirm 前置等
  *      逻辑一律不动——本视图不重写卡片本体，只换挂载位置，见卡片顶部注释）。
- *   3. `<StyleProfileCard />`（同上）。
+ *   5. `<StyleProfileCard />`（同上，语言层「你怎么说话」）。
+ *
+ * 顺序按「先是人，再是生意」：人物志/经历库回答你是谁、凭什么，人设定位回答做什么
+ * 生意，风格档案回答怎么说话。
  *
  * 与 `RadarView` 一样是自取数视图，但比它更轻：本视图不写任何 cockpit 事务，不消费/不写
  * `WorkspaceState`，也不需要 `refreshWorkspace`——`persona`/`style` 是与 cockpit workspace
@@ -76,6 +83,8 @@ export function PositioningView() {
           : <p className="goal-empty-copy">完成访谈与调研后，这里会生成你的定位一页纸</p>}
     </section>
 
+    <VoiceCard />
+    <ExperienceCard />
     <PersonaCard />
     <StyleProfileCard />
   </section>;
