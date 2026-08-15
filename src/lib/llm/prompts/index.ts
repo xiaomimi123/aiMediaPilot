@@ -61,3 +61,4 @@ export * from './persona-summary';
 // 人物志 + 个人经历库 (十二期): 6 问访谈起草人物志
 export * from './voice-draft';
 export * from './experience-tag';
+export * from './voice-section';

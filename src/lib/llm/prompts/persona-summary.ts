@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { JSON_STRICTNESS } from './base';
 import type { PersonaProfileData } from '@/lib/persona/profile';
+import type { CreatorVoiceData } from '@/lib/persona/voice';
 import type { ContentPart } from '@/lib/llm/vision';
 
 /**
@@ -15,6 +16,25 @@ export const PersonaSummaryResponseSchema = z.object({
 
 export interface PersonaSummaryInput {
   profile: PersonaProfileData;
+  /**
+   * 十二期: 人物志。没有它, 这份"一页纸"只是营销 brief 而不是"一页纸看懂这个人";
+   * null = 未建立, 此时输出与十二期之前一致。
+   */
+  voice?: CreatorVoiceData | null;
+}
+
+function formatVoiceForPrompt(voice: CreatorVoiceData): string {
+  const stances =
+    voice.stances.length > 0
+      ? voice.stances.map((s) => `  · ${s.claim}${s.reason ? ` (${s.reason})` : ''}`).join('\n')
+      : '  (未填)';
+  return [
+    `- 身份: ${voice.identity || '(未填)'}`,
+    `- 他不是: ${voice.notIdentity || '(未填)'}`,
+    `- 表达能量: ${voice.energy || '(未填)'}`,
+    `- 来路: ${voice.origin || '(未填)'}`,
+    `- 立场:\n${stances}`,
+  ].join('\n');
 }
 
 function formatProfileForPrompt(profile: PersonaProfileData): string {
@@ -82,7 +102,9 @@ ${JSON_STRICTNESS}`;
     return [
       {
         type: 'text',
-        text: `人设定位档案:
+        text: `${
+          input.voice ? `人物志(他是谁):\n${formatVoiceForPrompt(input.voice)}\n\n` : ''
+        }人设定位档案:
 ${formatProfileForPrompt(input.profile)}
 
 请综合以上信息, 按 schema 输出一份 100-2000 字的账号定位体系报告 (markdown 格式)。`,

@@ -3,6 +3,7 @@ import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { getDeepSeekTextLLM } from '@/lib/llm/clients';
 import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
+import { loadCreatorVoice } from '@/lib/persona/voice';
 import { loadPersonaProfile } from '@/lib/persona/profile';
 import { PERSONA_SUMMARY } from '@/lib/llm/prompts';
 
@@ -20,6 +21,8 @@ export async function POST() {
   const user = await getOrCreateDefaultUser();
 
   const profile = await loadPersonaProfile(user.id);
+  // 十二期: 人物志一并喂给报告 —— 没有它这份一页纸只是营销 brief
+  const voice = await loadCreatorVoice(user.id);
   if (!profile) return fail('人设定位档案未建立, 请先完善受众与内容支柱', 400);
 
   const apiKey = await resolveDeepSeekApiKey(user.id);
@@ -29,7 +32,7 @@ export async function POST() {
   try {
     const out = await llm.callStructured({
       systemPrompt: PERSONA_SUMMARY.buildSystemPrompt(DEFAULT_NICHE),
-      userMessage: PERSONA_SUMMARY.buildUserMessage({ profile }),
+      userMessage: PERSONA_SUMMARY.buildUserMessage({ profile, voice }),
       responseSchema: PERSONA_SUMMARY.responseSchema,
     });
 

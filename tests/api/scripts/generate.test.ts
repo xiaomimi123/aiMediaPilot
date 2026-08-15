@@ -21,6 +21,14 @@ const prismaMock = vi.hoisted(() => ({
   scriptDraft: { create: vi.fn() },
   cockpitContent: { findUnique: vi.fn(), update: vi.fn() },
   personaProfile: { findUnique: vi.fn() },
+  // 十二期: 人物志与经历库 —— 默认无档案/空库, 保证既有用例走零迁移路径 (行为与十二期前一致)
+  // 返回类型显式放宽为 unknown —— 否则 vi.fn 会把默认实现的 null/[] 推断成窄类型,
+  // 用例里 mockResolvedValue(具体行对象) 会 typecheck 失败
+  creatorVoice: { findUnique: vi.fn(async (): Promise<unknown> => null) },
+  creatorExperience: {
+    findMany: vi.fn(async (): Promise<unknown[]> => []),
+    updateMany: vi.fn(),
+  },
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
@@ -116,6 +124,7 @@ describe('POST /api/v1/scripts/generate — douyin (两阶段: research → styl
       topic: '如何用 ChatGPT 写周报',
       niche: 'ai-knowledge',
       userMaterials: undefined,
+      experiences: [], // 十二期: 空经历库时为空数组
     });
     expect(getStyleContextMock).toHaveBeenCalledWith('user1', 'douyin');
     expect(llmMock.callStructured).toHaveBeenCalledTimes(1);
@@ -185,6 +194,7 @@ describe('POST /api/v1/scripts/generate — douyin (两阶段: research → styl
       topic: '如何用 ChatGPT 写周报',
       niche: 'ai-knowledge',
       userMaterials: '我自己的素材文本',
+      experiences: [], // 十二期: 空经历库时为空数组
     });
   });
 
@@ -317,6 +327,7 @@ describe('POST /api/v1/scripts/generate — xiaohongshu (两阶段: research →
       topic: '如何用 ChatGPT 写周报',
       niche: 'ai-knowledge',
       userMaterials: undefined,
+      experiences: [], // 十二期: 空经历库时为空数组
     });
     expect(getStyleContextMock).toHaveBeenCalledWith('user1', 'xiaohongshu');
     expect(llmMock.callStructured).toHaveBeenCalledTimes(1);
@@ -336,6 +347,7 @@ describe('POST /api/v1/scripts/generate — xiaohongshu (两阶段: research →
       topic: '如何用 ChatGPT 写周报',
       niche: 'ai-knowledge',
       userMaterials: '我自己的素材文本',
+      experiences: [], // 十二期: 空经历库时为空数组
     });
   });
 
@@ -730,5 +742,96 @@ describe('POST /api/v1/scripts/generate — gongzhonghao 回归 (分支代码字
       const userText = (call.userMessage[0] as { text: string }).text;
       expect(userText).not.toContain('参考下面对标爆款');
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 十二期: 人物志 + 经历注入
+// ---------------------------------------------------------------------------
+describe('POST /api/v1/scripts/generate — 十二期人物志与经历注入', () => {
+  const VOICE_ROW = {
+    userId: 'user1',
+    origin: '被裁之后开始用 AI 自救',
+    identity: '一个靠 AI 提高认知的普通人',
+    notIdentity: '不是技术极客',
+    stances: [{ claim: '提示词工程是伪需求', reason: '模型在进步' }],
+    energy: '自信',
+    updatedAt: new Date(),
+  };
+  const EXP_ROW = {
+    id: 'exp1',
+    userId: 'user1',
+    content: '上周用 ChatGPT 写周报翻车, 忘了给它看往期格式',
+    topic: 'ChatGPT 周报',
+    kind: 'failure',
+    keywords: ['ChatGPT', '周报', '翻车'],
+    usedCount: 0,
+    createdAt: new Date('2026-08-16T00:00:00.000Z'),
+  };
+
+  beforeEach(() => {
+    process.env.DEEPSEEK_API_KEY = 'sk-test';
+    runResearchMock.mockResolvedValue(null);
+    getStyleContextMock.mockResolvedValue({ mode: 'description', description: '', samples: [] });
+    llmMock.callStructured.mockResolvedValue({
+      result: {
+        sections: [{ role: 'hook', startSec: 0, endSec: 5, text: '开头'.repeat(5) }],
+        hooks: [], titles: [], cover: { textOverlay: 'a', shotIdea: 'b', colorTone: 'c' },
+      },
+      usage: {},
+    });
+    prismaMock.scriptDraft.create.mockResolvedValue({ id: 'draft1' });
+  });
+
+  it('有人物志 + 命中经历 → voiceSection 进 systemPrompt, 经历作为最高优先级素材进 research', async () => {
+    prismaMock.creatorVoice.findUnique.mockResolvedValue(VOICE_ROW);
+    prismaMock.creatorExperience.findMany.mockResolvedValue([EXP_ROW]);
+    const res = await POST(makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge', platform: 'douyin' }));
+    expect(res.status).toBe(200);
+
+    // ① 命中经历进研究层 curatedParts (最高优先级)
+    expect(runResearchMock).toHaveBeenCalledWith('user1', expect.objectContaining({
+      experiences: [{ content: EXP_ROW.content, kind: 'failure' }],
+    }));
+
+    // ② 人物志与经历进写稿 systemPrompt, 且带护栏句
+    const sys = llmMock.callStructured.mock.calls.at(-1)![0].systemPrompt as string;
+    expect(sys).toContain('一个靠 AI 提高认知的普通人');
+    expect(sys).toContain('不要把他写成'); // notIdentity 护栏
+    expect(sys).toContain('不要硬凑'); // 经历护栏
+    expect(sys).toContain(EXP_ROW.content);
+
+    // ③ 命中条目引用计数 +1
+    expect(prismaMock.creatorExperience.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['exp1'] } },
+      data: { usedCount: { increment: 1 } },
+    });
+  });
+
+  it('主题与经历库完全无关 → 不注入经历(检索 0 命中), 也不计数', async () => {
+    prismaMock.creatorVoice.findUnique.mockResolvedValue(VOICE_ROW);
+    prismaMock.creatorExperience.findMany.mockResolvedValue([EXP_ROW]);
+    await POST(makeReq({ topic: '如何挑选一台咖啡机', niche: 'ai-knowledge', platform: 'douyin' }));
+    expect(runResearchMock).toHaveBeenCalledWith('user1', expect.objectContaining({ experiences: [] }));
+    const sys = llmMock.callStructured.mock.calls.at(-1)![0].systemPrompt as string;
+    expect(sys).not.toContain(EXP_ROW.content);
+    expect(sys).toContain('一个靠 AI 提高认知的普通人'); // 人物志仍注入
+    expect(prismaMock.creatorExperience.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('引用计数失败不影响已生成的稿子(best-effort)', async () => {
+    prismaMock.creatorVoice.findUnique.mockResolvedValue(VOICE_ROW);
+    prismaMock.creatorExperience.findMany.mockResolvedValue([EXP_ROW]);
+    prismaMock.creatorExperience.updateMany.mockRejectedValue(new Error('db down'));
+    const res = await POST(makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge', platform: 'douyin' }));
+    expect(res.status).toBe(200);
+  });
+
+  it('gongzhonghao 分支不加载人物志/经历(不注入)', async () => {
+    prismaMock.creatorVoice.findUnique.mockResolvedValue(VOICE_ROW);
+    llmMock.callStructured.mockResolvedValue({ result: { titles: [], body: 'x' }, usage: {} });
+    await POST(makeReq({ topic: 'x', niche: 'ai-knowledge', platform: 'gongzhonghao' }));
+    expect(prismaMock.creatorVoice.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.creatorExperience.findMany).not.toHaveBeenCalled();
   });
 });

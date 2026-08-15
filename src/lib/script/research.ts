@@ -24,6 +24,12 @@ export interface RunResearchInput {
   topic: string;
   niche: string;
   userMaterials?: string;
+  /**
+   * 十二期: 已由 matchExperiences 命中的个人经历。放在 curatedParts 最前 ——
+   * 比用户素材更优先, 因为它是用户**亲身做过**的事(写稿时最有说服力的素材),
+   * 而素材框里贴的可能只是他找到的第三方资料。
+   */
+  experiences?: { content: string; kind: string }[];
 }
 
 interface MaterialPart {
@@ -68,12 +74,17 @@ export async function runResearch(
     const curatedParts: MaterialPart[] = [];
     const searchParts: MaterialPart[] = [];
 
-    // ① 用户自备素材 — curated 组最优先, 见上方注释
+    // ① 个人经历 — curated 组最优先 (十二期): 用户亲身做过的事 > 他贴的第三方资料
+    for (const exp of input.experiences ?? []) {
+      pushIfNonEmpty(curatedParts, '我的亲身经历', exp.content);
+    }
+
+    // ② 用户自备素材 — 次优先, 见上方注释
     if (input.userMaterials) {
       pushIfNonEmpty(curatedParts, '用户素材', input.userMaterials);
     }
 
-    // ② 雷达种子 — 尽力而为, 命中则注入(标注来源 url), 未命中/异常静默跳过
+    // ③ 雷达种子 — 尽力而为, 命中则注入(标注来源 url), 未命中/异常静默跳过
     try {
       const seed = await prisma.radarItem.findFirst({
         where: {

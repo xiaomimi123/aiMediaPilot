@@ -14,6 +14,9 @@ import { runResearch } from '@/lib/script/research';
 import { getStyleContext } from '@/lib/script/style';
 import { loadPersonaProfile, validateIntent } from '@/lib/persona/profile';
 import { buildPersonaSection } from '@/lib/llm/prompts/persona-section';
+import { buildVoiceSection } from '@/lib/llm/prompts/voice-section';
+import { loadCreatorVoice, loadExperiences } from '@/lib/persona/voice';
+import { matchExperiences } from '@/lib/persona/experience-match';
 
 const PROMPT_BY_PLATFORM = {
   gongzhonghao: SCRIPT_GENERATE_GONGZHONGHAO,
@@ -73,6 +76,22 @@ async function loadStyleHints(inspirationId: string): Promise<InspirationStyleHi
   }
 }
 
+/**
+ * 十二期: 写稿成功后给命中的经历计数 +1 —— 用于 UI 展示"这条经历被用过几次"。
+ * best-effort: 计数失败不能影响已经生成好的稿子 (同 linkCockpitContent 容错先例)。
+ */
+async function bumpExperienceUsage(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  try {
+    await prisma.creatorExperience.updateMany({
+      where: { id: { in: ids } },
+      data: { usedCount: { increment: 1 } },
+    });
+  } catch (e) {
+    console.warn('[scripts/generate] 经历引用计数失败', e instanceof Error ? e.message : e);
+  }
+}
+
 export async function POST(req: Request) {
   let body: {
     topic?: unknown;
@@ -127,15 +146,27 @@ export async function POST(req: Request) {
 
   if (platform === 'douyin') {
     try {
-      const research = await runResearch(user.id, { topic, niche, userMaterials: materials });
+      // 十二期: 经历检索必须在 runResearch 之前 —— 命中的经历要作为最高优先级素材
+      // 进研究层的 curatedParts (亲身经历 > 用户贴的第三方资料 > 搜索正文)。
+      const matchedExperiences = matchExperiences(topic, await loadExperiences(user.id), 3);
+      const research = await runResearch(user.id, {
+        topic,
+        niche,
+        userMaterials: materials,
+        experiences: matchedExperiences.map((e) => ({ content: e.content, kind: e.kind })),
+      });
       const style = await getStyleContext(user.id, 'douyin');
       // 人设定位注入 (T4): 未建立档案时 personaSection 为空串, buildSystemPrompt 保持字符级一致
       // 十期: intent 透传给 buildPersonaSection, 非空时追加 CTA 指引段 (见 persona-section.ts)
       const profile = await loadPersonaProfile(user.id);
       const personaSection = buildPersonaSection(profile, 'write', intent);
+      // 十二期: 人物志(你是谁) + 命中的个人经历(你凭什么这么说)。两者皆空时
+      // voiceSection 为空串, 写稿 prompt 与十二期之前字符级一致 (零迁移)。
+      const voice = await loadCreatorVoice(user.id);
+      const voiceSection = buildVoiceSection(voice, matchedExperiences);
       const llm = getDeepSeekTextLLM(apiKey);
       const out = await llm.callStructured({
-        systemPrompt: SCRIPT_WRITE_DOUYIN.buildSystemPrompt(niche, style, personaSection),
+        systemPrompt: SCRIPT_WRITE_DOUYIN.buildSystemPrompt(niche, style, personaSection, voiceSection),
         userMessage: SCRIPT_WRITE_DOUYIN.buildUserMessage({ topic, durationSec, brief: research }),
         responseSchema: SCRIPT_WRITE_DOUYIN.responseSchema,
       });
@@ -153,6 +184,7 @@ export async function POST(req: Request) {
         },
         select: { id: true },
       });
+      await bumpExperienceUsage(matchedExperiences.map((e) => e.id));
 
       if (cockpitContentId) {
         await linkCockpitContent(user.id, cockpitContentId, draft.id);
@@ -179,15 +211,26 @@ export async function POST(req: Request) {
 
   if (platform === 'xiaohongshu') {
     try {
-      const research = await runResearch(user.id, { topic, niche, userMaterials: materials });
+      // 十二期: 经历检索必须在 runResearch 之前 —— 命中的经历要作为最高优先级素材
+      // 进研究层的 curatedParts (亲身经历 > 用户贴的第三方资料 > 搜索正文)。
+      const matchedExperiences = matchExperiences(topic, await loadExperiences(user.id), 3);
+      const research = await runResearch(user.id, {
+        topic,
+        niche,
+        userMaterials: materials,
+        experiences: matchedExperiences.map((e) => ({ content: e.content, kind: e.kind })),
+      });
       const style = await getStyleContext(user.id, 'xiaohongshu');
       // 人设定位注入 (T4): 未建立档案时 personaSection 为空串, buildSystemPrompt 保持字符级一致
       // 十期: intent 透传给 buildPersonaSection, 非空时追加 CTA 指引段 (见 persona-section.ts)
       const profile = await loadPersonaProfile(user.id);
       const personaSection = buildPersonaSection(profile, 'write', intent);
+      // 十二期: 同 douyin 分支 —— 人物志 + 命中经历, 皆空时保持字符级一致。
+      const voice = await loadCreatorVoice(user.id);
+      const voiceSection = buildVoiceSection(voice, matchedExperiences);
       const llm = getDeepSeekTextLLM(apiKey);
       const out = await llm.callStructured({
-        systemPrompt: SCRIPT_WRITE_XHS.buildSystemPrompt(niche, style, personaSection),
+        systemPrompt: SCRIPT_WRITE_XHS.buildSystemPrompt(niche, style, personaSection, voiceSection),
         userMessage: SCRIPT_WRITE_XHS.buildUserMessage({ topic, brief: research }),
         responseSchema: SCRIPT_WRITE_XHS.responseSchema,
       });
@@ -205,6 +248,7 @@ export async function POST(req: Request) {
         },
         select: { id: true },
       });
+      await bumpExperienceUsage(matchedExperiences.map((e) => e.id));
 
       if (cockpitContentId) {
         await linkCockpitContent(user.id, cockpitContentId, draft.id);

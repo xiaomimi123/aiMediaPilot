@@ -15,6 +15,7 @@ vi.mock('@/lib/llm/resolve-key', () => ({
 
 const prismaMock = vi.hoisted(() => ({
   personaProfile: { findUnique: vi.fn(), update: vi.fn() },
+  creatorVoice: { findUnique: vi.fn(async () => null) },
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
