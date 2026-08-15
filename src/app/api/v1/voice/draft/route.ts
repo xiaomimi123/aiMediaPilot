@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     const llm = getDeepSeekTextLLM(apiKey);
     const out = await llm.callStructured({
       systemPrompt: VOICE_DRAFT.buildSystemPrompt(DEFAULT_NICHE),
-      content: VOICE_DRAFT.buildUserMessage({ answers: parsed.data.answers }),
+      userMessage: VOICE_DRAFT.buildUserMessage({ answers: parsed.data.answers }),
       responseSchema: VOICE_DRAFT.responseSchema,
     });
     return ok({ draft: out.result });

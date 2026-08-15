@@ -77,7 +77,7 @@ describe('POST /api/v1/voice/draft', () => {
 
   it('未作答的问题以「(未作答)」进 prompt, 不丢问题', async () => {
     await POST(req({ answers: [{ q: '你是谁', a: '' }] }));
-    const content = callStructured.mock.calls[0][0].content;
+    const content = callStructured.mock.calls[0][0].userMessage;
     expect(content[0].text).toContain('你是谁');
     expect(content[0].text).toContain('(未作答)');
   });
