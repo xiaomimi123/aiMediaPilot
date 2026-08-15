@@ -57,3 +57,6 @@ export * from './persona-draft';
 // 账号定位体系 (十期 T4): 市场调研 → 体系报告
 export * from './market-research';
 export * from './persona-summary';
+
+// 人物志 + 个人经历库 (十二期): 6 问访谈起草人物志
+export * from './voice-draft';
