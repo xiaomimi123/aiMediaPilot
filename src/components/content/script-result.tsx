@@ -11,6 +11,8 @@ import type {
 import type { PickedState } from '@/lib/script-picked/types';
 import type { ContentPlatform } from '@/lib/platform';
 import { PickPanel } from './pick-panel';
+import { ACT_LABELS, type ScriptAct } from '@/lib/script/six-act';
+import { pickDouyinViewMode } from '@/lib/cockpit/douyin-view-mode';
 
 export type Platform = ContentPlatform;
 
@@ -121,8 +123,13 @@ function UseScriptCard({ result, niche, draftId }: { result: DouyinScriptRespons
 type DouyinSection = { role: 'hook' | 'main' | 'cta'; startSec: number; endSec: number; text: string };
 const SECTION_ROLE_LABEL: Record<DouyinSection['role'], string> = { hook: '钩子', main: '正文', cta: '结尾' };
 
+// 十三期任务五: 六幕稿 (isSixActScript) 是第三态, 与 retentionBeats/sections 互斥。
+// `pickDouyinViewMode` (src/lib/cockpit/douyin-view-mode.ts) 是唯一的判别入口 ——
+// 这里不重复写判别逻辑, 只按结果选 JSX 分支, 判别本身的正确性由该纯函数的单测覆盖。
 function DouyinView({ data }: { data: DouyinScriptResponse }) {
   const sections = (data as unknown as { script?: { sections?: DouyinSection[] } }).script?.sections;
+  const acts = (data as unknown as { script?: { acts?: ScriptAct[] } }).script?.acts;
+  const viewMode = pickDouyinViewMode(data);
   return (
     <>
       <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
@@ -146,7 +153,7 @@ function DouyinView({ data }: { data: DouyinScriptResponse }) {
         </CardContent>
       </Card>
 
-      {Array.isArray(data.retentionBeats) ? (
+      {viewMode === 'legacy' && Array.isArray(data.retentionBeats) ? (
         <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
           <CardContent className="space-y-2 pt-6">
             <h3 className="font-semibold">⏱ 完播节奏</h3>
@@ -164,7 +171,71 @@ function DouyinView({ data }: { data: DouyinScriptResponse }) {
             </table>
           </CardContent>
         </Card>
-      ) : Array.isArray(sections) ? (
+      ) : viewMode === 'six-act' && Array.isArray(acts) ? (
+        <>
+          {acts.map((act, i) => {
+            const beats = Array.isArray(act.beats) ? act.beats : [];
+            const facts = Array.isArray(act.facts) ? act.facts : [];
+            return (
+              <Card key={act.act ?? i} className="border-[var(--line)] bg-[var(--panel-bg)]">
+                <CardContent className="space-y-3 pt-6">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="font-semibold">
+                        {ACT_LABELS[act.act] ?? act.act} · {act.title}
+                      </h3>
+                      <p className="text-xs text-[var(--muted)]">建议时长 {act.targetSec ?? '-'}s</p>
+                    </div>
+                    {act.narration && <CopyButton text={act.narration} />}
+                  </div>
+
+                  <p className="text-sm whitespace-pre-wrap">{act.narration}</p>
+
+                  {act.visual && (
+                    <p className="text-sm">
+                      <span className="text-[var(--muted)]">配图建议: </span>
+                      {act.visual}
+                    </p>
+                  )}
+
+                  {beats.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {beats.map((b, bi) => (
+                        <span key={bi} className="rounded bg-amber-100 px-2 py-1 text-xs text-amber-900">
+                          {b.keyword}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {facts.length > 0 && (
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-xs text-[var(--muted)]">
+                          <th className="py-1 text-left font-normal">论点</th>
+                          <th className="py-1 text-left font-normal">数据</th>
+                          <th className="py-1 text-left font-normal">来源</th>
+                          <th className="py-1 text-left font-normal">置信度</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {facts.map((f, fi) => (
+                          <tr key={fi} className="border-b">
+                            <td className="py-2">{f.claim}</td>
+                            <td className="py-2">{f.value}</td>
+                            <td className="py-2 text-xs text-[var(--muted)]">{f.source}</td>
+                            <td className="py-2 text-xs text-[var(--muted)]">{f.confidence}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </>
+      ) : viewMode === 'sections' && Array.isArray(sections) ? (
         <Card className="border-[var(--line)] bg-[var(--panel-bg)]">
           <CardContent className="space-y-3 pt-6">
             <h3 className="font-semibold">逐字稿</h3>
