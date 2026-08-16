@@ -130,6 +130,35 @@ describe('lintSixActScript · 数字必须有事实佐证', () => {
     const issues = lintSixActScript(script);
     expect(findIssue(issues, '3.5')).toBeDefined();
   });
+
+  it('数字识别边界: 序数「第2步」不算断言, 不需要事实佐证', () => {
+    const script = makeValidScript();
+    script.acts[1] = makeAct('concept_a', { narration: '接下来看第2步该怎么操作' });
+    const issues = lintSixActScript(script);
+    expect(issues.some((i) => i.message.includes('事实核查里没有对应条目'))).toBe(false);
+  });
+
+  it('数字识别边界: 序数「前3名」不算断言, 不需要事实佐证', () => {
+    const script = makeValidScript();
+    script.acts[1] = makeAct('concept_a', { narration: '它常年稳居行业前3名' });
+    const issues = lintSixActScript(script);
+    expect(issues.some((i) => i.message.includes('事实核查里没有对应条目'))).toBe(false);
+  });
+
+  it('数字识别边界: 序数「后10年」不算断言, 不需要事实佐证', () => {
+    const script = makeValidScript();
+    script.acts[1] = makeAct('concept_a', { narration: '这个趋势会延续到后10年' });
+    const issues = lintSixActScript(script);
+    expect(issues.some((i) => i.message.includes('事实核查里没有对应条目'))).toBe(false);
+  });
+
+  it('数字识别边界: 「前50%」带单位 % 时不属于序数, 仍需要事实佐证', () => {
+    // 对齐 lint.py:58 —— before ∈ (第/前/后) 但 span 带 %/％/倍/万/亿 单位时不跳过。
+    const script = makeValidScript();
+    script.acts[1] = makeAct('concept_a', { narration: '成绩排在前50%的用户' });
+    const issues = lintSixActScript(script);
+    expect(findIssue(issues, '前50%') ?? findIssue(issues, '50%')).toBeDefined();
+  });
 });
 
 describe('lintSixActScript · facts.source 非空', () => {
