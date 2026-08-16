@@ -182,6 +182,82 @@ describe('depositStyleSample', () => {
     expect(out).toBe(false);
   });
 
+  describe('douyin 六幕稿分支 (十三期任务四: acts narration 取值, 旧 sections 稿逻辑不变)', () => {
+    const ACT_KEYS_LOCAL = ['hook', 'concept_a', 'concept_b', 'trivia', 'synthesis', 'punchline'] as const;
+    function makeAct(act: (typeof ACT_KEYS_LOCAL)[number], narration: string) {
+      return {
+        act,
+        title: `${act}标题`,
+        narration,
+        visual: '画面提示',
+        note: '备注说明',
+        targetSec: 10,
+        beats: [{ keyword: 'a' }, { keyword: 'b' }, { keyword: 'c' }],
+        facts: [],
+      };
+    }
+    function makeSixActs() {
+      return ACT_KEYS_LOCAL.map((act) => makeAct(act, `${act}幕的口播文案示例内容, 足够长满足最小长度要求。`));
+    }
+
+    it('六幕稿 (script.acts + 顶层 four_dims) → 拼接 acts narration 存样本', async () => {
+      const acts = makeSixActs();
+      prismaMock.scriptDraft.findFirst.mockResolvedValue({
+        id: 'd1',
+        userId: 'u1',
+        platform: 'douyin',
+        output: {
+          script: { acts },
+          four_dims: { gain: '收获', surprise: '意外', clarity: '清晰', appeal: '吸引' },
+        },
+      });
+      prismaMock.styleSample.findFirst.mockResolvedValue(null);
+      prismaMock.styleSample.create.mockResolvedValue({ id: 'new-sample' });
+
+      const out = await depositStyleSample('u1', 'd1');
+
+      expect(out).toBe(true);
+      expect(prismaMock.styleSample.create).toHaveBeenCalledWith({
+        data: {
+          userId: 'u1',
+          platform: 'douyin',
+          content: acts.map((a) => a.narration).join('\n'),
+          sourceScriptDraftId: 'd1',
+        },
+      });
+    });
+
+    it('旧 sections 稿 (无 four_dims) → 仍取 sections.map(text) 拼接, 逻辑不变', async () => {
+      prismaMock.scriptDraft.findFirst.mockResolvedValue({
+        id: 'd1',
+        userId: 'u1',
+        platform: 'douyin',
+        output: {
+          script: {
+            sections: [
+              { role: 'hook', startSec: 0, endSec: 3, text: '开场白' },
+              { role: 'cta', startSec: 3, endSec: 6, text: '点赞关注' },
+            ],
+          },
+        },
+      });
+      prismaMock.styleSample.findFirst.mockResolvedValue(null);
+      prismaMock.styleSample.create.mockResolvedValue({ id: 'new-sample' });
+
+      const out = await depositStyleSample('u1', 'd1');
+
+      expect(out).toBe(true);
+      expect(prismaMock.styleSample.create).toHaveBeenCalledWith({
+        data: {
+          userId: 'u1',
+          platform: 'douyin',
+          content: '开场白\n点赞关注',
+          sourceScriptDraftId: 'd1',
+        },
+      });
+    });
+  });
+
   describe('平台分支沉淀 (六期任务四: 按 draft.platform 取文本源)', () => {
     it('xiaohongshu: 未存过 → 拼接 intro + "\\n" + body 存样本, 返回 true', async () => {
       prismaMock.scriptDraft.findFirst.mockResolvedValue({

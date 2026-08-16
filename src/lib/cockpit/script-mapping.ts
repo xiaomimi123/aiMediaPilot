@@ -1,5 +1,6 @@
 import type { ScriptDraft } from "@/lib/cockpit/model";
 import type { ContentPlatform } from "@/lib/platform";
+import { ACT_LABELS, isSixActScript } from "@/lib/script/six-act";
 
 /**
  * 三平台生成结果 → 脚本骨架 (ScriptDraft) 映射纯函数。
@@ -77,36 +78,46 @@ function mapDouyin(result: Record<string, unknown>): Partial<ScriptDraft> {
     }
   }
 
-  const rawSections = result.sections;
-  if (Array.isArray(rawSections) && rawSections.length > 0) {
-    // 新形态: 有 sections 数组 → body 由 sections 拼接, hook 取 role==='hook' 块的 text。
-    // 单块畸形直接丢弃该块 (窄化解析防御风格), 不回退到旧的 hooks[]/retentionBeats[] 逻辑。
-    const sections = rawSections.filter(isValidSection).map((s) => ({ role: String(s.role), startSec: s.startSec, endSec: s.endSec, text: s.text }));
-    Object.assign(draft, sectionsToScriptFields(sections));
-  } else {
-    // 旧形态: 无 sections → 完全不变的旧逻辑 (hooks[] → hook, retentionBeats[] → body)。
-    const hooks = result.hooks;
-    if (Array.isArray(hooks) && hooks.length > 0) {
-      const first = hooks[0];
-      if (isPlainObject(first) && isNonEmptyString(first.text)) {
-        const rationale = isNonEmptyString(first.rationale) ? first.rationale : undefined;
-        draft.hook = rationale ? `${first.text}\n// ${rationale}` : first.text;
-      }
+  if (isSixActScript(result)) {
+    // 十三期任务四: 六幕新形态 (acts + four_dims 在生成响应顶层) → hook 幕 narration
+    // 回填 draft.hook, 六幕汇总 ([幕标签] narration 逐幕拼接) 回填 draft.body。
+    const hookAct = result.acts.find((a) => a.act === "hook");
+    if (hookAct) {
+      draft.hook = hookAct.narration;
     }
+    draft.body = result.acts.map((a) => `[${ACT_LABELS[a.act]}] ${a.narration}`).join("\n\n");
+  } else {
+    const rawSections = result.sections;
+    if (Array.isArray(rawSections) && rawSections.length > 0) {
+      // 新形态: 有 sections 数组 → body 由 sections 拼接, hook 取 role==='hook' 块的 text。
+      // 单块畸形直接丢弃该块 (窄化解析防御风格), 不回退到旧的 hooks[]/retentionBeats[] 逻辑。
+      const sections = rawSections.filter(isValidSection).map((s) => ({ role: String(s.role), startSec: s.startSec, endSec: s.endSec, text: s.text }));
+      Object.assign(draft, sectionsToScriptFields(sections));
+    } else {
+      // 旧形态: 无 sections → 完全不变的旧逻辑 (hooks[] → hook, retentionBeats[] → body)。
+      const hooks = result.hooks;
+      if (Array.isArray(hooks) && hooks.length > 0) {
+        const first = hooks[0];
+        if (isPlainObject(first) && isNonEmptyString(first.text)) {
+          const rationale = isNonEmptyString(first.rationale) ? first.rationale : undefined;
+          draft.hook = rationale ? `${first.text}\n// ${rationale}` : first.text;
+        }
+      }
 
-    const beats = result.retentionBeats;
-    if (Array.isArray(beats) && beats.length > 0) {
-      const lines = beats
-        .filter(
-          (beat): beat is { startSec: number; endSec: number; beat: string } =>
-            isPlainObject(beat) &&
-            typeof beat.startSec === "number" &&
-            typeof beat.endSec === "number" &&
-            isNonEmptyString(beat.beat)
-        )
-        .map((beat) => `${beat.startSec}-${beat.endSec}s：${beat.beat}`);
-      if (lines.length > 0) {
-        draft.body = lines.join("\n");
+      const beats = result.retentionBeats;
+      if (Array.isArray(beats) && beats.length > 0) {
+        const lines = beats
+          .filter(
+            (beat): beat is { startSec: number; endSec: number; beat: string } =>
+              isPlainObject(beat) &&
+              typeof beat.startSec === "number" &&
+              typeof beat.endSec === "number" &&
+              isNonEmptyString(beat.beat)
+          )
+          .map((beat) => `${beat.startSec}-${beat.endSec}s：${beat.beat}`);
+        if (lines.length > 0) {
+          draft.body = lines.join("\n");
+        }
       }
     }
   }

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import type { StyleContext } from '@/lib/llm/prompts/script-write-douyin';
+import { isSixActScript } from '@/lib/script/six-act';
 
 /**
  * 风格层 —「定稿即样本」积累路线。
@@ -56,9 +57,21 @@ function extractSectionTexts(output: unknown): string[] | null {
  * 六期任务四: 按 draft.platform 取「定稿文本源」——douyin 沿用 sections 拼接,
  * xiaohongshu 取两阶段写稿新形状的 intro + '\n' + body, 其余平台 (含未知平台)
  * 一律返回 null (防御读取, 不写入样本)。
+ *
+ * 十三期任务四: douyin 六幕稿 (output.script.acts + 顶层 output.four_dims) 取
+ * acts narration 拼接; 旧 sections 稿逻辑完全不变。`isSixActScript` (T1 唯一
+ * 形状判别入口) 判定, 两条路径互不相扰。
  */
 function extractTextForPlatform(platform: string, output: unknown): string | null {
   if (platform === 'douyin') {
+    if (output && typeof output === 'object') {
+      const o = output as Record<string, unknown>;
+      const script = o.script && typeof o.script === 'object' ? (o.script as Record<string, unknown>) : undefined;
+      const sixActCandidate = { acts: script?.acts, four_dims: o.four_dims };
+      if (isSixActScript(sixActCandidate)) {
+        return sixActCandidate.acts.map((a) => a.narration).join('\n');
+      }
+    }
     const texts = extractSectionTexts(output);
     return texts ? texts.join('\n') : null;
   }

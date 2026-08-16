@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { mapGeneratedToScript } from "@/lib/cockpit/script-mapping";
+import { ACT_LABELS } from "@/lib/script/six-act";
 
 describe("mapGeneratedToScript — douyin", () => {
   const validResult = {
@@ -131,6 +132,74 @@ describe("mapGeneratedToScript — douyin (五期 sections 逐字稿形态)", ()
     const draft = mapGeneratedToScript("douyin", result);
     expect(draft.hook).toBe("旧版钩子 (应被忽略)\n// sections 存在时不回退到 hooks[]");
     expect(draft.body).toBe("0-5s：旧节奏");
+  });
+});
+
+describe("mapGeneratedToScript — douyin (十三期任务四: 六幕新形态)", () => {
+  const ACT_KEYS_LOCAL = ["hook", "concept_a", "concept_b", "trivia", "synthesis", "punchline"] as const;
+  function makeAct(act: (typeof ACT_KEYS_LOCAL)[number], narration: string) {
+    return {
+      act,
+      title: `${act}标题`,
+      narration,
+      visual: "画面提示",
+      note: "备注说明",
+      targetSec: 10,
+      beats: [{ keyword: "a" }, { keyword: "b" }, { keyword: "c" }],
+      facts: [],
+    };
+  }
+  function makeSixActs() {
+    return ACT_KEYS_LOCAL.map((act) => makeAct(act, `${act}幕的口播文案示例内容, 足够长满足最小长度要求。`));
+  }
+  const sixActResult = {
+    acts: makeSixActs(),
+    four_dims: { gain: "收获", surprise: "意外", clarity: "清晰", appeal: "吸引" },
+    hooks: [
+      { text: "六幕稿钩子", rationale: "痛点开场" },
+      { text: "钩子二", rationale: "理由二" },
+      { text: "钩子三", rationale: "理由三" },
+    ],
+    titles: [
+      { text: "六幕稿标题", hookType: "数字" },
+      { text: "标题二", hookType: "反差" },
+      { text: "标题三", hookType: "问题" },
+    ],
+    cover: { textOverlay: "封面字", shotIdea: "镜头创意", colorTone: "白底红字" },
+  };
+
+  it("hook 幕 narration → draft.hook, 六幕逐幕拼接 ([幕标签] narration) → draft.body", () => {
+    const draft = mapGeneratedToScript("douyin", sixActResult);
+    const hookAct = sixActResult.acts.find((a) => a.act === "hook")!;
+    expect(draft.hook).toBe(hookAct.narration);
+    expect(draft.body).toBe(sixActResult.acts.map((a) => `[${ACT_LABELS[a.act]}] ${a.narration}`).join("\n\n"));
+    expect(draft.headline).toBe("六幕稿标题");
+  });
+
+  it("六幕稿命中时不回退到旧 sections/hooks[] 逻辑 (hook 不是裸 hooks[0].text)", () => {
+    const draft = mapGeneratedToScript("douyin", sixActResult);
+    expect(draft.hook).not.toContain("六幕稿钩子");
+  });
+
+  it("旧 sections 稿零改动: mapDouyin 对旧形态的输出与改造前完全一致", () => {
+    const validSectionsResult = {
+      hooks: [{ text: "旧版钩子", rationale: "理由" }],
+      sections: [
+        { role: "hook", startSec: 0, endSec: 3, text: "你还在为周报发愁吗？" },
+        { role: "main", startSec: 3, endSec: 15, text: "教你三个 prompt。" },
+        { role: "cta", startSec: 15, endSec: 20, text: "记得点赞关注。" },
+      ],
+      titles: [{ text: "旧稿标题", hookType: "数字" }],
+      cover: { textOverlay: "旧封面字", shotIdea: "旧镜头创意", colorTone: "白底红字" },
+    };
+    const draft = mapGeneratedToScript("douyin", validSectionsResult);
+    expect(draft.headline).toBe("旧稿标题");
+    expect(draft.hook).toBe("你还在为周报发愁吗？");
+    expect(draft.body).toBe(
+      "[hook 0-3s]\n你还在为周报发愁吗？\n\n[main 3-15s]\n教你三个 prompt。\n\n[cta 15-20s]\n记得点赞关注。"
+    );
+    expect(draft.example).toBe("封面文字：旧封面字\n镜头创意：旧镜头创意\n色调：白底红字");
+    expect(Object.keys(draft).sort()).toEqual(["body", "example", "headline", "hook"].sort());
   });
 });
 
