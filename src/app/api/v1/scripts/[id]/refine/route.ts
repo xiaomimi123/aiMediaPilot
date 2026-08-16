@@ -7,7 +7,7 @@ import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
 import { getStyleContext } from '@/lib/script/style';
 import { SCRIPT_REFINE } from '@/lib/llm/prompts/script-refine';
 import { XHS_REFINE } from '@/lib/llm/prompts/xhs-refine';
-import { ScriptSectionSchema, type DouyinFullScript } from '@/lib/llm/prompts/script-write-douyin';
+import { ScriptSectionSchema, type DouyinScriptSection } from '@/lib/llm/prompts/script-write-douyin';
 import { ResearchBriefSchema, type ResearchBrief } from '@/lib/llm/prompts/research-brief';
 
 /**
@@ -46,8 +46,8 @@ const XhsOutputReadSchema = z
   .passthrough();
 
 function textsEqualExceptTarget(
-  original: DouyinFullScript['sections'],
-  updated: DouyinFullScript['sections'],
+  original: DouyinScriptSection[],
+  updated: DouyinScriptSection[],
   targetIdx: number,
 ): boolean {
   if (original.length !== updated.length) return false;

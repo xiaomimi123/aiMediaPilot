@@ -1,4 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { ACT_KEYS, allocateActSeconds } from '@/lib/script/six-act';
+import type { ActKey } from '@/lib/script/six-act';
 
 const llmMock = vi.hoisted(() => ({ callStructured: vi.fn() }));
 vi.mock('@/lib/llm/deepseek', () => ({
@@ -61,12 +63,41 @@ const researchBrief = {
 
 const styleContext = { mode: 'description' as const, description: '语速快, 短句多', samples: [] };
 
+// 十三期: 六幕稿 fixture —— narration 特意不含数字/寒暄/空洞形容词/悬空指代, 且 hook 与
+// punchline 共享「写周报发愁」这个 2 字以上共同词, 保证 lintSixActScript 对这份稿子返回 []
+// (让 douyin 主流程测试聚焦在 route 行为本身, 不被 lint 细节噪音干扰; lint 内容另有专门用例)。
+const CLEAN_ACT_NARRATION: Record<ActKey, string> = {
+  hook: '写周报发愁，你是不是也是这样',
+  concept_a: '先把工作记录整理清楚，再动笔写',
+  concept_b: '然后让工具按你的语气来改写',
+  trivia: '换个提示词效果差别很大，很少人知道',
+  synthesis: '整理记录和语气改写结合起来就是完整方法',
+  punchline: '写周报发愁，现在终于有办法了',
+};
+
+function makeSixActs(actSeconds: Record<ActKey, number>) {
+  return ACT_KEYS.map((act) => ({
+    act,
+    title: `${act}标题`,
+    narration: CLEAN_ACT_NARRATION[act],
+    visual: `${act} 画面建议`,
+    note: `${act} 创作备注`,
+    targetSec: actSeconds[act],
+    beats: [{ keyword: '关键词一' }, { keyword: '关键词二' }, { keyword: '关键词三' }],
+    facts: [] as { claim: string; value: string; source: string; confidence: 'high' | 'medium' | 'low' }[],
+  }));
+}
+
+const DEFAULT_ACT_SECONDS = allocateActSeconds(90);
+
 const douyinScriptResult = {
-  sections: [
-    { role: 'hook', startSec: 0, endSec: 3, text: '你还在为周报发愁吗？' },
-    { role: 'main', startSec: 3, endSec: 40, text: '教你三个 prompt 技巧。' },
-    { role: 'cta', startSec: 40, endSec: 45, text: '记得点赞关注。' },
-  ],
+  acts: makeSixActs(DEFAULT_ACT_SECONDS),
+  four_dims: {
+    gain: '看完知道了写周报的三个具体步骤',
+    surprise: '原来换个提示词效果差别这么大',
+    clarity: '用整理记录和改写口吻两步就讲清楚了',
+    appeal: '开场直接戳中周报发愁的痛点',
+  },
   hooks: [
     { text: '钩子一', rationale: '痛点反差' },
     { text: '钩子二', rationale: '数字承诺' },
@@ -130,16 +161,18 @@ describe('POST /api/v1/scripts/generate — douyin (两阶段: research → styl
     expect(llmMock.callStructured).toHaveBeenCalledTimes(1);
   });
 
-  it('响应 data 含 research/sections/researchDegraded=false (research 命中)', async () => {
+  it('响应 data 含 research/acts/four_dims/researchDegraded=false (research 命中)', async () => {
     const res = await POST(makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge' }));
     const json = await res.json();
     expect(json.data.research).toEqual(researchBrief);
     expect(json.data.researchDegraded).toBe(false);
-    expect(json.data.sections).toEqual(douyinScriptResult.sections);
+    expect(json.data.acts).toEqual(douyinScriptResult.acts);
+    expect(json.data.four_dims).toEqual(douyinScriptResult.four_dims);
     expect(json.data.hooks).toEqual(douyinScriptResult.hooks);
     expect(json.data.titles).toEqual(douyinScriptResult.titles);
     expect(json.data.cover).toEqual(douyinScriptResult.cover);
-    expect(json.data.durationSec).toBe(45);
+    // 十三期: 六幕默认时长改为 90 秒 (原三段式默认 45 秒)
+    expect(json.data.durationSec).toBe(90);
     expect(json.data.platform).toBe('douyin');
   });
 
@@ -150,7 +183,7 @@ describe('POST /api/v1/scripts/generate — douyin (两阶段: research → styl
     const json = await res.json();
     expect(json.data.research).toBeNull();
     expect(json.data.researchDegraded).toBe(true);
-    expect(json.data.sections).toEqual(douyinScriptResult.sections);
+    expect(json.data.acts).toEqual(douyinScriptResult.acts);
     // 写稿 prompt 收到的 brief 应该是 null
     const call = llmMock.callStructured.mock.calls[0][0];
     expect(call.userMessage).toBeDefined();
@@ -162,7 +195,13 @@ describe('POST /api/v1/scripts/generate — douyin (两阶段: research → styl
     expect(json.data.suggestedIntent).toBeNull();
   });
 
-  it('响应含 scriptDraftId, 且已把完整 output 形状持久化到 ScriptDraft', async () => {
+  it('响应含 lintIssues (干净稿子无违规 → 空数组), 且随响应返回', async () => {
+    const res = await POST(makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge' }));
+    const json = await res.json();
+    expect(json.data.lintIssues).toEqual([]);
+  });
+
+  it('响应含 scriptDraftId, 且已把完整 output 形状 (acts/four_dims/lintIssues) 持久化到 ScriptDraft', async () => {
     const res = await POST(makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge' }));
     const json = await res.json();
     expect(json.data.scriptDraftId).toBe('draft1');
@@ -175,11 +214,13 @@ describe('POST /api/v1/scripts/generate — douyin (两阶段: research → styl
         platform: 'douyin',
         output: {
           research: researchBrief,
-          script: { sections: douyinScriptResult.sections },
+          script: { acts: douyinScriptResult.acts },
+          four_dims: douyinScriptResult.four_dims,
           hooks: douyinScriptResult.hooks,
           titles: douyinScriptResult.titles,
           cover: douyinScriptResult.cover,
-          durationSec: 45,
+          durationSec: 90,
+          lintIssues: [],
         },
       },
       select: { id: true },
@@ -198,20 +239,50 @@ describe('POST /api/v1/scripts/generate — douyin (两阶段: research → styl
     });
   });
 
-  it('durationSec 省略 → 默认 45, 且写进持久化 output 与响应', async () => {
+  it('durationSec 省略 → 默认 90, 且写进持久化 output 与响应, actSeconds 按 90 档分配传进 buildUserMessage', async () => {
     const res = await POST(makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge' }));
     const json = await res.json();
-    expect(json.data.durationSec).toBe(45);
+    expect(json.data.durationSec).toBe(90);
     const call = llmMock.callStructured.mock.calls[0][0];
-    expect(call.userMessage[0].text).toContain('45 秒');
+    expect(call.userMessage[0].text).toContain('90 秒');
+    const actSeconds90 = allocateActSeconds(90);
+    for (const key of ACT_KEYS) {
+      expect(call.userMessage[0].text).toContain(`${actSeconds90[key]} 秒`);
+    }
   });
 
-  it.each([30, 60])('durationSec=%d 合法值透传', async (durationSec) => {
+  it.each([30, 45, 60])('durationSec=%d 合法值透传, targetSec 按该档 allocateActSeconds 分配', async (durationSec) => {
     const res = await POST(
       makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge', durationSec }),
     );
     const json = await res.json();
     expect(json.data.durationSec).toBe(durationSec);
+    const call = llmMock.callStructured.mock.calls[0][0];
+    const expected = allocateActSeconds(durationSec);
+    for (const key of ACT_KEYS) {
+      expect(call.userMessage[0].text).toContain(`${expected[key]} 秒`);
+    }
+  });
+
+  it('durationSec=90 (90 档) targetSec 分配正确: hook9/concept_a20/concept_b20/trivia14/synthesis20/punchline7, 合计=90', async () => {
+    const res = await POST(
+      makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge', durationSec: 90 }),
+    );
+    expect(res.status).toBe(200);
+    const call = llmMock.callStructured.mock.calls[0][0];
+    const expected = allocateActSeconds(90);
+    expect(expected).toEqual({
+      hook: 9,
+      concept_a: 20,
+      concept_b: 20,
+      trivia: 14,
+      synthesis: 20,
+      punchline: 7,
+    });
+    expect(Object.values(expected).reduce((a, b) => a + b, 0)).toBe(90);
+    for (const key of ACT_KEYS) {
+      expect(call.userMessage[0].text).toContain(`${expected[key]} 秒`);
+    }
   });
 
   it('durationSec 非法值 (如 40) → 400', async () => {
@@ -221,6 +292,34 @@ describe('POST /api/v1/scripts/generate — douyin (两阶段: research → styl
     expect(res.status).toBe(400);
     const json = await res.json();
     expect(json.success).toBe(false);
+  });
+
+  it('lint 有 error 时仍 200 保存 (不阻断), lintIssues 落库且随响应返回含 error 项', async () => {
+    // hook narration 里带寒暄词 + 一个没有 facts 佐证的数字 → 两条 error
+    const dirtyActs = makeSixActs(DEFAULT_ACT_SECONDS).map((a) =>
+      a.act === 'hook' ? { ...a, narration: '大家好, 今天涨粉了 42% 的方法分享给你' } : a,
+    );
+    llmMock.callStructured.mockResolvedValueOnce({
+      result: { ...douyinScriptResult, acts: dirtyActs },
+      usage: { model: 'deepseek', promptTokens: 100, completionTokens: 200, estCostUSD: 0.001 },
+    });
+    const res = await POST(makeReq({ topic: '如何用 ChatGPT 写周报', niche: 'ai-knowledge' }));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.data.lintIssues.length).toBeGreaterThan(0);
+    expect(json.data.lintIssues.some((i: { level: string }) => i.level === 'error')).toBe(true);
+    expect(json.data.scriptDraftId).toBe('draft1');
+
+    expect(prismaMock.scriptDraft.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          output: expect.objectContaining({
+            lintIssues: expect.arrayContaining([expect.objectContaining({ level: 'error' })]),
+          }),
+        }),
+      }),
+    );
   });
 
   it('topic 空 → 400', async () => {
@@ -775,7 +874,8 @@ describe('POST /api/v1/scripts/generate — 十二期人物志与经历注入', 
     getStyleContextMock.mockResolvedValue({ mode: 'description', description: '', samples: [] });
     llmMock.callStructured.mockResolvedValue({
       result: {
-        sections: [{ role: 'hook', startSec: 0, endSec: 5, text: '开头'.repeat(5) }],
+        acts: makeSixActs(DEFAULT_ACT_SECONDS),
+        four_dims: douyinScriptResult.four_dims,
         hooks: [], titles: [], cover: { textOverlay: 'a', shotIdea: 'b', colorTone: 'c' },
       },
       usage: {},

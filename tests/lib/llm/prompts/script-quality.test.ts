@@ -13,6 +13,8 @@ import {
 import { SCRIPT_REFINE } from '@/lib/llm/prompts/script-refine';
 import { buildPersonaSection } from '@/lib/llm/prompts/persona-section';
 import type { PersonaProfileData } from '@/lib/persona/profile';
+import { ACT_KEYS, allocateActSeconds } from '@/lib/script/six-act';
+import type { ActKey } from '@/lib/script/six-act';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -39,8 +41,34 @@ const validSections = [
   { role: 'cta' as const, startSec: 25, endSec: 30, text: '如果你也遇到这个问题, 评论区告诉我, 关注我下期继续分享' },
 ];
 
+// 十三期: 六幕稿 fixture —— acts 恰好 6 项且按 ACT_KEYS 顺序排列。
+const validActSeconds = allocateActSeconds(90);
+
+function makeAct(act: ActKey, i: number) {
+  return {
+    act,
+    title: `幕${i + 1}标题`,
+    narration: `这是第${i + 1}幕的口播台词内容示例文本`,
+    visual: `第${i + 1}幕画面建议`,
+    note: `第${i + 1}幕创作备注`,
+    targetSec: validActSeconds[act],
+    beats: [{ keyword: '关键词一' }, { keyword: '关键词二' }, { keyword: '关键词三' }],
+    facts: [] as { claim: string; value: string; source: string; confidence: 'high' | 'medium' | 'low' }[],
+  };
+}
+
+const validActs = ACT_KEYS.map((act, i) => makeAct(act, i));
+
+const validFourDims = {
+  gain: '看完知道了一个新概念',
+  surprise: '原来还有这样的机制',
+  clarity: '用生活化类比讲清楚了',
+  appeal: '开场反差感强让人想看下去',
+};
+
 const validFullScript = {
-  sections: validSections,
+  acts: validActs,
+  four_dims: validFourDims,
   hooks: [
     { text: '90% 的人都用错了这个功能', rationale: '反差数字制造好奇' },
     { text: '这个功能你可能一直用错了', rationale: '悬念钩子引发好奇' },
@@ -188,40 +216,30 @@ describe('ScriptSectionSchema', () => {
   });
 });
 
-describe('DouyinFullScriptSchema', () => {
-  it('合法完整脚本解析通过', () => {
-    expect(() => DouyinFullScriptSchema.parse(validFullScript)).not.toThrow();
+describe('DouyinFullScriptSchema (十三期: acts + four_dims 六幕形态)', () => {
+  it('合法完整脚本解析通过 (schema 六幕往返)', () => {
+    const parsed = DouyinFullScriptSchema.parse(validFullScript);
+    expect(parsed.acts).toHaveLength(6);
+    expect(parsed.acts.map((a) => a.act)).toEqual(ACT_KEYS);
+    expect(parsed.four_dims).toEqual(validFourDims);
+    expect(parsed.hooks).toEqual(validFullScript.hooks);
   });
 
-  it('sections 只有 2 块 → 拒绝 (min 3)', () => {
+  it('acts 只有 5 项 → 拒绝 (恰好 6 项)', () => {
     expect(() =>
-      DouyinFullScriptSchema.parse({ ...validFullScript, sections: validSections.slice(0, 2) })
+      DouyinFullScriptSchema.parse({ ...validFullScript, acts: validActs.slice(0, 5) })
     ).toThrow();
   });
 
-  it('sections 有 6 块 → 通过 (max 6)', () => {
-    const sixSections = [
-      validSections[0],
-      { role: 'main' as const, startSec: 5, endSec: 10, text: '第二段内容, 讲一个具体案例细节展开' },
-      { role: 'main' as const, startSec: 10, endSec: 15, text: '第三段内容, 继续深入讲解具体做法细节' },
-      { role: 'main' as const, startSec: 15, endSec: 20, text: '第四段内容, 再补充一个反例做对比说明' },
-      { role: 'main' as const, startSec: 20, endSec: 25, text: '第五段内容, 总结前面讲的核心要点内容' },
-      validSections[2],
-    ];
-    expect(() => DouyinFullScriptSchema.parse({ ...validFullScript, sections: sixSections })).not.toThrow();
+  it('acts 有 7 项 → 拒绝', () => {
+    expect(() =>
+      DouyinFullScriptSchema.parse({ ...validFullScript, acts: [...validActs, makeAct('hook', 6)] })
+    ).toThrow();
   });
 
-  it('sections 有 7 块 → 拒绝 (max 6)', () => {
-    const sevenSections = [
-      validSections[0],
-      { role: 'main' as const, startSec: 5, endSec: 8, text: '第二段内容, 讲一个具体案例细节展开' },
-      { role: 'main' as const, startSec: 8, endSec: 11, text: '第三段内容, 继续深入讲解具体做法细节' },
-      { role: 'main' as const, startSec: 11, endSec: 14, text: '第四段内容, 再补充一个反例做对比说明' },
-      { role: 'main' as const, startSec: 14, endSec: 17, text: '第五段内容, 总结前面讲的核心要点内容' },
-      { role: 'main' as const, startSec: 17, endSec: 20, text: '第六段内容, 再补一句过渡衔接下面结尾' },
-      validSections[2],
-    ];
-    expect(() => DouyinFullScriptSchema.parse({ ...validFullScript, sections: sevenSections })).toThrow();
+  it('acts 顺序打乱 (集合齐全但顺序错) → 拒绝', () => {
+    const shuffled = [...validActs].reverse();
+    expect(() => DouyinFullScriptSchema.parse({ ...validFullScript, acts: shuffled })).toThrow();
   });
 
   it('hooks 不是 3 个 → 拒绝', () => {
@@ -279,18 +297,36 @@ describe('SCRIPT_WRITE_DOUYIN.buildSystemPrompt', () => {
     expect(p).toMatch(/短句/);
   });
 
-  it('要求第一块 hook 最后一块 cta', () => {
+  it('六幕结构固定六个 key, 依次出现 hook 与 punchline', () => {
     const p = SCRIPT_WRITE_DOUYIN.buildSystemPrompt('ai-knowledge', descStyle);
-    expect(p).toMatch(/hook/);
-    expect(p).toMatch(/cta/);
-    expect(p).toMatch(/第一块|首块/);
-    expect(p).toMatch(/最后一块|末块/);
+    for (const key of ACT_KEYS) {
+      expect(p).toContain(key);
+    }
+    expect(p.indexOf('hook')).toBeLessThan(p.indexOf('punchline'));
   });
 
-  it('要求秒段连续覆盖, 不留空档不重叠', () => {
+  it('吸收 script_spec.md 创作原则: 科普严谨性/禁止事项/四维/内容完整性的关键词断言', () => {
     const p = SCRIPT_WRITE_DOUYIN.buildSystemPrompt('ai-knowledge', descStyle);
-    expect(p).toMatch(/连续/);
-    expect(p).toMatch(/不留空档|不重叠/);
+    // Task 3 brief 明确要求的关键词
+    expect(p).toContain('不说没把握的数字');
+    expect(p).toContain('无开场白');
+    expect(p).toContain('冷知识');
+    expect(p).toContain('金句');
+    expect(p).toContain('回扣');
+    // script_spec.md 原文里的其余核心措辞, 确认是折叠原文而非凭记忆改写
+    expect(p).toContain('大家好');
+    expect(p).toContain('区分共识与观点');
+    expect(p).toContain('类比不能替代机制');
+    expect(p).toContain('不夸大因果');
+    expect(p).toContain('不制造伪矛盾');
+    expect(p).toContain('承认边界');
+    expect(p).toContain('不堆术语');
+    expect(p).toContain('空洞形容词');
+    expect(p).toContain('悬空指代');
+    expect(p).toContain('获得感');
+    expect(p).toContain('惊喜感');
+    expect(p).toContain('表达力');
+    expect(p).toContain('感染力');
   });
 
   it('要求素材简报 fact 引用进正文', () => {
@@ -380,12 +416,13 @@ describe('SCRIPT_WRITE_DOUYIN.buildSystemPrompt', () => {
   });
 });
 
-describe('SCRIPT_WRITE_DOUYIN.buildUserMessage', () => {
+describe('SCRIPT_WRITE_DOUYIN.buildUserMessage (十三期: actSeconds 分配表)', () => {
   it('包含 topic 与 durationSec', () => {
     const parts = SCRIPT_WRITE_DOUYIN.buildUserMessage({
       topic: 'AI 写周报',
       durationSec: 30,
       brief: null,
+      actSeconds: allocateActSeconds(30),
     });
     const text = (parts[0] as any).text;
     expect(text).toContain('AI 写周报');
@@ -397,6 +434,7 @@ describe('SCRIPT_WRITE_DOUYIN.buildUserMessage', () => {
       topic: 'AI 写周报',
       durationSec: 30,
       brief: null,
+      actSeconds: allocateActSeconds(30),
     });
     const text = (parts[0] as any).text;
     expect(text).not.toContain('素材简报');
@@ -407,6 +445,7 @@ describe('SCRIPT_WRITE_DOUYIN.buildUserMessage', () => {
       topic: 'AI 写周报',
       durationSec: 45,
       brief: validBrief,
+      actSeconds: allocateActSeconds(45),
     });
     const text = (parts[0] as any).text;
     expect(text).toContain('素材简报');
@@ -415,12 +454,17 @@ describe('SCRIPT_WRITE_DOUYIN.buildUserMessage', () => {
     expect(text).toMatch(/引用/);
   });
 
-  it.each([30, 45, 60] as const)('durationSec=%d 时给出 ±10%% 秒段范围', (duration) => {
-    const parts = SCRIPT_WRITE_DOUYIN.buildUserMessage({ topic: 't', durationSec: duration, brief: null });
+  it.each([30, 45, 60, 90] as const)('durationSec=%d 时六幕目标秒数表齐全且合计等于总时长', (duration) => {
+    const actSeconds = allocateActSeconds(duration);
+    const parts = SCRIPT_WRITE_DOUYIN.buildUserMessage({ topic: 't', durationSec: duration, brief: null, actSeconds });
     const text = (parts[0] as any).text;
-    const tolerance = Math.round(duration * 0.1);
-    expect(text).toContain(String(duration - tolerance));
-    expect(text).toContain(String(duration + tolerance));
+    for (const key of ACT_KEYS) {
+      expect(text).toContain(`${key} (`);
+      expect(text).toContain(`${actSeconds[key]} 秒`);
+    }
+    const sum = ACT_KEYS.reduce((acc, key) => acc + actSeconds[key], 0);
+    expect(sum).toBe(duration);
+    expect(text).toContain(`= ${duration} 秒`);
   });
 });
 

@@ -5,7 +5,7 @@ import type { ContentPart } from '@/lib/llm/vision';
 import {
   ScriptSectionSchema,
   buildStyleSection,
-  type DouyinFullScript,
+  type DouyinScriptSection,
   type StyleContext,
 } from './script-write-douyin';
 import type { ResearchBrief } from './research-brief';
@@ -57,7 +57,7 @@ ${buildStyleSection(style)}
 ${JSON_STRICTNESS}`;
   },
   buildUserMessage(input: {
-    sections: DouyinFullScript['sections'];
+    sections: DouyinScriptSection[];
     instruction: string;
     targetIdx?: number;
     brief: ResearchBrief | null;

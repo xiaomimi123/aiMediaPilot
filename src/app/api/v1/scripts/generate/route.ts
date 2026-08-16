@@ -1,9 +1,12 @@
+import type { Prisma } from '@prisma/client';
 import { ok, fail } from '@/lib/api';
 import { getDeepSeekTextLLM } from '@/lib/llm/clients';
 import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
 import { SCRIPT_GENERATE_GONGZHONGHAO } from '@/lib/llm/prompts';
 import { SCRIPT_WRITE_DOUYIN } from '@/lib/llm/prompts/script-write-douyin';
 import { SCRIPT_WRITE_XHS } from '@/lib/llm/prompts/script-write-xhs';
+import { allocateActSeconds } from '@/lib/script/six-act';
+import { lintSixActScript } from '@/lib/script/six-act-lint';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import type { InspirationStyleHints } from '@/lib/llm/prompts';
@@ -22,7 +25,7 @@ const PROMPT_BY_PLATFORM = {
   gongzhonghao: SCRIPT_GENERATE_GONGZHONGHAO,
 } as const;
 
-const VALID_DURATIONS = [30, 45, 60] as const;
+const VALID_DURATIONS = [30, 45, 60, 90] as const;
 type DurationSec = (typeof VALID_DURATIONS)[number];
 
 function isValidDuration(value: unknown): value is DurationSec {
@@ -124,10 +127,12 @@ export async function POST(req: Request) {
     return fail('niche 不能为空', 400);
   }
 
-  let durationSec: DurationSec = 45;
+  // 十三期: 六幕默认时长改为 90 秒 (原三段式默认 45 秒), 仅影响 douyin —— xhs/gongzhonghao
+  // 分支不消费 durationSec, 变更共享默认值对它们的响应/持久化无字符级影响。
+  let durationSec: DurationSec = 90;
   if (body.durationSec !== undefined) {
     if (!isValidDuration(body.durationSec)) {
-      return fail('durationSec 必须是 30/45/60', 400);
+      return fail('durationSec 必须是 30/45/60/90', 400);
     }
     durationSec = body.durationSec;
   }
@@ -164,15 +169,19 @@ export async function POST(req: Request) {
       // voiceSection 为空串, 写稿 prompt 与十二期之前字符级一致 (零迁移)。
       const voice = await loadCreatorVoice(user.id);
       const voiceSection = buildVoiceSection(voice, matchedExperiences);
+      // 十三期: 各幕目标秒数按 ACT_RATIOS 分配, 传进写稿 userMessage 供 targetSec 参照。
+      const actSeconds = allocateActSeconds(durationSec);
       const llm = getDeepSeekTextLLM(apiKey);
       const out = await llm.callStructured({
         systemPrompt: SCRIPT_WRITE_DOUYIN.buildSystemPrompt(niche, style, personaSection, voiceSection),
-        userMessage: SCRIPT_WRITE_DOUYIN.buildUserMessage({ topic, durationSec, brief: research }),
+        userMessage: SCRIPT_WRITE_DOUYIN.buildUserMessage({ topic, durationSec, brief: research, actSeconds }),
         responseSchema: SCRIPT_WRITE_DOUYIN.responseSchema,
       });
-      const { sections, hooks, titles, cover, suggestedIntent: rawSuggestedIntent } = out.result;
+      const { acts, four_dims, hooks, titles, cover, suggestedIntent: rawSuggestedIntent } = out.result;
       // 十期: AI 自报的 suggestedIntent 同样过 validateIntent (宽进严出), 非法/未产出一律降为 null。
       const suggestedIntent = validateIntent(rawSuggestedIntent) || null;
+      // 十三期: 生成后自动跑硬检查, lint 不阻断保存 —— 结果落库并随响应返回, 仅供前端展示。
+      const lintIssues = lintSixActScript({ acts, four_dims });
 
       const draft = await prisma.scriptDraft.create({
         data: {
@@ -180,7 +189,9 @@ export async function POST(req: Request) {
           topic,
           niche,
           platform: 'douyin',
-          output: { research, script: { sections }, hooks, titles, cover, durationSec },
+          // acts/four_dims/lintIssues 来自 T1/T2 的 interface 类型 (非 type alias), TS 结构化检查
+          // 不会自动认定其满足 Prisma InputJsonValue 的隐式索引签名, 显式 cast 不改变实际写入内容。
+          output: { research, script: { acts }, four_dims, hooks, titles, cover, durationSec, lintIssues } as unknown as Prisma.InputJsonValue,
         },
         select: { id: true },
       });
@@ -195,12 +206,14 @@ export async function POST(req: Request) {
         scriptDraftId: draft.id,
         research,
         researchDegraded: research === null,
-        sections,
+        acts,
+        four_dims,
         hooks,
         titles,
         cover,
         durationSec,
         suggestedIntent,
+        lintIssues,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
