@@ -1224,6 +1224,33 @@ textarea { resize: vertical; }
 .script-hook-picker { display: grid; gap: 6px; }
 .script-hook-option { display: block; width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); text-align: left; font-size: 9px; line-height: 1.5; }
 .script-hook-option.active { border-color: var(--clay); background: var(--clay-soft); color: #8f3f28; }
+/* 十三期: 六幕卡片 —— 沿 .script-section-card 体系, 多渲染标题/配图建议/备注/
+   关键词 chips/事实核查列表这些六幕独有字段。 */
+.script-act-card { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-bg); }
+.script-act-title { margin: 0; font-family: "Songti SC", serif; font-size: 12px; font-weight: 650; }
+.script-act-meta { margin: 0; color: var(--ink-soft); font-size: 10px; line-height: 1.6; }
+.script-act-meta span { color: var(--muted); }
+.script-act-beats { display: flex; flex-wrap: wrap; gap: 6px; }
+.script-act-chip { padding: 3px 9px; border-radius: 999px; background: var(--olive-soft); color: var(--olive); font-size: 8px; font-weight: 650; }
+.script-act-facts { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.script-act-facts li { padding: 8px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 10px; line-height: 1.6; }
+.script-act-fact-meta { display: block; margin-top: 3px; color: var(--muted); font-size: 8px; }
+/* 十三期: lint 结果条 —— error 红点 / warn 黄点分组, 点开展开详情列表, 明确
+   标注仅提示不阻断保存 (裁决: lint 不影响保存, 只做展示)。 */
+.lint-strip { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); }
+.lint-strip-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; width: 100%; padding: 0; border: 0; background: transparent; color: var(--ink); text-align: left; font-size: 10px; font-weight: 650; }
+.lint-summary-item { display: inline-flex; align-items: center; gap: 6px; }
+.lint-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
+.lint-dot.error { background: var(--clay); }
+.lint-dot.warn { background: var(--gold); }
+.lint-strip-toggle { margin-left: auto; color: var(--muted); font-size: 8px; font-weight: 700; }
+.lint-strip-hint { margin: 4px 0 0; color: var(--muted); font-size: 8px; }
+.lint-strip-list { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.lint-issue { display: flex; align-items: baseline; gap: 7px; padding: 7px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); font-size: 9px; line-height: 1.6; }
+.lint-issue .lint-dot { flex: 0 0 auto; }
+.lint-issue strong { flex: 0 0 auto; color: var(--muted); font-weight: 700; }
+.lint-issue.error strong { color: var(--clay); }
+.lint-issue.warn strong { color: var(--gold); }
 /* T5 七期: 小红书抽屉内出图 —— 缩略图网格 (竖版 3:4, 对应生成路由的 1024x1536) + 单格失败态/打包下载 */
 .script-image-actions { display: flex; align-items: center; gap: 10px; }
 .script-image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }

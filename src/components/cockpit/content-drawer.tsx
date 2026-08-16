@@ -21,6 +21,8 @@ import { mapGeneratedToScript, sectionsToScriptFields, type DouyinSection } from
 import { runGenerateScript } from "@/lib/cockpit/generate-flow";
 import { parseDraftOutput } from "@/lib/cockpit/draft-restore";
 import { CONTENT_PLATFORMS, CONTENT_PLATFORM_LABEL, isContentPlatform, type ContentPlatform } from "@/lib/platform";
+import { ACT_LABELS, isSixActScript, type ActKey, type FourDims, type ScriptAct } from "@/lib/script/six-act";
+import type { LintIssue } from "@/lib/script/six-act-lint";
 import { Badge, Icon, StarRating } from "./shared";
 
 // T6 三期: 抽屉内 AI 生成脚本只覆盖 @/lib/platform 的 ContentPlatform 三个值
@@ -103,6 +105,20 @@ function parseXhsTags(raw: unknown): string[] {
   return Array.isArray(raw) ? raw.filter((v): v is string => typeof v === "string" && v.length > 0) : [];
 }
 
+// ---- 十三期: 六幕稿 lint 结果窄化解析 —— 与本文件其余 parseXxx 同一风格
+// (per-field 独立解析, 畸形条目直接丢弃, 不影响其余条目)。----
+function isLintIssue(value: unknown): value is LintIssue {
+  return (
+    isPlainRecord(value) &&
+    (value.level === "error" || value.level === "warn") &&
+    typeof value.act === "string" &&
+    typeof value.message === "string"
+  );
+}
+
+function parseLintIssues(raw: unknown): LintIssue[] {
+  return Array.isArray(raw) ? raw.filter(isLintIssue) : [];
+}
 
 // ---- T5 七期: 出图计划 / 逐张生图结果的窄化解析 —— 消费 POST .../images/plan
 // (`ok({plan})`, plan = `{style, images:[{idx,prompt}]}`) 与 POST .../images
@@ -188,6 +204,76 @@ function ScriptSectionsPanel({ sections, research, researchDegraded, hooks, pick
       {section.role === "hook" && hooks.length > 0 ? <div className="script-hook-picker">{hooks.map((hook, hookIdx) => <button key={hookIdx} type="button" className={hookIdx === pickedHookIdx ? "script-hook-option active" : "script-hook-option"} disabled={busy} aria-pressed={hookIdx === pickedHookIdx} onClick={() => onPickHook(hookIdx)}>候选 {hookIdx + 1}：{hook.text}</button>)}</div> : null}
       {openSectionIdx === idx ? <div className="script-instruction-row"><input value={sectionInstruction} onChange={(e) => onSectionInstructionChange(e.target.value)} maxLength={200} placeholder="一句话指令，例如：这段再犀利一点" disabled={busy} aria-label={`第 ${idx + 1} 段改写指令`} /><button type="button" className="secondary-button small" disabled={busy || !sectionInstruction.trim()} onClick={() => onRefineSection(idx)}>{refiningSectionIdx === idx ? "改写中…" : "确认"}</button></div> : null}
     </div>)}
+  </div>;
+}
+
+/**
+ * 十三期: 六幕稿面板 —— 与 `ScriptSectionsPanel` 是同一份「五期分块改稿交互与
+ * 竞态守卫模式」的六幕版镜像 (逐块渲染 + 每块「改这一X」按钮切换一句话指令输入 +
+ * busy 统一禁用控件), 只是块的单位从 section 换成 act, 每张卡片额外多渲染
+ * targetSec/配图建议/备注/关键词 chips/事实核查列表这些六幕独有字段。页顶整稿
+ * 指令行与 lint 结果条也在这个面板内, lint 条明确标注「仅提示, 不影响保存」
+ * (十三期裁决: lint 硬检查不阻断保存, 只做展示)。
+ */
+function SixActPanel({ script, lintIssues, research, researchDegraded, allInstruction, onAllInstructionChange, onRefineAll, refiningAll, lintExpanded, onToggleLint, openActKey, onToggleAct, actInstruction, onActInstructionChange, onRefineAct, refiningActKey, generating, imgGenerating }: {
+  script: { acts: ScriptAct[]; four_dims: FourDims };
+  lintIssues: LintIssue[];
+  research: ResearchBriefView | null;
+  researchDegraded: boolean;
+  allInstruction: string;
+  onAllInstructionChange: (value: string) => void;
+  onRefineAll: () => void;
+  refiningAll: boolean;
+  lintExpanded: boolean;
+  onToggleLint: () => void;
+  openActKey: ActKey | null;
+  onToggleAct: (actKey: ActKey) => void;
+  actInstruction: string;
+  onActInstructionChange: (value: string) => void;
+  onRefineAct: (actKey: ActKey) => void;
+  refiningActKey: ActKey | null;
+  generating: boolean;
+  imgGenerating: boolean;
+}) {
+  const busy = refiningAll || refiningActKey !== null || generating || imgGenerating;
+  const errorIssues = lintIssues.filter((issue) => issue.level === "error");
+  const warnIssues = lintIssues.filter((issue) => issue.level === "warn");
+  return <div className="script-sections-panel">
+    <ResearchBriefDetails research={research} researchDegraded={researchDegraded} />
+    <div className="script-all-instruction-row">
+      <input value={allInstruction} onChange={(e) => onAllInstructionChange(e.target.value)} maxLength={200} placeholder="整体指令，例如：语气更轻松一些" disabled={busy} aria-label="整体改写指令" />
+      <button type="button" className="secondary-button small" disabled={busy || !allInstruction.trim()} onClick={onRefineAll}>{refiningAll ? "改写中…" : "整体指令"}</button>
+    </div>
+    {lintIssues.length > 0 ? <div className="lint-strip">
+      <button type="button" className="lint-strip-summary" onClick={onToggleLint} aria-expanded={lintExpanded}>
+        {errorIssues.length > 0 ? <span className="lint-summary-item"><span className="lint-dot error" />{errorIssues.length} 个问题</span> : null}
+        {warnIssues.length > 0 ? <span className="lint-summary-item"><span className="lint-dot warn" />{warnIssues.length} 条建议</span> : null}
+        <span className="lint-strip-toggle">{lintExpanded ? "收起" : "查看详情"}</span>
+      </button>
+      <p className="lint-strip-hint">硬检查结果仅提示，不影响保存。</p>
+      {lintExpanded ? <ul className="lint-strip-list">
+        {errorIssues.map((issue, idx) => <li key={`error-${idx}`} className="lint-issue error"><span className="lint-dot error" /><strong>{issue.act}</strong><span>{issue.message}</span></li>)}
+        {warnIssues.map((issue, idx) => <li key={`warn-${idx}`} className="lint-issue warn"><span className="lint-dot warn" /><strong>{issue.act}</strong><span>{issue.message}</span></li>)}
+      </ul> : null}
+    </div> : null}
+    {script.acts.map((act) => {
+      const beats = Array.isArray(act.beats) ? act.beats : [];
+      const facts = Array.isArray(act.facts) ? act.facts : [];
+      const label = ACT_LABELS[act.act] ?? act.act;
+      return <div key={act.act} className="script-act-card">
+        <div className="script-section-head">
+          <strong>{label}{typeof act.targetSec === "number" ? ` · ${act.targetSec}s` : ""}</strong>
+          <button type="button" className="text-button" disabled={busy} onClick={() => onToggleAct(act.act)}>改这一幕</button>
+        </div>
+        {act.title ? <p className="script-act-title">{act.title}</p> : null}
+        <p className="script-section-text">{act.narration}</p>
+        {act.visual ? <p className="script-act-meta"><span>配图建议：</span>{act.visual}</p> : null}
+        {act.note ? <p className="script-act-meta"><span>备注：</span>{act.note}</p> : null}
+        {beats.length > 0 ? <div className="script-act-beats">{beats.map((beat, idx) => <span key={idx} className="script-act-chip">{beat.keyword}</span>)}</div> : null}
+        {facts.length > 0 ? <ul className="script-act-facts">{facts.map((fact, idx) => <li key={idx}><strong>{fact.claim}</strong>：{fact.value}<span className="script-act-fact-meta">来源：{fact.source} · 置信度：{fact.confidence}</span></li>)}</ul> : null}
+        {openActKey === act.act ? <div className="script-instruction-row"><input value={actInstruction} onChange={(e) => onActInstructionChange(e.target.value)} maxLength={200} placeholder="一句话指令，例如：这幕再犀利一点" disabled={busy} aria-label={`${label} 改写指令`} /><button type="button" className="secondary-button small" disabled={busy || !actInstruction.trim()} onClick={() => onRefineAct(act.act)}>{refiningActKey === act.act ? "改写中…" : "确认"}</button></div> : null}
+      </div>;
+    })}
   </div>;
 }
 
@@ -339,6 +425,19 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
   const [openSectionIdx, setOpenSectionIdx] = useState<number | null>(null);
   const [sectionInstruction, setSectionInstruction] = useState("");
   const [refiningSectionIdx, setRefiningSectionIdx] = useState<number | null>(null);
+  // ---- 十三期: 六幕稿 (acts/four_dims/lintIssues) 的派生 state —— 与上面
+  // sections 系列并列, 同一时刻只会有一组非空 (douyin 生成响应现在总是六幕
+  // 形态, sections 只会来自旧稿懒加载恢复; 见 parseDraftOutput 未解析 acts
+  // 形状的说明)。openActKey/actInstruction/refiningActKey 是「改这一幕」按钮的
+  // 分块改稿交互三件套, 与 openSectionIdx/sectionInstruction/refiningSectionIdx
+  // 同一模式, 只是块单位从 section 换成 act。整稿指令复用上面已有的
+  // allInstruction/refiningAll (六幕面板与旧 sections 面板互斥渲染, 不会撞车)。
+  const [sixActScript, setSixActScript] = useState<{ acts: ScriptAct[]; four_dims: FourDims } | null>(null);
+  const [lintIssues, setLintIssues] = useState<LintIssue[]>([]);
+  const [lintExpanded, setLintExpanded] = useState(false);
+  const [openActKey, setOpenActKey] = useState<ActKey | null>(null);
+  const [actInstruction, setActInstruction] = useState("");
+  const [refiningActKey, setRefiningActKey] = useState<ActKey | null>(null);
   // ---- T6 六期: xiaohongshu 两阶段生成的派生 state (与上面 douyin 专属的
   // sections/hooks 并列, 同一时刻只会有一组非空——scriptDraftId 是共享的单一
   // 判据)。intro/body 为 null 表示尚未生成/尚未恢复, XhsScriptPanel 只在两者
@@ -368,7 +467,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
   // 这些动作, 都会打到同一草稿的并发写操作上; 出图虽然不改 intro/body, 但同样
   // 写同一条 ScriptDraft.output (imagePlan/images 键), 并发写有互相覆盖对方
   // spread 快照的风险, 一并纳入同一互斥开关。
-  const scriptActionPending = refiningAll || refiningSectionIdx !== null || pickHookPending || xhsRefining || imgGenerating;
+  const scriptActionPending = refiningAll || refiningSectionIdx !== null || refiningActKey !== null || pickHookPending || xhsRefining || imgGenerating;
   const mountedRef = useRef(true);
   const currentItemIdRef = useRef(item.id);
   currentItemIdRef.current = item.id;
@@ -510,6 +609,11 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
     setAllInstruction("");
     setOpenSectionIdx(null);
     setSectionInstruction("");
+    setSixActScript(null);
+    setLintIssues([]);
+    setLintExpanded(false);
+    setOpenActKey(null);
+    setActInstruction("");
     setXhsIntro(null);
     setXhsBody(null);
     setXhsTags([]);
@@ -525,7 +629,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
     // 整体指令/xhs 整稿指令/出图五组动作互斥——生成会整体替换
     // scriptDraftId/sections/intro/body, 若在改稿/选 hook/出图请求在途时打断,
     // 迟到的响应可能覆盖掉新草稿, 或改稿/出图请求会打到已经不存在的旧草稿上。
-    if (generating || refiningAll || refiningSectionIdx !== null || pickHookPending || xhsRefining || imgGenerating) return;
+    if (generating || refiningAll || refiningSectionIdx !== null || refiningActKey !== null || pickHookPending || xhsRefining || imgGenerating) return;
     await runGenerateScript(
       { itemId: item.id, title: item.title, platform: scriptPlatform, materials: scriptPlatform === "douyin" || scriptPlatform === "xiaohongshu" ? (materials.trim() || undefined) : undefined, durationSec: scriptPlatform === "douyin" ? durationSec : undefined, cockpitContentId: item.id },
       {
@@ -549,6 +653,14 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
           setResearchDegraded(Boolean(data.researchDegraded));
           setHooks(parseHooks(data.hooks));
           setPickedHookIdx(null);
+          // 十三期: 生成响应的六幕形态 (顶层 acts + four_dims, 见 scripts/generate
+          // 路由 douyin 分支的 ok() 调用) 用 isSixActScript (T1 唯一形状判别入口)
+          // 判定——xhs/gongzhonghao 响应没有 acts 字段, 天然落到 null。
+          setSixActScript(isSixActScript(data) ? { acts: data.acts, four_dims: data.four_dims } : null);
+          setLintIssues(parseLintIssues(data.lintIssues));
+          setLintExpanded(false);
+          setOpenActKey(null);
+          setActInstruction("");
           // T6 六期: xiaohongshu 分支响应带 intro/body/tags/shotIdeas, douyin
           // 分支响应没有这几个键——非字符串/非数组时各自落到 null/[] 兜底,
           // 与上面 sections/hooks 在跨平台切换时的清空行为保持一致。
@@ -581,7 +693,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
   }
 
   async function handlePickHook(hookIdx: number) {
-    if (!scriptDraftId || pickHookPending || generating || refiningAll || refiningSectionIdx !== null || xhsRefining || imgGenerating) return;
+    if (!scriptDraftId || pickHookPending || generating || refiningAll || refiningSectionIdx !== null || refiningActKey !== null || xhsRefining || imgGenerating) return;
     // 跨 item 竞态守卫: 请求发起时捕获目标 item, await 期间用户可能已切到另一篇
     // 内容 (resetScriptGenerationState 已清空 sections/scriptDraftId)——这条迟到
     // 的响应不该再把 A 内容的选定结果写进现在显示的 B 内容面板。过期直接丢弃,
@@ -639,7 +751,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
 
   async function handleRefineSection(idx: number) {
     const instruction = sectionInstruction.trim();
-    if (!scriptDraftId || !instruction || refiningSectionIdx !== null || refiningAll || generating || pickHookPending || xhsRefining || imgGenerating) return;
+    if (!scriptDraftId || !instruction || refiningSectionIdx !== null || refiningAll || refiningActKey !== null || generating || pickHookPending || xhsRefining || imgGenerating) return;
     const requestedItemId = item.id;
     setRefiningSectionIdx(idx);
     try {
@@ -659,11 +771,82 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
 
   async function handleRefineAll() {
     const instruction = allInstruction.trim();
-    if (!scriptDraftId || !instruction || refiningAll || refiningSectionIdx !== null || generating || pickHookPending || xhsRefining || imgGenerating) return;
+    if (!scriptDraftId || !instruction || refiningAll || refiningSectionIdx !== null || refiningActKey !== null || generating || pickHookPending || xhsRefining || imgGenerating) return;
     const requestedItemId = item.id;
     setRefiningAll(true);
     try {
       const succeeded = await runRefine({ scope: "all", instruction });
+      if (succeeded) setAllInstruction("");
+    } catch (e) {
+      if (mountedRef.current && currentItemIdRef.current === requestedItemId) {
+        notify(e instanceof Error ? e.message : "改写失败，请稍后重试");
+      }
+    } finally {
+      setRefiningAll(false);
+    }
+  }
+
+  /**
+   * 十三期: 六幕改稿——同 `runRefine` 的竞态守卫 (跨 item 迟到响应静默丢弃)，
+   * 但响应形状是 `{ acts }` (不是 sections)，且成功后要保留 `four_dims`
+   * (refine 路由不重新返回它，见 refine/route.ts `handleSixActRefine` 只
+   * `ok({ acts: newActs })`) 才能继续满足 `isSixActScript` 的形状要求，因此
+   * 不能直接复用 `runRefine`，独立实现同款成功/失败路径。定稿后同样用
+   * `mapGeneratedToScript("douyin", ...)` 回填六字段骨架 —— 与 script-mapping.ts
+   * 的 `mapDouyin` 六幕分支共用同一份 hook/body 拼接逻辑 (T4 已测)，不在这里
+   * 重复手写一份。
+   */
+  async function runSixActRefine(body: { scope: "act"; actKey: ActKey; instruction: string } | { scope: "all"; instruction: string }): Promise<boolean> {
+    if (!scriptDraftId || !sixActScript) return false;
+    const requestedItemId = item.id;
+    const res = await fetch(`/api/v1/scripts/${scriptDraftId}/refine`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    if (!mountedRef.current || currentItemIdRef.current !== requestedItemId) return false;
+    if (json.success) {
+      const nextActs = json.data.acts as ScriptAct[];
+      const fourDims = sixActScript.four_dims;
+      setSixActScript({ acts: nextActs, four_dims: fourDims });
+      mergeScript(item.id, mapGeneratedToScript("douyin", { acts: nextActs, four_dims: fourDims }));
+      return true;
+    }
+    // 502 (AI 越权改动) 与其余错误共用同一条展示路径, 同 runRefine。
+    notify(json.message || "改写失败");
+    return false;
+  }
+
+  async function handleRefineAct(actKey: ActKey) {
+    const instruction = actInstruction.trim();
+    if (!scriptDraftId || !instruction || refiningActKey !== null || refiningAll || refiningSectionIdx !== null || generating || pickHookPending || xhsRefining || imgGenerating) return;
+    const requestedItemId = item.id;
+    setRefiningActKey(actKey);
+    try {
+      const succeeded = await runSixActRefine({ scope: "act", actKey, instruction });
+      if (succeeded) {
+        setOpenActKey(null);
+        setActInstruction("");
+      }
+    } catch (e) {
+      if (mountedRef.current && currentItemIdRef.current === requestedItemId) {
+        notify(e instanceof Error ? e.message : "改写失败，请稍后重试");
+      }
+    } finally {
+      setRefiningActKey(null);
+    }
+  }
+
+  /** 六幕稿页顶整稿指令——复用与旧 sections 面板共享的 allInstruction/refiningAll
+   * state (两个面板互斥渲染，不会互相踩踏), 但走六幕专属的 runSixActRefine。 */
+  async function handleRefineSixActAll() {
+    const instruction = allInstruction.trim();
+    if (!scriptDraftId || !instruction || refiningAll || refiningActKey !== null || refiningSectionIdx !== null || generating || pickHookPending || xhsRefining || imgGenerating) return;
+    const requestedItemId = item.id;
+    setRefiningAll(true);
+    try {
+      const succeeded = await runSixActRefine({ scope: "all", instruction });
       if (succeeded) setAllInstruction("");
     } catch (e) {
       if (mountedRef.current && currentItemIdRef.current === requestedItemId) {
@@ -686,7 +869,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
    */
   async function handleRefineXhsAll() {
     const instruction = xhsInstruction.trim();
-    if (!scriptDraftId || !instruction || xhsRefining || refiningAll || refiningSectionIdx !== null || generating || pickHookPending || imgGenerating) return;
+    if (!scriptDraftId || !instruction || xhsRefining || refiningAll || refiningSectionIdx !== null || refiningActKey !== null || generating || pickHookPending || imgGenerating) return;
     const requestedItemId = item.id;
     setXhsRefining(true);
     try {
@@ -790,7 +973,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
    * 重新点生成配图→只补齐失败的那些")。
    */
   async function handleGenerateImages() {
-    if (!scriptDraftId || imgGenerating || generating || refiningAll || refiningSectionIdx !== null || pickHookPending || xhsRefining) return;
+    if (!scriptDraftId || imgGenerating || generating || refiningAll || refiningSectionIdx !== null || refiningActKey !== null || pickHookPending || xhsRefining) return;
     const requestedItemId = item.id;
     const draftId = scriptDraftId;
     imgKeyMissingNotifiedRef.current = false;
@@ -834,7 +1017,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
   /** 单格「重试」—— 复用 generateOneImage, 与批量生成共用同一个 imgGenerating
    * pending 开关 (简化互斥: 批量在跑时所有格的重试按钮也一并 disabled)。 */
   async function handleRetryImage(idx: number) {
-    if (!scriptDraftId || imgGenerating || generating || refiningAll || refiningSectionIdx !== null || pickHookPending || xhsRefining) return;
+    if (!scriptDraftId || imgGenerating || generating || refiningAll || refiningSectionIdx !== null || refiningActKey !== null || pickHookPending || xhsRefining) return;
     const requestedItemId = item.id;
     const draftId = scriptDraftId;
     imgKeyMissingNotifiedRef.current = false;
@@ -890,7 +1073,7 @@ export function ContentDrawer({ item, initialTab, stageEvents, stageColors, cont
     {/* “AI 体检”按钮（调 /api/ai/analyze）已在 Task 14 移除：该路由未移植，AI 相关能力统一走 /agent。 */}
     {activeTab === "topic" ? <div className="drawer-section"><div className="section-title-row"><div><span className="eyebrow">TOPIC GATE</span><h3>大纲卡</h3></div></div><StageScheduleField item={item} stage="topic" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{[["目标受众", "audience"], ["具体痛点", "painPoint"], ["一句话观点", "pointOfView"], ["大家通常怎么讲", "commonAngle"], ["我的反差角度", "contrastAngle"], ["可展示素材", "assets"], ["最低成本拍法", "minimumProduction"]].map(([label, key]) => <label key={key} className="field full"><span>{label}</span><textarea value={String(item.topic[key as keyof typeof item.topic] ?? "")} onChange={(e) => updateTopic({ [key]: e.target.value })} /></label>)}<div className="score-card"><div><span>六维总分</span><strong>{score}<small> / 30</small></strong></div><div className="score-grid">{Object.entries({ audience: "受众", pain: "痛点", scene: "场景", demonstrable: "可展示", distribution: "传播", efficiency: "性价比" }).map(([key, label]) => <label key={key}><span>{label}</span><input type="range" min="0" max="5" value={item.topic.score[key as keyof typeof item.topic.score]} onChange={(e) => updateTopic({ score: { ...item.topic.score, [key]: Number(e.target.value) } })} /><strong>{item.topic.score[key as keyof typeof item.topic.score]}</strong></label>)}</div></div></div> : null}
     {/* “AI 质检”按钮（调 /api/ai/analyze）已在 Task 14 移除：该路由未移植；“用 AI 写脚本”自 Task 2 起改为抽屉内就地生成，不再跳转 /agent。 */}
-    {activeTab === "script" ? <div className="drawer-section"><div className="section-title-row"><div><span className="eyebrow">SCRIPT</span><h3>先搭结构，再改措辞</h3></div></div>{!isContentPlatform(item.platform) ? <small className="field-hint">该平台暂不支持 AI 生成，可选相近平台生成后手动调整</small> : null}{scriptPlatform === "douyin" ? <div className="script-generate-options"><details className="script-materials-details"><summary>素材（可选）</summary><textarea value={materials} onChange={(e) => setMaterials(e.target.value)} disabled={generating} placeholder="粘贴素材原文、参考链接或要点，生成时会尝试真实引用进正文" /></details><label className="field script-duration-field"><span>时长</span><select value={durationSec} onChange={(e) => setDurationSec(Number(e.target.value) as 30 | 45 | 60)} disabled={generating} aria-label="视频时长">{[30, 45, 60].map((value) => <option key={value} value={value}>{value} 秒</option>)}</select></label></div> : scriptPlatform === "xiaohongshu" ? <div className="script-generate-options single"><details className="script-materials-details"><summary>素材（可选）</summary><textarea value={materials} onChange={(e) => setMaterials(e.target.value)} disabled={generating} placeholder="粘贴素材原文、参考链接或要点，生成时会尝试真实引用进正文" /></details></div> : null}<div className="script-generate-actions"><select value={scriptPlatform} onChange={(e) => { setScriptPlatform(e.target.value as ContentPlatform); setTitleHint(""); lastCheckedTitleRef.current = ""; resetScriptGenerationState(); }} disabled={generating || scriptActionPending} aria-label="生成平台" style={{ height: 34, borderRadius: 9 }}>{CONTENT_PLATFORMS.map((value) => <option key={value} value={value}>{CONTENT_PLATFORM_LABEL[value]}</option>)}</select><button type="button" className="ai-button small" disabled={generating || scriptActionPending} onClick={handleGenerateScript}><Icon name="spark" />{generating ? "生成中…" : "用 AI 写脚本"}</button></div><StageScheduleField item={item} stage="script" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{sections ? <ScriptSectionsPanel sections={sections} research={research} researchDegraded={researchDegraded} hooks={hooks} pickedHookIdx={pickedHookIdx} hookPending={pickHookPending} onPickHook={handlePickHook} allInstruction={allInstruction} onAllInstructionChange={setAllInstruction} onRefineAll={handleRefineAll} refiningAll={refiningAll} openSectionIdx={openSectionIdx} onToggleSection={(idx) => { setOpenSectionIdx(openSectionIdx === idx ? null : idx); setSectionInstruction(""); }} sectionInstruction={sectionInstruction} onSectionInstructionChange={setSectionInstruction} onRefineSection={handleRefineSection} refiningSectionIdx={refiningSectionIdx} generating={generating} imgGenerating={imgGenerating} /> : xhsIntro !== null && xhsBody !== null ? <XhsScriptPanel research={research} researchDegraded={researchDegraded} intro={xhsIntro} body={xhsBody} tags={xhsTags} shotIdeas={xhsShotIdeas} instruction={xhsInstruction} onInstructionChange={setXhsInstruction} onRefineAll={handleRefineXhsAll} refining={xhsRefining} generating={generating} imagePlan={imagePlan} images={xhsImages} imgGenerating={imgGenerating} failedImageIdxs={failedImgIdxs} onGenerateImages={handleGenerateImages} onRetryImage={handleRetryImage} archiveHref={scriptDraftId ? `/api/v1/scripts/${scriptDraftId}/images/archive` : null} /> : null}{[["标题方向", "headline"], ["开头 3 秒", "hook"], ["一句话结论", "conclusion"], ["内容结构", "body"], ["案例 / 演示", "example"], ["结尾行动 / 观点", "ending"]].map(([label, key]) => <label key={key} className="field full"><span>{label}</span><textarea className={key === "body" ? "large" : ""} value={item.script[key as keyof typeof item.script]} onChange={(e) => updateScript({ [key]: e.target.value })} onBlur={key === "headline" ? handleHeadlineBlur : undefined} />{key === "headline" && titleHint ? <small className="field-hint">{titleHint}</small> : null}</label>)}</div> : null}
+    {activeTab === "script" ? <div className="drawer-section"><div className="section-title-row"><div><span className="eyebrow">SCRIPT</span><h3>先搭结构，再改措辞</h3></div></div>{!isContentPlatform(item.platform) ? <small className="field-hint">该平台暂不支持 AI 生成，可选相近平台生成后手动调整</small> : null}{scriptPlatform === "douyin" ? <div className="script-generate-options"><details className="script-materials-details"><summary>素材（可选）</summary><textarea value={materials} onChange={(e) => setMaterials(e.target.value)} disabled={generating} placeholder="粘贴素材原文、参考链接或要点，生成时会尝试真实引用进正文" /></details><label className="field script-duration-field"><span>时长</span><select value={durationSec} onChange={(e) => setDurationSec(Number(e.target.value) as 30 | 45 | 60)} disabled={generating} aria-label="视频时长">{[30, 45, 60].map((value) => <option key={value} value={value}>{value} 秒</option>)}</select></label></div> : scriptPlatform === "xiaohongshu" ? <div className="script-generate-options single"><details className="script-materials-details"><summary>素材（可选）</summary><textarea value={materials} onChange={(e) => setMaterials(e.target.value)} disabled={generating} placeholder="粘贴素材原文、参考链接或要点，生成时会尝试真实引用进正文" /></details></div> : null}<div className="script-generate-actions"><select value={scriptPlatform} onChange={(e) => { setScriptPlatform(e.target.value as ContentPlatform); setTitleHint(""); lastCheckedTitleRef.current = ""; resetScriptGenerationState(); }} disabled={generating || scriptActionPending} aria-label="生成平台" style={{ height: 34, borderRadius: 9 }}>{CONTENT_PLATFORMS.map((value) => <option key={value} value={value}>{CONTENT_PLATFORM_LABEL[value]}</option>)}</select><button type="button" className="ai-button small" disabled={generating || scriptActionPending} onClick={handleGenerateScript}><Icon name="spark" />{generating ? "生成中…" : "用 AI 写脚本"}</button></div><StageScheduleField item={item} stage="script" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{sixActScript ? <SixActPanel script={sixActScript} lintIssues={lintIssues} research={research} researchDegraded={researchDegraded} allInstruction={allInstruction} onAllInstructionChange={setAllInstruction} onRefineAll={handleRefineSixActAll} refiningAll={refiningAll} lintExpanded={lintExpanded} onToggleLint={() => setLintExpanded(!lintExpanded)} openActKey={openActKey} onToggleAct={(actKey) => { setOpenActKey(openActKey === actKey ? null : actKey); setActInstruction(""); }} actInstruction={actInstruction} onActInstructionChange={setActInstruction} onRefineAct={handleRefineAct} refiningActKey={refiningActKey} generating={generating} imgGenerating={imgGenerating} /> : sections ? <ScriptSectionsPanel sections={sections} research={research} researchDegraded={researchDegraded} hooks={hooks} pickedHookIdx={pickedHookIdx} hookPending={pickHookPending} onPickHook={handlePickHook} allInstruction={allInstruction} onAllInstructionChange={setAllInstruction} onRefineAll={handleRefineAll} refiningAll={refiningAll} openSectionIdx={openSectionIdx} onToggleSection={(idx) => { setOpenSectionIdx(openSectionIdx === idx ? null : idx); setSectionInstruction(""); }} sectionInstruction={sectionInstruction} onSectionInstructionChange={setSectionInstruction} onRefineSection={handleRefineSection} refiningSectionIdx={refiningSectionIdx} generating={generating} imgGenerating={imgGenerating} /> : xhsIntro !== null && xhsBody !== null ? <XhsScriptPanel research={research} researchDegraded={researchDegraded} intro={xhsIntro} body={xhsBody} tags={xhsTags} shotIdeas={xhsShotIdeas} instruction={xhsInstruction} onInstructionChange={setXhsInstruction} onRefineAll={handleRefineXhsAll} refining={xhsRefining} generating={generating} imagePlan={imagePlan} images={xhsImages} imgGenerating={imgGenerating} failedImageIdxs={failedImgIdxs} onGenerateImages={handleGenerateImages} onRetryImage={handleRetryImage} archiveHref={scriptDraftId ? `/api/v1/scripts/${scriptDraftId}/images/archive` : null} /> : null}{[["标题方向", "headline"], ["开头 3 秒", "hook"], ["一句话结论", "conclusion"], ["内容结构", "body"], ["案例 / 演示", "example"], ["结尾行动 / 观点", "ending"]].map(([label, key]) => <label key={key} className="field full"><span>{label}</span><textarea className={key === "body" ? "large" : ""} value={item.script[key as keyof typeof item.script]} onChange={(e) => updateScript({ [key]: e.target.value })} onBlur={key === "headline" ? handleHeadlineBlur : undefined} />{key === "headline" && titleHint ? <small className="field-hint">{titleHint}</small> : null}</label>)}</div> : null}
     {activeTab === "recording" ? <div className="drawer-section"><div className="stage-detail-strip"><span>录制阶段</span><Badge tone="recording" color={stageColors.recording}>录制</Badge><small>完成后进入剪辑</small></div><StageScheduleField item={item} stage="recording" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} /><label className="field full"><span>录制备注</span><textarea className="large" value={item.recordingNotes} onChange={(e) => update({ recordingNotes: e.target.value })} placeholder="记录机位、口播、录屏、演示路径和补拍素材…" /></label><div className="checklist"><strong>录制完成清单</strong>{["机位与画面可用", "收音清晰", "口播或演示路径完整", "必要素材与补拍镜头齐全"].map((text) => <label key={text}><input type="checkbox" />{text}</label>)}</div></div> : null}
     {activeTab === "editing" ? <div className="drawer-section"><div className="stage-detail-strip"><span>剪辑阶段</span><Badge tone="editing" color={stageColors.editing}>剪辑</Badge><small>完成后进入发布</small></div><StageScheduleField item={item} stage="editing" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} /><label className="field full"><span>剪辑备注</span><textarea className="large" value={item.editingNotes} onChange={(e) => update({ editingNotes: e.target.value })} placeholder="记录结构删改、字幕、包装、素材替换和导出要求…" /></label><div className="checklist"><strong>剪辑完成清单</strong>{["开头 5 秒直接进入场景", "案例或演示重点清楚", "字幕清楚可读", "封面与标题已确认", `${item.tier}档制作投入已控制`].map((text) => <label key={text}><input type="checkbox" />{text}</label>)}</div></div> : null}
     {activeTab === "publish" ? <div className="drawer-section"><StageScheduleField item={item} stage="publishing" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} label="计划发布日期" /><div className="form-grid"><label className="field"><span>发布状态</span><select value={item.publicationStatus} disabled><option value="draft">未排期</option><option value="scheduled">已排期</option><option value="published">已发布</option></select><small>由发布档期和实际发布记录自动更新。</small></label><label className="field"><span>实际发布时间</span><input type="date" value={item.publishedAt} onChange={(e) => update({ publishedAt: e.target.value })} /></label></div><label className="field full"><span>封面文案</span><input value={item.coverCopy} onChange={(e) => update({ coverCopy: e.target.value })} /></label><label className="field full"><span>发布正文</span><textarea className="large" value={item.publishCopy} onChange={(e) => update({ publishCopy: e.target.value })} /></label><label className="field full"><span>小红书链接</span><input value={item.xhsLink} onChange={(e) => update({ xhsLink: e.target.value })} placeholder="https://www.xiaohongshu.com/..." /></label>{item.publicationStatus !== "published" ? <><button className="primary-button full-button" disabled={!item.publishedAt} onClick={markPublished}>标记为已发布</button>{!item.publishedAt ? <p className="validation-note">先填写实际发布时间，系统才会计入大目标。</p> : null}</> : <div className="published-banner"><span>已发布于 {item.publishedAt} · 已进入待复盘列表</span><button onClick={unmarkPublished}>撤销发布记录</button></div>}</div> : null}
