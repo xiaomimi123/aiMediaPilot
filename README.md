@@ -276,6 +276,102 @@
 
 **收尾真实 E2E** (无 mock, 真花 DeepSeek+Tavily key 额度几毛钱, 详见 `.superpowers/sdd/2026-08-15-positioning-system/task-7-report.md`): ①真实 9 问作答起草 (5 条痛点/3 条 offerings/productLogic 均在 spec 上限内) → 保存 → GET 校验一致 ②真实市场调研一轮, `marketInsight` 四段均非空 + `researchedAt` ③真实体系报告生成 (1839 字 markdown) + 导出逻辑代码走读确认 (浏览器扩展当次不可用, 未做真实点击下载走查, 与七期先例同样降级) ④真实雷达扫描产出 5 条新条目, 4 条命中 `painHit`/带 `angleSuggestion`——用 `composeHeat`/`applyPersonaAdjust` 对同一批条目原样重算, 5/5 与库内 `heatScore`/`personaAdjust` 完全一致, 实测验证"痛点识别不影响热度分"⑤真实生成一篇 `intent='convert'` 的抖音稿, CTA 确认指向 `offerings` 里的真实产品名⑥临时清空 `audience`/`pillars` 触发无档案回退, 真实生成/雷达扫描确认不报错且退回默认文案, 随后完整恢复原档案 (三份新旧字段深度比对完全一致, 详见报告)⑦`typecheck`+`test`(1376)+`build` 全绿。 过程中④→⑤走查发现一个真实 bug 并修复: 抖音写稿 prompt (`src/lib/llm/prompts/script-write-douyin.ts`) 里"最后一块必须引导评论/关注/转发"是无条件的写作要求, 会盖过 persona 段按 `intent='convert'` 给出的 CTA 指引 (真实生成验证到 AI 完全没有引用任何 offering), 改为"上文如果给了具体的结尾方向就照着写, 没给的话默认引导评论/关注/转发"后原地复现验证通过, 单独一个 fix commit。 E2E 过程中产生的测试用 `ScriptDraft`(3 条) 已清理; 雷达真实扫描产出的条目属于真实产品输出 (非测试专用数据) 予以保留; 用户真实定位档案原样保留未受影响。
 
+### 抖音逐字稿六幕改造 (十三期新增)
+
+一句话: 抖音口播逐字稿的结构从「hook/main×N/cta」三段式改为固定六幕(向外部工具
+`script_spec.md` 的六幕格式对齐), 新增服务端硬检查(lint, 不阻断保存)。详见
+`docs/superpowers/specs/2026-08-16-six-act-script-design.md`。
+
+**六幕结构** (`src/lib/script/six-act.ts`, `ACT_KEYS` 固定顺序, 不可乱序/增减):
+
+| 幕 key | 中文标签 | 时长占比 |
+|---|---|---|
+| `hook` | 开场钩子 | 10% |
+| `concept_a` | 概念A | 22.5% |
+| `concept_b` | 概念B | 22.5% |
+| `trivia` | 冷知识 | 15% |
+| `synthesis` | 知识串联 | 22.5% |
+| `punchline` | 金句收尾 | 7.5% |
+
+`allocateActSeconds(durationSec)` 按占比四舍五入分配各幕 `targetSec`, 余数补给
+`concept_a`, 保证 6 幕之和恰好等于 `durationSec`。每幕除 `narration`(口播台词)外还带
+`title`/`visual`(配图建议)/`note`(备注)/`beats`(3-5 个关键词 chip)/`facts`(0-8 条
+事实核查, 每条 `claim`+`value`+`source`+`confidence`)。字段宽进严出: LLM 响应先放宽
+上限接住超发挥, `ScriptActSchema` 的 `transform` 再截断到展示上限(如 `narration` 最多
+1500 字接、截到 800 展示), 而不是直接拒收整份重试。`isSixActScript` 是**唯一的形状判别
+入口**——`script-write-douyin.ts`/生成路由/改稿路由/`style.ts`/`script-mapping.ts`/深度页/
+抽屉六处消费点都调它分岔, 不各写各的判别逻辑。
+
+**时长建议**: 生成请求 `durationSec` 可选 30/45/60/**90(六幕默认)**——六幕结构是按
+~90 秒科普口播设计的(六幕塞进 45 秒每幕仅 4-11 秒, 概念讲不透), 抽屉时长下拉与深度写稿页
+都以 90 为默认值, 选中 <60 秒时给出提示「六幕结构在 60 秒以下会很挤，建议 90 秒」。
+
+**lint 硬检查** (`src/lib/script/six-act-lint.ts` 的 `lintSixActScript`, 规则移植自参考实现
+`lint.py` 并按当前字段裁剪): 生成后自动跑一遍, 结果落 `output.lintIssues` 并随生成响应
+返回, **仅作展示提示, 不阻断保存**(生成/改稿都是 200 直接持久化)。规则表:
+
+| 规则 | 级别 |
+|---|---|
+| 六幕缺失或顺序错误 | error |
+| 四维(`gain`/`surprise`/`clarity`/`appeal`)任一项为空 | error |
+| 某幕 `title`/`narration`/`visual` 为空 | error |
+| 台词里出现的数字(年份/百分比/倍数/万亿等单位)在该幕 `facts` 里找不到对应条目("不说没把握的数字") | error |
+| `facts` 条目缺 `source`(没有标注来源) | error |
+| 开场 30 字内出现「大家好/欢迎来到/今天我们来聊聊/我是」等寒暄词 | error |
+| 空洞形容词(非常/极其/震撼/颠覆) | warn |
+| 单句超过 30 字(念不出来, 建议拆) | warn |
+| 句首悬空指代(这个/那个开头) | warn |
+| 收尾 (`punchline`) 与开场 (`hook`) 没有 2 字以上共同词(可能没回扣钩子) | warn |
+
+抽屉「脚本」tab 六幕卡片区顶部有一条 lint 结果条, error 红点/warn 黄点分组展示, 点开列出
+`act + message`, 明确标注「仅提示, 不影响保存」。
+
+**六处消费点**: ①写稿 prompt(`script-write-douyin.ts`)与生成路由 —— `DouyinFullScriptSchema`
+从 `sections` 换成 `acts`+`four_dims`, system prompt 吸收 `script_spec.md` 的六幕职责/占比/
+科普严谨性原则, 生成后跑 lint、落库 `output.script.acts`+`output.four_dims`+`output.lintIssues`
+②改稿路由新增 `scope:'act'`(单幕改稿, 服务端校验其余五幕 `narration` 逐字不变 + act
+key/顺序不被打乱)与六幕版 `scope:'all'`(整稿改稿, 校验幕数固定 6 且顺序正确) ③定稿沉淀
+(`style.ts` 的 `depositStyleSample`)六幕稿取 `acts[].narration` 拼接作为样本正文 ④抽屉骨架
+回填(`script-mapping.ts` 的 `mapDouyin`)六幕稿取 hook 幕 narration 回填 `draft.hook`、六幕
+`[标签] narration` 拼接回填 `draft.body` ⑤深度脚本页(`script-result.tsx` 的 `DouyinView`)
+按 `pickDouyinViewMode` 四态判别(`legacy`/`six-act`/`sections`/`empty`)渲染六幕卡片(标题+
+建议时长+台词+配图建议+关键词 chips+事实核查表) ⑥抽屉六幕面板(`SixActPanel`, 六张幕卡片 +
+每幕「改这一幕」按钮 + 页顶整稿指令 + lint 结果条)。
+
+**旧稿兼容(零迁移)**: 所有消费点按 `output.script` 里是 `sections` 还是 `acts` 分岔, 旧的
+三段式抖音稿(`output.script.sections`)完全走原渲染/原改稿路径, 不做存量数据迁移脚本——
+`isSixActScript` 对旧稿返回 `false`, 六处消费点各自落回改造前的逻辑, 字符级不变。
+
+**成本**: 一篇 90 秒六幕稿约几分钱 DeepSeek 调用(研究+写稿两阶段管线沿用五期结构未变);
+单幕改稿一次调用成本更低(只重写一幕的输出量)。
+
+**收尾真实 E2E** (无 mock, 真花 DeepSeek key 额度几分钱, 详见
+`.superpowers/sdd/2026-08-16-six-act-script/task-7-report.md`): ①真实生成一篇 90 秒六幕稿——
+六幕齐全且顺序正确(`hook/concept_a/concept_b/trivia/synthesis/punchline`)、`four_dims` 四项
+均非空、9 条 `facts` 全部标注 `source`、6 幕 `targetSec`(9/20/20/14/20/7)合计=90 ②对
+`punchline` 幕按幕改稿——其余五幕 `narration` 逐字节比对与改稿前完全一致(仅 `punchline`
+变化) ③定稿(`PUT .../picked`)→ `StyleSample.content` 与库内草稿六幕 `narration` 拼接逐字节
+相等 ④打开库里一篇真实存在的旧三段式抖音稿(`cmsrgm36f0001jupvvnbxvlx1`, `output.script.sections`
+5 块)——深度页 `pickDouyinViewMode` 判定为 `'sections'`(非六幕/非崩溃), 抽屉懒加载
+`parseDraftOutput` 正确恢复 5 个 section + hooks + research; 另建一份该草稿的临时克隆走真实
+`scope:'section'` 改稿 HTTP 调用全链路验证「改稿仍可用」, 验证完删除克隆, **原稿只读查未做
+任何写入** ⑤手工构造一条含无来源数字(`87%`)的六幕稿喂给真实 `lintSixActScript`, 确认产出
+`error` 级问题; 真实生成响应里也自然复现了同类问题(`trivia` 幕「2025 年」无 facts 佐证)且
+仍 200 保存, 双重验证「lint 不阻断」⑥`typecheck` + `test`(1566) + `build` 全绿。
+
+过程中④走查发现两个真实 bug 并修复(均为单独 fix commit): 一是抽屉懒加载恢复
+(`src/lib/cockpit/draft-restore.ts` 的 `parseDraftOutput`)完全没有六幕形态判据——关闭抽屉
+再打开同一条**新生成**的六幕稿(组件整体重挂载, 触发的正是这条懒加载路径)时六幕面板会
+整体消失(不崩溃, 但改稿功能不可用), 已补上六幕稿判据(优先于 sections 判别, 与
+`script-mapping.ts`/`douyin-view-mode.ts` 判别顺序一致), 并把该文件的 `durationSec` 白名单
+从 `[30,45,60]` 补到 `[30,45,60,90]`(90 此前会被直接判非法丢弃); 二是抽屉内时长选择器
+(`content-drawer.tsx`)默认值硬编码 45 且下拉选项只有 30/45/60——生成请求每次都显式携带
+`durationSec`, 后端「六幕默认 90 秒」的改动在抽屉这一实际入口从未真正生效过, 也缺失 spec
+里要求的「<60 秒 UI 提示」, 一并补上(默认值改 90、下拉加 90 选项、<60 秒时给出提示文案)。
+两处修复各补了对应单测(`tests/lib/cockpit/draft-restore.test.ts` 新增六幕懒加载恢复
+describe 块, 3 条用例)。E2E 过程中产生的测试用 `ScriptDraft`(生成稿 1 条 + 旧稿克隆 1 条)与
+对应 `StyleSample`(1 条)已清理; 用户真实存在的旧三段式草稿全程只读, 内容与创建时间未变。
+
 ### 人物志 + 个人经历库 (十二期新增)
 
 一句话: 定位体系的每个字段都是商业策略维度(受众/支柱/痛点/商品/产品逻辑/市场), 是一份营销
