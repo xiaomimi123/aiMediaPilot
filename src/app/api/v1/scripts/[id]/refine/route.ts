@@ -11,7 +11,15 @@ import { ScriptSectionSchema, buildStyleSection, type DouyinScriptSection } from
 import { getExpertPersona } from '@/lib/llm/prompts/expert-persona';
 import { JSON_STRICTNESS } from '@/lib/llm/prompts/base';
 import { ResearchBriefSchema, type ResearchBrief } from '@/lib/llm/prompts/research-brief';
-import { ACT_KEYS, ACT_LABELS, isSixActScript, type ActKey, type ScriptAct, type FourDims } from '@/lib/script/six-act';
+import {
+  ACT_KEYS,
+  ACT_LABELS,
+  isSixActScript,
+  ScriptActSchema,
+  type ActKey,
+  type ScriptAct,
+  type FourDims,
+} from '@/lib/script/six-act';
 
 /**
  * 两级改稿路由 — scope='section' 只重写指定块 (服务端校验其余块 text 逐字不变),
@@ -36,25 +44,15 @@ interface RefineBody {
   instruction?: unknown;
 }
 
-/** 六幕改稿 LLM 响应的宽进 schema —— 只校验基本结构, 幕数/顺序/越权改动由服务端自行核对 (同 section 先例)。 */
-const ActNarrowSchema = z.object({
-  act: z.enum(ACT_KEYS),
-  title: z.string(),
-  narration: z.string().min(1),
-  visual: z.string(),
-  note: z.string(),
-  targetSec: z.number(),
-  beats: z.array(z.object({ keyword: z.string() })),
-  facts: z.array(
-    z.object({
-      claim: z.string(),
-      value: z.string(),
-      source: z.string(),
-      confidence: z.enum(['high', 'medium', 'low']),
-    }),
-  ),
-});
-const SixActRefineResponseSchema = z.object({ acts: z.array(ActNarrowSchema).min(6).max(6) });
+/**
+ * 六幕改稿 LLM 响应 schema —— 每幕字段复用 six-act.ts 真实的 `ScriptActSchema` (严格上限 +
+ * 宽进严出截断, 修复审查意见#2: 此前这里是一份手写的宽松 copy, 越界字段会被原样持久化,
+ * 导致该稿此后 isSixActScript 判别失效)。数组只校验恰好 6 项, **不**在这里做顺序 superRefine
+ * (顺序/越权改动由下方服务端自行核对并返回 502, 同 scope='section' 先例 —— 若在这里就用
+ * SixActScriptSchema 的顺序校验, 顺序错误会在 callStructured 内部直接 parse 失败抛出, 变成
+ * 500 而不是我们想要的 502)。
+ */
+const SixActRefineResponseSchema = z.object({ acts: z.array(ScriptActSchema).length(6) });
 
 // 防御性读取 ScriptDraft.output — 旧稿可能没有 research/script 键, 一律 null 兜底。
 const ScriptOutputReadSchema = z
@@ -83,14 +81,25 @@ function textsEqualExceptTarget(
   return original.every((s, i) => i === targetIdx || s.text === updated[i].text);
 }
 
-/** 六幕版的越权改动守卫 —— 按索引比较 narration, 与 textsEqualExceptTarget 同一先例。 */
-function actsNarrationEqualExceptTarget(
+/**
+ * 六幕版 scope='act' 越权改动守卫 —— 与 textsEqualExceptTarget 同一先例, 但比对两件事
+ * (修复审查意见#1: 此前只比 narration, 没比 act key/顺序, 一份 act 值被错标或整体挪位、
+ * narration 恰好仍按原索引对齐的响应会被静默放行, 写坏"六幕 key 与顺序固定"这条不变量):
+ * 1. 每个位置的 act 字段必须等于 ACT_KEYS 里该位置应有的值 (含 target 位置本身) ——
+ *    保证 key 与顺序没被打乱/错标;
+ * 2. 除 targetAct 外, 其余每个位置的 narration 必须与原稿逐字相同。
+ */
+function actsValidForTargetEdit(
   original: ScriptAct[],
   updated: { act: string; narration: string }[],
   targetAct: ActKey,
 ): boolean {
-  if (original.length !== updated.length) return false;
-  return original.every((a, i) => a.act === targetAct || a.narration === updated[i]?.narration);
+  if (updated.length !== ACT_KEYS.length || original.length !== ACT_KEYS.length) return false;
+  return ACT_KEYS.every((expected, i) => {
+    if (updated[i]?.act !== expected) return false;
+    if (expected === targetAct) return true;
+    return updated[i]?.narration === original[i]?.narration;
+  });
 }
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -359,7 +368,7 @@ ${actsText}
     const newActs = out.result.acts;
 
     if (scope === 'act') {
-      if (!actKey || !actsNarrationEqualExceptTarget(acts, newActs, actKey)) {
+      if (!actKey || !actsValidForTargetEdit(acts, newActs, actKey)) {
         return fail('AI 修改了未指定的幕, 请重试', 502);
       }
     } else {

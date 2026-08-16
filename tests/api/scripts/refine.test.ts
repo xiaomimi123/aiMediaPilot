@@ -438,6 +438,30 @@ describe('POST /api/v1/scripts/[id]/refine — 六幕稿 scope=act', () => {
     expect(prismaMock.scriptDraft.update).not.toHaveBeenCalled();
   });
 
+  it('act 字段被错标/挪位 (narration 恰好仍按原索引对齐) → 502, 不写库 (审查修复#1)', async () => {
+    prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(baseSixActDraft());
+    const original = makeSixActs();
+    // 目标幕是 concept_b (index 2), 只改它的 narration —— 合法。但同时把 index 0 的 act 从
+    // 'hook' 错标成 'concept_a' (narration 保持原索引对齐的原文不变), 这在旧的"只比 narration"
+    // 校验下会被误判为"未改动", 必须被识别为越权改动。
+    const newActs = original.map((a, i) => {
+      if (i === 2) return { ...a, narration: '这是目标幕 concept_b, 允许改。' };
+      if (i === 0) return { ...a, act: 'concept_a' };
+      return a;
+    });
+    llmMock.callStructured.mockResolvedValueOnce({
+      result: { acts: newActs },
+      usage: { model: 'deepseek', promptTokens: 10, completionTokens: 10, estCostUSD: 0 },
+    });
+
+    const res = await POST(reqJSON({ scope: 'act', actKey: 'concept_b', instruction: '换个说法' }), ctx);
+    expect(res.status).toBe(502);
+    const json = await res.json();
+    expect(json.success).toBe(false);
+    expect(json.message).toBe('AI 修改了未指定的幕, 请重试');
+    expect(prismaMock.scriptDraft.update).not.toHaveBeenCalled();
+  });
+
   it('actKey 非法 → 400, 不调用 LLM (校验先于查库, 不消费 findUnique 的 once mock)', async () => {
     const res = await POST(reqJSON({ scope: 'act', actKey: 'bogus_act', instruction: '换个说法' }), ctx);
     expect(res.status).toBe(400);
@@ -528,6 +552,66 @@ describe('POST /api/v1/scripts/[id]/refine — 六幕稿 scope=all', () => {
     prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(baseSixActDraft());
     llmMock.callStructured.mockRejectedValueOnce(new Error('LLM down'));
     const res = await POST(reqJSON({ scope: 'all', instruction: '换个说法' }), ctx);
+    expect(res.status).toBe(500);
+    expect(prismaMock.scriptDraft.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/v1/scripts/[id]/refine — 六幕稿响应严格 schema 校验 (审查修复#2)', () => {
+  // 这两个用例故意用 mockImplementationOnce 而不是 mockResolvedValueOnce —— 真实
+  // callStructured (deepseek.ts/vision.ts) 内部会把 LLM 原始响应喂给传入的 responseSchema
+  // 做 parse (JSON mode 分支是 `opts.responseSchema.parse(parsed)`, 逐字可查 src/lib/llm/vision.ts)。
+  // 这里在 mock 里手动复现同一步 `opts.responseSchema.parse(...)`, 才能真实验证 route.ts
+  // 传给 callStructured 的是 six-act.ts 导出的严格 ScriptActSchema (含 title.max(20) 硬校验、
+  // narration.max(1500)+截断 800 等), 而不是此前那份宽松手写 copy —— 否则测试只是在验证
+  // mock 本身回显了什么, 测不出 schema 是否真的严格。
+  function mockStructuredWithRealSchemaParse(rawResult: unknown) {
+    llmMock.callStructured.mockImplementationOnce(async (opts: { responseSchema: { parse: (v: unknown) => unknown } }) => ({
+      result: opts.responseSchema.parse(rawResult),
+      usage: { model: 'deepseek', promptTokens: 10, completionTokens: 10, estCostUSD: 0 },
+    }));
+  }
+
+  it('title 超过 20 字上限 (无 transform 截断) → schema parse 失败 → 500, 不写库', async () => {
+    prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(baseSixActDraft());
+    const original = makeSixActs();
+    const newActs = original.map((a, i) => (i === 0 ? { ...a, title: 'a'.repeat(25) } : a));
+    mockStructuredWithRealSchemaParse({ acts: newActs });
+
+    const res = await POST(reqJSON({ scope: 'act', actKey: 'hook', instruction: '换个说法' }), ctx);
+    expect(res.status).toBe(500);
+    expect(prismaMock.scriptDraft.update).not.toHaveBeenCalled();
+  });
+
+  it('narration 超过展示上限 (1200 字, 在原始上限 1500 内) → 被真实 schema 截断到 800, 而非原样持久化', async () => {
+    prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(baseSixActDraft());
+    const original = makeSixActs();
+    const oversized = 'x'.repeat(1200);
+    const newActs = original.map((a, i) => (i === 0 ? { ...a, narration: oversized } : a));
+    mockStructuredWithRealSchemaParse({ acts: newActs });
+
+    const res = await POST(reqJSON({ scope: 'act', actKey: 'hook', instruction: '换个说法' }), ctx);
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.data.acts[0].narration.length).toBe(800);
+    expect(json.data.acts[0].narration).toBe(oversized.slice(0, 800));
+    expect(prismaMock.scriptDraft.update).toHaveBeenCalledWith({
+      where: { id: 'draft1' },
+      data: {
+        output: expect.objectContaining({
+          script: { acts: expect.arrayContaining([expect.objectContaining({ narration: oversized.slice(0, 800) })]) },
+        }),
+      },
+    });
+  });
+
+  it('narration 超过原始上限 (1600 字, 超过 1500) → schema parse 失败 → 500, 不写库', async () => {
+    prismaMock.scriptDraft.findUnique.mockResolvedValueOnce(baseSixActDraft());
+    const original = makeSixActs();
+    const newActs = original.map((a, i) => (i === 0 ? { ...a, narration: 'y'.repeat(1600) } : a));
+    mockStructuredWithRealSchemaParse({ acts: newActs });
+
+    const res = await POST(reqJSON({ scope: 'act', actKey: 'hook', instruction: '换个说法' }), ctx);
     expect(res.status).toBe(500);
     expect(prismaMock.scriptDraft.update).not.toHaveBeenCalled();
   });

@@ -75,8 +75,14 @@ const ActFactSchema = z.object({
   confidence: z.enum(['high', 'medium', 'low']),
 });
 
-/** 单幕 schema —— narration/visual/note 宽进严出: 放宽上限接住 AI 超发挥, transform 截到展示上限。 */
-const ScriptActSchema = z.object({
+/**
+ * 单幕 schema —— narration/visual/note 宽进严出: 放宽上限接住 AI 超发挥, transform 截到展示上限。
+ * 导出 (十三期任务四修复): refine 六幕改稿路由需要复用这份真实的单幕字段校验/截断规则,
+ * 而不是自己另手写一份宽松 copy —— 避免出现两套单幕校验标准, 也避免改稿写回的 acts 逃过
+ * `isSixActScript` 事后判别 (脱离字段上限的畸形 act 一旦持久化, 该稿此后永久无法再被判定为
+ * 六幕稿, style.ts/script-mapping.ts/本路由自身都会失效)。这是新增导出, 不改动 T1 既有契约。
+ */
+export const ScriptActSchema = z.object({
   act: z.enum(ACT_KEYS),
   title: z.string().max(20),
   narration: z
