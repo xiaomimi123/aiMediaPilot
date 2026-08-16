@@ -1,4 +1,6 @@
 import type { DouyinSection } from "./script-mapping";
+import { isSixActScript, type ScriptAct, type FourDims } from "@/lib/script/six-act";
+import type { LintIssue } from "@/lib/script/six-act-lint";
 
 /**
  * 抽屉懒加载拉回改稿 UI 的窄化解析 —— 输入是 `GET /api/v1/scripts/{id}` 返回的
@@ -110,7 +112,10 @@ function parseTitles(raw: unknown): RestoredTitle[] | undefined {
   return titles.length > 0 ? titles : undefined;
 }
 
-const VALID_DURATIONS = [30, 45, 60] as const;
+// 十三期收尾修复: 六幕默认时长 90 秒未被这里的白名单接住——六幕稿 durationSec=90
+// 会被 parseDurationSec 判为非法直接丢弃, 抽屉重开后时长选择器静默回退成上次的
+// 30/45/60 值, 与草稿实际生成时长不一致。
+const VALID_DURATIONS = [30, 45, 60, 90] as const;
 type DurationSec = (typeof VALID_DURATIONS)[number];
 
 function parseDurationSec(raw: unknown): DurationSec | undefined {
@@ -194,12 +199,38 @@ function parseImages(raw: unknown): Record<number, RestoredGeneratedImage> | und
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+// ---- 十三期收尾修复: 六幕稿 (acts/four_dims/lintIssues) 窄化解析 —— 抽屉懒加载
+// 重开时(关抽屉再打开同一条内容, 组件整体重挂载)此前完全没有覆盖新的六幕形态:
+// generate 响应落库形状是 `{ script: { acts }, four_dims, lintIssues, ... }`,
+// 本文件在十三期改造前只认 sections/intro+body 两种旧形态, 六幕草稿重开时
+// `parseDraftOutput` 返回 null, 抽屉六幕改稿面板整体消失(不崩溃, 但整幕功能
+// 不可用)。用 `isSixActScript` (T1 唯一形状判别入口) 补上第三条判据, 与
+// sections/xhs 两条分支同一 per-field 独立解析风格。
+function isLintIssue(value: unknown): value is LintIssue {
+  return (
+    isPlainObject(value) &&
+    (value.level === "error" || value.level === "warn") &&
+    typeof value.act === "string" &&
+    typeof value.message === "string"
+  );
+}
+
+function parseLintIssues(raw: unknown): LintIssue[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const issues = raw.filter(isLintIssue);
+  return issues.length > 0 ? issues : undefined;
+}
+
 export interface ParsedDraftOutput {
   sections?: DouyinSection[];
   research?: RestoredResearch;
   hooks?: RestoredHook[];
   titles?: RestoredTitle[];
   durationSec?: DurationSec;
+  /** 十三期收尾修复: 六幕稿形态 —— acts(六项)+four_dims 都合法时才会出现 */
+  acts?: ScriptAct[];
+  four_dims?: FourDims;
+  lintIssues?: LintIssue[];
   /** 六期: xiaohongshu 形态 —— intro/body 双非空字符串同时存在时才会出现 */
   intro?: string;
   body?: string;
@@ -223,6 +254,28 @@ export function parseDraftOutput(output: unknown): ParsedDraftOutput | null {
   if (!isPlainObject(output)) return null;
 
   const scriptField = output.script;
+
+  // 十三期收尾修复: 六幕稿判据优先于 sections —— douyin 生成响应现在总是六幕
+  // 形态, sections 只会来自五~十二期旧稿; isSixActScript 命中即整段返回, 不
+  // 落进下面的 sections/xhs 判别 (两种形态字段互斥, 顺序对真实数据无影响,
+  // 但六幕稿优先判别与其它消费点——script-mapping.ts/douyin-view-mode.ts——的
+  // 判别顺序保持一致)。
+  const sixActCandidate = { acts: isPlainObject(scriptField) ? scriptField.acts : undefined, four_dims: output.four_dims };
+  if (isSixActScript(sixActCandidate)) {
+    const result: ParsedDraftOutput = { acts: sixActCandidate.acts, four_dims: sixActCandidate.four_dims };
+
+    const research = parseResearch(output.research);
+    if (research) result.research = research;
+
+    const durationSec = parseDurationSec(output.durationSec);
+    if (durationSec !== undefined) result.durationSec = durationSec;
+
+    const lintIssues = parseLintIssues(output.lintIssues);
+    if (lintIssues) result.lintIssues = lintIssues;
+
+    return result;
+  }
+
   const sections = isPlainObject(scriptField) ? parseSections(scriptField.sections) : undefined;
 
   if (sections) {

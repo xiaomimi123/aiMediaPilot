@@ -244,3 +244,75 @@ describe("parseDraftOutput", () => {
     expect(result2).not.toHaveProperty("images");
   });
 });
+
+// ---------------------------------------------------------------------------
+// 十三期收尾修复 (task-7 真实 E2E 走查发现): parseDraftOutput 在改造前完全不
+// 识别 acts 形态 —— 抽屉关了再打开同一条已生成六幕稿的内容 (组件整体重挂载,
+// 走的正是这条懒加载路径) 时静默返回 null, SixActPanel 整体消失 (不崩溃, 但
+// 改稿功能不可用)。补一条六幕稿判据, 与 sections/xhs 两条分支同一恢复模式。
+// ---------------------------------------------------------------------------
+function makeAct(act: string, narration: string) {
+  return {
+    act,
+    title: "标题",
+    narration,
+    visual: "配图建议",
+    note: "备注",
+    targetSec: 15,
+    beats: [{ keyword: "a" }, { keyword: "b" }, { keyword: "c" }],
+    facts: [],
+  };
+}
+
+const SIX_ACT_KEYS = ["hook", "concept_a", "concept_b", "trivia", "synthesis", "punchline"];
+
+const FULL_SIX_ACT_OUTPUT = {
+  research: FULL_OUTPUT.research,
+  script: {
+    acts: SIX_ACT_KEYS.map((k) => makeAct(k, `这是 ${k} 幕的口播台词, 内容足够长以通过最小字数校验。`)),
+  },
+  four_dims: { gain: "获得感", surprise: "惊喜感", clarity: "表达力", appeal: "感染力" },
+  hooks: FULL_OUTPUT.hooks,
+  titles: FULL_OUTPUT.titles,
+  cover: FULL_OUTPUT.cover,
+  durationSec: 90,
+  lintIssues: [{ level: "warn", act: "hook", message: "空洞形容词「非常」不承载信息, 建议删" }],
+};
+
+describe("parseDraftOutput — 六幕稿懒加载恢复 (十三期收尾修复)", () => {
+  it("完整六幕形态 → acts/four_dims/durationSec(90)/lintIssues/research 全部解析出来", () => {
+    const result = parseDraftOutput(FULL_SIX_ACT_OUTPUT);
+    expect(result).not.toBeNull();
+    expect(result!.acts).toHaveLength(6);
+    expect(result!.acts!.map((a) => a.act)).toEqual(SIX_ACT_KEYS);
+    expect(result!.four_dims).toEqual(FULL_SIX_ACT_OUTPUT.four_dims);
+    expect(result!.durationSec).toBe(90);
+    expect(result!.lintIssues).toEqual(FULL_SIX_ACT_OUTPUT.lintIssues);
+    expect(result!.research).toEqual(FULL_OUTPUT.research);
+    // 六幕稿判据命中时不应该混入 sections/xhs 分支的字段
+    expect(result).not.toHaveProperty("sections");
+    expect(result).not.toHaveProperty("intro");
+  });
+
+  it("六幕稿缺 lintIssues/research (最小合法形态) → 只有 acts/four_dims/durationSec 出现", () => {
+    const result = parseDraftOutput({
+      script: { acts: SIX_ACT_KEYS.map((k) => makeAct(k, `${k} 幕台词, 足够长以通过最小字数校验规则。`)) },
+      four_dims: FULL_SIX_ACT_OUTPUT.four_dims,
+      durationSec: 90,
+    });
+    expect(result).not.toBeNull();
+    expect(result!.acts).toHaveLength(6);
+    expect(result).not.toHaveProperty("lintIssues");
+    expect(result).not.toHaveProperty("research");
+  });
+
+  it("acts 顺序错误/缺幕 (不满足 isSixActScript) → 不算六幕形态, 落回旧路径判别", () => {
+    const shuffled = {
+      script: { acts: [...SIX_ACT_KEYS].reverse().map((k) => makeAct(k, `${k} 幕台词, 足够长以通过最小字数校验规则。`)) },
+      four_dims: FULL_SIX_ACT_OUTPUT.four_dims,
+    };
+    const result = parseDraftOutput(shuffled);
+    // 乱序 acts 既不满足六幕判据, 也没有合法 sections/intro+body → null
+    expect(result).toBeNull();
+  });
+});
