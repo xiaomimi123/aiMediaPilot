@@ -30,6 +30,8 @@
 
 **关闭/返回：** 页面顶部「← 返回看板」链接回对应的平台看板页（`/?view=platform-<platform>`），不做浏览器历史特殊处理。
 
+**归属校验：** 沿用 `/content/script/[id]` 的先例（`draft.userId !== user.id` → `notFound()`）——服务端组件里用 `getOrCreateDefaultUser()` 取当前用户，`id` 对应的 `ContentItem` 不属于该用户（或不存在）一律 `notFound()`，不裸露 404 之外的错误信息。
+
 ## 3. 步骤条
 
 复用 `platform-stages.ts` 的 `stageFlowFor(item.platform)` 得到该平台的阶段顺序（如抖音：`topic/script/recording/editing/publishing/review`）。步骤条节点 = 这个数组，每个节点：
