@@ -135,6 +135,10 @@ export interface ContentItem {
   script: ScriptDraft;
   recordingNotes: string;
   editingNotes: string;
+  // 十三期: 抖音逐字稿六幕改造 —— 六幕录制/剪辑打勾进度 (可选, 缺省=未打勾, 旧数据零迁移)。
+  // 键 = ActKey (六幕脚本 act 名), 值 = 是否已录/已剪。供 StepNode 步骤条 (Task 4/5) 消费。
+  recordingActProgress?: Record<string, boolean>;
+  editingActProgress?: Record<string, boolean>;
   metrics: MetricsSnapshot;
   review: Review;
   // 六期: 服务端字段, 由 /api/v1/scripts/generate (douyin) best-effort 回写关联,

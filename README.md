@@ -372,6 +372,38 @@ key/顺序不被打乱)与六幕版 `scope:'all'`(整稿改稿, 校验幕数固�
 describe 块, 3 条用例)。E2E 过程中产生的测试用 `ScriptDraft`(生成稿 1 条 + 旧稿克隆 1 条)与
 对应 `StyleSample`(1 条)已清理; 用户真实存在的旧三段式草稿全程只读, 内容与创建时间未变。
 
+### 内容详情整页 + 步骤条 (十四期新增)
+
+一句话: 内容详情从右拉抽屉(7 个标签平级按钮, 每次打开都硬编码停在「概览」)改为独立整页
+路由(`/content/detail/[id]`, 可刷新/可分享), 新增连线步骤条自动定位到内容当前所在阶段;
+录制/剪辑阶段对已生成的六幕稿(十三期)新增逐幕对照指导(台词+配图建议+备注+关键词 chip+
+打勾), 无六幕稿的内容退回原有空白备注框, 零迁移。详见
+`docs/superpowers/specs/2026-08-17-content-detail-page-design.md` 与
+`docs/superpowers/plans/2026-08-17-content-detail-page.md`。
+
+**步骤条** (`src/components/cockpit/stage-stepper.tsx` + 纯函数 `computeStepNodes`,
+`src/lib/cockpit/stage-stepper.ts`): 按平台阶段流 (`stageFlowFor`) 渲染圆点+连线, 已完成
+(`--olive` 绿) / 当前 (`--gold` 金) / 未到 (灰) 三态, **不锁顺序**——所有节点仍可自由点击
+切换标签, 只是导航展示, 不触发阶段推进 (`onSelect` 只调 `setTab`, 不调 `changeStage`)。
+
+**六幕录制/剪辑指导** (`src/components/cockpit/six-act-guide-panel.tsx`): 内容有六幕脚本时,
+录制/剪辑两个 tab 从空白备注框换成六张幕卡片(标题+建议时长+台词+配图建议+备注+关键词
+chip), 每幕一个「这一幕录完了/剪完了」打勾, 录制与剪辑两侧进度各自独立存储
+(`ContentItem.recordingActProgress`/`editingActProgress`, 十三期新增字段) 并持久化到
+Postgres。
+
+**数据加载**: 新页面不新建单条内容读写接口, 复用现有 `loadWorkspace()`/`saveWorkspace()`
+整仓库机制——抽成共享 hook `useWorkspaceState` (`src/lib/cockpit/use-workspace-state.ts`),
+供 `Cockpit.tsx` 与新页面共同使用。所有原来会打开抽屉的入口 (看板卡片/今日推进/灵感库
+"已转为内容"/内容数据分析"待复盘") 统一改为 `router.push('/content/detail/[id]')`。
+
+**导航前显式落盘**: 整页架构下, `router.push` 会立即卸载承载 `useWorkspaceState` 的组件树,
+而自动保存是 250ms 防抖——若变更后立即导航, 防抖计时器可能来不及触发就被清理。
+`createBlankContent`/`createContentForPlatform`/`createContentFromInspiration`(`Cockpit.tsx`)
+与内容详情页的删除处理函数(`content-detail-client.tsx`)因此都在 `setState(...)` 之后、
+导航之前显式调用一次 `saveWorkspace(nextState)`(best-effort, 不 `await`, 只保证请求在卸载前
+已发出), 不依赖防抖计时器。
+
 ### 人物志 + 个人经历库 (十二期新增)
 
 一句话: 定位体系的每个字段都是商业策略维度(受众/支柱/痛点/商品/产品逻辑/市场), 是一份营销

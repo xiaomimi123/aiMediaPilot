@@ -185,6 +185,37 @@ describe('GET /api/v1/cockpit/workspace', () => {
     expect(json.data.state.contents[0]).not.toHaveProperty('analysisId');
   });
 
+  it('十四期: recordingActProgress/editingActProgress — contents 组装带出六幕打勾进度', async () => {
+    prismaMock.cockpitContent.findMany.mockResolvedValue([{
+      id: 'content1', userId: 'user1', title: 'T', idea: 'I', contentType: 'ct', tier: 'A',
+      platform: 'douyin', stage: 'recording', publicationStatus: 'draft', priority: 'normal',
+      tags: [], publishedAt: '', xhsLink: '', coverCopy: '', publishCopy: '',
+      topic: {}, script: {}, recordingNotes: '', editingNotes: '', metrics: {}, review: {},
+      recordingActProgress: { hook: true }, editingActProgress: { bRoll: true },
+      scriptDraftId: null, analysisId: null, createdAt: 'c', updatedAt: 'u',
+    }]);
+    const res = await GET();
+    const json = await res.json();
+    expect(json.data.state.contents[0].recordingActProgress).toEqual({ hook: true });
+    expect(json.data.state.contents[0].editingActProgress).toEqual({ bRoll: true });
+  });
+
+  it('十四期: recordingActProgress/editingActProgress — 存量行列为 null 时防御性回退 undefined, 不抛异常', async () => {
+    prismaMock.cockpitContent.findMany.mockResolvedValue([{
+      id: 'content1', userId: 'user1', title: 'T', idea: 'I', contentType: 'ct', tier: 'A',
+      platform: 'douyin', stage: 'recording', publicationStatus: 'draft', priority: 'normal',
+      tags: [], publishedAt: '', xhsLink: '', coverCopy: '', publishCopy: '',
+      topic: {}, script: {}, recordingNotes: '', editingNotes: '', metrics: {}, review: {},
+      recordingActProgress: null, editingActProgress: null,
+      scriptDraftId: null, analysisId: null, createdAt: 'c', updatedAt: 'u',
+    }]);
+    const res = await GET();
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.data.state.contents[0].recordingActProgress).toBeUndefined();
+    expect(json.data.state.contents[0].editingActProgress).toBeUndefined();
+  });
+
   it('无绑定 PlatformAccount → extras.account 为 null', async () => {
     prismaMock.platformAccount.findFirst.mockResolvedValue(null);
     const res = await GET();
@@ -381,5 +412,44 @@ describe('PUT /api/v1/cockpit/workspace', () => {
 
     // prefs upsert 最终发生
     expect(prismaMock.cockpitPrefs.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it('十四期: recordingActProgress/editingActProgress — upsert data 的 update/create 都带出六幕打勾进度', async () => {
+    prismaMock.cockpitPrefs.findUnique.mockResolvedValue({
+      userId: 'user1', updatedAt: new Date('2026-08-01T00:00:00.000Z'),
+    });
+    prismaMock.cockpitPrefs.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.cockpitPrefs.upsert.mockResolvedValue({
+      userId: 'user1', updatedAt: new Date('2026-08-04T00:00:00.000Z'),
+    });
+
+    const state = emptyState({
+      contents: [{
+        id: 'content1', title: 'T', idea: 'I', contentType: 'ct', tier: 'A', platform: 'douyin', intent: 'trust', stage: 'recording',
+        publicationStatus: 'draft', priority: 'normal', tags: [], createdAt: 'c', updatedAt: 'u',
+        publishedAt: '', xhsLink: '', coverCopy: '', publishCopy: '',
+        topic: {
+          audience: '', painPoint: '', pointOfView: '', commonAngle: '', contrastAngle: '',
+          assets: '', minimumProduction: '',
+          score: { audience: 0, pain: 0, scene: 0, demonstrable: 0, distribution: 0, efficiency: 0 },
+        },
+        script: { headline: '', hook: '', conclusion: '', body: '', example: '', ending: '' },
+        recordingNotes: '', editingNotes: '',
+        recordingActProgress: { hook: true },
+        editingActProgress: { bRoll: true },
+        metrics: { views: 0, likes: 0, saves: 0, comments: 0, followerGain: 0, capturedAt: '' },
+        review: { rating: 0, analysis: '', learnedRule: '', completedAt: '' },
+      }],
+    });
+
+    const res = await PUT(req({ state, rev: '2026-08-01T00:00:00.000Z' }));
+    expect(res.status).toBe(200);
+
+    expect(prismaMock.cockpitContent.upsert).toHaveBeenCalledTimes(1);
+    const contentUpsertArgs = prismaMock.cockpitContent.upsert.mock.calls[0][0];
+    expect(contentUpsertArgs.update.recordingActProgress).toEqual({ hook: true });
+    expect(contentUpsertArgs.update.editingActProgress).toEqual({ bRoll: true });
+    expect(contentUpsertArgs.create.recordingActProgress).toEqual({ hook: true });
+    expect(contentUpsertArgs.create.editingActProgress).toEqual({ bRoll: true });
   });
 });

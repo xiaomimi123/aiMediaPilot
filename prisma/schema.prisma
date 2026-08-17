@@ -667,33 +667,35 @@ model ActualMetric {
 // FollowerSnapshot 不建表：workspace GET 时从 AccountMetric 派生（爬虫已每日写入），PUT 忽略该字段。
 
 model CockpitContent {
-  id                String  @id // 客户端 crypto.randomUUID()
-  userId            String
-  title             String
-  idea              String  @default("")
-  contentType       String  @default("")
-  tier              String  @default("B") // A | B | C
-  platform          String  @default("douyin") // 三期 IA 演化: platform 字段 — douyin|xiaohongshu|bilibili|x|youtube|gongzhonghao
-  intent            String  @default("") // 十期: 内容意图 — ''|reach|trust|convert
-  stage             String  @default("inbox") // inbox|topic|script|recording|editing|publishing|review|archived
-  publicationStatus String  @default("draft") // draft|scheduled|published
-  priority          String  @default("normal")
-  tags              Json    @default("[]")
-  publishedAt       String  @default("") // cockpit 用 ISO date 字符串, 保持原样
-  xhsLink           String  @default("")
-  coverCopy         String  @default("")
-  publishCopy       String  @default("")
-  topic             Json // TopicCard
-  script            Json // ScriptDraft 骨架
-  recordingNotes    String  @default("")
-  editingNotes      String  @default("")
-  metrics           Json // MetricsSnapshot
-  review            Json // Review
-  scriptDraftId     String? // → ScriptDraft (AI 稿)
-  analysisId        String? // → ContentAnalysis (L1/复盘链)
-  createdAt         String
-  updatedAt         String
-  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                   String  @id // 客户端 crypto.randomUUID()
+  userId               String
+  title                String
+  idea                 String  @default("")
+  contentType          String  @default("")
+  tier                 String  @default("B") // A | B | C
+  platform             String  @default("douyin") // 三期 IA 演化: platform 字段 — douyin|xiaohongshu|bilibili|x|youtube|gongzhonghao
+  intent               String  @default("") // 十期: 内容意图 — ''|reach|trust|convert
+  stage                String  @default("inbox") // inbox|topic|script|recording|editing|publishing|review|archived
+  publicationStatus    String  @default("draft") // draft|scheduled|published
+  priority             String  @default("normal")
+  tags                 Json    @default("[]")
+  publishedAt          String  @default("") // cockpit 用 ISO date 字符串, 保持原样
+  xhsLink              String  @default("")
+  coverCopy            String  @default("")
+  publishCopy          String  @default("")
+  topic                Json // TopicCard
+  script               Json // ScriptDraft 骨架
+  recordingNotes       String  @default("")
+  editingNotes         String  @default("")
+  recordingActProgress Json? // 十四期: 六幕录制/剪辑进度打勾, act key -> 是否完成, 旧行为 null
+  editingActProgress   Json?
+  metrics              Json // MetricsSnapshot
+  review               Json // Review
+  scriptDraftId        String? // → ScriptDraft (AI 稿)
+  analysisId           String? // → ContentAnalysis (L1/复盘链)
+  createdAt            String
+  updatedAt            String
+  user                 User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, stage])
   @@index([userId, platform])
