@@ -1082,6 +1082,42 @@ textarea { resize: vertical; }
 .score-card { padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }.score-card > div:first-child { display: flex; align-items: end; justify-content: space-between; }.score-card > div:first-child span { color: var(--muted); font-size: 9px; }.score-card > div:first-child strong { font-family: Georgia, serif; font-size: 27px; font-weight: 500; }.score-card > div:first-child small { color: var(--muted); font-size: 12px; }.score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 11px 20px; margin-top: 17px; }.score-grid label { display: grid; grid-template-columns: 43px 1fr 16px; align-items: center; gap: 7px; }.score-grid span, .score-grid strong { font-size: 8px; }.score-grid input { accent-color: var(--clay); }
 .stage-detail-strip { display: flex; align-items: center; gap: 8px; padding: 12px 13px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-soft); }.stage-detail-strip > span { color: var(--muted); font-size: 8px; }.stage-detail-strip > small { margin-left: auto; color: var(--muted); font-size: 8px; }
 .checklist { display: grid; gap: 9px; padding: 17px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }.checklist strong { margin-bottom: 4px; font-size: 10px; }.checklist label { display: flex; align-items: center; gap: 8px; color: var(--ink-soft); font-size: 9px; }.checklist input { accent-color: var(--olive); }
+
+/* 十三期: 内容详情整页 —— 抽屉改整页后的容器与页头, 沿用 .drawer-header/.drawer-title 的观感 */
+.content-detail-header { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px 16px; padding: 18px 22px 16px; border: 1px solid var(--line); border-radius: 15px 15px 0 0; border-bottom: 0; background: rgba(255,253,248,.7); }
+.content-detail-header > .text-button { flex: 0 0 100%; }
+.content-detail-header > .drawer-badges { flex: 0 0 100%; margin-bottom: 0; }
+.content-detail-header > .drawer-title { flex: 1 1 auto; min-width: 0; }
+.content-detail-body { border: 1px solid var(--line); border-top: 0; border-radius: 0 0 15px 15px; background: var(--panel-bg); box-shadow: 0 6px 24px rgba(52,48,39,.035); }
+.content-detail-body > .drawer-section { padding: 24px; }
+.content-detail-body > .drawer-footer-action { margin: 6px 24px 24px; }
+
+/* 十三期: 步骤条 —— 已完成 (--olive 绿) / 当前 (--gold 金) / 未到 (--muted 灰), 圆点+连线 */
+.stage-stepper { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 4px; padding: 14px 22px; border: 1px solid var(--line); border-top: 0; background: var(--surface-soft); }
+.stage-stepper-overview { padding: 5px 11px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); font-size: 9px; font-weight: 650; transition: .18s ease; }
+.stage-stepper-overview:hover { color: var(--ink); }
+.stage-stepper-overview.active { border-color: var(--clay); background: var(--clay-soft); color: var(--clay); }
+.stage-stepper-track { display: flex; align-items: center; flex: 1 1 auto; min-width: 0; }
+.stage-stepper-item-wrap { display: flex; align-items: center; min-width: 0; }
+.stage-stepper-node { display: flex; align-items: center; gap: 7px; padding: 4px 8px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: 9px; font-weight: 650; white-space: nowrap; transition: .18s ease; }
+.stage-stepper-node:hover { color: var(--ink); }
+.stage-stepper-node.active { background: var(--hover-bg); color: var(--ink); }
+.stage-stepper-dot { display: grid; width: 16px; height: 16px; flex: 0 0 auto; place-items: center; border: 2px solid var(--line-dark); border-radius: 50%; background: var(--surface); color: transparent; font-size: 9px; line-height: 1; transition: .18s ease; }
+.stage-stepper-node.current .stage-stepper-dot { border-color: var(--gold); background: var(--gold); }
+.stage-stepper-node.done .stage-stepper-dot { border-color: var(--olive); background: var(--olive); color: var(--surface); }
+.stage-stepper-node.current .stage-stepper-label { color: var(--gold); }
+.stage-stepper-node.done .stage-stepper-label { color: var(--olive); }
+.stage-stepper-line { width: 24px; height: 2px; flex: 0 0 auto; margin: 0 2px; background: var(--line); }
+.stage-stepper-line.done { background: var(--olive); }
+
+/* 十三期: 六幕录制/剪辑指导卡片 —— 复用 .script-act-card/.script-section-head/.script-act-meta 的视觉语言 */
+.six-act-guide-panel { display: grid; gap: 12px; }
+.six-act-guide-card { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); transition: .18s ease; }
+.six-act-guide-card.done { border-color: var(--olive); background: var(--olive-soft); }
+.six-act-guide-checkbox { display: flex; align-items: center; gap: 8px; margin-top: 2px; color: var(--ink-soft); font-size: 9px; font-weight: 650; }
+.six-act-guide-checkbox input { accent-color: var(--olive); }
+.six-act-guide-card.done .six-act-guide-checkbox { color: var(--olive); }
+
 .published-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; border-radius: 9px; background: var(--olive-soft); color: #5b6242; font-size: 10px; text-align: left; }
 .published-banner button { padding: 5px 8px; border: 1px solid #bcc4aa; border-radius: 6px; background: rgba(255,255,255,.48); color: #6a714f; font-size: 8px; }
 .metrics-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; }.metrics-grid label { padding: 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }.metrics-grid span { display: block; margin-bottom: 5px; color: var(--muted); font-size: 8px; }.metrics-grid input { width: 100%; height: 28px; padding: 0 4px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; font-family: Georgia, serif; font-size: 15px; }
@@ -1374,6 +1410,7 @@ html[data-theme="dark"] .weekly-config-modal > footer,
 html[data-theme="dark"] .goal-config-modal > footer,
 html[data-theme="dark"] .drawer-header,
 html[data-theme="dark"] .drawer-tabs,
+html[data-theme="dark"] .content-detail-header,
 html[data-theme="dark"] .stage-color-modal > footer,
 html[data-theme="dark"] .live-session-modal > footer,
 html[data-theme="dark"] .review-save-bar {
@@ -1913,6 +1950,7 @@ html[data-style="bauhaus"] .review-kpi-grid > article:nth-child(4) {
   .stage-color-grid { grid-template-columns: 1fr; }.stage-color-modal { max-height: 94vh; }.schedule-type-delete-options { grid-template-columns: 1fr; }
   .inspiration-count { align-self: flex-start; }.inspiration-workspace, .inspiration-grid { grid-template-columns: 1fr; }.inspiration-composer { position: static; min-height: auto; }.inspiration-composer textarea { min-height: 220px; }.inspiration-composer > footer { align-items: stretch; flex-direction: column; }.inspiration-composer > footer button { width: 100%; }
   .create-content-modal, .version-modal, .import-preview-modal, .inspiration-detail-modal { width: 100vw; max-height: 100vh; border-radius: 0; }.inspiration-detail-modal { height: 100vh; }.inspiration-detail-body textarea { min-height: 50vh; }.create-section-heading { align-items: stretch; flex-direction: column; }.create-section-heading .search-field { width: 100%; }.update-safety-note { grid-template-columns: 34px minmax(0, 1fr); }.update-safety-note > button { grid-column: 1 / -1; }.import-summary-grid { grid-template-columns: repeat(2, 1fr); }.import-summary-grid article:last-child { grid-column: 1 / -1; }.import-mode-options { grid-template-columns: 1fr; }
+  .content-detail-header { border-radius: 0; }.content-detail-body { border-radius: 0; }.stage-stepper { flex-wrap: nowrap; overflow-x: auto; border-radius: 0; }
 }
 
 @media (max-width: 520px) {
