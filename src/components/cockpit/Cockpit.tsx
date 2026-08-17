@@ -6,7 +6,7 @@ import {
   useState,
   type DragEvent,
 } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   calculateGoalHealth,
   currentFollowers,
@@ -26,7 +26,6 @@ import {
   type DesignStyle,
   type GoalCycle,
   type InspirationCard,
-  type InsightRule,
   type LiveSession,
   type PageTitleKey,
   type ScheduleObject,
@@ -65,6 +64,7 @@ import {
   transitionContentStage,
 } from "@/lib/cockpit/workflow";
 import { nextStageFor, stageLabelFor } from "@/lib/cockpit/platform-stages";
+import { TAB_TO_STAGE } from "@/lib/cockpit/stage-tab-map";
 import { Icon, creatorMark, dashboardTitle, date, normalizeGoalQuotas, shiftDate } from "./shared";
 import { MOBILE_NAV_ITEMS, Sidebar } from "./sidebar";
 import {
@@ -85,7 +85,7 @@ import { PlatformView } from "./views/platform";
 import { AnalyticsView } from "./views/analytics";
 import { SettingsView } from "./views/settings";
 import { Onboarding } from "./onboarding";
-import { ContentDrawer, type ContentDrawerTab } from "./content-drawer";
+import type { ContentDrawerTab } from "./content-drawer";
 
 type ColorTheme = "light" | "dark";
 
@@ -183,6 +183,7 @@ function createBlankState(): WorkspaceState {
 // 这几条规则的注释和实现都在那边, 这里只消费 resolveInitialView/resolveInitialMomentumTab。
 
 export default function Cockpit() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [toast, setToast] = useState("");
   const {
@@ -205,17 +206,6 @@ export default function Cockpit() {
   const [showStageColors, setShowStageColors] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showCreateContent, setShowCreateContent] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [selectedTab, setSelectedTab] = useState<ContentDrawerTab>("overview");
-  // T2 六期修复轮 1: 同会话内「生成→关抽屉→重开」要能立即恢复改稿 UI, 不必等
-  // 下一次 GET /api/v1/cockpit/workspace ——但生成路由 (linkCockpitContent) 按
-  // T1 设计特意不调 bumpCockpitRev (避免这种高频动作触发 409), 所以 state.contents
-  // 里的 item.scriptDraftId 在本次会话里不会自动刷新。这里加一张纯客户端覆盖表
-  // (contentId → scriptDraftId), 只在这次会话内存活, 不参与 state/workspace PUT
-  // 序列化、不碰 rev —— 抽屉生成成功时写入, 抽屉懒加载拉回时优先读它兜底
-  // item.scriptDraftId (server-store.ts 只读下发的服务端字段), 两者谁有值用谁,
-  // 完整刷新页面后自然清空、退回只认 item.scriptDraftId 的路径。
-  const [scriptDraftIdOverrides, setScriptDraftIdOverrides] = useState<Record<string, string>>({});
   const [pipelineQuery, setPipelineQuery] = useState("");
   const [pipelineType, setPipelineType] = useState("全部类型");
   const workspaceTitle = dashboardTitle(state.profile);
@@ -263,7 +253,6 @@ export default function Cockpit() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  const selected = state.contents.find((item) => item.id === selectedId) ?? null;
   const health = useMemo(() => calculateGoalHealth(state.goal, state.contents, state.followerSnapshots), [state]);
   const publishedQuarter = useMemo(() => publishedWithin(state.contents, state.goal.startDate, state.goal.endDate), [state.contents, state.goal]);
   const followers = currentFollowers(state.goal, state.followerSnapshots);
@@ -328,16 +317,15 @@ export default function Cockpit() {
     setState((prev) => ({ ...prev, designStyle }));
   }
 
-  function openContent(id: string, tab: ContentDrawerTab = "overview") {
-    setSelectedTab(tab);
-    setSelectedId(id);
+  function openContent(id: string, tab?: ContentDrawerTab) {
+    const stepQuery = tab && tab !== "overview" ? `?step=${TAB_TO_STAGE[tab]}` : "";
+    router.push(`/content/detail/${id}${stepQuery}`);
   }
 
   function deleteContent(item: ContentItem) {
     const confirmed = window.confirm(`确定永久删除「${item.title}」吗？\n\n它会同时从今日 Todo、档期、大目标统计和复盘中移除，且无法恢复。`);
     if (!confirmed) return;
     setState((prev) => deleteContentFromWorkspace(prev, item.id));
-    setSelectedId(null);
     setToast("内容已永久删除");
   }
 
@@ -810,7 +798,6 @@ export default function Cockpit() {
 
       <nav className="mobile-nav" aria-label="移动端导航">{MOBILE_NAV_ITEMS.map((item) => <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => setView(item.id)}><Icon name={item.icon} /><span>{item.label}</span></button>)}</nav>
       {showCreateContent ? <CreateContentModal inspirationCards={state.inspirationCards} close={() => setShowCreateContent(false)} createBlank={createBlankContent} createFromInspiration={createContentFromInspiration} openInspirationPool={() => { setShowCreateContent(false); setView("inspirations"); }} /> : null}
-      {selected ? <ContentDrawer item={selected} initialTab={selectedTab} stageEvents={state.stageEvents} stageColors={state.stageColors} contentTypes={state.contentTypes} scriptDraftIdOverride={scriptDraftIdOverrides[selected.id]} onScriptDraftLinked={(contentId, scriptDraftId) => setScriptDraftIdOverrides((prev) => prev[contentId] === scriptDraftId ? prev : { ...prev, [contentId]: scriptDraftId })} close={() => setSelectedId(null)} update={(patch) => updateContent(selected.id, patch)} mergeScript={mergeScript} changeStage={(stage) => setState((prev) => transitionContentStage(prev, selected.id, stage, date))} setStageStatus={(stage, completed) => setStageStatus(selected.id, stage, completed)} schedule={(stage, plannedDate) => planStage(selected.id, stage, plannedDate)} unschedule={(stage) => clearStagePlan(selected.id, stage)} remove={() => deleteContent(selected)} markPublished={() => markPublished(selected)} unmarkPublished={() => unmarkPublished(selected)} saveReview={() => saveReview(selected)} ruleDeposited={Boolean(selected.review.learnedRule.trim() && state.insightRules.some((rule) => rule.sourceContentId === selected.id && rule.text === selected.review.learnedRule.trim()))} addRule={(text) => { const normalized = text.trim(); if (!normalized) return; setState((prev) => { const existing = prev.insightRules.find((rule) => rule.sourceContentId === selected.id && rule.text === normalized); if (existing) return { ...prev, insightRules: prev.insightRules.map((rule) => rule.id === existing.id ? { ...rule, active: true } : rule) }; const rule: InsightRule = { id: crypto.randomUUID(), text: normalized, sourceContentId: selected.id, createdAt: todayISO(), active: true }; return { ...prev, insightRules: [rule, ...prev.insightRules] }; }); setToast("已沉淀为内容规则"); }} notify={setToast} /> : null}
       {showStageColors ? <StageColorModal colors={state.stageColors} close={() => setShowStageColors(false)} update={(stage, color) => setState((prev) => ({ ...prev, stageColors: { ...prev.stageColors, [stage]: color.toUpperCase() } }))} reset={() => setState((prev) => ({ ...prev, stageColors: { ...DEFAULT_STAGE_COLORS } }))} /> : null}
       {showVersionHistory ? <VersionHistoryModal close={() => setShowVersionHistory(false)} exportData={exportData} /> : null}
       {showOnboarding ? <Onboarding start={startWorkspace} /> : null}
