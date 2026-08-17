@@ -51,11 +51,13 @@ export function ContentDetailClient({ id }: { id: string }) {
   // 下面每个函数都是从 Cockpit.tsx 对应同名函数搬来的**故意保留的独立副本**
   // （不抽共享模块）——这些函数把校验/toast提示/setState 混在一起，不是纯
   // `(state, args) => state` 函数，抽共享层需要先拆分校验与状态变更两层，
-  // 属于超出本计划范围的重构；Cockpit.tsx 是这些逻辑的唯一真源，出现行为分歧时
-  // 以 Cockpit.tsx 为准同步过来（同 content-drawer.tsx 里 `linkCockpitContent`
-  // 与旧路由逻辑重复未抽共享的先例，见该文件相关注释）。搬运时把 `setToast` 换成
-  // 本文件顶部这个局部 toast state，`setSelectedId(null)`（仅 deleteContent 里有，
-  // Cockpit.tsx 原 deleteContent 里）换成 `router.push('/?view=platform-' + item.platform)`。
+  // 属于超出本计划范围的重构（同 content-drawer.tsx 里 `linkCockpitContent`
+  // 与旧路由逻辑重复未抽共享的先例，见该文件相关注释）。原 Cockpit.tsx 里的对应
+  // 函数已在后续清理中删除（唯一调用方——旧的抽屉内联渲染——已被本页面路由取代），
+  // 本文件是这些逻辑目前唯一的存活版本；后续如需变更行为，直接改这里即可，无需
+  // 再去 Cockpit.tsx 同步。搬运时把 `setToast` 换成本文件顶部这个局部 toast state，
+  // `setSelectedId(null)`（仅 deleteContent 里有，Cockpit.tsx 原 deleteContent 里）
+  // 换成 `router.push('/?view=platform-' + item.platform)`。
 
   // 下面这批函数原本在 Cockpit.tsx 里用 `function` 声明；这里改成 const 箭头函数——
   // 唯一原因是 TS 的空值收窄不会跨越（会被提升的）嵌套 function 声明生效，`item` 上面

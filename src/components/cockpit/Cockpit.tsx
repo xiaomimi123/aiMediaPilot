@@ -47,19 +47,16 @@ import {
   saveLiveSession as saveLiveSessionInWorkspace,
   moveScheduleObject as moveScheduleObjectInWorkspace,
 } from "@/lib/cockpit/schedule";
-import { completeContentReview, deleteContentFromWorkspace } from "@/lib/cockpit/workspace";
 import { createContent, createDemoState, useWorkspaceState } from "@/lib/cockpit/use-workspace-state";
 import { saveWorkspace } from "@/lib/cockpit/storage";
 import {
   canScheduleStage,
-  completedPublishingEvents,
   moveStageEventToDate,
   moveStageEvent,
   overdueStageEvents,
   removeStageEvent,
   scheduleContentForDate,
   scheduleStageForDate,
-  setContentStageCompletion,
   sortStageEvents,
   toggleStageEvent,
   transitionContentStage,
@@ -279,28 +276,6 @@ export default function Cockpit() {
       shiftDate(item.publishedAt, 3) <= date,
   ).length;
 
-  function updateContent(id: string, patch: Partial<ContentItem>) {
-    setState((prev) => ({
-      ...prev,
-      contents: prev.contents.map((item) => item.id === id ? { ...item, ...patch, updatedAt: todayISO() } : item),
-    }));
-  }
-
-  // AI 生成脚本回填专用: 相比 updateContent 直接替换 `script` 整块, 这里对
-  // `script` 做字段级合并 (`{ ...item.script, ...partial }`) 并读取回填时刻
-  // 最新的 `item.script`——而不是抽屉打开/点击生成那一刻捕获的闭包值。
-  // 生成是异步的, 用户很可能在等待期间已经手改了脚本字段 (闭包里的 item 是旧的);
-  // 若在调用点直接 `{ ...item.script, ...patch }` 再整体 update, 会用那份过期
-  // 的 script 覆盖掉用户这段时间的编辑。
-  function mergeScript(id: string, partial: Partial<ContentItem["script"]>) {
-    setState((prev) => ({
-      ...prev,
-      contents: prev.contents.map((item) => item.id === id
-        ? { ...item, script: { ...item.script, ...partial }, updatedAt: todayISO() }
-        : item),
-    }));
-  }
-
   function updatePageTitle(key: PageTitleKey, value: string) {
     setState((prev) => ({ ...prev, pageTitles: { ...prev.pageTitles, [key]: value } }));
   }
@@ -321,13 +296,6 @@ export default function Cockpit() {
   function openContent(id: string, tab?: ContentDrawerTab) {
     const stepQuery = tab && tab !== "overview" ? `?step=${TAB_TO_STAGE[tab]}` : "";
     router.push(`/content/detail/${id}${stepQuery}`);
-  }
-
-  function deleteContent(item: ContentItem) {
-    const confirmed = window.confirm(`确定永久删除「${item.title}」吗？\n\n它会同时从今日 Todo、档期、大目标统计和复盘中移除，且无法恢复。`);
-    if (!confirmed) return;
-    setState((prev) => deleteContentFromWorkspace(prev, item.id));
-    setToast("内容已永久删除");
   }
 
   function updateGoal(patch: Partial<GoalCycle>) {
@@ -575,34 +543,6 @@ export default function Cockpit() {
     setToast("自定义日程已删除");
   }
 
-  function setStageStatus(contentId: string, stage: WorkStage, completed: boolean) {
-    const content = state.contents.find((item) => item.id === contentId);
-    if (stage === "review" && completed && content?.publicationStatus !== "published") {
-      setToast("内容发布后才能完成复盘");
-      return;
-    }
-    if (stage === "review" && completed && (!content?.review.rating || !content.review.analysis.trim())) {
-      setToast("请先到复盘页完成星级评价和复盘分析");
-      return;
-    }
-    const completedAt = new Date().toISOString();
-    setState((prev) => {
-      const withReviewStatus = stage === "review"
-        ? {
-            ...prev,
-            contents: prev.contents.map((item) => item.id === contentId
-              ? { ...item, review: { ...item.review, completedAt: completed ? completedAt : "" } }
-              : item),
-          }
-        : prev;
-      return setContentStageCompletion(withReviewStatus, contentId, stage, completed, date, completedAt);
-    });
-    const label = stageLabelFor(content?.platform ?? "", stage);
-    setToast(completed
-      ? `${label}已完成，前置阶段已同步`
-      : `${label}及后续阶段已恢复待完成`);
-  }
-
   function moveToday(eventId: string, direction: -1 | 1) {
     setState((prev) => moveStageEvent(prev, eventId, direction));
   }
@@ -636,78 +576,6 @@ export default function Cockpit() {
     const id = event.dataTransfer.getData("text/content-id");
     if (!id) return;
     setState((prev) => transitionContentStage(prev, id, stage, date));
-  }
-
-  function markPublished(item: ContentItem) {
-    if (!item.publishedAt) {
-      setToast("请先填写实际发布时间");
-      return;
-    }
-    const completedAt = new Date().toISOString();
-    setState((prev) => {
-      const publishedItem: ContentItem = {
-        ...item,
-        publicationStatus: "published",
-        stage: "review",
-        review: { ...item.review, completedAt: "" },
-        updatedAt: date,
-      };
-      const next = {
-        ...prev,
-        contents: prev.contents.map((content) => content.id === item.id ? publishedItem : content),
-      };
-      return {
-        ...next,
-        stageEvents: completedPublishingEvents(next, publishedItem, completedAt),
-      };
-    });
-    setToast("已发布，内容已进入待复盘");
-  }
-
-  function unmarkPublished(item: ContentItem) {
-    setState((prev) => {
-      const publishingEvents = prev.stageEvents.filter((event) => event.contentId === item.id && event.stage === "publishing");
-      const latestPublishing = [...publishingEvents].sort((a, b) => b.plannedDate.localeCompare(a.plannedDate))[0];
-      let stageEvents = prev.stageEvents
-        .filter((event) => !(event.contentId === item.id && event.stage === "review" && !event.completedAt))
-        .map((event) => event.id === latestPublishing?.id ? { ...event, plannedDate: date, completedAt: "" } : event);
-      if (!latestPublishing) {
-        stageEvents = [...stageEvents, {
-          id: crypto.randomUUID(),
-          contentId: item.id,
-          stage: "publishing",
-          plannedDate: date,
-          rank: 0,
-          completedAt: "",
-        }];
-      }
-      return {
-        ...prev,
-        contents: prev.contents.map((content) => content.id === item.id ? {
-          ...content,
-          publicationStatus: "scheduled",
-          publishedAt: "",
-          stage: "publishing",
-          updatedAt: date,
-        } : content),
-        stageEvents,
-      };
-    });
-    setToast("已撤销发布记录");
-  }
-
-  function saveReview(item: ContentItem) {
-    if (item.publicationStatus !== "published") {
-      setToast("内容发布后才能保存复盘");
-      return;
-    }
-    if (!item.review.rating || !item.review.analysis.trim()) {
-      setToast("请先完成星级评价和复盘分析");
-      return;
-    }
-    const completedAt = new Date().toISOString();
-    setState((prev) => completeContentReview(prev, item.id, date, completedAt));
-    setToast(item.review.completedAt ? "复盘已更新" : "复盘已保存，内容进入已复盘");
   }
 
   // 注：原 creator-cockpit 有 analyze()/copyText()/AiModal 调 /api/ai/analyze 做「AI 体检 /
