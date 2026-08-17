@@ -116,5 +116,5 @@ export function synthesizeSrtFromSixActScript(acts: ScriptAct[]): string;
 | `stageFlowFor` 签名扩展要传 `deliveryMode`，调用点分散在看板/步骤条/发布等多处，漏传一处就会让 `ai-faceless` 内容在那一处退回按 platform 分的默认 7 阶段流（`recording` 又冒出来），复现九期"展示层收窄可见集合时写入层必须同步"的老问题 | 实施时先全仓库搜 `stageFlowFor(` 每个调用点，逐个核对是否需要传 `item.deliveryMode`，写一条覆盖每个消费点的旧模式（`deliveryMode` 缺省）回归测试 |
 | DeepSeek Builder 阶段画面质量偏弱是已知的、本期刻意接受的限制，不是要在实施阶段"顺手优化掉"的 bug | 明确写进 §0 决策表和 §5，实施子代理不应擅自切换模型或大改提示词试图"修好"这个问题 |
 | 后端首次跑"多阶段 AI 编排 + 真实渲染管线"的长任务，失败模式未知（DeepSeek 超时、Chromium 崩溃、ffmpeg 编码失败等） | worker 每一步都要有明确的 try/catch 落 `failed` 状态+错误信息，不吞异常；第一版不做自动重试，靠用户手动重试降低复杂度 |
-| `VideoProduction` 工作目录 (`productionRoot`) 会在本机磁盘留下真实文件（分镜 JSON、渲染中间产物、预览片、成片） | 实施时确认清理策略——至少要在 spec 落地前问清楚：失败/废弃的任务要不要自动清理磁盘，还是留给用户手动清（参照 `erduo-broll-loop-engineering` 技能本身"Never overwrite"的产物管理约定） |
+| `VideoProduction` 工作目录 (`productionRoot`) 会在本机磁盘留下真实文件（分镜 JSON、渲染中间产物、预览片、成片） | **不做自动清理**——沿用 `erduo-broll-loop-engineering` 技能本身"Never overwrite"的产物管理约定，磁盘占用留给用户自己视需要手动清理（本期是纯本机个人工具，不是多租户 SaaS，没有存储成本压力，自动清理反而有误删未看过的成片的风险） |
 | SRT 合成的按字数占比分配时长，对短句/长句边界情况（如全幕只有一句超长台词）可能分配出不合理的单句时长 | `synthesizeSrtFromSixActScript` 需要单元测试覆盖：单句幕、多句幕、极短幕（`targetSec` 很小）等边界 |
