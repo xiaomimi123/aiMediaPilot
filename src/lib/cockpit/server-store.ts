@@ -61,6 +61,9 @@ export async function loadWorkspaceFromDb(userId: string) {
       intent: rest.intent ?? '',
       topic: rest.topic as any, script: rest.script as any,
       metrics: rest.metrics as any, review: rest.review as any,
+      // 十四期: 六幕录制/剪辑打勾进度 — Json? 列, 旧行为 null → 前端可选字段 undefined
+      recordingActProgress: (rest.recordingActProgress ?? undefined) as Record<string, boolean> | undefined,
+      editingActProgress: (rest.editingActProgress ?? undefined) as Record<string, boolean> | undefined,
     })) as WorkspaceState['contents'],
     stageEvents: stageEvents.map(({ userId: _u, ...rest }) => rest) as WorkspaceState['stageEvents'],
     reviewDays: reviewDays.map(({ userId: _u, ...rest }) => rest),
@@ -165,6 +168,10 @@ export async function saveWorkspaceToDb(
         script: item.script as object,
         recordingNotes: item.recordingNotes,
         editingNotes: item.editingNotes,
+        // 十四期: 六幕录制/剪辑打勾进度 — Json? 列, 未打过勾 (旧数据/未生成六幕稿) 时是
+        // undefined, cast 成 object|undefined 让 Prisma 存 null (跟 topic/script 同款 as 风格)。
+        recordingActProgress: item.recordingActProgress as object | undefined,
+        editingActProgress: item.editingActProgress as object | undefined,
         metrics: item.metrics as object,
         review: item.review as object,
         createdAt: item.createdAt,
