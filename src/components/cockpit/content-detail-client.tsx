@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useWorkspaceState } from "@/lib/cockpit/use-workspace-state";
+import { saveWorkspace } from "@/lib/cockpit/storage";
 import { stageFlowFor, stageLabelFor } from "@/lib/cockpit/platform-stages";
 import { STAGE_TO_TAB } from "@/lib/cockpit/stage-tab-map";
 import {
@@ -124,7 +125,13 @@ export function ContentDetailClient({ id }: { id: string }) {
   const remove = () => {
     const confirmed = window.confirm(`确定永久删除「${item.title}」吗？\n\n它会同时从今日 Todo、档期、大目标统计和复盘中移除，且无法恢复。`);
     if (!confirmed) return;
-    setState((prev) => deleteContentFromWorkspace(prev, item.id));
+    const nextState = deleteContentFromWorkspace(state, item.id);
+    setState(nextState);
+    // 导航前显式落盘: router.push 会卸载本组件树 (含 useWorkspaceState 的 250ms
+    // 防抖保存计时器), 若只 setState 不主动 save, 删除永远不会真正写入服务端
+    // (十四期改造后新增的竞态, 详见 README §已知问题/task-6-report.md)。
+    // best-effort、不 await —— 只需保证请求在卸载前已发出即可。
+    saveWorkspace(nextState).catch(() => {});
     router.push(`/?view=platform-${item.platform}`);
     setToast("内容已永久删除");
   };

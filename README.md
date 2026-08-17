@@ -397,9 +397,12 @@ Postgres。
 供 `Cockpit.tsx` 与新页面共同使用。所有原来会打开抽屉的入口 (看板卡片/今日推进/灵感库
 "已转为内容"/内容数据分析"待复盘") 统一改为 `router.push('/content/detail/[id]')`。
 
-**已知问题(未修复, 见下文「已知问题」)**: 整页架构下, "新建内容后立即跳转"与"删除内容后
-跳转回看板"这两个动作都会在防抖自动保存(250ms)完成前就把承载 `useWorkspaceState` 的组件树
-卸载, 导致这次写入实际从未落库——详见 §5 Known Issues。
+**导航前显式落盘**: 整页架构下, `router.push` 会立即卸载承载 `useWorkspaceState` 的组件树,
+而自动保存是 250ms 防抖——若变更后立即导航, 防抖计时器可能来不及触发就被清理。
+`createBlankContent`/`createContentForPlatform`/`createContentFromInspiration`(`Cockpit.tsx`)
+与内容详情页的删除处理函数(`content-detail-client.tsx`)因此都在 `setState(...)` 之后、
+导航之前显式调用一次 `saveWorkspace(nextState)`(best-effort, 不 `await`, 只保证请求在卸载前
+已发出), 不依赖防抖计时器。
 
 ### 人物志 + 个人经历库 (十二期新增)
 
@@ -584,25 +587,6 @@ API: `POST/GET /api/v1/topics`、`PATCH /api/v1/topics/[id]`、`POST/GET /api/v1
 - `User.baselinePlays` (L1) — 视频专属概念, 新场景下 score multiplier 失去意义。 留着不动。
 - `ContentAnalysis.publishChecklist` (J) — 视频专属。
 - 新增 `ScriptDraft.platform` 后,现有数据是抖音,需 migration 设默认值。
-
-### 已知 Bug (未修复)
-
-- **十四期整页化引入的数据丢失竞态**(内容详情整页收尾走查发现, 未修复——超出该收尾任务的
-  文件改动范围, 记录于此留给下一期处理): `createBlankContent`/`createContentForPlatform`/
-  `createContentFromInspiration`(`Cockpit.tsx`)与 `content-detail-client.tsx` 的删除处理函数
-  都是"先 `setState(...)`, 紧接着同步 `router.push(...)`"的写法。十三期之前, 打开内容走的是
-  同一组件树内的抽屉(`ContentDrawer`), `router.push` 不存在, 这个写法没问题; 十四期把内容详情
-  换成独立路由后, `router.push` 会立刻卸载承载 `useWorkspaceState` 的组件树, 而自动保存是
-  250ms 防抖(`src/lib/cockpit/use-workspace-state.ts`)——组件卸载时 `useEffect` 清理函数会
-  `clearTimeout` 掉这个待发的保存, 写入从未真正发到 `PUT /api/v1/cockpit/workspace`。真实复现
-  (真连 docker Postgres, 非 mock): ①新建内容后立即跳转到详情页, 直接查库该行不存在; ②在详情
-  页点「删除此内容」, 确认弹窗后正常跳回看板且卡片"消失", 但直接查库该行仍在, 刷新页面卡片
-  会重新出现(用户会误以为删除生效, 造成困惑)。同一页面内的编辑(改标题/生成脚本/勾选六幕
-  进度)不受影响——因为没有跨路由跳转, 组件树没有被卸载, 250ms 计时器能正常触发。修复方向:
-  这几处"变更后立即导航"的调用点需要先 `await` 一次真实保存完成(或把即时保存与防抖保存分开,
-  导航前强制走一次同步保存), 再执行 `router.push`/`setState` 卸载路径; 涉及 `Cockpit.tsx`
-  与 `content-detail-client.tsx` 两个文件, 不在十四期收尾任务("只改样式"）范围内, 留给下一次
-  改动这两个文件的任务顺带修。
 
 ### Code 重复
 

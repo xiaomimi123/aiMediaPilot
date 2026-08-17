@@ -49,6 +49,7 @@ import {
 } from "@/lib/cockpit/schedule";
 import { completeContentReview, deleteContentFromWorkspace } from "@/lib/cockpit/workspace";
 import { createContent, createDemoState, useWorkspaceState } from "@/lib/cockpit/use-workspace-state";
+import { saveWorkspace } from "@/lib/cockpit/storage";
 import {
   canScheduleStage,
   completedPublishingEvents,
@@ -347,8 +348,15 @@ export default function Cockpit() {
       createdAt: todayISO(),
       updatedAt: todayISO(),
     });
-    setState((prev) => ({ ...prev, contents: [item, ...prev.contents] }));
+    const nextState = { ...state, contents: [item, ...state.contents] };
+    setState(nextState);
     setShowCreateContent(false);
+    // 导航前显式落盘: openContent 会 router.push 到独立路由并卸载本组件树 (含
+    // useWorkspaceState 的 250ms 防抖保存计时器), 若只 setState 不主动 save,
+    // 该计时器永远不会触发, 新建内容从未真正写入服务端 (十四期改造后新增的
+    // 竞态, 详见 README §已知问题/task-6-report.md)。best-effort、不 await —
+    // 只需保证请求在卸载前已发出即可。
+    saveWorkspace(nextState).catch(() => {});
     openContent(item.id);
   }
 
@@ -369,7 +377,10 @@ export default function Cockpit() {
       createdAt: todayISO(),
       updatedAt: todayISO(),
     });
-    setState((prev) => ({ ...prev, contents: [item, ...prev.contents] }));
+    const nextState = { ...state, contents: [item, ...state.contents] };
+    setState(nextState);
+    // 导航前显式落盘, 原因同 createBlankContent。
+    saveWorkspace(nextState).catch(() => {});
     openContent(item.id);
   }
 
@@ -383,18 +394,21 @@ export default function Cockpit() {
       createdAt: todayISO(),
       updatedAt: todayISO(),
     });
-    setState((prev) => ({
-      ...prev,
-      inspirationCards: prev.inspirationCards.map((card) => card.id === inspiration.id
+    const nextState = {
+      ...state,
+      inspirationCards: state.inspirationCards.map((card) => card.id === inspiration.id
         ? {
             ...card,
             convertedContentIds: Array.from(new Set([...card.convertedContentIds, item.id])),
             updatedAt: new Date().toISOString(),
           }
         : card),
-      contents: [item, ...prev.contents],
-    }));
+      contents: [item, ...state.contents],
+    };
+    setState(nextState);
     setShowCreateContent(false);
+    // 导航前显式落盘, 原因同 createBlankContent。
+    saveWorkspace(nextState).catch(() => {});
     openContent(item.id, "topic");
     setToast("已从灵感创建内容，并进入大纲阶段");
   }
