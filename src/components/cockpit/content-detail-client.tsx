@@ -15,7 +15,7 @@ import {
 } from "@/lib/cockpit/workflow"; // 与 Cockpit.tsx 同一个纯函数导入源
 import { completeContentReview, deleteContentFromWorkspace } from "@/lib/cockpit/workspace";
 import { todayISO } from "@/lib/cockpit/calculations";
-import { ContentDrawer, type ContentDrawerTab } from "./content-drawer";
+import { ContentDetailView, type ContentDrawerTab } from "./content-detail";
 import type { WorkStage, ContentItem, ContentStage, InsightRule } from "@/lib/cockpit/model";
 
 export function ContentDetailClient({ id }: { id: string }) {
@@ -205,13 +205,12 @@ export function ContentDetailClient({ id }: { id: string }) {
   };
 
   return <>
-    <ContentDrawer
+    <ContentDetailView
     item={item}
     initialTab={initialTab}
     stageEvents={state.stageEvents}
     stageColors={state.stageColors}
     contentTypes={state.contentTypes}
-    close={() => router.push(`/?view=platform-${item.platform}`)}
     update={updateItem}
     mergeScript={(_id, partial) => mergeScriptField(partial)}
     changeStage={changeStage}

@@ -85,7 +85,7 @@ import { PlatformView } from "./views/platform";
 import { AnalyticsView } from "./views/analytics";
 import { SettingsView } from "./views/settings";
 import { Onboarding } from "./onboarding";
-import type { ContentDrawerTab } from "./content-drawer";
+import type { ContentDrawerTab } from "./content-detail";
 
 type ColorTheme = "light" | "dark";
 
