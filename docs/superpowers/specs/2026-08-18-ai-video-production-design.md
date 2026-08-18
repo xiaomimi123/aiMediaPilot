@@ -14,6 +14,8 @@
 | 部署环境 | 只在用户本机跑（`npm run dev` + `npm run worker:dev`），直接复用本机已装好的无头 Chromium + ffmpeg 工具链，不考虑服务器部署 |
 | 接入现有内容流程 | 新增 `ContentItem.deliveryMode` 字段；选了无人出镜的内容用一条新阶段流替代录制+剪辑 |
 | 第一版目标 | 先跑通端到端骨架（真实调 DeepSeek + 真实渲染 + 真实产出预览片/成片），画面构图故意从简，不在这版死磕视觉丰富度 |
+| 渲染/拼接实现方式 | 不复用 `erduo-broll-loop-engineering` 技能自带的 `plan-runtime.mjs`/`assemble-frozen-production.mjs`（其哈希/receipt 契约体系是为 Claude 交互式生产设计的重型基础设施）——自己写一个精简版：逐镜头无头浏览器截帧编码成短 mp4，`ffmpeg concat` 拼接成完整片 |
+| 预览/正式两档画质 | 预览片用低分辨率/帧率快速产出供用户确认；正式导出用同一套渲染逻辑、只是把分辨率/帧率参数提到正式规格（如 1080p/30fps）重新跑一遍，不是"放大预览片" |
 
 ## 1. 数据模型
 
@@ -83,11 +85,11 @@ export function synthesizeSrtFromSixActScript(acts: ScriptAct[]): string;
 
 **新增 worker**：`src/jobs/workers/video-production-worker.ts`（注册进 `src/jobs/workers/index.ts`，随 `npm run worker:dev` 一起跑），任务体依次执行，每步更新 `VideoProduction.status` 并落库中间产物路径：
 
-1. **`queued → directing`**：调用 DeepSeek（`deepseek-reasoner`，已验证可行），提示词照抄 2026-08-17 会话验证过的 Director 阶段提示词（系统提示词内容见项目记忆 `project-broll-engine-findings` 关联的会话记录，或重新读 `~/.claude/skills/broll-director/SKILL.md` 提炼），输入 §4 合成的 SRT，产出叙事纲要/视觉系统/逐镜头 Recipe（JSON/markdown 混合，参照 `erduo-broll-loop-engineering` 技能 `01-director/` 产物结构）。
-2. **`directing → building`**：调用该技能自带的确定性脚本 `plan-runtime.mjs`（`~/.claude/skills/erduo-broll-loop-engineering/scripts/`）跑运行时规划，产出每个分镜的任务包；再逐镜头调 DeepSeek（`deepseek-chat`，已验证可行但质量偏弱，第一版接受）复刻 Builder 阶段，产出 HyperFrames HTML/GSAP 源码（系统提示词照抄 2026-08-17 验证脚本里用过的版本，存档在项目记忆关联的会话记录里）。
-3. **`building → assembling`**：本机无头 Chromium（`playwright-core` + 已缓存的 `chromium-1234` 版本，2026-08-17 会话已验证可用）逐镜头渲染截帧+编码，调用该技能的 `assemble-frozen-production.mjs preview` 拼出低成本预览片。
+1. **`queued → directing`**：调用 DeepSeek（`deepseek-reasoner`，已验证可行），提示词内容取材自 `~/.claude/skills/broll-director/SKILL.md`（2026-08-17 会话已用真实 key 验证过复刻版本可行），输入 §4 合成的 SRT，产出叙事纲要/视觉系统/逐镜头 Recipe（结构化 JSON，字段参照 `erduo-broll-loop-engineering` 技能 `01-director/` 产物但不强求逐字段对齐——本期自建 schema，不依赖该技能的下游校验工具）。
+2. **`directing → building`**：逐镜头调 DeepSeek（`deepseek-chat`，2026-08-17 已验证可行但质量偏弱，第一版接受）复刻 Builder 阶段，提示词内容取材自 `~/.claude/skills/broll-master-build/SKILL.md`，产出 HyperFrames HTML/GSAP 源码，契约与 2026-08-17 验证时一致：暴露 `window.__timelines[id]` 一个暂停态 GSAP 主时间线，供外部 `tl.seek(seconds)` 截帧。
+3. **`building → assembling`**：**不复用该技能自带的 `plan-runtime.mjs`/`assemble-frozen-production.mjs`**——这两个脚本内置的哈希校验/receipt/契约体系是为 Claude 交互式生产设计的重型基础设施，本期自己写一个精简版渲染+拼接模块：本机无头 Chromium（`playwright-core` + 已缓存的 `chromium-1234` 版本，2026-08-17 会话已验证可用）对每个镜头的 HTML，按目标 fps 逐帧 `tl.seek()`+截图，`ffmpeg` 把该镜头的帧序列编码成一段短 mp4；所有镜头编码完成后用 `ffmpeg -f concat` 按顺序拼接成一条完整预览片。
 4. **`assembling → preview_ready`**：预览片路径写回 `VideoProduction.previewPath`，等待用户在前端确认。
-5. **用户点"确认导出"**：状态 `preview_ready → approved → rendering`，调用 `assemble-frozen-production.mjs deliver` 跑正式全规格渲染，产出写 `masterPath`，状态转 `done`。
+5. **用户点"确认导出"**：状态 `preview_ready → approved → rendering`，用同一套渲染+拼接模块，只是把截帧的目标分辨率/帧率从"预览档"提到 §0 决策表约定的正式规格，产出写 `masterPath`，状态转 `done`。
 6. 任一步失败：状态转 `failed`，`errorMessage` 记录具体阶段+原因，不静默重试（用户在前端点"重试"手动触发，复用同一条 `VideoProduction` 记录或开新的，看实施时哪种更符合"多次生成保留历史"的既有模式）。
 
 **第一版画面从简**：Director 提示词里明确要求"构图从简，优先保证时长覆盖/字幕清晰/无渲染报错，不追求视觉丰富度"——用简单的文字卡片+基础过渡即可，验证骨架通不通比画面好看更优先。
