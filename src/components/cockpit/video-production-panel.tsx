@@ -61,13 +61,13 @@ export function VideoProductionPanel({ contentId }: { contentId: string }) {
   return <div className="video-production-panel">
     <div className="video-production-status"><strong>{STATUS_LABEL[vp.status] ?? vp.status}</strong></div>
     {vp.status === 'preview_ready' && vp.previewPath ? <>
-      <video src={vp.previewPath} controls className="video-production-preview" />
+      <video src={`/api/v1/cockpit/video-productions/${vp.id}/file?kind=preview`} controls className="video-production-preview" />
       <div className="video-production-actions">
         <button type="button" className="primary-button" onClick={approve}>确认导出</button>
         <button type="button" className="secondary-button" onClick={start}>重新生成</button>
       </div>
     </> : null}
-    {vp.status === 'done' && vp.masterPath ? <a className="primary-button" href={vp.masterPath} download>下载成片</a> : null}
+    {vp.status === 'done' && vp.masterPath ? <a className="primary-button" href={`/api/v1/cockpit/video-productions/${vp.id}/file?kind=master`} download>下载成片</a> : null}
     {vp.status === 'failed' ? <>
       <p className="field-hint">{vp.errorMessage}</p>
       <button type="button" className="secondary-button" onClick={start}>重试</button>
