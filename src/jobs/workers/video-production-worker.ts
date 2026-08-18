@@ -18,10 +18,6 @@ async function handleProduce(job: Job<JobData>) {
   const vp = await prisma.videoProduction.findUnique({ where: { id: videoProductionId } });
   if (!vp) throw new Error(`video production ${videoProductionId} not found`);
 
-  if (mode === 'master' && vp.status !== 'approved') {
-    throw new Error(`video production ${videoProductionId} 未处于 approved 状态，拒绝正式渲染 (当前: ${vp.status})`);
-  }
-
   const setStatus = (status: string, extra: Record<string, unknown> = {}) =>
     prisma.videoProduction.update({
       where: { id: videoProductionId },
@@ -34,6 +30,10 @@ async function handleProduce(job: Job<JobData>) {
   const outputField = mode === 'master' ? 'masterPath' : 'previewPath';
 
   try {
+    if (mode === 'master' && vp.status !== 'approved') {
+      throw new Error(`video production ${videoProductionId} 未处于 approved 状态，拒绝正式渲染 (当前: ${vp.status})`);
+    }
+
     await setStatus('directing');
     const deepseekKey = await resolveDeepSeekApiKey(vp.userId);
     if (!deepseekKey) throw new Error('未配置 DeepSeek key');
