@@ -46,7 +46,9 @@ model VideoProduction {
 
 ## 2. 阶段流变更（不新增 ContentStage 枚举值）
 
-**关键设计取舍**：不新增第 8 个 `ContentStage` 值（如 `"producing"`）——那会牵动 `STAGE_LABELS`/`NEXT_ACTIONS`/`CONTENT_STAGES`/看板列/`Prisma.stage` 默认值等一整圈现有代码，改动面和小红书当年"录制/剪辑对它是死阶段"的场景本质相同。**沿用 `platform-stages.ts` 已有的先例**（`src/lib/cockpit/platform-stages.ts:7-8` 注释："配图并入「文案」阶段的抽屉, 不新增阶段值"）：`deliveryMode:'ai-faceless'` 的内容，阶段流跳过 `recording`（`isStageInFlow` 返回 false，看板/步骤条都不显示这一列/节点），**复用 `editing` 这个既有阶段值**，但它的详情页渲染内容整体替换成"生成成片"面板（而不是六幕指导清单或空白备注框）。
+**关键设计取舍**：不新增第 8 个 `ContentStage` 值（如 `"producing"`）——那会牵动 `STAGE_LABELS`/`NEXT_ACTIONS`/`CONTENT_STAGES`/看板列/`Prisma.stage` 默认值等一整圈现有代码，改动面和小红书当年"录制/剪辑对它是死阶段"的场景本质相同。**沿用 `platform-stages.ts` 已有的先例**（`src/lib/cockpit/platform-stages.ts:7-8` 注释："配图并入「文案」阶段的抽屉, 不新增阶段值"）：`deliveryMode:'ai-faceless'` 的内容，阶段流跳过 `recording`（`isStageInFlow` 返回 false，`nextActionFor`/`nextStageFor` 从 script 直接指向 editing），**复用 `editing` 这个既有阶段值**，但它的详情页渲染内容整体替换成"生成成片"面板（而不是六幕指导清单或空白备注框）。
+
+**看板不受影响的澄清**：这条"跳过 recording"只在**内容详情页的步骤条**（`content-detail.tsx`/`content-detail-client.tsx`，天然是单条内容的视图）里生效。**看板（`pipeline.tsx`/`platform.tsx`）保持第一版计划里"看板本身不动"的承诺，本期同样不动**——看板的列集合是按平台共享的，不是按单条内容算的，同一块看板上可能同时有手动内容和 AI 内容混排，没法让"录制"列对某些卡片存在、对另一些卡片不存在。`ai-faceless` 内容的 `stage` 值永远不会落在 `"recording"`（`nextStageFor` 直接跳过），所以"录制"列对这类内容天然是空的，不需要也不应该改动 `pipeline.tsx` 里 `stageFlowFor(platformFilter)` 那个调用点。
 
 `stageFlowFor` 签名扩展为同时按 `deliveryMode` 分岔（`platform` 不变仍是第一参数，`deliveryMode` 新增可选第二参数）：
 ```ts
@@ -55,7 +57,7 @@ export function stageFlowFor(platform: string, deliveryMode?: 'manual' | 'ai-fac
   return PLATFORM_STAGE_FLOW[platform] ?? DEFAULT_STAGE_FLOW;
 }
 ```
-所有调用点（`isStageInFlow`/`nextActionFor`/`stageLabelFor`/内容详情页步骤条/看板列生成）都要把 `item.deliveryMode` 一并传入——**这是本期改动面最大的一处，需要逐个调用点核实**（详见 §7 风险）。
+需要传 `deliveryMode` 的调用点只有内容详情页相关的几处（`content-detail.tsx` 的 `StageStatusPanel`/`StageStepper` 两处，`content-detail-client.tsx` 一处，`platform-stages.ts` 内部 `isStageInFlow`/`nextStageFor`/`schedulableStagesFor` 三处透传）——**`pipeline.tsx`/`platform.tsx` 看板相关调用点明确不传**，维持"看板本身不动"（详见 §7 风险的核实清单）。
 
 `editing` 阶段在无人出镜模式下的 `stageLabelFor` 展示文案改成"生成成片"（`src/lib/cockpit/platform-stages.ts` 的 `stageLabelFor` 已有 xiaohongshu 的"文案"覆写先例，同款再加一条分支）。
 
@@ -113,7 +115,7 @@ export function synthesizeSrtFromSixActScript(acts: ScriptAct[]): string;
 
 | 风险 | 对策 |
 |---|---|
-| `stageFlowFor` 签名扩展要传 `deliveryMode`，调用点分散在看板/步骤条/发布等多处，漏传一处就会让 `ai-faceless` 内容在那一处退回按 platform 分的默认 7 阶段流（`recording` 又冒出来），复现九期"展示层收窄可见集合时写入层必须同步"的老问题 | 实施时先全仓库搜 `stageFlowFor(` 每个调用点，逐个核对是否需要传 `item.deliveryMode`，写一条覆盖每个消费点的旧模式（`deliveryMode` 缺省）回归测试 |
+`stageFlowFor` 签名扩展要传 `deliveryMode`，已核实全仓库调用点只有 7 处（`platform-stages.ts` 内部 3 处、`content-detail.tsx` 2 处、`content-detail-client.tsx` 1 处、`pipeline.tsx` 1 处）——漏传内容详情页那 6 处会让 `ai-faceless` 内容的步骤条退回默认 7 阶段流（`recording` 又冒出来）；`pipeline.tsx` 那 1 处刻意不传（看板本身不动，见 §2 说明），不是遗漏 | 实施时逐个核对上述 6 个需要传参的调用点，`pipeline.tsx` 那 1 处保持不传并在代码里留注释说明"看板共享列, 故意不按 deliveryMode 分岔"，避免后人误加 |
 | DeepSeek Builder 阶段画面质量偏弱是已知的、本期刻意接受的限制，不是要在实施阶段"顺手优化掉"的 bug | 明确写进 §0 决策表和 §5，实施子代理不应擅自切换模型或大改提示词试图"修好"这个问题 |
 | 后端首次跑"多阶段 AI 编排 + 真实渲染管线"的长任务，失败模式未知（DeepSeek 超时、Chromium 崩溃、ffmpeg 编码失败等） | worker 每一步都要有明确的 try/catch 落 `failed` 状态+错误信息，不吞异常；第一版不做自动重试，靠用户手动重试降低复杂度 |
 | `VideoProduction` 工作目录 (`productionRoot`) 会在本机磁盘留下真实文件（分镜 JSON、渲染中间产物、预览片、成片） | **不做自动清理**——沿用 `erduo-broll-loop-engineering` 技能本身"Never overwrite"的产物管理约定，磁盘占用留给用户自己视需要手动清理（本期是纯本机个人工具，不是多租户 SaaS，没有存储成本压力，自动清理反而有误删未看过的成片的风险） |
