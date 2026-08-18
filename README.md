@@ -372,6 +372,39 @@ key/顺序不被打乱)与六幕版 `scope:'all'`(整稿改稿, 校验幕数固�
 describe 块, 3 条用例)。E2E 过程中产生的测试用 `ScriptDraft`(生成稿 1 条 + 旧稿克隆 1 条)与
 对应 `StyleSample`(1 条)已清理; 用户真实存在的旧三段式草稿全程只读, 内容与创建时间未变。
 
+### 无人出镜 AI 自动成片 (十五期新增)
+
+一句话: 六幕脚本(十三期)定稿后, 内容详情页(十四期)脚本 tab 新增「交付方式」选择——选
+「AI 自动生成无人出镜成片」后, 「录制」步骤跳过、「剪辑」步骤换成生成成片面板, 点「开始
+生成」全自动跑完 SRT 合成 → DeepSeek 导演(分镜) → DeepSeek 构建者(逐镜头 HTML+GSAP 动画
+源码) → headless Chromium 逐帧截图 → ffmpeg 编码拼接, 产出可在浏览器里播放的预览片; 人工
+确认「确认导出」后用正式规格 (30fps, 对比预览档 15fps) 重新跑一遍同一条流水线产出正式成
+片, 可下载。详见 `docs/superpowers/specs/2026-08-18-ai-video-production-design.md`。
+
+**用法**: 内容详情页「脚本」tab, 生成六幕脚本后出现「交付方式」二选一 (手动拍剪 / AI 自动
+生成无人出镜成片) → 选 AI 模式后切到「剪辑」tab (此时标签显示「生成成片」) → 点「开始生
+成」→ 面板每 3 秒轮询一次状态, 依次经过 `queued → directing → building → assembling →
+preview_ready`, 全程几分钟(镜头数与画面复杂度影响耗时, 一次 60 秒脚本、7 个镜头的真实走
+查约 4.5 分钟) → 预览片就绪后内嵌 `<video>` 播放, 「确认导出」触发 `approved → building →
+assembling → done` 的正式渲染 (同一条流水线, 时长通常是预览档的 1.5-2 倍——上述真实走查约
+8 分钟), 完成后「下载成片」。预览片/正式成片都通过 `GET /api/v1/cockpit/video-productions/
+[id]/file?kind=preview|master` 流式返回 (支持 Range, 用户/内容归属校验同其它接口), 不是
+直接暴露服务器文件系统路径。
+
+**已知限制**:
+- **画面质量弱于人工剪辑** —— 这是本期接受的明确取舍。Builder 阶段由 DeepSeek 直接产出
+  HTML+GSAP 动画源码, 第一版构图故意从简 (文字卡片 + 基础过渡, 不做复杂运镜/隐喻), 视觉
+  丰富度和转场精细度都明显不如人工剪辑, 后续阶段若要提升需要专门迭代 Builder 提示词或改
+  用更贴近专业剪辑工作流的渲染引擎。
+- **只支持无人出镜 (faceless)** —— 不支持真人出镜/口播实拍内容的自动剪辑, 交付方式仍需
+  手动选「手动拍剪」走原有录制/剪辑流程。
+- **仅本机可跑** —— 依赖本机已安装的 Playwright Chromium (`playwright install chromium`,
+  找不到时可用 `PLAYWRIGHT_CHROMIUM_PATH` 环境变量指定) 和本机 `ffmpeg`/`ffprobe`, 未做容
+  器化/服务器部署适配, 暂不能部署到无头服务器上跑。
+- **真实耗时随镜头数/时长线性增长** —— 渲染是逐帧截图 (15fps 预览 / 30fps 正式), 脚本越
+  长、Director 切的镜头越多, 耗时越长; 长脚本 (如六幕默认 90 秒) 单次生成可能到 10 分钟以
+  上量级, 是预期行为不是 bug。
+
 ### 内容详情整页 + 步骤条 (十四期新增)
 
 一句话: 内容详情从右拉抽屉(7 个标签平级按钮, 每次打开都硬编码停在「概览」)改为独立整页
@@ -626,8 +659,13 @@ npm install
 
 # 5. 跑 dev + worker (各开一个 terminal)
 npm run dev          # http://localhost:3000
-npm run worker:dev   # BullMQ workers (analyze / retro / auto-sync / radar 四期新增)
+npm run worker:dev   # BullMQ workers (analyze / retro / auto-sync / radar 四期新增 / video-production 十五期新增)
 ```
+
+无人出镜 AI 自动成片 (十五期, 见 §3「无人出镜 AI 自动成片」小节) 除上面两步外还需要:
+本机执行过 `npx playwright install chromium` (headless 截帧用) 和一个可用的 `ffmpeg`/
+`ffprobe` (`brew install ffmpeg`); DeepSeek key 同五期抖音逐字稿复用「AI 服务配置」卡/
+`.env` 里的 `DEEPSEEK_API_KEY`, 不需要额外配置项。
 
 雷达功能额外需要: Tavily API key (在设置视图「雷达配置」卡里填, 见 §3「热点雷达」小节; 去 [tavily.com](https://tavily.com) 免费注册即得, 免费档每月 1000 次检索通常够用) + 一个可用的 DeepSeek key (阅读评分复用「AI 服务配置」卡——优先读该卡里配置的 key, 未配置时回退 `.env` 里的 `DEEPSEEK_API_KEY`)。 两者任一缺失时「立即扫描」会明确报错 (未配置 Tavily/未启用 → 400；无可用 DeepSeek key → 503), 每日自动扫描会静默跳过该轮 (不报错, 见 `runRadarScan` 注释)。
 
@@ -641,7 +679,7 @@ npm run worker:dev   # BullMQ workers (analyze / retro / auto-sync / radar 四�
 
 ```bash
 npm run typecheck    # tsc --noEmit
-npm test             # vitest, 1376 tests across 110 files (含 Cockpit 纯逻辑层原版测试; 其中 1 个文件是真实连 Postgres 的集成测试, 需先 docker compose up -d postgres)
+npm test             # vitest, 1620 tests across 130 files (含 Cockpit 纯逻辑层原版测试; 其中 1 个文件是真实连 Postgres 的集成测试, 需先 docker compose up -d postgres; 无人出镜 AI 自动成片相关文件里有 1 个是真实跑 headless Chromium 截帧+ffmpeg 编码的集成测试, 无网络调用, 不需要 DeepSeek key)
 npm test -- <filter> # 跑某个 file
 ```
 
@@ -711,7 +749,7 @@ src/
 │   │   ├── script/                # 脚本生成详情页 (E) + 分发登记, `script/new` 为深度写稿入口
 │   │   └── retro-sync/            # 抖音半自动复盘 (C)
 │   ├── accounts/                  # 账号绑定, 挂 ExternalShell (双入口之一)
-│   └── api/v1/                    # 所有 API routes (含 topics/ distributions/ cockpit/workspace/ cockpit/inspirations/ douyin/auto-sync/trigger/ radar/{items,keywords,config,trigger,runs/latest}/ scripts/generate(五期 douyin 两阶段化)/ scripts/[id]/refine(五期新增)/ style/{profile,samples}(五期新增)/ scripts/[id]/images/{plan,route,archive}(七期新增: 出图计划/逐张生图/zip 打包))
+│   └── api/v1/                    # 所有 API routes (含 topics/ distributions/ cockpit/workspace/ cockpit/inspirations/ douyin/auto-sync/trigger/ radar/{items,keywords,config,trigger,runs/latest}/ scripts/generate(五期 douyin 两阶段化)/ scripts/[id]/refine(五期新增)/ style/{profile,samples}(五期新增)/ scripts/[id]/images/{plan,route,archive}(七期新增: 出图计划/逐张生图/zip 打包)/ cockpit/video-productions/{[id],[id]/approve,[id]/file,latest}(十五期新增: 触发生成/状态轮询/确认导出/预览-成片文件流))
 ├── components/
 │   ├── cockpit/                   # Creator Cockpit 移植主体
 │   │   ├── Cockpit.tsx             # 顶层组件: state + view 路由 (`NavView`, 三期起见 `lib/cockpit/view-routing.ts`) + 主题/onboarding (侧栏拖拽排序三期已移除)
@@ -721,6 +759,7 @@ src/
 │   │   ├── sidebar.tsx             # 全站共用侧栏 (cockpit 模式 + external 模式), 二期起「平台」外链组已移除, 四期新增「热点雷达」项
 │   │   ├── external-shell.tsx      # 站外页面外壳 (侧栏 + mobile-nav + 主题同步), 仅剩 /accounts /agent/discover /content/* 使用
 │   │   ├── content-drawer.tsx      # 内容详情抽屉, 二期 (T2) 脚本 tab 加入就地 AI 生成 + 标题实时建议; 五期新增素材框/时长/简报折叠区/分块渲染/换一版/整体指令; 六期新增挂载时懒加载拉回改稿 UI (parseDraftOutput) + 小红书两阶段面板(`XhsScriptPanel`, 与 douyin 分块面板共用 `ResearchBriefDetails` 素材简报子组件) + 素材框对小红书开放 + 生成/改稿/hook 动作四类互斥扩到小红书整稿指令; 七期新增「配图」区块 (一键全生成 + 并发 2 逐张渲染 + 单张重试 + 打包下载链接), 生图动作并入同一互斥矩阵
+│   │   ├── video-production-panel.tsx # 十五期新增: 无人出镜成片生成面板 (内容详情页「剪辑」tab, deliveryMode==='ai-faceless' 时替换原剪辑清单), 3 秒轮询状态 + 预览播放器 + 确认导出/重新生成/下载
 │   │   ├── onboarding.tsx / shared.tsx
 │   ├── content/                   # script-form, script-result (深度写稿入口用), publish-checklist, prediction-card, 分发登记弹窗 etc
 │   └── layout/                    # main-layout.tsx (按路径决定是否套 ExternalShell)
@@ -729,6 +768,7 @@ src/
 │   ├── radar/                     # 四期新增: search.ts(SearchProvider 抽象 + Tavily 实现) / config.ts(RadarConfig 读写+加解密) / scoring.ts(titleFingerprint/clusterByTopic/composeHeat/applyTimeDecay 纯函数) / run.ts(runRadarScan 管线主体)
 │   ├── script/                    # 五期新增: research.ts(runResearch 两阶段生成的阶段一, 雷达种子+Tavily+素材框合并→DeepSeek 提炼简报) / style.ts(getStyleContext 风格上下文切换 + depositStyleSample 定稿沉淀)
 │   ├── image/                     # 七期新增: provider.ts(ImageProvider 抽象 + GptImageProvider, 直连 api.openai.com, b64_json 返回)
+│   ├── video-production/          # 十五期新增: srt-synthesis.ts(六幕脚本→SRT 纯函数) / director-prompt.ts + builder-prompt.ts(DeepSeek 导演/构建者两阶段 prompt+schema) / shot-renderer.ts(headless Chromium 逐帧截图→ffmpeg 编码单镜头 clip) / assets/gsap.min.js(构建者产出的 HTML 固定引入的本地 GSAP 资产)
 │   ├── llm/                       # DeepSeekTextLLM + OpenAIVisionLLM + prompts/ (四期新增 radar-read.ts; 五期新增 research-brief.ts / script-write-douyin.ts / script-refine.ts; 七期新增 image-plan.ts / resolve-image-key.ts(gpt-image key 解析, 无 .env 回退))
 │   ├── pipeline/                  # deriveStage 纯函数 + platforms.ts 分发平台注册表
 │   ├── prediction/                # L1 formula + baseline
@@ -738,13 +778,13 @@ src/
 │   ├── checklist/                 # J types + isReady
 │   └── prisma.ts
 ├── jobs/
-│   ├── queue.ts                   # 6 BullMQ queues (四期新增 radar)
-│   └── workers/                   # 5 workers (bind, analyze, retro, auto-sync, radar 四期新增)
+│   ├── queue.ts                   # 7 BullMQ queues (四期新增 radar; 十五期新增 video-production)
+│   └── workers/                   # 6 workers (bind, analyze, retro, auto-sync, radar 四期新增, video-production 十五期新增)
 scripts/
 ├── migrate-cockpit.ts             # 存量数据 → Cockpit 表, dry-run 默认 / --apply 写库
 └── migrate-xhs-stages.ts          # 九期: xhs 存量 recording/editing 归并回 script, dry-run 默认 / --apply 写库
 prisma/
-└── schema.prisma                  # User / ContentAnalysis / ActualMetric / ScriptDraft / TopicIdea / Distribution / Cockpit* (10 张) / Radar*(4 张, 四期新增) / StyleProfile / StyleSample (五期新增) 等
+└── schema.prisma                  # User / ContentAnalysis / ActualMetric / ScriptDraft / TopicIdea / Distribution / Cockpit* (10 张) / Radar*(4 张, 四期新增) / StyleProfile / StyleSample (五期新增) / VideoProduction (十五期新增) 等
 vendor/
 └── creator-cockpit/                # 移植源固定副本 (pinned 197d49b, MIT), tsconfig 排除, 不参与构建, 只读参考
 docs/superpowers/
@@ -791,6 +831,7 @@ Phase A-C、工作台重定位 (Task 1-12)、Creator Cockpit 整体移植 (Task 
 5. **人工走查二期 Task 8 未自动化验证项** — 抽屉三平台生成回填真机走查、discover 存灵感→灵感池 409 横幅、复盘/大目标新区块数据对照、立即同步真实入队观察、设置卡三项功能等价、明暗模式残留检查 (见 `.superpowers/sdd/2026-08-05-platform-pages-fusion/task-8-report.md` 待人工走查清单)
 6. **遗留清理候选** — `PoolButton` 组件与 `TopicIdea`/`ideaId` 选题池链路现无任何 UI 入口 (二期起灵感只走 `CockpitInspiration`), 未来若确认不再需要可整体移除; cockpit 设置视图「账号管理」静态链接卡未单独拆文件 (内联在 `settings.tsx`), 后续扩展时再拆
 7. **十期遗留 minor (已知不阻断使用)** — `truncateAngleSuggestion`/`pushCtaLines` 里个别防御性空分支在当前校验顺序下不可达 (zod 先一步抛错), 保留纯防御; `suggestedIntent` 只在生成响应里返回、不落库 `ScriptDraft.output`(重开草稿不保留 AI 建议, spec 未要求持久化); 体系报告「导出 .md」按钮的真实浏览器点击下载走查因扩展当次故障未做 (逻辑走读已确认, 待扩展恢复后补, 同七期先例)
+8. **十五期 Builder 画面质量** — 无人出镜自动成片(见 §3「无人出镜 AI 自动成片」小节)的构图质量是本期明确接受的取舍, 弱于人工剪辑, 未来若要提升需专门迭代 Builder 提示词; 收尾 E2E 走查时 Chrome 扩展连接不稳定, 预览片在浏览器里的可视化播放确认改用「直接 HTTP GET/Range 请求 `[id]/file` 路由 + ffprobe 解析时长」验证 (字节级比对文件一致、时长与 SRT 总时长吻合), 未留存真实浏览器截图, 后续如需要可补一次纯人工走查
 
 ---
 
@@ -808,4 +849,5 @@ Phase A-C、工作台重定位 (Task 1-12)、Creator Cockpit 整体移植 (Task 
 - `docs/superpowers/specs/2026-08-03-workbench-repositioning-design.md` (工作台重定位, 第二次 pivot, Task 1-12)
 - `docs/superpowers/specs/2026-08-04-cockpit-adoption-design.md` (Creator Cockpit 整体移植, 第三次 pivot, Task 1-14)
 - `docs/superpowers/specs/2026-08-05-platform-pages-fusion-design.md` (平台页面融入驾驶舱, 二期, Task 1-8)
+- `docs/superpowers/specs/2026-08-18-ai-video-production-design.md` (无人出镜 AI 自动成片, 十五期, Task 1-10)
 (Plan files in `docs/superpowers/plans/` 对应每个 spec)

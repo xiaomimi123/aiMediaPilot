@@ -32,7 +32,11 @@ model VideoProduction {
   contentId     String   // → CockpitContent.id
   status        String   @default("queued") // queued|directing|building|assembling|preview_ready|approved|rendering|done|failed
   srt           String   // 合成的 SRT 全文
-  productionRoot String  // 本机工作目录绝对路径 (production-profile.json/narrative-envelope.json 等产物所在)
+  productionRoot String  // 本机工作目录路径 (production-profile.json/narrative-envelope.json 等产物所在)。实施落地: 生成入口默认拼的是相对
+                          // 路径 (`./video-productions/<id>`, 相对 Next dev server 进程 cwd), 不是本注释原写的"绝对路径"——headless
+                          // Chromium 用 `file://` 协议打开每个镜头的 index.html 时必须是绝对路径 (否则 `net::ERR_INVALID_URL`, 十五期收尾
+                          // 真实 E2E 走查发现并修复), shot-renderer.ts 在拼 file:// URL 前用 `path.resolve()` 转一次绝对路径, 不要求
+                          // productionRoot 本身在写入时就是绝对路径
   previewPath   String?  // 低成本预览片相对路径
   masterPath    String?  // 正式成片相对路径
   errorMessage  String?
