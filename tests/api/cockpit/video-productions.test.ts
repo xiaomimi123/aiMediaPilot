@@ -6,6 +6,7 @@ vi.mock('@/lib/user', () => ({
 
 const prismaMock = vi.hoisted(() => ({
   cockpitContent: { findUnique: vi.fn() },
+  scriptDraft: { findUnique: vi.fn() },
   videoProduction: {
     create: vi.fn(),
     findUnique: vi.fn(),
@@ -52,11 +53,12 @@ beforeEach(() => {
 });
 
 describe('POST /api/v1/cockpit/video-productions', () => {
-  it('内容没有六幕脚本 → 400', async () => {
+  it('内容没有关联 scriptDraft → 400', async () => {
     prismaMock.cockpitContent.findUnique.mockResolvedValue({
       id: 'c1',
       userId: 'user1',
-      script: { acts: [] },
+      scriptDraftId: null,
+      script: {},
     });
     const res = await POST(req('http://t/api/v1/cockpit/video-productions', { contentId: 'c1' }));
     expect(res.status).toBe(400);
@@ -64,11 +66,35 @@ describe('POST /api/v1/cockpit/video-productions', () => {
     expect(queueMock.add).not.toHaveBeenCalled();
   });
 
-  it('内容有六幕脚本 → 200, create 被调用, 队列 mode:preview', async () => {
+  it('关联的 scriptDraft 不是六幕形态 → 400', async () => {
     prismaMock.cockpitContent.findUnique.mockResolvedValue({
       id: 'c1',
       userId: 'user1',
-      script: SIX_ACT_SCRIPT,
+      scriptDraftId: 'sd1',
+      script: {},
+    });
+    prismaMock.scriptDraft.findUnique.mockResolvedValue({
+      id: 'sd1',
+      output: { script: { sections: [] } },
+    });
+    const res = await POST(req('http://t/api/v1/cockpit/video-productions', { contentId: 'c1' }));
+    expect(res.status).toBe(400);
+    expect(prismaMock.videoProduction.create).not.toHaveBeenCalled();
+    expect(queueMock.add).not.toHaveBeenCalled();
+  });
+
+  it('关联的 scriptDraft 有六幕脚本 → 200, create 被调用, 队列 mode:preview', async () => {
+    prismaMock.cockpitContent.findUnique.mockResolvedValue({
+      id: 'c1',
+      userId: 'user1',
+      scriptDraftId: 'sd1',
+      script: {},
+    });
+    // 真实落库形状 (见 scripts/generate/route.ts douyin 分支): acts 包在 script.{acts} 里,
+    // four_dims 在顶层——与前端抽屉懒加载复用同一份 parseDraftOutput 解析。
+    prismaMock.scriptDraft.findUnique.mockResolvedValue({
+      id: 'sd1',
+      output: { script: { acts: SIX_ACT_SCRIPT.acts }, four_dims: SIX_ACT_SCRIPT.four_dims },
     });
     prismaMock.videoProduction.create.mockResolvedValue({ id: 'vp1', status: 'queued' });
     queueMock.add.mockResolvedValue({ id: 'job-1' });
@@ -89,7 +115,8 @@ describe('POST /api/v1/cockpit/video-productions', () => {
     prismaMock.cockpitContent.findUnique.mockResolvedValue({
       id: 'c1',
       userId: 'other-user',
-      script: SIX_ACT_SCRIPT,
+      scriptDraftId: 'sd1',
+      script: {},
     });
     const res = await POST(req('http://t/api/v1/cockpit/video-productions', { contentId: 'c1' }));
     expect(res.status).toBe(404);
