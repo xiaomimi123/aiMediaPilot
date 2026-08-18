@@ -37,6 +37,7 @@ model User {
   inspirationInsights        InspirationInsight[]
   topicIdeas                 TopicIdea[]
   cockpitContents            CockpitContent[]
+  videoProductions           VideoProduction[]
   cockpitInspirations        CockpitInspiration[]
   cockpitStageEvents         CockpitStageEvent[]
   cockpitReviewDays          CockpitReviewDay[]
@@ -675,6 +676,7 @@ model CockpitContent {
   tier                 String  @default("B") // A | B | C
   platform             String  @default("douyin") // 三期 IA 演化: platform 字段 — douyin|xiaohongshu|bilibili|x|youtube|gongzhonghao
   intent               String  @default("") // 十期: 内容意图 — ''|reach|trust|convert
+  deliveryMode         String  @default("manual") // manual|ai-faceless，十五期 C
   stage                String  @default("inbox") // inbox|topic|script|recording|editing|publishing|review|archived
   publicationStatus    String  @default("draft") // draft|scheduled|published
   priority             String  @default("normal")
@@ -701,6 +703,23 @@ model CockpitContent {
   @@index([userId, platform])
   @@index([scriptDraftId])
   @@index([analysisId])
+}
+
+model VideoProduction {
+  id             String   @id
+  userId         String
+  contentId      String
+  status         String   @default("queued") // queued|directing|building|assembling|preview_ready|approved|rendering|done|failed
+  srt            String
+  productionRoot String
+  previewPath    String?
+  masterPath     String?
+  errorMessage   String?
+  createdAt      String
+  updatedAt      String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, contentId])
 }
 
 model CockpitInspiration {

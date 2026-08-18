@@ -156,6 +156,8 @@ export async function saveWorkspaceToDb(
         platform: item.platform,
         // 十期: intent 字段 — 与 platform 同属可写字段
         intent: item.intent,
+        // 十五期 C: deliveryMode 字段 — 与 platform/intent 同属可写字段
+        deliveryMode: item.deliveryMode ?? 'manual',
         stage: item.stage,
         publicationStatus: item.publicationStatus,
         priority: item.priority,

@@ -199,3 +199,45 @@ describe('schedulableStagesFor', () => {
     ]);
   });
 });
+
+// 十五期 C: deliveryMode 按 'ai-faceless' 分岔——AI 自动生成成片跳过 recording 阶段。
+describe('stageFlowFor / isStageInFlow / nextStageFor / schedulableStagesFor — deliveryMode 分岔', () => {
+  it("stageFlowFor('douyin', 'ai-faceless') 跳过 recording, 6 项", () => {
+    expect(stageFlowFor('douyin', 'ai-faceless')).toEqual([
+      'inbox',
+      'topic',
+      'script',
+      'editing',
+      'publishing',
+      'review',
+    ]);
+  });
+
+  it("手动模式零回归: stageFlowFor('douyin', 'manual') 与不传第二参数一致, 等于 DEFAULT_STAGE_FLOW", () => {
+    expect(stageFlowFor('douyin', 'manual')).toEqual(DEFAULT_STAGE_FLOW);
+    expect(stageFlowFor('douyin')).toEqual(DEFAULT_STAGE_FLOW);
+    expect(stageFlowFor('douyin')).toEqual(stageFlowFor('douyin', 'manual'));
+  });
+
+  it('isStageInFlow: ai-faceless 下 recording 不在流内, manual 下仍在', () => {
+    expect(isStageInFlow('douyin', 'recording', 'ai-faceless')).toBe(false);
+    expect(isStageInFlow('douyin', 'recording')).toBe(true);
+    expect(isStageInFlow('douyin', 'recording', 'manual')).toBe(true);
+  });
+
+  it('nextStageFor: ai-faceless 下 script 之后直接跳到 editing, manual 下仍是 recording', () => {
+    expect(nextStageFor('douyin', 'script', 'ai-faceless')).toBe('editing');
+    expect(nextStageFor('douyin', 'script')).toBe('recording');
+    expect(nextStageFor('douyin', 'script', 'manual')).toBe('recording');
+  });
+
+  it('schedulableStagesFor: ai-faceless 下不含 recording', () => {
+    expect(schedulableStagesFor('douyin', 'ai-faceless')).not.toContain('recording');
+    expect(schedulableStagesFor('douyin', 'ai-faceless')).toEqual([
+      'topic',
+      'script',
+      'editing',
+      'publishing',
+    ]);
+  });
+});

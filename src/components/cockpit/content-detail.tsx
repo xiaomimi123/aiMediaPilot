@@ -380,7 +380,7 @@ function StageStatusPanel({ item, stageColors, setStageStatus }: {
 }) {
   return <section className="stage-status-panel">
     <header><div><strong>阶段完成状态</strong><small>完成后续阶段会自动补齐前置；撤销后，该阶段及后续恢复待完成。</small></div></header>
-    <div className="stage-status-track">{stageFlowFor(item.platform).map((stage) => {
+    <div className="stage-status-track">{stageFlowFor(item.platform, item.deliveryMode).map((stage) => {
       const completed = item.stage === "archived" || stageIndex(item.stage) > stageIndex(stage);
       const current = item.stage === stage;
       return <button
@@ -1088,7 +1088,7 @@ export function ContentDetailView({ item, initialTab, stageEvents, stageColors, 
       <div className="drawer-badges"><Badge tone={item.stage} color={stageColors[item.stage]}>{stageLabelFor(item.platform, item.stage)}</Badge><Badge tone={`tier-${item.tier.toLowerCase()}`}>{item.tier}档</Badge></div>
       <input className="drawer-title" value={item.title} onChange={(e) => update({ title: e.target.value })} />
     </div>
-    <StageStepper platform={item.platform} flow={stageFlowFor(item.platform)} currentStage={item.stage} activeStage={activeTab === "overview" ? "overview" : (TAB_STAGE[activeTab] as WorkStage)} onSelect={(stage) => setTab(stage === "overview" ? "overview" : (Object.entries(TAB_STAGE).find(([, s]) => s === stage)?.[0] as ContentDrawerTab))} />
+    <StageStepper platform={item.platform} flow={stageFlowFor(item.platform, item.deliveryMode)} currentStage={item.stage} activeStage={activeTab === "overview" ? "overview" : (TAB_STAGE[activeTab] as WorkStage)} onSelect={(stage) => setTab(stage === "overview" ? "overview" : (Object.entries(TAB_STAGE).find(([, s]) => s === stage)?.[0] as ContentDrawerTab))} />
     <div className="content-detail-body">
     {/* 九期: 「全局当前阶段」下拉是数据层的手动逃生舱——刻意保留 CONTENT_STAGES
         全 8 阶段超集 (含平台流外的值), 不走 stageLabelFor, 允许把内容手动改到

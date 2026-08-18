@@ -42,7 +42,7 @@ export function ContentDetailClient({ id }: { id: string }) {
   if (!item) return <div className="page"><p className="muted">没有找到这条内容，可能已被删除。</p><a href="/">返回看板</a></div>;
 
   const stepParam = searchParams.get("step");
-  const flow = stageFlowFor(item.platform);
+  const flow = stageFlowFor(item.platform, item.deliveryMode);
   const defaultStage = flow.includes(item.stage as WorkStage) ? (item.stage as WorkStage) : flow[0];
   const initialTab: ContentDrawerTab = stepParam && stepParam in STAGE_TO_TAB
     ? STAGE_TO_TAB[stepParam as WorkStage]

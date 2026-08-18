@@ -121,6 +121,9 @@ export interface ContentItem {
   platform: ContentPlatformEx;
   // 十期: 账号定位体系 —— 内容意图 (引流/建立信任/转化), 可写字段, 处理方式照 platform。
   intent: ContentIntent;
+  // 十五期 C: 交付模式 (手动出镜/AI 自动生成无人出镜成片), 可选, 缺省=manual, 零迁移。
+  // 驱动 platform-stages.ts 的 stageFlowFor 分岔 (ai-faceless 跳过 recording 阶段)。
+  deliveryMode?: 'manual' | 'ai-faceless';
   stage: ContentStage;
   publicationStatus: "draft" | "scheduled" | "published";
   priority: "high" | "normal" | "low";
