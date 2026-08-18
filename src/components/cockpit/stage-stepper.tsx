@@ -4,12 +4,13 @@ import type { WorkStage } from "@/lib/cockpit/model";
 import { computeStepNodes } from "@/lib/cockpit/stage-stepper";
 import { stageLabelFor } from "@/lib/cockpit/platform-stages";
 
-export function StageStepper({ platform, flow, currentStage, activeStage, onSelect }: {
+export function StageStepper({ platform, flow, currentStage, activeStage, onSelect, deliveryMode }: {
   platform: string;
   flow: WorkStage[];
   currentStage: string;
   activeStage: WorkStage | "overview";
   onSelect: (stage: WorkStage | "overview") => void;
+  deliveryMode?: 'manual' | 'ai-faceless';
 }) {
   const nodes = computeStepNodes(flow, currentStage as never);
   return <div className="stage-stepper">
@@ -23,7 +24,7 @@ export function StageStepper({ platform, flow, currentStage, activeStage, onSele
           aria-current={activeStage === node.stage ? "step" : undefined}
         >
           <span className="stage-stepper-dot">{node.status === "done" ? "✓" : ""}</span>
-          <span className="stage-stepper-label">{stageLabelFor(platform, node.stage)}</span>
+          <span className="stage-stepper-label">{deliveryMode === 'ai-faceless' && node.stage === 'editing' ? '生成成片' : stageLabelFor(platform, node.stage)}</span>
         </button>
         {idx < nodes.length - 1 ? <span className={`stage-stepper-line ${node.status === "done" ? "done" : ""}`} /> : null}
       </div>)}
