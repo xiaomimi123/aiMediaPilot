@@ -91,7 +91,13 @@ export async function renderShotToClip(opts: RenderShotOpts): Promise<void> {
   const browser = await chromium.launch({ executablePath, headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
-    await page.goto(`file://${indexHtmlPath}`);
+    // `workDir`/`indexHtmlPath` 可能是相对路径 (productionRoot 默认 `./video-productions/<id>`,
+    // 见 video-productions/route.ts) —— 直接拼进 file:// URL 会产出
+    // `file://video-productions/...` 这种缺 host/根斜杠的非法 URL, Playwright 的
+    // page.goto 会以 net::ERR_INVALID_URL 拒绝 (真实 E2E 走查触发, building 阶段每个
+    // 镜头必现)。用 path.resolve 转成绝对路径后再拼 URL, 与 ffmpeg.ts concatClips
+    // 里 `path.resolve(p)` 写 concat 列表的处理方式一致。
+    await page.goto(`file://${path.resolve(indexHtmlPath)}`);
 
     const totalFrames = Math.ceil((durationMs / 1000) * fps);
     for (let frameIndex = 0; frameIndex < totalFrames; frameIndex++) {
