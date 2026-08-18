@@ -1079,7 +1079,7 @@ export function ContentDetailView({ item, initialTab, stageEvents, stageColors, 
   const TAB_LABEL: Record<ContentDrawerTab, string> = { overview: "概览", topic: "大纲", script: stageLabelFor(item.platform, "script"), recording: "录制", editing: "剪辑", publish: "发布", review: "复盘" };
   const visibleTabs = (["overview", "topic", "script", "recording", "editing", "publish", "review"] as const).filter((value) => {
     const stage = TAB_STAGE[value];
-    return !stage || isStageInFlow(item.platform, stage);
+    return !stage || isStageInFlow(item.platform, stage, item.deliveryMode);
   });
   const activeTab: ContentDrawerTab = visibleTabs.includes(tab) ? tab : "overview";
   return <div className="page content-detail-page">
