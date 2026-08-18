@@ -4,6 +4,8 @@ import {
   buildExtractFramesArgs,
   buildExtractAudioArgs,
   buildExtractSingleFrameArgs,
+  buildEncodeFramesArgs,
+  buildConcatArgs,
   parseProbeOutput,
 } from '@/lib/video/ffmpeg';
 
@@ -52,6 +54,34 @@ describe('buildExtractSingleFrameArgs', () => {
     expect(args).toContain('-frames:v');
     expect(args).toContain('1');
     expect(args[args.length - 1]).toBe('/out/frame.jpg');
+  });
+});
+
+describe('buildEncodeFramesArgs', () => {
+  it('按 fps 把帧图片序列编码为 mp4', () => {
+    const args = buildEncodeFramesArgs({ framesDir: '/tmp/f', fps: 24, outputPath: '/tmp/out.mp4' });
+    expect(args).toContain('-framerate');
+    expect(args).toContain('24');
+    expect(args).toContain('/tmp/f/frame_%04d.png');
+    expect(args).toContain('/tmp/out.mp4');
+  });
+});
+
+describe('buildConcatArgs', () => {
+  it('用 concat demuxer 拼接多段 clip', () => {
+    const args = buildConcatArgs({
+      clipPaths: ['/tmp/a.mp4', '/tmp/b.mp4'],
+      outputPath: '/tmp/out.mp4',
+      concatListPath: '/tmp/list.txt',
+    });
+    expect(args).toContain('-f');
+    expect(args).toContain('concat');
+    expect(args).toContain('-safe');
+    expect(args).toContain('0');
+    expect(args).toContain('-c');
+    expect(args).toContain('copy');
+    expect(args).toContain('/tmp/list.txt');
+    expect(args).toContain('/tmp/out.mp4');
   });
 });
 

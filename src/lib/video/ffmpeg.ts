@@ -1,6 +1,7 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
+import fs from 'fs/promises';
 
 const execFileAsync = promisify(execFile);
 
@@ -95,4 +96,47 @@ export function buildExtractSingleFrameArgs(opts: ExtractSingleFrameOpts): strin
 
 export async function extractSingleFrame(opts: ExtractSingleFrameOpts): Promise<void> {
   await execFileAsync(FFMPEG_BIN, buildExtractSingleFrameArgs(opts), { timeout: 30_000 });
+}
+
+export interface EncodeFramesOpts {
+  framesDir: string;
+  fps: number;
+  outputPath: string;
+}
+
+export function buildEncodeFramesArgs(opts: EncodeFramesOpts): string[] {
+  return [
+    '-y',
+    '-framerate', String(opts.fps),
+    '-i', path.join(opts.framesDir, 'frame_%04d.png'),
+    '-pix_fmt', 'yuv420p',
+    opts.outputPath,
+  ];
+}
+
+export async function encodeFramesToClip(opts: EncodeFramesOpts): Promise<void> {
+  await execFileAsync(FFMPEG_BIN, buildEncodeFramesArgs(opts), { timeout: 600_000 });
+}
+
+export interface ConcatClipsOpts {
+  clipPaths: string[];
+  outputPath: string;
+  concatListPath: string;
+}
+
+export function buildConcatArgs(opts: ConcatClipsOpts): string[] {
+  return [
+    '-y',
+    '-f', 'concat',
+    '-safe', '0',
+    '-i', opts.concatListPath,
+    '-c', 'copy',
+    opts.outputPath,
+  ];
+}
+
+export async function concatClips(opts: ConcatClipsOpts): Promise<void> {
+  const listContent = opts.clipPaths.map((p) => `file '${path.resolve(p)}'`).join('\n');
+  await fs.writeFile(opts.concatListPath, listContent, 'utf-8');
+  await execFileAsync(FFMPEG_BIN, buildConcatArgs(opts), { timeout: 600_000 });
 }
