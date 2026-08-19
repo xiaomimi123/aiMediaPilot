@@ -67,14 +67,14 @@ describe('resolveInitialMomentumTab', () => {
     expect(resolveInitialMomentumTab(params, 'momentum')).toBe('week');
   });
 
-  it('view=momentum 缺省 tab → today', () => {
-    const params = paramsFrom('view=momentum');
-    expect(resolveInitialMomentumTab(params, resolveInitialView(params))).toBe('today');
+  it('resolvedView 显式传入 momentum: 缺省 tab → today', () => {
+    const params = paramsFrom('');
+    expect(resolveInitialMomentumTab(params, 'momentum')).toBe('today');
   });
 
-  it('非法 tab → today', () => {
-    const params = paramsFrom('view=momentum&tab=not-a-real-tab');
-    expect(resolveInitialMomentumTab(params, resolveInitialView(params))).toBe('today');
+  it('resolvedView 显式传入 momentum: 非法 tab → today', () => {
+    const params = paramsFrom('tab=not-a-real-tab');
+    expect(resolveInitialMomentumTab(params, 'momentum')).toBe('today');
   });
 
   it('门控: view=inspirations&tab=schedule → today (tab 只在 view=momentum 时生效)', () => {

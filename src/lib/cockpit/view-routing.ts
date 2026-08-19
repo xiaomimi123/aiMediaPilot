@@ -55,11 +55,13 @@ const FIXED_VIEW_IDS: ReadonlyArray<string> = [
 /**
  * 解析 `?view=` 初始视图。合法固定项 / 平台项放行, `settings` 单独放行,
  * legacy `goals`/`review` 折叠进 `"analytics"`（精确到 tab 由
- * `resolveInitialAnalyticsTab` 处理, 见下方）, 其余（含缺省、非法值、旧的 `schedule`）
- * 一律回退 `"momentum"`。`schedule` 在 T3 后不再是独立 NavView —— 旧 `?view=schedule`
- * 链接落回 momentum, 精确到档期 tab 的映射由 `resolveInitialMomentumTab`
- * 重读原始 `view` 参数完成（T6, 与 `resolveInitialAnalyticsTab` 处理
- * legacy `goals`/`review` 的手法一致）。
+ * `resolveInitialAnalyticsTab` 处理, 见下方）, 其余（含缺省、非法值、`momentum`/
+ * `pipeline`/`platform-*`/旧的 `schedule`）一律回退 `"home"`。十六期起 `"home"` 取代
+ * `"momentum"` 成为默认落地视图 —— `momentum`/`pipeline`/`platform-*` 均不再是可达的
+ * view 状态, 旧 `?view=schedule` 链接同样落回 `"home"`（`schedule` 从未进过
+ * `FIXED_VIEW_IDS`, T3 后就不是独立 NavView）。精确到平台 tab 的映射由
+ * `resolveInitialHomePlatform` 重读原始 `view` 参数完成（T6, 与
+ * `resolveInitialAnalyticsTab` 处理 legacy `goals`/`review` 的手法一致）。
  */
 export function resolveInitialView(searchParams: URLSearchParams): NavView {
   const requested = searchParams.get("view");
@@ -89,10 +91,13 @@ const MOMENTUM_TABS: ReadonlyArray<MomentumPeriod> = ["today", "week", "schedule
  * 时不应该直接跳到档期)。
  *
  * 与 `resolveInitialAnalyticsTab` 处理 legacy `?view=goals`/`?view=review` 的手法一致
- * (T6): legacy `?view=schedule`（`resolveInitialView` 已把它折叠回 `"momentum"`, 这一步
- * 的信息已经丢失）在这里重新读取原始 `view` 参数值精确落到 `"schedule"` tab, 优先级
- * 高于 `?tab=`；否则再看 `?tab=`（新 `?view=momentum&tab=schedule` 深链的写法）, 非法/
- * 缺省值落回 `"today"`。
+ * (T6): legacy `?view=schedule`（重新读取原始 `view` 参数值）在这里精确落到 `"schedule"`
+ * tab, 优先级高于 `?tab=`；否则再看 `?tab=`（`?view=momentum&tab=schedule` 深链的写法）,
+ * 非法/缺省值落回 `"today"`。**十六期提醒**: `resolveInitialView` 已改为把
+ * `momentum`/`pipeline`/`platform-*`/`schedule` 等历史 `?view=` 值统一折叠成 `"home"`
+ * (取代原来的 `"momentum"`), 因此本函数的门控在任何经 `resolveInitialView` 得出的
+ * `resolvedView` 上都不会再匹配 —— 只有显式传入字面量 `"momentum"`（`NavView` 联合里
+ * 仍保留该值仅供兼容, 见类型定义处注释）时门控才会放行, 见单测。
  */
 export function resolveInitialMomentumTab(searchParams: URLSearchParams, resolvedView: NavView): MomentumPeriod {
   if (resolvedView !== "momentum") return "today";
