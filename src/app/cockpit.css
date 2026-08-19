@@ -696,34 +696,34 @@ textarea { resize: vertical; }
 
 /* 四期 T6: 热点雷达视图 (候选词审批条 / 热度排行 / 立即扫描三块, 见 views/radar.tsx)。
    .radar-page 用与 .platform-page 一致的单列 grid+gap 手法把三块 panel 垂直排开。 */
-.radar-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
-.radar-status { padding: 0 4px; }
-.radar-status-error { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 0 4px; }
+.radar-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-sm); }
+.radar-status { padding: 0 var(--space-xs); }
+.radar-status-error { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-md); padding: 0 var(--space-xs); }
 .radar-status-error .radar-status { padding: 0; }
 /* 八期 T5: 无人设档案时的页顶一行引导 —— 复用 .radar-status-error 的横排文案+按钮布局。 */
-.radar-persona-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-bottom: 4px; padding: 10px 4px; }
+.radar-persona-hint { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-md); margin-bottom: var(--space-xs); padding: var(--space-sm) var(--space-xs); }
 .radar-persona-hint p { margin: 0; color: var(--muted); font-size: 10px; }
 .radar-item-badge-off { color: var(--muted); font-style: italic; }
-.radar-candidate-bar { padding-bottom: 20px; }
-.radar-candidate-hint { margin: 0 0 14px; padding: 0 22px; color: var(--muted); font-size: 9px; }
-.radar-candidate-chips { display: flex; flex-wrap: wrap; gap: 9px; padding: 0 22px; }
-.radar-candidate-chip { display: inline-flex; align-items: center; gap: 8px; padding: 7px 8px 7px 13px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-soft); font-size: 10px; }
-.radar-candidate-chip .text-button { padding: 3px 8px; }
-.radar-ranking-panel { padding-bottom: 20px; }
-.radar-item-grid { display: grid; gap: 12px; padding: 0 22px; }
-.radar-item-card { display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; gap: 16px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
-.radar-item-score { display: grid; height: 62px; place-items: center; border-radius: 10px; background: var(--surface-soft); color: var(--clay); font-family: "Songti SC", serif; font-size: 24px; font-weight: 650; cursor: help; }
+.radar-candidate-bar { padding-bottom: var(--space-lg); }
+.radar-candidate-hint { margin: 0 0 var(--space-md); padding: 0 var(--space-lg); color: var(--muted); font-size: 9px; }
+.radar-candidate-chips { display: flex; flex-wrap: wrap; gap: var(--space-sm); padding: 0 var(--space-lg); }
+.radar-candidate-chip { display: inline-flex; align-items: center; gap: var(--space-sm); padding: var(--space-xs) var(--space-sm) var(--space-xs) var(--space-md); border: 1px solid var(--line); border-radius: 999px; background: var(--surface-soft); font-size: 10px; }
+.radar-candidate-chip .text-button { padding: var(--space-xs) var(--space-sm); }
+.radar-ranking-panel { padding-bottom: var(--space-lg); }
+.radar-item-grid { display: grid; gap: var(--space-sm); padding: 0 var(--space-lg); }
+.radar-item-card { display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; gap: var(--space-md); padding: var(--space-md); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+.radar-item-score { display: grid; height: 62px; place-items: center; border-radius: var(--radius-md); background: var(--surface-soft); color: var(--clay); font-family: "Songti SC", serif; font-size: 24px; font-weight: 650; cursor: help; }
 .radar-item-body { min-width: 0; }
-.radar-item-title { display: block; overflow: hidden; margin-bottom: 6px; color: var(--ink); font-family: "Songti SC", serif; font-size: 13px; font-weight: 600; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
+.radar-item-title { display: block; overflow: hidden; margin-bottom: var(--space-xs); color: var(--ink); font-family: "Songti SC", serif; font-size: 13px; font-weight: 600; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
 .radar-item-title:hover { text-decoration: underline; }
-.radar-item-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+.radar-item-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); margin-bottom: var(--space-sm); }
 .radar-item-source { color: var(--muted); font-size: 9px; }
-.radar-item-summary, .radar-item-angle, .radar-item-painhit { margin: 0 0 6px; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.radar-item-summary, .radar-item-angle, .radar-item-painhit { margin: 0 0 var(--space-xs); color: var(--muted); font-size: 10px; line-height: 1.6; }
 .radar-item-painhit strong { color: var(--ink); font-weight: 600; }
 .radar-item-angle strong { color: var(--ink); font-weight: 600; }
-.radar-item-actions { display: flex; flex-direction: column; gap: 8px; align-self: center; }
-.radar-scan-panel { padding: 20px 22px; }
-.radar-scan-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.radar-item-actions { display: flex; flex-direction: column; gap: var(--space-sm); align-self: center; }
+.radar-scan-panel { padding: var(--space-lg); }
+.radar-scan-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-md); }
 .radar-run-summary { margin: 0; }
 /* 十期 T6: 内容组合比例——只展示 + 一句静态提示, 不做自动纠偏 (spec §3)。放在
    page-heading 与 tab 切换条之间, 平台视图/总览共用同一份样式。 */
