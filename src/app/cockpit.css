@@ -28,6 +28,18 @@
   --inverse-surface: #24251f;
   --inverse-ink: #fffdf7;
   --sidebar: 238px;
+  --space-xs: 6px;
+  --space-sm: 10px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 40px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-lg: 16px;
 }
 
 html[data-theme="dark"] {
@@ -58,6 +70,18 @@ html[data-theme="dark"] {
   --tint-base: #22231d;
   --inverse-surface: #0e0f0c;
   --inverse-ink: #f7f4ec;
+  --space-xs: 6px;
+  --space-sm: 10px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 40px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-lg: 16px;
 }
 
 * { box-sizing: border-box; }
@@ -1987,4 +2011,20 @@ html[data-style="bauhaus"] .review-kpi-grid > article:nth-child(4) {
   margin-top: 16px;
   padding-top: 12px;
   border-top: 1px solid var(--line);
+}
+
+/* 十六期: 视觉基线 — 简洁极简 token 与基础类 */
+.card-minimal {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  background: var(--surface);
+}
+
+.section-label {
+  font-size: var(--text-xs);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: var(--space-sm);
 }
