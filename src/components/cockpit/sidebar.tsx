@@ -131,7 +131,7 @@ export function Sidebar(props: SidebarProps) {
       ) : null}
 
       {props.mode === "cockpit" ? (
-        <button className="brand" onClick={props.onBrandClick} aria-label="返回今日 Todo">
+        <button className="brand" onClick={props.onBrandClick} aria-label="返回首页">
           <span className="brand-mark">{props.brandMark}</span><span><strong>{props.brandTitle}</strong><small>{props.brandSubtitle}</small></span>
         </button>
       ) : (
