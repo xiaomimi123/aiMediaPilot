@@ -66,8 +66,8 @@ import { TAB_TO_STAGE } from "@/lib/cockpit/stage-tab-map";
 import { Icon, creatorMark, dashboardTitle, date, normalizeGoalQuotas, shiftDate } from "./shared";
 import { MOBILE_NAV_ITEMS, Sidebar } from "./sidebar";
 import {
-  isPlatformNavView,
   resolveInitialAnalyticsTab,
+  resolveInitialHomePlatform,
   resolveInitialMomentumTab,
   resolveInitialView,
   type AnalyticsTab,
@@ -77,10 +77,9 @@ import {
 import { PositioningView } from "./views/positioning";
 import { InspirationPoolView } from "./views/inspirations";
 import { RadarView } from "./views/radar";
-import { MomentumView, type DailyStageEntry } from "./views/momentum";
-import { ContentOverviewView } from "./views/pipeline";
-import { PlatformView } from "./views/platform";
+import { type DailyStageEntry } from "./views/momentum";
 import { AnalyticsView } from "./views/analytics";
+import { HomePipelineView } from "./views/home-pipeline";
 import { SettingsView } from "./views/settings";
 import { Onboarding } from "./onboarding";
 import type { ContentDrawerTab } from "./content-detail";
@@ -199,6 +198,7 @@ export default function Cockpit() {
   const [view, setView] = useState<NavView>(() => resolveInitialView(searchParams));
   const [momentumPeriod, setMomentumPeriod] = useState<MomentumPeriod>(() => resolveInitialMomentumTab(searchParams, view));
   const [analyticsTab, setAnalyticsTab] = useState<AnalyticsTab>(() => resolveInitialAnalyticsTab(searchParams, view));
+  const [initialHomePlatform] = useState(() => resolveInitialHomePlatform(searchParams, view));
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [theme, setTheme] = useState<ColorTheme | null>(null);
   const [showStageColors, setShowStageColors] = useState(false);
@@ -611,7 +611,7 @@ export default function Cockpit() {
         brandTitle={workspaceTitle}
         brandMark={creatorMark(state.profile)}
         brandSubtitle={`${state.profile.primaryPlatform}${state.profile.contentFocus ? ` · ${state.profile.contentFocus}` : ""}`}
-        onBrandClick={() => { setView("momentum"); setMomentumPeriod("today"); }}
+        onBrandClick={() => { setView("home"); }}
         activeView={view}
         onSelectView={setView}
         onSelectSettings={() => setView("settings")}
@@ -636,17 +636,29 @@ export default function Cockpit() {
           {view === "inspirations" ? <InspirationPoolView state={state} pageTitle={state.pageTitles.inspirations} updateTitle={(value) => updatePageTitle("inspirations", value)} add={addInspiration} update={updateInspiration} createContent={createContentFromInspiration} remove={removeInspiration} openContent={openContent} /> : null}
           {/* T6: 热点雷达 —— 自取数视图, 不消费 WorkspaceState (见 radar.tsx 顶部注释), 只需要 setView 用于未配置空态的「去设置」跳转。 */}
           {view === "radar" ? <RadarView setView={setView} refreshWorkspace={refreshWorkspace} /> : null}
-          {view === "momentum" ? (
-            <MomentumView
-              momentumPeriod={momentumPeriod}
-              setMomentumPeriod={setMomentumPeriod}
-              pageTitle={state.pageTitles[momentumPeriod]}
-              pageTitleFallback={DEFAULT_PAGE_TITLES[momentumPeriod]}
-              updatePageTitle={(value) => updatePageTitle(momentumPeriod, value)}
+          {/* 十六期 T5: 新首页——把原来互斥的 momentum/pipeline/platform-* 三个分支
+              合并进 HomePipelineView 一个组件 (内部自己管平台 tab + 展开态今日推进)。 */}
+          {view === "home" ? (
+            <HomePipelineView
+              initialPlatform={initialHomePlatform}
               state={state}
+              pageTitle={state.pageTitles.pipeline}
+              updateTitle={(value) => updatePageTitle("pipeline", value)}
+              query={pipelineQuery}
+              setQuery={setPipelineQuery}
+              type={pipelineType}
+              setType={setPipelineType}
+              open={openContent}
+              addToday={addToToday}
+              dropStage={onDropStage}
+              createContentForPlatform={createContentForPlatform}
               todayEntries={todayEntries}
               overdueEntries={overdueEntries}
-              open={openContent}
+              momentumPeriod={momentumPeriod}
+              setMomentumPeriod={setMomentumPeriod}
+              momentumPageTitle={state.pageTitles[momentumPeriod]}
+              momentumPageTitleFallback={DEFAULT_PAGE_TITLES[momentumPeriod]}
+              updateMomentumPageTitle={(value) => updatePageTitle(momentumPeriod, value)}
               openReview={() => { setView("analytics"); setAnalyticsTab("review"); }}
               moveToday={moveToday}
               toggleComplete={toggleTodayComplete}
@@ -669,9 +681,6 @@ export default function Cockpit() {
               configureColors={() => setShowStageColors(true)}
             />
           ) : null}
-          {view === "pipeline" ? <ContentOverviewView state={state} pageTitle={state.pageTitles.pipeline} updateTitle={(value) => updatePageTitle("pipeline", value)} query={pipelineQuery} setQuery={setPipelineQuery} type={pipelineType} setType={setPipelineType} open={openContent} addToday={addToToday} dropStage={onDropStage} /> : null}
-          {/* T5: 五个 platform-* 视图挂 PlatformView (产出/看板/分发三区)，platform 从 view id 推导 (`platform-${key}`)。 */}
-          {isPlatformNavView(view) ? <PlatformView platform={view.slice("platform-".length) as ContentPlatformEx} state={state} pageTitle={state.pageTitles.pipeline} updateTitle={(value) => updatePageTitle("pipeline", value)} query={pipelineQuery} setQuery={setPipelineQuery} type={pipelineType} setType={setPipelineType} open={openContent} addToday={addToToday} dropStage={onDropStage} createContent={() => createContentForPlatform(view.slice("platform-".length) as ContentPlatformEx)} /> : null}
           {/* T4: analytics 挂载合并后的 AnalyticsView（目标/复盘 两个 tab，取代 T2 的 GoalsView 占位共享分支）。 */}
           {view === "analytics" ? <AnalyticsView analyticsTab={analyticsTab} setAnalyticsTab={setAnalyticsTab} state={state} goalsPageTitle={state.pageTitles.goals} updateGoalsTitle={(value) => updatePageTitle("goals", value)} health={health} followers={followers} published={publishedQuarter} updateGoal={updateGoal} notify={setToast} reviewPageTitle={state.pageTitles.review} updateReviewTitle={(value) => updatePageTitle("review", value)} open={(id) => openContent(id, "review")} setState={setState} /> : null}
           {view === "settings" ? <SettingsView state={state} pageTitle={state.pageTitles.settings} updateTitle={(value) => updatePageTitle("settings", value)} updateDesignStyle={updateDesignStyle} setState={setState} onReset={() => { if (window.confirm("确定清空全部内容与目标数据吗？个人设置会保留，请先导出备份。")) { setState({ ...createBlankState(), designStyle: state.designStyle, navigationOrder: state.navigationOrder, profile: state.profile, pageTitles: state.pageTitles }); setToast("已清空内容与目标，个人设置已保留"); } }} /> : null}
