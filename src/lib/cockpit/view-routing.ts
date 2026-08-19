@@ -5,6 +5,7 @@
 // 顺手牵连组件渲染代码。NavView/PlatformNavId 类型同样搬到这里作为唯一定义来源——
 // sidebar.tsx 现在反过来 `import type` 这两个类型, 避免和这个模块产生环形依赖。
 import { CONTENT_PLATFORMS } from "./model";
+import type { ContentPlatformEx } from "./model";
 
 type RoutingPlatform = (typeof CONTENT_PLATFORMS)[number];
 export type PlatformNavId = `platform-${RoutingPlatform}`;
@@ -22,10 +23,13 @@ export type PlatformNavId = `platform-${RoutingPlatform}`;
 // 是内容战略资产, 是一切选题/写稿的前提, 语义上不该和设置页的配置项并列 (十期教训)。
 // 视图组件本身在 T2 落地 (src/components/cockpit/views/positioning.tsx), 这里先只开
 // 合法的 `?view=` 目的地, 供 T2 挂载消费。
+// 十六期新增: 新首页默认视图; momentum/pipeline/platform-* 三个值保留仅供
+// resolveInitialView 内部兼容识别历史链接, 不再是可达的 view 状态。
 export type NavView =
   | "positioning"
   | "inspirations"
   | "radar"
+  | "home"
   | "momentum"
   | "pipeline"
   | "analytics"
@@ -59,13 +63,18 @@ const FIXED_VIEW_IDS: ReadonlyArray<string> = [
  */
 export function resolveInitialView(searchParams: URLSearchParams): NavView {
   const requested = searchParams.get("view");
-  if (!requested) return "momentum";
+  if (!requested) return "home"; // 原来是 "momentum"
   if (requested === "settings") return "settings";
   if (requested === "goals" || requested === "review") return "analytics";
+  // 十六期: momentum/pipeline/platform-* 三类历史 view 值统一落到 "home"
+  // (原首页流水线/平台看板/今日推进已合并进新首页, 见 resolveInitialHomePlatform
+  // 精确到平台 tab 预选)。
+  if (requested === "momentum" || requested === "pipeline") return "home";
   if (FIXED_VIEW_IDS.includes(requested)) {
+    if (requested.startsWith("platform-")) return "home";
     return requested as NavView;
   }
-  return "momentum";
+  return "home"; // 原来是 "momentum"
 }
 
 export type MomentumPeriod = "today" | "week" | "schedule";
@@ -120,4 +129,27 @@ export function resolveInitialAnalyticsTab(searchParams: URLSearchParams, resolv
     return requestedTab as AnalyticsTab;
   }
   return "goals";
+}
+
+/**
+ * 解析首页流水线视图的初始平台 tab 预选。**门控**: 只在 `resolvedView === "home"` 时
+ * 才读取参数——否则返回 undefined（即"全部"tab）。与 `resolveInitialMomentumTab`/
+ * `resolveInitialAnalyticsTab` 同样的历史链接精确映射手法 (T6)：`resolveInitialView`
+ * 已经把 `?view=platform-douyin` 折叠成 `"home"`，这一步重新读取原始 `view` 参数值，
+ * 若是合法的 `platform-*` id 则精确到该平台 tab；否则（含 `?view=momentum`/
+ * `?view=pipeline`/缺省）落到 undefined（"全部"tab）。
+ */
+export function resolveInitialHomePlatform(
+  searchParams: URLSearchParams,
+  resolvedView: NavView,
+): ContentPlatformEx | undefined {
+  if (resolvedView !== "home") return undefined;
+  const requestedView = searchParams.get("view");
+  if (requestedView && requestedView.startsWith("platform-")) {
+    const platform = requestedView.slice("platform-".length);
+    if ((CONTENT_PLATFORMS as readonly string[]).includes(platform)) {
+      return platform as ContentPlatformEx;
+    }
+  }
+  return undefined;
 }
