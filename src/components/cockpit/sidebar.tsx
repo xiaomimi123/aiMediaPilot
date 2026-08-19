@@ -14,39 +14,39 @@ import { Icon, ProgressBar } from "./shared";
 export type FixedNavId = Exclude<NavView, "settings">;
 export type SidebarNavItem = { id: FixedNavId; label: string; icon: string };
 
-// 工作台组 —— ◌ 账号定位 (十一期新增, T1) / ✣ 灵感库选题 / ◉ 热点雷达 (四期新增, T6) /
-// ◫ 今日推进。「账号定位」放在最前面: 定位是内容战略资产, 是选题/写稿一切动作的前提,
+// 工作台组 —— ◌ 账号定位 (十一期新增, T1) / ✣ 灵感库选题 / ◉ 热点雷达 (四期新增, T6)。
+// 「账号定位」放在最前面: 定位是内容战略资产, 是选题/写稿一切动作的前提,
 // 十期把它塞进设置页与 API key 并列造成语义错位, 用户明确要求独立成侧栏第一栏
 // (见 docs/superpowers/specs/2026-08-15-positioning-view-design.md)。视图组件本身在 T2
 // 落地, 这里先占住导航位置。「热点雷达」紧跟在「灵感库选题」下面: 采纳雷达条目就是写进
 // 灵感库 (见 items/[id] PATCH adopt), 两者是同一条数据管线的前后段, 放在一起符合心智。
+// 十六期 (T3): 「今日推进」从这里移除——并入新首页 (T4/T5), 不再是独立侧栏项。
 export const WORKBENCH_NAV_ITEMS: ReadonlyArray<SidebarNavItem> = [
   { id: "positioning", label: "账号定位", icon: "positioning" },
   { id: "inspirations", label: "灵感库选题", icon: "inspiration" },
   { id: "radar", label: "热点雷达", icon: "radar" },
-  { id: "momentum", label: "今日推进", icon: "momentum" },
 ];
 
 // 创作组 —— 五平台, 顺序沿用 CONTENT_PLATFORMS。纯文字 + ▸ 前缀, 不占用独立图形语言。
+// 十六期 (T3): 不再在侧栏渲染 (见下方 Sidebar 组件的 nav JSX)——平台看板并入新首页 (T4/T5)。
+// 常量本身保留导出, 避免破坏潜在的类型引用/未来复用。
 export const PLATFORM_NAV_ITEMS: ReadonlyArray<SidebarNavItem> = CONTENT_PLATFORMS.map((platform) => ({
   id: `platform-${platform}` as PlatformNavId,
   label: PLATFORM_LABELS[platform],
   icon: "platform",
 }));
 
-// ▦ 内容总览 / ◎ 内容数据分析。
+// ◎ 内容数据分析。十六期 (T3): 「内容总览」从这里移除——并入新首页 (T4/T5)。
 export const OVERVIEW_NAV_ITEMS: ReadonlyArray<SidebarNavItem> = [
-  { id: "pipeline", label: "内容总览", icon: "pipeline" },
   { id: "analytics", label: "内容数据分析", icon: "analytics" },
 ];
 
 export const ALL_NAV_ITEMS: ReadonlyArray<SidebarNavItem> = [
   ...WORKBENCH_NAV_ITEMS,
-  ...PLATFORM_NAV_ITEMS,
   ...OVERVIEW_NAV_ITEMS,
 ];
 
-// 移动端底部导航精简快捷方式 —— 九项挤不进一屏, 只保留工作台组 + 内容总览/内容数据分析。
+// 移动端底部导航精简快捷方式 —— 现在与 ALL_NAV_ITEMS 等价 (工作台组 + 内容数据分析)。
 export const MOBILE_NAV_ITEMS: ReadonlyArray<SidebarNavItem> = [
   ...WORKBENCH_NAV_ITEMS,
   ...OVERVIEW_NAV_ITEMS,
@@ -82,8 +82,9 @@ type ExternalSidebarProps = { mode: "external" };
 type SidebarProps = CockpitSidebarProps | ExternalSidebarProps;
 
 /**
- * 全站共用侧栏。三期 IA (T2) 起结构固定为三段：工作台组（灵感库选题/今日推进）→
- * 创作组（五平台，标签「创作」）→ 内容总览/内容数据分析。不再支持拖拽排序。
+ * 全站共用侧栏。十六期 (T3) 起收窄为 4 项：工作台组（账号定位/灵感库选题/热点雷达）→
+ * 内容数据分析。不再渲染「创作」分组标题与五平台入口，也不再渲染「内容总览」——
+ * 均并入新首页 (T4/T5)。不再支持拖拽排序。
  * cockpit 模式：折叠 / 视图内切换。
  * external 模式（挂在 /accounts /content 等落地页外壳里）：
  * 工作台视图项渲染为回到 `/?view=<id>` 的静态链接，不支持折叠。
@@ -142,8 +143,6 @@ export function Sidebar(props: SidebarProps) {
       <nav aria-label="主导航">
         <div className="nav-section-label">工作台</div>
         {WORKBENCH_NAV_ITEMS.map(renderItem)}
-        <div className="sidebar-group-label">创作</div>
-        {PLATFORM_NAV_ITEMS.map(renderItem)}
         {OVERVIEW_NAV_ITEMS.map(renderItem)}
       </nav>
 

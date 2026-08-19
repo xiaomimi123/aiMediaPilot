@@ -105,16 +105,17 @@ textarea { resize: vertical; }
 .brand > span:last-child { min-width: 0; }
 .brand strong { display: -webkit-box; overflow: hidden; font-size: 13px; letter-spacing: .02em; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .brand small { display: block; margin-top: 3px; overflow: hidden; color: var(--muted); font-size: 8px; letter-spacing: .06em; text-overflow: ellipsis; white-space: nowrap; }
-.nav-section-label { padding: 12px 12px 8px; color: var(--muted); font-size: 10px; letter-spacing: .16em; }
-/* 三期 IA (T2): 固定分组标题「创作」, 气质同 .nav-section-label, 多留一点顶部间距做视觉分段。 */
-.sidebar-group-label { margin-top: 6px; padding: 12px 12px 8px; color: var(--muted); font-size: 10px; letter-spacing: .16em; }
-.nav-item { display: flex; width: 100%; align-items: center; gap: 11px; min-height: 43px; margin: 3px 0; padding: 0 12px; border: 0; border-radius: 10px; background: transparent; color: var(--ink-soft); text-align: left; transition: .18s ease; }
+.nav-section-label { padding: var(--space-sm) var(--space-sm) var(--space-xs); color: var(--muted); font-size: var(--text-xs); letter-spacing: .16em; }
+/* 三期 IA (T2): 固定分组标题「创作」, 气质同 .nav-section-label, 多留一点顶部间距做视觉分段。
+   十六期 (T3): 不再渲染 (侧栏平台分组已移除), 规则保留供未来复用。 */
+.sidebar-group-label { margin-top: var(--space-xs); padding: var(--space-sm) var(--space-sm) var(--space-xs); color: var(--muted); font-size: var(--text-xs); letter-spacing: .16em; }
+.nav-item { display: flex; width: 100%; align-items: center; gap: 11px; min-height: 43px; margin: 3px 0; padding: 0 var(--space-sm); border: 0; border-radius: 10px; background: transparent; color: var(--ink-soft); text-align: left; transition: .18s ease; }
 .nav-item:hover { background: var(--hover-bg); color: var(--ink); }
 .nav-item.active { background: var(--surface); color: var(--ink); box-shadow: 0 7px 22px rgba(52,48,39,.06); }
 .nav-item .icon { width: 20px; color: var(--muted); font-size: 19px; text-align: center; }
 .nav-item.active .icon { color: var(--clay); }
-.nav-item span:not(.icon) { flex: 1; font-size: 13px; font-weight: 600; }
-.nav-item em { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 20px; background: var(--clay); color: white; font-size: 11px; font-style: normal; line-height: 20px; text-align: center; }
+.nav-item span:not(.icon) { flex: 1; font-size: var(--text-sm); font-weight: 600; }
+.nav-item em { min-width: 20px; height: 20px; padding: 0 var(--space-xs); border-radius: 20px; background: var(--clay); color: white; font-size: var(--text-xs); font-style: normal; line-height: 20px; text-align: center; }
 .sidebar-bottom { margin-top: auto; }
 .quarter-mini { margin: 14px 4px 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--glass-bg); }
 .quarter-mini > div { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
