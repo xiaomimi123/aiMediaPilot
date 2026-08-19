@@ -150,7 +150,7 @@ textarea { resize: vertical; }
 .mobile-nav { display: none; }
 .page-scroll { min-height: calc(100vh - 76px); overflow: hidden; }
 .page { width: 100%; max-width: 1540px; margin: 0 auto; padding: 34px 34px 54px; }
-.page-heading { margin-bottom: 26px; }
+.page-heading { margin-bottom: var(--space-lg); }
 .split-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
 .split-heading > div:first-child { min-width: 0; flex: 1; }
 .page-heading h1 { max-width: 860px; margin: 5px 0 9px; font-family: "Songti SC", "STSong", Georgia, serif; font-size: clamp(29px, 3vw, 43px); font-weight: 500; letter-spacing: -.035em; line-height: 1.2; }
@@ -223,7 +223,7 @@ textarea { resize: vertical; }
 
 .dashboard-grid { display: grid; gap: 20px; }
 .day-grid { grid-template-columns: minmax(0, 1.7fr) minmax(300px, .82fr); }
-.panel { border: 1px solid var(--line); border-radius: 15px; background: var(--panel-bg); box-shadow: 0 6px 24px rgba(52,48,39,.035); }
+.panel { border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--panel-bg); box-shadow: 0 6px 24px rgba(52,48,39,.035); }
 .today-view-stack { display: grid; gap: 17px; }
 .overdue-todo-panel { overflow: hidden; border-color: color-mix(in srgb, var(--clay) 38%, var(--line)); box-shadow: inset 0 3px 0 var(--clay), 0 6px 24px rgba(52,48,39,.035); }
 .overdue-todo-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 19px 22px 11px; }
@@ -232,7 +232,7 @@ textarea { resize: vertical; }
 .overdue-todo-heading > div:last-child { display: flex; align-items: center; gap: 15px; }
 .overdue-todo-heading > div:last-child > span { color: var(--clay); font-family: Georgia, serif; font-size: 11px; white-space: nowrap; }
 .overdue-todo-list { padding-bottom: 14px; }
-.panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 22px 14px; }
+.panel-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); padding: var(--space-md) var(--space-md) var(--space-sm); }
 .panel-heading h2 { margin: 3px 0 0; font-family: "Songti SC", serif; font-size: 20px; font-weight: 600; }
 .count-label { color: var(--muted); font-family: Georgia, serif; font-size: 12px; }
 .today-panel { min-height: 510px; }
@@ -689,10 +689,10 @@ textarea { resize: vertical; }
    .positioning-page 沿用 .radar-page 的单列 grid+gap 手法把三段纵向排开——PersonaCard/
    StyleProfileCard 自带 .panel.settings-card.wide, 单列网格下 wide 修饰符是无操作的 no-op,
    不影响样式。 */
-.positioning-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
-.positioning-summary-panel { padding-bottom: 20px; }
-.positioning-summary-panel .system-summary-body { margin: 8px 22px 0; }
-.positioning-summary-panel > p { margin: 0 22px; }
+.positioning-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-sm); }
+.positioning-summary-panel { padding-bottom: var(--space-lg); }
+.positioning-summary-panel .system-summary-body { margin: var(--space-sm) var(--space-lg) 0; }
+.positioning-summary-panel > p { margin: 0 var(--space-lg); }
 
 /* 四期 T6: 热点雷达视图 (候选词审批条 / 热度排行 / 立即扫描三块, 见 views/radar.tsx)。
    .radar-page 用与 .platform-page 一致的单列 grid+gap 手法把三块 panel 垂直排开。 */
@@ -1009,21 +1009,21 @@ textarea { resize: vertical; }
 @media (max-width: 820px) { .performance-panel-body { grid-template-columns: 1fr; } }
 
 .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-.settings-card { display: flex; gap: 17px; min-height: 210px; padding: 22px; }.settings-card.wide { grid-column: 1 / -1; min-height: auto; }.settings-icon { display: grid; width: 40px; height: 40px; place-items: center; flex: 0 0 auto; border-radius: 10px; background: var(--surface-soft); color: var(--clay); font-family: Georgia, serif; font-size: 19px; }.settings-card > div:last-child { flex: 1; }.settings-card h2 { margin: 2px 0 7px; font-family: "Songti SC", serif; font-size: 18px; }.settings-card p { max-width: 550px; margin: 0 0 16px; color: var(--muted); font-size: 10px; line-height: 1.65; }.settings-card small { display: block; margin-top: 12px; color: var(--muted); font-size: 8px; line-height: 1.7; }
+.settings-card { display: flex; gap: var(--space-md); min-height: 210px; padding: var(--space-md); }.settings-card.wide { grid-column: 1 / -1; min-height: auto; }.settings-icon { display: grid; width: 40px; height: 40px; place-items: center; flex: 0 0 auto; border-radius: var(--radius-md); background: var(--surface-soft); color: var(--clay); font-family: Georgia, serif; font-size: 19px; }.settings-card > div:last-child { flex: 1; }.settings-card h2 { margin: 2px 0 7px; font-family: "Songti SC", serif; font-size: 18px; }.settings-card p { max-width: 550px; margin: 0 0 var(--space-md); color: var(--muted); font-size: 10px; line-height: 1.65; }.settings-card small { display: block; margin-top: var(--space-sm); color: var(--muted); font-size: 8px; line-height: 1.7; }
 .appearance-settings-card { overflow: hidden; }
 .ai-provider-settings-card .form-grid { margin-bottom: 13px; }
-.ai-provider-form { margin-bottom: 18px; }
+.ai-provider-form { margin-bottom: var(--space-md); }
 .ai-provider-default-toggle { display: flex; align-items: center; gap: 7px; margin: 11px 0; color: var(--muted); font-size: 10px; }
-.ai-provider-form-actions { display: flex; align-items: center; gap: 14px; }
+.ai-provider-form-actions { display: flex; align-items: center; gap: var(--space-md); }
 .ai-provider-status { margin: 0; font-size: 10px; }
 .ai-provider-status.ok { color: var(--olive); }
 .ai-provider-status.err { color: #a23f24; }
-.ai-provider-list { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; border-top: 1px solid var(--line); }
-.ai-provider-list > li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.ai-provider-list { display: flex; flex-direction: column; gap: 2px; margin-top: var(--space-xs); border-top: 1px solid var(--line); }
+.ai-provider-list > li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); padding: var(--space-sm) 0; border-bottom: 1px solid var(--line); }
 .ai-provider-list strong { font-size: 11px; font-weight: 650; }
 .ai-provider-default-badge { margin-left: 8px; padding: 2px 7px; border-radius: 999px; background: var(--surface-soft); color: var(--muted); font-size: 8px; font-style: normal; }
 .ai-provider-list small { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; }
-.ai-provider-list-actions { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
+.ai-provider-list-actions { display: flex; align-items: center; gap: var(--space-sm); flex: 0 0 auto; }
 .style-sample-list > li { align-items: flex-start; }
 .style-sample-list > li > div:first-child { min-width: 0; }
 .style-sample-list small { overflow-wrap: anywhere; }
@@ -1037,24 +1037,24 @@ textarea { resize: vertical; }
 .radar-keyword-groups h4 { margin: 0 0 4px; color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .04em; }
 /* 八期 T5: 「人设定位」设置卡 —— 沿用 .ai-provider-* 体系，只补访谈展开区与
    支柱增删列表自己的排版。 */
-.persona-draft-trigger { margin-bottom: 12px; }
-.persona-interview { margin-bottom: 18px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); }
-.persona-interview .field { margin-bottom: 10px; }
-.persona-pillars { margin-bottom: 16px; }
-.persona-pillars-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .04em; }
+.persona-draft-trigger { margin-bottom: var(--space-sm); }
+.persona-interview { margin-bottom: var(--space-md); padding: var(--space-sm) var(--space-md); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-soft); }
+.persona-interview .field { margin-bottom: var(--space-sm); }
+.persona-pillars { margin-bottom: var(--space-md); }
+.persona-pillars-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); margin-bottom: var(--space-xs); color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .04em; }
 .persona-pillar-list > li { align-items: center; }
-.persona-pillar-inputs { display: grid; flex: 1; grid-template-columns: 120px 1fr; gap: 10px; min-width: 0; }
+.persona-pillar-inputs { display: grid; flex: 1; grid-template-columns: 120px 1fr; gap: var(--space-sm); min-width: 0; }
 /* 十期 T6: 痛点 / 商品服务增删列表 —— 沿用上面 .persona-pillar-* 同一套排版, 商品服务
    四列 (名称/类型/描述/解决痛点) 比支柱多一列, 单独定义 grid-template-columns。 */
 .persona-pain-list > li, .persona-offering-list > li { align-items: center; }
-.persona-pain-inputs { display: grid; flex: 1; grid-template-columns: 140px 1fr; gap: 10px; min-width: 0; }
-.persona-offering-inputs { display: grid; flex: 1; grid-template-columns: 110px 100px 1fr 1fr; gap: 10px; min-width: 0; }
-.persona-market-panel, .persona-summary-panel { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
-.market-insight-block { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.persona-pain-inputs { display: grid; flex: 1; grid-template-columns: 140px 1fr; gap: var(--space-sm); min-width: 0; }
+.persona-offering-inputs { display: grid; flex: 1; grid-template-columns: 110px 100px 1fr 1fr; gap: var(--space-sm); min-width: 0; }
+.persona-market-panel, .persona-summary-panel { margin-top: var(--space-md); padding-top: var(--space-md); border-top: 1px solid var(--line); }
+.market-insight-block { display: flex; flex-direction: column; gap: var(--space-xs); margin-top: var(--space-sm); }
 .market-insight-block p { margin: 0; color: var(--ink); font-size: 10px; line-height: 1.65; }
 .market-insight-block p strong { color: var(--clay); font-weight: 650; }
 .market-insight-stale { color: #a23f24 !important; }
-.system-summary-body { max-height: 420px; margin: 8px 0 0; padding: 14px 16px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); color: var(--ink); font-family: "Songti SC", serif; font-size: 11px; line-height: 1.75; white-space: pre-wrap; }
+.system-summary-body { max-height: 420px; margin: var(--space-sm) 0 0; padding: var(--space-sm) var(--space-md); overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-soft); color: var(--ink); font-family: "Songti SC", serif; font-size: 11px; line-height: 1.75; white-space: pre-wrap; }
 .baseline-auto-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 8px; background: var(--surface-soft); font-size: 10px !important; }
 .baseline-override-hint { margin-top: 12px; padding: 9px 12px; border-radius: 8px; background: var(--clay-soft); color: #8f3f28; font-size: 9px !important; }
 .design-style-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 9px; margin-top: 17px; }
@@ -1999,9 +1999,9 @@ html[data-style="bauhaus"] .review-kpi-grid > article:nth-child(4) {
 /* 十二期: 人物志立场行与访谈区 —— 沿用 .ai-provider-* 体系, 只补两处布局 */
 .voice-stance-row {
   display: flex;
-  gap: 8px;
+  gap: var(--space-sm);
   align-items: center;
-  margin-bottom: 6px;
+  margin-bottom: var(--space-xs);
 }
 .voice-stance-row input {
   flex: 1;
@@ -2009,8 +2009,8 @@ html[data-style="bauhaus"] .review-kpi-grid > article:nth-child(4) {
 }
 .voice-interview,
 .voice-candidates {
-  margin-top: 16px;
-  padding-top: 12px;
+  margin-top: var(--space-md);
+  padding-top: var(--space-sm);
   border-top: 1px solid var(--line);
 }
 
