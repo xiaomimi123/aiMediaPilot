@@ -64,7 +64,7 @@
 
 ### 2.1 结构（自上而下）
 
-1. **顶部快捷动作条**（原"今日推进"内容）：一行文字总结当前待办（"你有 N 条内容卡在 X 阶段，M 条待复盘"，复用"今日推进"现有的统计逻辑，只改渲染位置和样式）+ 右侧"新建内容"按钮。
+1. **顶部快捷动作条**（原"今日推进"内容）：一行文字总结当前待办（"你有 N 条内容卡在 X 阶段，M 条待复盘"，复用"今日推进"现有的统计逻辑，只改渲染位置和样式）+ 右侧"新建内容"按钮 + 一个"展开"控件。点击展开后，条下方原地展开出完整的日/周待办视图（复用现有 `momentum.tsx` 导出的 `DayView`/`WeekOverview`/`TodoCard` 子组件，拖拽改期等交互逻辑不变，只是从独立页面搬到首页顶部条的可折叠区域）——脑暴阶段确认："今日推进"不只是一句话总结，还有完整的日/周待办浏览+拖拽改期功能，这部分功能必须保留，用"总结+展开"而不是"简化成一句话"来承载。
 2. **平台筛选 tab**：全部 / 抖音 / 小红书 / B站 / X / YouTube，横向排列，选中态用底部 2px 实线（`var(--ink)`）+ 文字色加深，未选中态 `var(--muted)`。默认选中"全部"。
 3. **流水线阶段列**：横向排列，列数随平台而变——"全部"时用通用阶段集合（选题/脚本/生成成片或剪辑/发布/复盘，按 `stageFlowFor` 现有逻辑合并展示），选中具体平台时用该平台 `stageFlowFor(platform, deliveryMode)` 返回的真实阶段顺序（含十五期 `ai-faceless` 分岔——"生成成片"替代"剪辑"的逻辑直接复用，不新写）。每列顶部 `.section-label` 显示阶段名+数量，列内卡片用 `.card-minimal`，点击卡片跳转到内容详情页（十四期路由 `/content/detail/[id]`，不变）。
 
@@ -73,8 +73,9 @@
 不是新建路由/新数据获取路径——现有 `pipeline.tsx`/`platform.tsx`（看板视图组件）已经各自实现了"某个阶段集合 × 卡片列表"的渲染逻辑和数据来源（`loadWorkspace()`）。本次改造是：
 
 1. 新建 `src/components/cockpit/home-pipeline.tsx`，把现有 `pipeline.tsx` 的多平台聚合数据逻辑 + `platform.tsx` 的单平台阶段列渲染逻辑，合并成一个"顶部 tab 切换平台 → 下方渲染该平台阶段列"的组件，视觉走 §1 新样式。
-2. 现有 `pipeline.tsx`/`platform.tsx` 两个组件本身**保留代码**（不删除，避免破坏 `?view=` 兼容路由），首页改为渲染新的 `home-pipeline.tsx`。
-3. "今日推进"现有的统计计算逻辑（`momentum` 视图背后的数据函数）抽出来复用，不重写统计口径。
+2. 现有 `pipeline.tsx`（`ContentOverviewView`）/`platform.tsx`（`PlatformView`）两个组件**原样保留、直接复用**——不是"保留但不再使用的死代码"，而是首页新组件 `home-pipeline.tsx` 真正的渲染载体："全部"tab 渲染 `ContentOverviewView`（不传 `platformFilter`），具体平台 tab 渲染整个 `PlatformView`（含其产出区/分发区）。真正不再被渲染的是 `momentum.tsx` 的 `MomentumView`外层包装（其内部 `DayView`/`WeekOverview`/`TodoCard` 被首页顶部条的展开区直接复用）。
+3. "今日推进"现有的统计计算逻辑（`sortStageEvents`/`overdueStageEvents`，定义于 `src/lib/cockpit/workflow.ts`，零 IO 纯函数）直接复用，不重写统计口径；展开态直接复用 `momentum.tsx` 已导出的 `DayView`/`WeekOverview`/`TodoCard` 组件，不重新实现日/周待办浏览和拖拽改期。
+4. 平台特定 tab（非"全部"）选中时，首页下方渲染的不只是阶段列看板，而是**整个** `PlatformView`（产出区"新建内容"按钮+能力说明、看板区、分发区三段落原样保留）——即 §2.1 的阶段列只是"全部"tab 的呈现方式；具体平台 tab 直接复用 `PlatformView` 整个组件，避免拆分其内部产出区/分发区逻辑，功能零改动。"全部"tab 则直接复用 `ContentOverviewView`（不传 `platformFilter`），与现状 `pipeline.tsx` 的调用方式完全一致。
 
 ## 3. 侧栏重排
 
@@ -114,7 +115,7 @@
 
 | 风险 | 对策 |
 |---|---|
-| `pipeline.tsx`/`platform.tsx` 保留代码但不再是主入口，未来可能有人误改这两个死代码路径以为在改首页 | 组件顶部加注释说明"仅供 `?view=` 兼容重定向使用，首页真实渲染见 `home-pipeline.tsx`" |
+| `momentum.tsx` 的 `MomentumView` 外层包装不再被渲染（其子组件被首页展开区直接复用），容易被误认为整个文件都是死代码 | 组件顶部加注释说明"`MomentumView` 本体不再被渲染，`DayView`/`WeekOverview`/`TodoCard` 仍被 `home-pipeline.tsx` 展开区直接复用，勿删" |
 | 全站重贴皮改动面大（涉及内容详情页 1100+ 行的大文件、4 个独立侧栏页面），逐页机械替换容易漏改或误改到功能逻辑 | §4 明确"只换样式 token，不动组件树/状态逻辑"，每页改动前后做一次现有测试全绿确认+人工视觉走查，不新增测试覆盖视觉本身 |
 | 首页合并平台看板逻辑（`home-pipeline.tsx`）是本次唯一有真实"新代码逻辑"的部分，容易埋结构性 bug | 复用现有 `stageFlowFor`/`loadWorkspace` 等已验证的底层函数，不重新实现阶段判定或数据获取，只重组渲染层 |
 | 侧栏收窄后，`?view=momentum`/`?view=pipeline`/`?view=platform-*` 等旧链接（若被外部收藏或书签）行为改变 | §3 明确这些 `NavView` 值保留，只做"侧栏不显示 + 访问时重定向到首页并预选对应 tab"，不是访问报错 |
