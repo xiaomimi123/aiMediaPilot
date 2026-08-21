@@ -23,36 +23,45 @@ import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
  * 加载复用同一份逻辑) 解出 acts/four_dims。
  */
 export async function POST(req: Request) {
-  const user = await getOrCreateDefaultUser();
-  const { contentId } = await req.json();
-  const content = await prisma.cockpitContent.findUnique({ where: { id: contentId } });
-  if (!content || content.userId !== user.id) return fail('内容不存在', 404);
+  let body: { contentId?: unknown };
+  try { body = await req.json(); } catch { return fail('请求体不是合法 JSON', 400); }
+  if (typeof body.contentId !== 'string' || !body.contentId) return fail('缺少 contentId', 400);
+  const contentId = body.contentId;
 
-  const draft = content.scriptDraftId
-    ? await prisma.scriptDraft.findUnique({ where: { id: content.scriptDraftId } })
-    : null;
-  const parsed = draft ? parseDraftOutput(draft.output) : null;
-  if (!parsed?.acts || !parsed.four_dims) {
-    return fail('需要先生成六幕脚本', 400);
+  try {
+    const user = await getOrCreateDefaultUser();
+    const content = await prisma.cockpitContent.findUnique({ where: { id: contentId } });
+    if (!content || content.userId !== user.id) return fail('内容不存在', 404);
+
+    const draft = content.scriptDraftId
+      ? await prisma.scriptDraft.findUnique({ where: { id: content.scriptDraftId } })
+      : null;
+    const parsed = draft ? parseDraftOutput(draft.output) : null;
+    if (!parsed?.acts || !parsed.four_dims) {
+      return fail('需要先生成六幕脚本', 400);
+    }
+
+    const srt = synthesizeSrtFromSixActScript(parsed.acts);
+    const id = randomUUID().slice(0, 12);
+    const productionRoot = path.join(process.env.VIDEO_PRODUCTION_ROOT || './video-productions', id);
+    await fs.mkdir(productionRoot, { recursive: true });
+
+    const vp = await prisma.videoProduction.create({
+      data: {
+        id,
+        userId: user.id,
+        contentId,
+        srt,
+        productionRoot,
+        status: 'queued',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    });
+    await videoProductionQueue.add('produce', { videoProductionId: id, mode: 'preview' });
+    return ok({ id: vp.id, status: vp.status });
+  } catch (e) {
+    console.error('[POST cockpit/video-productions]', e);
+    return fail(`生成失败: ${e instanceof Error ? e.message : String(e)}`, 500);
   }
-
-  const srt = synthesizeSrtFromSixActScript(parsed.acts);
-  const id = randomUUID().slice(0, 12);
-  const productionRoot = path.join(process.env.VIDEO_PRODUCTION_ROOT || './video-productions', id);
-  await fs.mkdir(productionRoot, { recursive: true });
-
-  const vp = await prisma.videoProduction.create({
-    data: {
-      id,
-      userId: user.id,
-      contentId,
-      srt,
-      productionRoot,
-      status: 'queued',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-  });
-  await videoProductionQueue.add('produce', { videoProductionId: id, mode: 'preview' });
-  return ok({ id: vp.id, status: vp.status });
 }

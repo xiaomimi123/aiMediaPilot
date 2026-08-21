@@ -1,5 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
+vi.mock('@/lib/user', () => ({
+  getOrCreateDefaultUser: vi.fn(async () => ({ id: 'user1' })),
+}));
+
 const prismaMock = vi.hoisted(() => ({
   contentAnalysis: {
     findUnique: vi.fn(),
@@ -26,7 +30,7 @@ import { GET as detailGET } from '@/app/api/v1/content/analyses/[id]/route';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  prismaMock.contentAnalysis.findUnique.mockResolvedValue({ id: 'a1', retroStatus: null });
+  prismaMock.contentAnalysis.findUnique.mockResolvedValue({ id: 'a1', userId: 'user1', retroStatus: null });
   prismaMock.contentAnalysis.findFirst.mockResolvedValue(null);
 });
 
@@ -75,7 +79,7 @@ describe('POST /publish', () => {
   });
 
   it('retroStatus=RUNNING → 400 (拒绝并发)', async () => {
-    prismaMock.contentAnalysis.findUnique.mockResolvedValueOnce({ id: 'a1', retroStatus: 'RUNNING' });
+    prismaMock.contentAnalysis.findUnique.mockResolvedValueOnce({ id: 'a1', userId: 'user1', retroStatus: 'RUNNING' });
     const res = await publishPOST(
       makeReq({ url: 'https://www.douyin.com/video/7234567890', publishedAt: new Date(Date.now() - 86400000).toISOString() }),
       { params: { id: 'a1' } }
@@ -86,19 +90,19 @@ describe('POST /publish', () => {
 
 describe('POST /retro-now', () => {
   it('happy path', async () => {
-    prismaMock.contentAnalysis.findUnique.mockResolvedValueOnce({ id: 'a1', douyinAwemeId: '7234567890', retroStatus: null });
+    prismaMock.contentAnalysis.findUnique.mockResolvedValueOnce({ id: 'a1', userId: 'user1', douyinAwemeId: '7234567890', retroStatus: null });
     const res = await retroNowPOST(new Request('http://x', { method: 'POST' }), { params: { id: 'a1' } });
     expect(res.status).toBe(200);
   });
 
   it('无 douyinAwemeId → 400', async () => {
-    prismaMock.contentAnalysis.findUnique.mockResolvedValueOnce({ id: 'a1', douyinAwemeId: null, retroStatus: null });
+    prismaMock.contentAnalysis.findUnique.mockResolvedValueOnce({ id: 'a1', userId: 'user1', douyinAwemeId: null, retroStatus: null });
     const res = await retroNowPOST(new Request('http://x', { method: 'POST' }), { params: { id: 'a1' } });
     expect(res.status).toBe(400);
   });
 
   it('retroStatus=RUNNING → 400 (拒绝并发)', async () => {
-    prismaMock.contentAnalysis.findUnique.mockResolvedValueOnce({ id: 'a1', douyinAwemeId: '7234567890', retroStatus: 'RUNNING' });
+    prismaMock.contentAnalysis.findUnique.mockResolvedValueOnce({ id: 'a1', userId: 'user1', douyinAwemeId: '7234567890', retroStatus: 'RUNNING' });
     const res = await retroNowPOST(new Request('http://x', { method: 'POST' }), { params: { id: 'a1' } });
     expect(res.status).toBe(400);
     const json = await res.json();
@@ -111,6 +115,7 @@ describe('GET projection — BigInt + Date serialization', () => {
     const now = new Date();
     prismaMock.contentAnalysis.findUnique.mockResolvedValueOnce({
       id: 'a1',
+      userId: 'user1',
       videoFilename: 'x.mp4',
       videoDurationSec: 60,
       videoMimeType: 'video/mp4',
@@ -145,6 +150,7 @@ describe('GET projection — BigInt + Date serialization', () => {
     const now = new Date();
     prismaMock.contentAnalysis.findUnique.mockResolvedValueOnce({
       id: 'a1',
+      userId: 'user1',
       videoFilename: 'x.mp4',
       videoDurationSec: 60,
       videoMimeType: 'video/mp4',

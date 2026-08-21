@@ -1,10 +1,15 @@
 import { prisma } from '@/lib/prisma';
 import { sseResponse } from '@/lib/sse';
+import { fail } from '@/lib/api';
+import { getOrCreateDefaultUser } from '@/lib/user';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const id = params.id;
+  const user = await getOrCreateDefaultUser();
+  const owner = await prisma.contentAnalysis.findUnique({ where: { id }, select: { userId: true } });
+  if (!owner || owner.userId !== user.id) return fail('not found', 404);
 
   async function* gen() {
     const terminal = new Set(['COMPLETED', 'FAILED', 'CANCELLED']);

@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { prisma } from '@/lib/prisma';
 import { ok, fail } from '@/lib/api';
+import { getOrCreateDefaultUser } from '@/lib/user';
 
 /** BigInt 转 string 让 JSON.stringify 不抛错。Date 原样透传让 JSON.stringify 输出 ISO 字符串。 */
 function serializeBigInts(obj: unknown): unknown {
@@ -15,10 +16,12 @@ function serializeBigInts(obj: unknown): unknown {
 }
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
+  const user = await getOrCreateDefaultUser();
   const a = await prisma.contentAnalysis.findUnique({
     where: { id: params.id },
     select: {
       id: true,
+      userId: true,
       videoFilename: true,
       videoDurationSec: true,
       videoMimeType: true,
@@ -59,7 +62,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       },
     },
   });
-  if (!a) return fail('not found', 404);
+  if (!a || a.userId !== user.id) return fail('not found', 404);
   const covers = (a.coverCandidates as { path: string }[] | null) ?? [];
   return ok(serializeBigInts({
     id: a.id,
@@ -92,8 +95,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 }
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  const user = await getOrCreateDefaultUser();
   const a = await prisma.contentAnalysis.findUnique({ where: { id: params.id } });
-  if (!a) return fail('not found', 404);
+  if (!a || a.userId !== user.id) return fail('not found', 404);
 
   if (a.status === 'QUEUED' || a.status === 'PREPROCESSING' || a.status === 'ANALYZING') {
     return fail('任务运行中无法删除,请先取消', 400);

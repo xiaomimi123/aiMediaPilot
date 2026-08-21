@@ -2,10 +2,12 @@ import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { ok, fail } from '@/lib/api';
 import { retroQueue } from '@/jobs/queue';
+import { getOrCreateDefaultUser } from '@/lib/user';
 
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
+  const user = await getOrCreateDefaultUser();
   const analysis = await prisma.contentAnalysis.findUnique({ where: { id: params.id } });
-  if (!analysis) return fail('not found', 404);
+  if (!analysis || analysis.userId !== user.id) return fail('not found', 404);
   if (!analysis.douyinAwemeId) return fail('请先填抖音链接', 400);
   if (analysis.retroStatus === 'RUNNING') return fail('复盘正在进行中,请先取消', 400);
 

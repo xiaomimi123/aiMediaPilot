@@ -1,12 +1,14 @@
 import { prisma } from '@/lib/prisma';
 import { ok, fail } from '@/lib/api';
 import { analyzeQueue } from '@/jobs/queue';
+import { getOrCreateDefaultUser } from '@/lib/user';
 
 const MAX_RETRIES = 3;
 
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
+  const user = await getOrCreateDefaultUser();
   const a = await prisma.contentAnalysis.findUnique({ where: { id: params.id } });
-  if (!a) return fail('not found', 404);
+  if (!a || a.userId !== user.id) return fail('not found', 404);
   if (a.status !== 'FAILED') return fail('仅 FAILED 状态可重试', 400);
   if (a.retryCount >= MAX_RETRIES) return fail(`已达重试上限 ${MAX_RETRIES} 次`, 400);
 

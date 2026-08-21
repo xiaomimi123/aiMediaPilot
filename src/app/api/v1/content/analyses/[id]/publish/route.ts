@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { ok, fail } from '@/lib/api';
 import { resolveDouyinUrl } from '@/lib/douyin/aweme';
 import { retroQueue } from '@/jobs/queue';
+import { getOrCreateDefaultUser } from '@/lib/user';
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const body = (await req.json().catch(() => null)) as { url?: string; publishedAt?: string } | null;
@@ -12,8 +13,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (Number.isNaN(publishedAt.getTime())) return fail('publishedAt 格式错误', 400);
   if (publishedAt.getTime() > Date.now()) return fail('发布时间不能在未来', 400);
 
+  const user = await getOrCreateDefaultUser();
   const analysis = await prisma.contentAnalysis.findUnique({ where: { id: params.id } });
-  if (!analysis) return fail('not found', 404);
+  if (!analysis || analysis.userId !== user.id) return fail('not found', 404);
   if (analysis.retroStatus === 'RUNNING') return fail('复盘正在进行中,请先取消', 400);
 
   const awemeId = await resolveDouyinUrl(body.url);

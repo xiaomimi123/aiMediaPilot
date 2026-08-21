@@ -122,6 +122,21 @@ describe('POST /api/v1/cockpit/video-productions', () => {
     expect(res.status).toBe(404);
     expect(prismaMock.videoProduction.create).not.toHaveBeenCalled();
   });
+
+  it('请求体不是合法 JSON → 400, 不查库', async () => {
+    const res = await POST(new Request('http://t/api/v1/cockpit/video-productions', {
+      method: 'POST',
+      body: '{not valid json',
+    }));
+    expect(res.status).toBe(400);
+    expect(prismaMock.cockpitContent.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('请求体缺少 contentId → 400, 不查库', async () => {
+    const res = await POST(req('http://t/api/v1/cockpit/video-productions', {}));
+    expect(res.status).toBe(400);
+    expect(prismaMock.cockpitContent.findUnique).not.toHaveBeenCalled();
+  });
 });
 
 describe('GET /api/v1/cockpit/video-productions/[id]', () => {
