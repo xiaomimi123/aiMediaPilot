@@ -12,6 +12,9 @@ const prismaMock = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
+const queueMock = vi.hoisted(() => ({ add: vi.fn() }));
+vi.mock('@/jobs/queue', () => ({ videoProductionQueue: queueMock }));
+
 vi.mock('fs', async () => {
   const actual = await vi.importActual<typeof import('fs')>('fs');
   return {
@@ -109,6 +112,12 @@ describe('POST /api/v1/cockpit/video-productions/[id]/upload-source', () => {
         where: { id: 'vp1' },
         data: expect.objectContaining({ status: 'source_uploaded' }),
       }),
+    );
+    // 十九期 T15 修复: talking-head-broll 创建时(POST /video-productions)故意不入队
+    // (worker 缺 sourceVideoPath 会立即失败且无重试), 改为这里上传成功后触发。
+    expect(queueMock.add).toHaveBeenCalledWith(
+      'produce',
+      expect.objectContaining({ videoProductionId: 'vp1', mode: 'preview' }),
     );
   });
 });

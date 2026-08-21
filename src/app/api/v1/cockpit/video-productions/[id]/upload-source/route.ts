@@ -4,6 +4,7 @@ import path from 'path';
 import { prisma } from '@/lib/prisma';
 import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
+import { videoProductionQueue } from '@/jobs/queue';
 
 const MAX_BYTES = 500 * 1024 * 1024;
 const ALLOWED_VIDEO_MIME = /^video\/(mp4|quicktime|webm|x-matroska)$/;
@@ -44,5 +45,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     where: { id: params.id },
     data: { sourceVideoPath, status: 'source_uploaded', updatedAt: new Date().toISOString() },
   });
+  // 创建时 (POST /video-productions) talking-head-broll 特意没有入队, 就是等这里
+  // sourceVideoPath 落地后再触发, 避免 worker 在视频还没上传时立即失败。
+  await videoProductionQueue.add('produce', { videoProductionId: params.id, mode: 'preview' });
   return ok({ sourceVideoPath: updated.sourceVideoPath, status: updated.status });
 }

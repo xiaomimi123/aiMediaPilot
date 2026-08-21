@@ -392,7 +392,7 @@ function StageStatusPanel({ item, stageColors, setStageStatus }: {
         onClick={() => setStageStatus(stage, !completed)}
         aria-pressed={completed}
         title={completed ? `点击将${stageLabelFor(item.platform, stage)}及后续恢复为待完成` : `标记${stageLabelFor(item.platform, stage)}完成`}
-      ><span>{completed ? "✓" : ""}</span><strong>{item.deliveryMode === 'ppt-narration' && stage === 'editing' ? '生成成片' : stageLabelFor(item.platform, stage)}</strong><em>{completed ? "已完成" : current ? "当前 · 待完成" : "待完成"}</em></button>;
+      ><span>{completed ? "✓" : ""}</span><strong>{item.deliveryMode !== 'manual' && item.deliveryMode !== undefined && stage === 'editing' ? '生成成片' : stageLabelFor(item.platform, stage)}</strong><em>{completed ? "已完成" : current ? "当前 · 待完成" : "待完成"}</em></button>;
     })}</div>
   </section>;
 }
@@ -444,6 +444,11 @@ export function ContentDetailView({ item, initialTab, stageEvents, stageColors, 
   const [openActKey, setOpenActKey] = useState<ActKey | null>(null);
   const [actInstruction, setActInstruction] = useState("");
   const [refiningActKey, setRefiningActKey] = useState<ActKey | null>(null);
+  // ---- 十九期 T15: talking-head-broll 出镜视频上传 (录制阶段) ----
+  const [sourceVideoFile, setSourceVideoFile] = useState<File | null>(null);
+  const [sourceVideoUploading, setSourceVideoUploading] = useState(false);
+  const [sourceVideoUploaded, setSourceVideoUploaded] = useState(false);
+  const [sourceVideoError, setSourceVideoError] = useState<string | null>(null);
   // ---- T6 六期: xiaohongshu 两阶段生成的派生 state (与上面 douyin 专属的
   // sections/hooks 并列, 同一时刻只会有一组非空——scriptDraftId 是共享的单一
   // 判据)。intro/body 为 null 表示尚未生成/尚未恢复, XhsScriptPanel 只在两者
@@ -1070,6 +1075,42 @@ export function ContentDetailView({ item, initialTab, stageEvents, stageColors, 
       }
     }, 1500);
   }
+  // 十九期 T15: talking-head-broll「录制」步骤的出镜视频上传——先按 VideoProductionPanel
+  // 同款的 latest/创建两段式取一条 VideoProduction id (不发明新查询), 再 POST multipart
+  // 到 Task 3 的 upload-source 路由。
+  async function handleUploadSourceVideo() {
+    if (!sourceVideoFile) return;
+    setSourceVideoUploading(true);
+    setSourceVideoError(null);
+    try {
+      const latestRes = await fetch(`/api/v1/cockpit/video-productions/latest?contentId=${item.id}`);
+      const latestJson = await latestRes.json();
+      let vpId: string | null = latestJson.success && latestJson.data ? latestJson.data.id : null;
+      if (!vpId) {
+        const createRes = await fetch("/api/v1/cockpit/video-productions", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ contentId: item.id }),
+        });
+        const createJson = await createRes.json();
+        if (!createJson.success) { setSourceVideoError(createJson.error ?? "创建生成任务失败"); return; }
+        vpId = createJson.data.id;
+      }
+      const form = new FormData();
+      form.append("video", sourceVideoFile);
+      const uploadRes = await fetch(`/api/v1/cockpit/video-productions/${vpId}/upload-source`, { method: "POST", body: form });
+      const uploadJson = await uploadRes.json();
+      if (uploadJson.success) {
+        setSourceVideoUploaded(true);
+      } else {
+        setSourceVideoError(uploadJson.error ?? "上传失败");
+      }
+    } catch {
+      setSourceVideoError("上传失败，请检查网络后重试");
+    } finally {
+      setSourceVideoUploading(false);
+    }
+  }
   // 九期: 抽屉 tab 与阶段的对应——每个非 overview tab 都映射到一个具体 WorkStage,
   // 不在该内容平台流内的阶段 (xhs 的 recording/editing) 直接从 tab 栏隐藏, 与看板
   // 列/档期可排阶段的隐藏方式一致。ContentDrawer 没有 `key={item.id}`, 组件实例
@@ -1101,14 +1142,17 @@ export function ContentDetailView({ item, initialTab, stageEvents, stageColors, 
     {activeTab === "script" ? <div className="drawer-section"><div className="section-title-row"><div><span className="eyebrow">SCRIPT</span><h3>先搭结构，再改措辞</h3></div></div>{!isContentPlatform(item.platform) ? <small className="field-hint">该平台暂不支持 AI 生成，可选相近平台生成后手动调整</small> : null}{scriptPlatform === "douyin" ? <div className="script-generate-options"><details className="script-materials-details"><summary>素材（可选）</summary><textarea value={materials} onChange={(e) => setMaterials(e.target.value)} disabled={generating} placeholder="粘贴素材原文、参考链接或要点，生成时会尝试真实引用进正文" /></details><label className="field script-duration-field"><span>时长</span><select value={durationSec} onChange={(e) => setDurationSec(Number(e.target.value) as 30 | 45 | 60 | 90)} disabled={generating} aria-label="视频时长">{[30, 45, 60, 90].map((value) => <option key={value} value={value}>{value} 秒{value === 90 ? "（六幕默认）" : ""}</option>)}</select>{durationSec < 60 ? <small className="field-hint">六幕结构在 60 秒以下会很挤，建议 90 秒</small> : null}</label></div> : scriptPlatform === "xiaohongshu" ? <div className="script-generate-options single"><details className="script-materials-details"><summary>素材（可选）</summary><textarea value={materials} onChange={(e) => setMaterials(e.target.value)} disabled={generating} placeholder="粘贴素材原文、参考链接或要点，生成时会尝试真实引用进正文" /></details></div> : null}<div className="script-generate-actions"><select value={scriptPlatform} onChange={(e) => { setScriptPlatform(e.target.value as ContentPlatform); setTitleHint(""); lastCheckedTitleRef.current = ""; resetScriptGenerationState(); }} disabled={generating || scriptActionPending} aria-label="生成平台" style={{ height: 34, borderRadius: 9 }}>{CONTENT_PLATFORMS.map((value) => <option key={value} value={value}>{CONTENT_PLATFORM_LABEL[value]}</option>)}</select><button type="button" className="ai-button small" disabled={generating || scriptActionPending} onClick={handleGenerateScript}><Icon name="spark" />{generating ? "生成中…" : "用 AI 写脚本"}</button></div><StageScheduleField item={item} stage="script" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{sixActScript ? <SixActPanel script={sixActScript} lintIssues={lintIssues} research={research} researchDegraded={researchDegraded} allInstruction={allInstruction} onAllInstructionChange={setAllInstruction} onRefineAll={handleRefineSixActAll} refiningAll={refiningAll} lintExpanded={lintExpanded} onToggleLint={() => setLintExpanded(!lintExpanded)} openActKey={openActKey} onToggleAct={(actKey) => { setOpenActKey(openActKey === actKey ? null : actKey); setActInstruction(""); }} actInstruction={actInstruction} onActInstructionChange={setActInstruction} onRefineAct={handleRefineAct} refiningActKey={refiningActKey} generating={generating} imgGenerating={imgGenerating} /> : null}{sixActScript ? <div className="delivery-mode-picker">
   <span>交付方式</span>
   <div className="delivery-mode-options">
-    <button type="button" className={item.deliveryMode !== 'ppt-narration' ? 'active' : ''} onClick={() => update({ deliveryMode: 'manual' })}>手动拍剪</button>
-    <button type="button" className={item.deliveryMode === 'ppt-narration' ? 'active' : ''} onClick={() => update({ deliveryMode: 'ppt-narration' })}>AI 自动生成无人出镜成片</button>
+    <button type="button" className={item.deliveryMode !== 'manual' ? '' : 'active'} onClick={() => update({ deliveryMode: 'manual' })}>手动拍剪</button>
+    <button type="button" className={item.deliveryMode === 'ppt-narration' ? 'active' : ''} onClick={() => update({ deliveryMode: 'ppt-narration' })}>PPT 读稿形式</button>
+    <button type="button" className={item.deliveryMode === 'talking-head-broll' ? 'active' : ''} onClick={() => update({ deliveryMode: 'talking-head-broll' })}>口播视频配字幕特效</button>
+    <button type="button" className={item.deliveryMode === 'illustration-tts' ? 'active' : ''} onClick={() => update({ deliveryMode: 'illustration-tts' })}>插画动画形式</button>
   </div>
-  {item.deliveryMode === 'ppt-narration' ? <small className="field-hint">选择后「录制」步骤会跳过，「剪辑」步骤会变成「生成成片」——由 AI 自动产出无人出镜视频。</small> : null}
+  {item.deliveryMode === 'talking-head-broll' ? <small className="field-hint">选择后「录制」步骤变成上传出镜视频，「剪辑」步骤会变成「生成成片」。</small> : null}
+  {(item.deliveryMode === 'ppt-narration' || item.deliveryMode === 'illustration-tts') ? <small className="field-hint">选择后「录制」步骤会跳过，「剪辑」步骤会变成「生成成片」——由 AI 自动产出视频。</small> : null}
 </div> : null}{sixActScript ? null : sections ? <ScriptSectionsPanel sections={sections} research={research} researchDegraded={researchDegraded} hooks={hooks} pickedHookIdx={pickedHookIdx} hookPending={pickHookPending} onPickHook={handlePickHook} allInstruction={allInstruction} onAllInstructionChange={setAllInstruction} onRefineAll={handleRefineAll} refiningAll={refiningAll} openSectionIdx={openSectionIdx} onToggleSection={(idx) => { setOpenSectionIdx(openSectionIdx === idx ? null : idx); setSectionInstruction(""); }} sectionInstruction={sectionInstruction} onSectionInstructionChange={setSectionInstruction} onRefineSection={handleRefineSection} refiningSectionIdx={refiningSectionIdx} generating={generating} imgGenerating={imgGenerating} /> : xhsIntro !== null && xhsBody !== null ? <XhsScriptPanel research={research} researchDegraded={researchDegraded} intro={xhsIntro} body={xhsBody} tags={xhsTags} shotIdeas={xhsShotIdeas} instruction={xhsInstruction} onInstructionChange={setXhsInstruction} onRefineAll={handleRefineXhsAll} refining={xhsRefining} generating={generating} imagePlan={imagePlan} images={xhsImages} imgGenerating={imgGenerating} failedImageIdxs={failedImgIdxs} onGenerateImages={handleGenerateImages} onRetryImage={handleRetryImage} archiveHref={scriptDraftId ? `/api/v1/scripts/${scriptDraftId}/images/archive` : null} /> : null}{[["标题方向", "headline"], ["开头 3 秒", "hook"], ["一句话结论", "conclusion"], ["内容结构", "body"], ["案例 / 演示", "example"], ["结尾行动 / 观点", "ending"]].map(([label, key]) => <label key={key} className="field full"><span>{label}</span><textarea className={key === "body" ? "large" : ""} value={item.script[key as keyof typeof item.script]} onChange={(e) => updateScript({ [key]: e.target.value })} onBlur={key === "headline" ? handleHeadlineBlur : undefined} />{key === "headline" && titleHint ? <small className="field-hint">{titleHint}</small> : null}</label>)}</div> : null}
-    {activeTab === "recording" ? <div className="drawer-section"><div className="stage-detail-strip"><span>录制阶段</span><Badge tone="recording" color={stageColors.recording}>录制</Badge><small>完成后进入剪辑</small></div><StageScheduleField item={item} stage="recording" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{sixActScript ? <SixActGuidePanel acts={sixActScript.acts} progress={item.recordingActProgress} mode="recording" onToggle={(actKey, done) => update({ recordingActProgress: { ...item.recordingActProgress, [actKey]: done } })} /> : <><label className="field full"><span>录制备注</span><textarea className="large" value={item.recordingNotes} onChange={(e) => update({ recordingNotes: e.target.value })} placeholder="记录机位、口播、录屏、演示路径和补拍素材…" /></label><div className="checklist"><strong>录制完成清单</strong>{["机位与画面可用", "收音清晰", "口播或演示路径完整", "必要素材与补拍镜头齐全"].map((text) => <label key={text}><input type="checkbox" />{text}</label>)}</div></>}</div> : null}
-    {activeTab === "editing" ? (item.deliveryMode === 'ppt-narration'
-      ? <div className="drawer-section"><VideoProductionPanel contentId={item.id} /></div>
+    {activeTab === "recording" ? <div className="drawer-section"><div className="stage-detail-strip"><span>录制阶段</span><Badge tone="recording" color={stageColors.recording}>录制</Badge><small>完成后进入剪辑</small></div><StageScheduleField item={item} stage="recording" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{item.deliveryMode === 'talking-head-broll' ? <div className="source-video-upload"><label className="field full"><span>出镜视频</span><input type="file" accept="video/*" disabled={sourceVideoUploading} onChange={(e) => { setSourceVideoFile(e.target.files?.[0] ?? null); setSourceVideoUploaded(false); setSourceVideoError(null); }} /></label><button type="button" className="primary-button" disabled={!sourceVideoFile || sourceVideoUploading} onClick={handleUploadSourceVideo}>{sourceVideoUploading ? "上传中…" : "上传出镜视频"}</button>{sourceVideoUploaded ? <p className="field-hint">已上传，可进入「剪辑」步骤生成成片。</p> : null}{sourceVideoError ? <p className="validation-note">{sourceVideoError}</p> : null}</div> : sixActScript ? <SixActGuidePanel acts={sixActScript.acts} progress={item.recordingActProgress} mode="recording" onToggle={(actKey, done) => update({ recordingActProgress: { ...item.recordingActProgress, [actKey]: done } })} /> : <><label className="field full"><span>录制备注</span><textarea className="large" value={item.recordingNotes} onChange={(e) => update({ recordingNotes: e.target.value })} placeholder="记录机位、口播、录屏、演示路径和补拍素材…" /></label><div className="checklist"><strong>录制完成清单</strong>{["机位与画面可用", "收音清晰", "口播或演示路径完整", "必要素材与补拍镜头齐全"].map((text) => <label key={text}><input type="checkbox" />{text}</label>)}</div></>}</div> : null}
+    {activeTab === "editing" ? (item.deliveryMode !== 'manual'
+      ? <div className="drawer-section"><VideoProductionPanel contentId={item.id} deliveryMode={item.deliveryMode ?? 'manual'} /></div>
       : <div className="drawer-section"><div className="stage-detail-strip"><span>剪辑阶段</span><Badge tone="editing" color={stageColors.editing}>剪辑</Badge><small>完成后进入发布</small></div><StageScheduleField item={item} stage="editing" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} />{sixActScript ? <SixActGuidePanel acts={sixActScript.acts} progress={item.editingActProgress} mode="editing" onToggle={(actKey, done) => update({ editingActProgress: { ...item.editingActProgress, [actKey]: done } })} /> : <><label className="field full"><span>剪辑备注</span><textarea className="large" value={item.editingNotes} onChange={(e) => update({ editingNotes: e.target.value })} placeholder="记录结构删改、字幕、包装、素材替换和导出要求…" /></label><div className="checklist"><strong>剪辑完成清单</strong>{["开头 5 秒直接进入场景", "案例或演示重点清楚", "字幕清楚可读", "封面与标题已确认", `${item.tier}档制作投入已控制`].map((text) => <label key={text}><input type="checkbox" />{text}</label>)}</div></>}</div>
     ) : null}
     {activeTab === "publish" ? <div className="drawer-section"><StageScheduleField item={item} stage="publishing" stageEvents={stageEvents} schedule={schedule} unschedule={unschedule} label="计划发布日期" /><div className="form-grid"><label className="field"><span>发布状态</span><select value={item.publicationStatus} disabled><option value="draft">未排期</option><option value="scheduled">已排期</option><option value="published">已发布</option></select><small>由发布档期和实际发布记录自动更新。</small></label><label className="field"><span>实际发布时间</span><input type="date" value={item.publishedAt} onChange={(e) => update({ publishedAt: e.target.value })} /></label></div><label className="field full"><span>封面文案</span><input value={item.coverCopy} onChange={(e) => update({ coverCopy: e.target.value })} /></label><label className="field full"><span>发布正文</span><textarea className="large" value={item.publishCopy} onChange={(e) => update({ publishCopy: e.target.value })} /></label><label className="field full"><span>小红书链接</span><input value={item.xhsLink} onChange={(e) => update({ xhsLink: e.target.value })} placeholder="https://www.xiaohongshu.com/..." /></label>{item.publicationStatus !== "published" ? <><button className="primary-button full-button" disabled={!item.publishedAt} onClick={markPublished}>标记为已发布</button>{!item.publishedAt ? <p className="validation-note">先填写实际发布时间，系统才会计入大目标。</p> : null}</> : <div className="published-banner"><span>已发布于 {item.publishedAt} · 已进入待复盘列表</span><button onClick={unmarkPublished}>撤销发布记录</button></div>}</div> : null}

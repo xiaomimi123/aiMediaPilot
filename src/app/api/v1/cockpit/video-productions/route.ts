@@ -46,11 +46,21 @@ export async function POST(req: Request) {
     const productionRoot = path.join(process.env.VIDEO_PRODUCTION_ROOT || './video-productions', id);
     await fs.mkdir(productionRoot, { recursive: true });
 
+    // 十九期 T15 修复: 原实现从不写 mode 字段, 落库永远是 schema 默认值
+    // 'ppt-narration'——导致 worker (十八期 T4-T7 的三分支 dispatch) 对
+    // talking-head-broll/illustration-tts 内容也会走错分支, upload-source
+    // 路由 (只认 mode==='talking-head-broll') 也永远 400。按 content.deliveryMode
+    // 落 mode, 非三个合法值 (如 'manual'/未设置) 时兜底 'ppt-narration'。
+    const mode = content.deliveryMode === 'talking-head-broll' || content.deliveryMode === 'illustration-tts'
+      ? content.deliveryMode
+      : 'ppt-narration';
+
     const vp = await prisma.videoProduction.create({
       data: {
         id,
         userId: user.id,
         contentId,
+        mode,
         srt,
         productionRoot,
         status: 'queued',
@@ -58,7 +68,13 @@ export async function POST(req: Request) {
         updatedAt: new Date().toISOString(),
       },
     });
-    await videoProductionQueue.add('produce', { videoProductionId: id, mode: 'preview' });
+    // talking-head-broll 需要先在「录制」步骤上传出镜视频 (upload-source 路由),
+    // worker 的 handleTalkingHeadBroll 会在 sourceVideoPath 缺失时立即抛错且
+    // 没有重试——这里不能像其它模式一样创建后立刻入队, 否则永远是一次性失败。
+    // 入队改由 upload-source 路由在写入 sourceVideoPath 后触发。
+    if (mode !== 'talking-head-broll') {
+      await videoProductionQueue.add('produce', { videoProductionId: id, mode: 'preview' });
+    }
     return ok({ id: vp.id, status: vp.status });
   } catch (e) {
     console.error('[POST cockpit/video-productions]', e);

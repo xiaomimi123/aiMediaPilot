@@ -111,6 +111,54 @@ describe('POST /api/v1/cockpit/video-productions', () => {
     );
   });
 
+  it('十九期 T15: deliveryMode=talking-head-broll → create 的 mode 字段跟随, 且创建时不入队(等上传出镜视频后再入队)', async () => {
+    prismaMock.cockpitContent.findUnique.mockResolvedValue({
+      id: 'c1',
+      userId: 'user1',
+      scriptDraftId: 'sd1',
+      deliveryMode: 'talking-head-broll',
+      script: {},
+    });
+    prismaMock.scriptDraft.findUnique.mockResolvedValue({
+      id: 'sd1',
+      output: { script: { acts: SIX_ACT_SCRIPT.acts }, four_dims: SIX_ACT_SCRIPT.four_dims },
+    });
+    prismaMock.videoProduction.create.mockResolvedValue({ id: 'vp1', status: 'queued' });
+
+    const res = await POST(req('http://t/api/v1/cockpit/video-productions', { contentId: 'c1' }));
+    expect(res.status).toBe(200);
+    expect(prismaMock.videoProduction.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ mode: 'talking-head-broll' }) }),
+    );
+    expect(queueMock.add).not.toHaveBeenCalled();
+  });
+
+  it('十九期 T15: deliveryMode=illustration-tts → create 的 mode 字段跟随, 仍立即入队', async () => {
+    prismaMock.cockpitContent.findUnique.mockResolvedValue({
+      id: 'c1',
+      userId: 'user1',
+      scriptDraftId: 'sd1',
+      deliveryMode: 'illustration-tts',
+      script: {},
+    });
+    prismaMock.scriptDraft.findUnique.mockResolvedValue({
+      id: 'sd1',
+      output: { script: { acts: SIX_ACT_SCRIPT.acts }, four_dims: SIX_ACT_SCRIPT.four_dims },
+    });
+    prismaMock.videoProduction.create.mockResolvedValue({ id: 'vp1', status: 'queued' });
+    queueMock.add.mockResolvedValue({ id: 'job-3' });
+
+    const res = await POST(req('http://t/api/v1/cockpit/video-productions', { contentId: 'c1' }));
+    expect(res.status).toBe(200);
+    expect(prismaMock.videoProduction.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ mode: 'illustration-tts' }) }),
+    );
+    expect(queueMock.add).toHaveBeenCalledWith(
+      'produce',
+      expect.objectContaining({ mode: 'preview' }),
+    );
+  });
+
   it('内容属于别的用户 → 404', async () => {
     prismaMock.cockpitContent.findUnique.mockResolvedValue({
       id: 'c1',
