@@ -6,6 +6,7 @@ import {
   buildExtractSingleFrameArgs,
   buildEncodeFramesArgs,
   buildConcatArgs,
+  buildConcatAudioArgs,
   buildCompositeCutawayArgs,
   buildBurnCaptionsArgs,
   buildMuxAudioArgs,
@@ -85,6 +86,25 @@ describe('buildConcatArgs', () => {
     expect(args).toContain('copy');
     expect(args).toContain('/tmp/list.txt');
     expect(args).toContain('/tmp/out.mp4');
+  });
+});
+
+describe('buildConcatAudioArgs', () => {
+  it('用 concat demuxer 但强制 -c:a pcm_s16le 重编码, 不用 -c copy', () => {
+    const args = buildConcatAudioArgs({
+      audioPaths: ['/tmp/a.mp3', '/tmp/b.mp3'],
+      outputPath: '/tmp/out.wav',
+      concatListPath: '/tmp/list.txt',
+    });
+    expect(args).toContain('-f');
+    expect(args).toContain('concat');
+    expect(args).toContain('-safe');
+    expect(args).toContain('0');
+    expect(args).toContain('-c:a');
+    expect(args).toContain('pcm_s16le');
+    expect(args).not.toContain('copy');
+    expect(args).toContain('/tmp/list.txt');
+    expect(args).toContain('/tmp/out.wav');
   });
 });
 

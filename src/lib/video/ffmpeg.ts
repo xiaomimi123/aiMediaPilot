@@ -143,6 +143,39 @@ export async function concatClips(opts: ConcatClipsOpts): Promise<void> {
   await execFileAsync(FFMPEG_BIN, buildConcatArgs(opts), { timeout: 600_000 });
 }
 
+export interface ConcatAudioOpts {
+  audioPaths: string[];
+  outputPath: string;
+  concatListPath: string;
+}
+
+/**
+ * 纯音频拼接专用参数 —— 与 buildConcatArgs 共用 concat demuxer 的基本形状(同一份
+ * concat-list 文件写法)，但**不能**沿用 `-c copy`。`-c copy` 是 bitstream 级直接拼
+ * 字节，对 mp3/aac 这类帧编码在拼接点上不是采样点精确的(实测两段 TTS mp3 拼接会有
+ * ~64ms 的时长漂移 + `Non-monotonic DTS` 警告)，会导致后续按每幕音频时长算出的
+ * alignedActs 边界与实际拼接音轨的边界对不上、随幕数增多累积成画面渐进错位。
+ * 这里显式指定 `-c:a pcm_s16le` 强制 ffmpeg 对 concat demuxer 的每个输入做真实解码
+ * 再重新编码为 PCM，拼接点上不再有帧边界对不齐的问题，用可接受的一次性重编码开销
+ * 换取采样点精确对齐。
+ */
+export function buildConcatAudioArgs(opts: ConcatAudioOpts): string[] {
+  return [
+    '-y',
+    '-f', 'concat',
+    '-safe', '0',
+    '-i', opts.concatListPath,
+    '-c:a', 'pcm_s16le',
+    opts.outputPath,
+  ];
+}
+
+export async function concatAudioTracks(opts: ConcatAudioOpts): Promise<void> {
+  const listContent = opts.audioPaths.map((p) => `file '${path.resolve(p)}'`).join('\n');
+  await fs.writeFile(opts.concatListPath, listContent, 'utf-8');
+  await execFileAsync(FFMPEG_BIN, buildConcatAudioArgs(opts), { timeout: 600_000 });
+}
+
 export interface CutawaySegment {
   startMs: number;
   endMs: number;

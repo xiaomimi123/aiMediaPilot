@@ -14,6 +14,7 @@ import { renderShotToClip } from '@/lib/video-production/shot-renderer';
 import { buildSrtFromAlignedActs, buildCaptionSrtFromTranscript } from '@/lib/video-production/srt-synthesis';
 import {
   concatClips,
+  concatAudioTracks,
   extractAudio,
   compositeCutawayVideo,
   burnCaptions,
@@ -336,7 +337,9 @@ async function handleIllustrationTts(
 
     const ttsResults: TtsActResult[] = [];
     for (const act of acts) {
-      const audioPath = path.join(vp.productionRoot, `tts-${act.act}.wav`);
+      // 扩展名用 .mp3：synthesizeVolcTts 实际写出的是 mp3 编码字节(audio_params.format:'mp3')，
+      // 用 .wav 会误导直接翻 productionRoot 目录的人。
+      const audioPath = path.join(vp.productionRoot, `tts-${act.act}.mp3`);
       const { durationMs } = await synthesizeVolcTts(act.narration, audioPath, {
         apiKey,
         voiceType: ttsConfig.voiceType,
@@ -404,12 +407,15 @@ async function handleIllustrationTts(
       concatListPath: path.join(vp.productionRoot, 'concat-list.txt'),
     });
     // 音频轨拼接：ttsResults 天然按六幕固定顺序排列，与合成 alignedActs 的顺序一致。
-    // concatClips 本身只是"写 concat-demuxer 列表文件 + ffmpeg -f concat -c copy"的通用封装，
-    // 不关心输入是视频还是纯音频；这批 wav 均由同一次 synthesizeVolcTts 调用产出、编码参数一致，
-    // 复用同一函数对音频文件做 -c copy 拼接同样成立，不需要另写一套 ffmpeg 拼接逻辑。
+    // 注意不能复用 concatClips —— 它对视频用 `-c copy` 纯字节拼接，视频分镜是同一渲染器
+    // 产出、编码参数严格一致，字节拼接安全；但 mp3 这类帧编码音频用 -c copy 在拼接点上
+    // 不是采样点精确的(实测会有几十毫秒漂移 + Non-monotonic DTS 警告)，而 alignedActs 的
+    // 每幕 startMs/endMs 是按 ffprobe 出来的单幕时长累加算出的，假设了拼接后严丝合缝——
+    // 漂移会让实际音轨边界和这个假设对不上，随幕数增多累积成画面渐进错位。
+    // concatAudioTracks 用同一份 concat demuxer 技巧但强制重编码为 pcm_s16le，规避这个问题。
     const concatenatedAudioPath = path.join(vp.productionRoot, 'tts-audio.wav');
-    await concatClips({
-      clipPaths: ttsResults.map((r) => r.audioPath),
+    await concatAudioTracks({
+      audioPaths: ttsResults.map((r) => r.audioPath),
       outputPath: concatenatedAudioPath,
       concatListPath: path.join(vp.productionRoot, 'concat-audio-list.txt'),
     });
@@ -468,13 +474,13 @@ async function handleIllustrationTts(
       outputPath: videoOnlyPath,
       concatListPath: path.join(vp.productionRoot, 'concat-list-master.txt'),
     });
-    // 复用预览阶段已经拼接好的完整 TTS 音轨(tts-audio.wav)，音频时长与画面 fps 无关，
-    // 不需要因为画面重渲染为 30fps 就重新合成/重新拼接语音——按 alignedActs 里持久化的顺序
-    // (startMs 升序，等同预览阶段合成 ttsResults 时的六幕固定顺序)找回各幕 wav 文件仅用于
-    // 校验其仍然存在；真正参与混流的是预览阶段已拼好的那条完整音轨。
+    // 复用预览阶段已经拼接好的完整 TTS 音轨(tts-audio.wav，重编码 pcm 后的产物)，音频时长与
+    // 画面 fps 无关，不需要因为画面重渲染为 30fps 就重新合成/重新拼接语音——按 alignedActs 里
+    // 持久化的顺序(startMs 升序，等同预览阶段合成 ttsResults 时的六幕固定顺序)找回各幕原始
+    // mp3 文件仅用于校验其仍然存在；真正参与混流的是预览阶段已拼好的那条完整音轨。
     const orderedActs = [...alignedActs].sort((a, b) => a.startMs - b.startMs);
     for (const a of orderedActs) {
-      const perActPath = path.join(vp.productionRoot, `tts-${a.act}.wav`);
+      const perActPath = path.join(vp.productionRoot, `tts-${a.act}.mp3`);
       try {
         await fs.access(perActPath);
       } catch {
