@@ -1,5 +1,6 @@
 import type { ScriptAct } from '@/lib/script/six-act';
 import type { AlignedAct } from './aligner-prompt';
+import type { TranscriptSegment } from '@/lib/llm/whisper';
 
 /**
  * 六幕脚本 → SRT 合成纯函数 (十三期任务二)。
@@ -100,5 +101,22 @@ export function buildSrtFromAlignedActs(
     index += 1;
   }
 
+  return output;
+}
+
+/**
+ * ASR 原始转写 → 字幕烧录用 SRT (十九期)。
+ *
+ * 与 buildSrtFromAlignedActs 不同——这里不做任何六幕语义对齐, 只是把真实
+ * 逐句转写(真人出镜原话)按顺序原样转成标准 SRT 字幕块, 每个 segment 对应
+ * 一条字幕, 序号从 1 连续递增。用于 talking-head-broll 交付模式的最终
+ * 字幕烧录(burnCaptions), 与"六幕对齐结果"(buildSrtFromAlignedActs, 驱动
+ * Director/Builder 分镜) 是两条独立用途、互不影响的 SRT 生成路径。
+ */
+export function buildCaptionSrtFromTranscript(segments: TranscriptSegment[]): string {
+  let output = '';
+  segments.forEach((segment, i) => {
+    output += `${i + 1}\n${formatTimestamp(segment.startSec * 1000)} --> ${formatTimestamp(segment.endSec * 1000)}\n${segment.text.trim()}\n\n`;
+  });
   return output;
 }
