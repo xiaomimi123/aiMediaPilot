@@ -174,7 +174,7 @@ async function handleTalkingHeadBroll(
       ? await prisma.scriptDraft.findUnique({ where: { id: content.scriptDraftId } })
       : null;
     const parsed = draft ? parseDraftOutput(draft.output) : null;
-    if (!parsed?.acts) throw new Error('需要先生成六幕脚本');
+    if (!parsed?.acts || !parsed.four_dims) throw new Error('需要先生成六幕脚本');
     const acts = parsed.acts;
 
     const deepseekKey = await resolveDeepSeekApiKey(vp.userId);
