@@ -87,7 +87,7 @@
 ⚙ 设置                          ← 底部, 不在上述任一分组
 ```
 
-站外页面挂入壳时同一份侧栏渲染成 `/?view=<id>` 静态链接。 `settings` 是固定分组之外的独立 view state (不在侧栏三段分组渲染逻辑里), 只能通过「设置与备份」按钮或 `/?view=settings` 直达。 `/accounts` 不在侧栏里 (二期解散的「平台」组唯一残留的落地页), 入口见下方双入口说明。
+站外页面挂入壳时同一份侧栏渲染成 `/?view=<id>` 静态链接。 `settings` 是固定分组之外的独立 view state (不在侧栏三段分组渲染逻辑里), 只能通过「设置与备份」按钮或 `/?view=settings` 直达。 `/accounts` 页面十七期已整体移除 (见下文「账号绑定功能移除」小节), 不再是站外落地页之一。
 
 ### `/` — Cockpit 驾驶舱 (首页)
 
@@ -522,9 +522,13 @@ top3, 注入两处——①研究层 `curatedParts` **最前**(亲身经历 > �
 
 **验证**: 无纯函数新增 (纯 UI 挂载点搬迁), 走查用 Playwright 直连本机 Chromium 做真实浏览器交互验证 (`?view=positioning` 直达 / 侧栏点击 / 移动端首项 / 设置页只剩三卡 / 明暗主题 / 保存往返写入-核对-恢复), 详见 `.superpowers/sdd/2026-08-15-positioning-view/task-2-report.md`。
 
-### `/accounts` `/agent/discover` `/content/*` — 挂入 Cockpit 外壳
+### `/agent/discover` `/content/*` — 挂入 Cockpit 外壳
 
-根布局 (`src/components/layout/main-layout.tsx`) 按路径判断: 非 `/` 时用 `ExternalShell` (`src/components/cockpit/external-shell.tsx`) 包一层, 复用同一个 `Sidebar`(`mode="external"`) + `.main-area` 容器 + 移动端 `.mobile-nav`, 主题/风格从 cockpit 写入的 localStorage 同步。 二期起 `ExternalShell` 仅剩 `/accounts`、`/agent/discover`(及其未挂导航的兄弟页 `inspiration`/`patterns`)、`/content/preflight|script|retro-sync` 使用 (`/agent` `/dashboard` `/settings` 三个壳页已删除)。 这些存留页面二期 (T7) 已做纸质风重塑 (样式层改动, 业务逻辑零改动)。
+根布局 (`src/components/layout/main-layout.tsx`) 按路径判断: 非 `/` 时用 `ExternalShell` (`src/components/cockpit/external-shell.tsx`) 包一层, 复用同一个 `Sidebar`(`mode="external"`) + `.main-area` 容器 + 移动端 `.mobile-nav`, 主题/风格从 cockpit 写入的 localStorage 同步。 二期起 `ExternalShell` 仅剩 `/agent/discover`(及其未挂导航的兄弟页 `inspiration`/`patterns`)、`/content/preflight|script|retro-sync` 使用 (`/agent` `/dashboard` `/settings` `/accounts` 均已删除, 见下文「账号绑定功能移除」小节)。 这些存留页面二期 (T7) 已做纸质风重塑 (样式层改动, 业务逻辑零改动)。
+
+### 账号绑定功能移除 (十七期)
+
+二期起以双入口形式保留的 `/accounts` 账号绑定与采集功能 (扫码登录向导 + 独立 `bind-worker` + 自建 Chromium/NoVNC 容器 + `src/crawler/**` 爬虫代码, 详见 `docs/superpowers/specs/2026-05-25-phase2-account-binding-and-sync-design.md`) 十七期**整体移除**——排查确认它与实际在用的抢点/雷达/自动同步功能完全无关 (那些走外部 `cheat-on-content` 项目自行管理登录态, 从不读写这里的 `PlatformAccount.cookieData`/`BrowserSession`)。移除范围: `/accounts` 页面 + 绑定向导组件 + `bind-session`/`sessions/*`/`proxy/test` 三组 API 路由 + `bind-worker.ts` + `src/crawler/**` + 自建 `chromium` Docker 服务 + 侧栏/设置页/内容数据分析·目标 tab 状态条里指向账号绑定的入口引用。`内容数据分析·目标 tab` 状态条精简为只保留"上次自动同步时间 + 立即同步"手动触发 (与账号绑定无关, 保留)。`PlatformAccount`/`BrowserSession` 等 Prisma 表暂不删 (仍被 `AccountMetric`/`PlatformNote`/`SyncTask`/`PublishTarget` 关联引用, 全部清理需要单独核查这几张表)。
 
 ### 新功能位置表 (二期融合 + 三期重组后)
 
@@ -536,7 +540,7 @@ top3, 注入两处——①研究层 `curatedParts` **最前**(亲身经历 > �
 | AI key 配置 | `/settings` | cockpit 设置视图「AI Provider」卡 |
 | 账号基准播放数 (baseline) | `/settings/baseline` | cockpit 设置视图「Baseline」卡 |
 | 手动同步 | `/settings` 或账号页内触发 | 内容数据分析·目标 tab「账号粉丝趋势」状态条「立即同步」按钮 (`POST /api/v1/douyin/auto-sync/trigger`) |
-| 账号绑定/管理 (深流程) | 侧栏常驻「账号」入口 | **保留** `/accounts` 页面本身, 但侧栏入口移除, 改为双入口: 内容数据分析·目标 tab 状态条「管理账号 →」链接 + 设置视图账号管理卡 + 站外页面 (`/accounts` 等) 移动端底部导航「账号」格 |
+| 账号绑定/管理 (深流程) | 侧栏常驻「账号」入口 | 十七期**整体移除** (`/accounts` 页面/向导/worker/爬虫代码/Chromium 容器均已删除), 与实际在用的抢点/雷达/自动同步功能无关; 内容数据分析·目标 tab 状态条精简为只保留自动同步时间+手动触发 |
 | 深度写稿 (完整多区块生成, 非抽屉内快速生成) | `/agent` | `/content/script/new`(保留, `ScriptForm`/`ScriptResult` 组件未删除, 仍支持 `?topic=&ideaId=&platform=&niche=&inspirationId=` 预填) |
 
 ### redirect 表 (`next.config.js`)
@@ -548,7 +552,7 @@ top3, 注入两处——①研究层 `curatedParts` **最前**(亲身经历 > �
 | `/settings` | `/?view=settings` | 307 (二期实施中从最初的 `/` 升级为直达 settings 视图, 见 spec 实际实施结论) |
 | `/settings/baseline` | `/?view=settings` | 307, 同上 |
 
-保留可直接访问的路由 (不 redirect): `/agent/discover`、`/agent/inspiration`、`/agent/patterns`、`/accounts`、`/content/script`、`/content/script/new`(深度写稿入口)、`/content/script/[id]`、`/content/preflight`、`/content/retro-sync`。
+保留可直接访问的路由 (不 redirect): `/agent/discover`、`/agent/inspiration`、`/agent/patterns`、`/content/script`、`/content/script/new`(深度写稿入口)、`/content/script/[id]`、`/content/preflight`、`/content/retro-sync`。 (`/accounts` 十七期已删除)
 
 **三期 (产出优先信息架构重组) 起旧 `?view=` 兼容映射**: 二期六视图里的 `schedule`/`goals`/`review` 三个旧 view 值 (redirect 表目的地里仍会出现) 在三期后不再是独立视图, 由 `src/lib/cockpit/view-routing.ts` (`resolveInitialView`/`resolveInitialMomentumTab`/`resolveInitialAnalyticsTab`, 单测 `tests/lib/cockpit/view-routing.test.ts`) 精确折叠到新视图的对应 tab；其余三值原生直达。 六值映射矩阵:
 
@@ -789,7 +793,6 @@ src/
 │   │   ├── preflight/             # 视频分析 (Phase 1, L1) — 列表页已删, 子路由保留
 │   │   ├── script/                # 脚本生成详情页 (E) + 分发登记, `script/new` 为深度写稿入口
 │   │   └── retro-sync/            # 抖音半自动复盘 (C)
-│   ├── accounts/                  # 账号绑定, 挂 ExternalShell (双入口之一)
 │   └── api/v1/                    # 所有 API routes (含 topics/ distributions/ cockpit/workspace/ cockpit/inspirations/ douyin/auto-sync/trigger/ radar/{items,keywords,config,trigger,runs/latest}/ scripts/generate(五期 douyin 两阶段化)/ scripts/[id]/refine(五期新增)/ style/{profile,samples}(五期新增)/ scripts/[id]/images/{plan,route,archive}(七期新增: 出图计划/逐张生图/zip 打包)/ cockpit/video-productions/{[id],[id]/approve,[id]/file,latest}(十五期新增: 触发生成/状态轮询/确认导出/预览-成片文件流))
 ├── components/
 │   ├── cockpit/                   # Creator Cockpit 移植主体
@@ -798,7 +801,7 @@ src/
 │   │   ├── analytics/              # 二期 (T4) 从 components/dashboard/ 迁移重塑: prediction-panel/performance-panel + 7 个搬迁 widget + use-dashboard-summary hook
 │   │   ├── settings-cards/         # ai-provider-card, baseline-card (二期 T5) + radar-config-card (四期 T6) + style-profile-card (五期新增)
 │   │   ├── sidebar.tsx             # 全站共用侧栏 (cockpit 模式 + external 模式), 二期起「平台」外链组已移除, 四期新增「热点雷达」项
-│   │   ├── external-shell.tsx      # 站外页面外壳 (侧栏 + mobile-nav + 主题同步), 仅剩 /accounts /agent/discover /content/* 使用
+│   │   ├── external-shell.tsx      # 站外页面外壳 (侧栏 + mobile-nav + 主题同步), 仅剩 /agent/discover /content/* 使用 (十七期起 /accounts 已删除)
 │   │   ├── content-drawer.tsx      # 内容详情抽屉, 二期 (T2) 脚本 tab 加入就地 AI 生成 + 标题实时建议; 五期新增素材框/时长/简报折叠区/分块渲染/换一版/整体指令; 六期新增挂载时懒加载拉回改稿 UI (parseDraftOutput) + 小红书两阶段面板(`XhsScriptPanel`, 与 douyin 分块面板共用 `ResearchBriefDetails` 素材简报子组件) + 素材框对小红书开放 + 生成/改稿/hook 动作四类互斥扩到小红书整稿指令; 七期新增「配图」区块 (一键全生成 + 并发 2 逐张渲染 + 单张重试 + 打包下载链接), 生图动作并入同一互斥矩阵
 │   │   ├── video-production-panel.tsx # 十五期新增: 无人出镜成片生成面板 (内容详情页「剪辑」tab, deliveryMode==='ai-faceless' 时替换原剪辑清单), 3 秒轮询状态 + 预览播放器 + 确认导出/重新生成/下载
 │   │   ├── onboarding.tsx / shared.tsx

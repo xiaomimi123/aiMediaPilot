@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import {
   DEFAULT_PAGE_TITLES,
   QUALITY_LABELS,
@@ -21,8 +20,11 @@ function formatSyncTime(value: string | null): string {
   return value.slice(0, 16).replace("T", " ");
 }
 
+// 十七期: 账号绑定功能整体移除, 状态条不再显示绑定昵称/登录状态, 只保留
+// 自动同步时间 + 手动触发按钮 (auto-sync 走外部 cheat-on-content 适配器,
+// 不依赖任何本应用内绑定的账号)。
 function AccountStatusBar({ notify }: { notify: (message: string) => void }) {
-  const { account } = getExtras();
+  const { lastAutoSyncAt } = getExtras();
   const [syncing, setSyncing] = useState(false);
 
   const triggerSync = async () => {
@@ -39,10 +41,8 @@ function AccountStatusBar({ notify }: { notify: (message: string) => void }) {
   };
 
   return <div className="account-status-bar">
-    <span>绑定：{account?.nickname ?? "未绑定"}</span>
-    <span>· 上次同步 {formatSyncTime(account?.lastAutoSyncAt ?? null)}</span>
+    <span>上次同步 {formatSyncTime(lastAutoSyncAt)}</span>
     <button type="button" className="text-button" disabled={syncing} onClick={triggerSync}>{syncing ? "同步中…" : "立即同步"}</button>
-    <Link className="text-button" href="/accounts">管理账号 →</Link>
   </div>;
 }
 

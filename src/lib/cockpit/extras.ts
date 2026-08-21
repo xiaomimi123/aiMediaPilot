@@ -58,32 +58,15 @@ async function loadPredictions(userId: string): Promise<CockpitExtras['predictio
 }
 
 /**
- * 账号状态条 (goals 视图) 用: 用户绑定的第一个 active 平台账号
- * (findFirst + orderBy createdAt asc, 与既有"取主账号"约定一致), 无绑定 → null。
- * lastAutoSyncAt 挂在 User 上 (全局一次自动同步的时间, 不区分账号), 拼进同一个对象
- * 方便前端一次性展示, 但只在确实有绑定账号时才返回非 null——未绑定时状态条只需
- * "未绑定" 文案, 不需要展示自动同步时间。
+ * 状态条 (goals 视图) 用: 全局最近一次自动同步时间 (挂在 User 上, 不区分账号)。
+ * 十七期: 账号绑定功能整体移除, 这里不再依赖 PlatformAccount。
  */
-async function loadAccount(userId: string): Promise<CockpitExtras['account']> {
-  const account = await prisma.platformAccount.findFirst({
-    where: { userId, isActive: true },
-    orderBy: { createdAt: 'asc' },
-    select: { nickname: true, loginStatus: true, followerCount: true, lastSyncAt: true },
-  });
-  if (!account) return null;
-
+async function loadLastAutoSyncAt(userId: string): Promise<CockpitExtras['lastAutoSyncAt']> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { lastAutoSyncAt: true },
   });
-
-  return {
-    nickname: account.nickname,
-    loginStatus: account.loginStatus,
-    followerCount: account.followerCount,
-    lastSyncAt: account.lastSyncAt ? account.lastSyncAt.toISOString() : null,
-    lastAutoSyncAt: user?.lastAutoSyncAt ? user.lastAutoSyncAt.toISOString() : null,
-  };
+  return user?.lastAutoSyncAt ? user.lastAutoSyncAt.toISOString() : null;
 }
 
 /** 设置视图「内容基准」卡: baseline 当前值 (BigInt → string) + retro median 提示。 */
@@ -104,10 +87,10 @@ async function loadSettings(userId: string): Promise<CockpitExtras['settings']> 
 }
 
 export async function loadExtras(userId: string): Promise<CockpitExtras> {
-  const [predictions, account, settings] = await Promise.all([
+  const [predictions, lastAutoSyncAt, settings] = await Promise.all([
     loadPredictions(userId),
-    loadAccount(userId),
+    loadLastAutoSyncAt(userId),
     loadSettings(userId),
   ]);
-  return { predictions, account, settings };
+  return { predictions, lastAutoSyncAt, settings };
 }

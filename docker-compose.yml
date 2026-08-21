@@ -29,23 +29,6 @@ services:
       - "6379:6379"
     restart: unless-stopped
 
-  # Chromium + NoVNC 浏览器服务 — Phase 2 自建镜像
-  chromium:
-    build:
-      context: ./src/docker/chromium-novnc
-    container_name: mediapilot-chromium
-    ports:
-      - "127.0.0.1:9222:9222"
-    volumes:
-      - chromium-profiles:/profiles
-    shm_size: "2gb"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:9222/json/version"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   # 主应用 — 生产部署时使用,本地开发请用 `npm run dev`
   app:
     build:
@@ -58,7 +41,6 @@ services:
     environment:
       - DATABASE_URL=postgresql://mediapilot:${DB_PASSWORD:-mediapilot_dev_pwd}@postgres:5432/mediapilot
       - REDIS_URL=redis://redis:6379
-      - CHROMIUM_REMOTE_DEBUG_URL=http://chromium:9222
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - NODE_ENV=production
     depends_on:
@@ -81,7 +63,6 @@ services:
     environment:
       - DATABASE_URL=postgresql://mediapilot:${DB_PASSWORD:-mediapilot_dev_pwd}@postgres:5432/mediapilot
       - REDIS_URL=redis://redis:6379
-      - CHROMIUM_REMOTE_DEBUG_URL=http://chromium:9222
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - NODE_ENV=production
     depends_on:
@@ -92,5 +73,4 @@ services:
 volumes:
   postgres-data:
   redis-data:
-  chromium-profiles:
   app-data:

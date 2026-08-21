@@ -4,7 +4,7 @@ import type { CockpitExtras } from './extras-types';
 let rev = '';
 let extras: CockpitExtras = {
   predictions: {},
-  account: null,
+  lastAutoSyncAt: null,
   settings: { baselinePlays: null, retroMedian: null, retroCount: 0 },
 };
 

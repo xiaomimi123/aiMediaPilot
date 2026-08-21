@@ -52,11 +52,6 @@ export const MOBILE_NAV_ITEMS: ReadonlyArray<SidebarNavItem> = [
   ...OVERVIEW_NAV_ITEMS,
 ];
 
-export function isExternalActive(pathname: string | null, href: string): boolean {
-  if (!pathname) return false;
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
-
 type CockpitSidebarProps = {
   mode: "cockpit";
   collapsed: boolean;

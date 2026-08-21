@@ -18,7 +18,6 @@ const prismaMock = vi.hoisted(() => ({
   cockpitInsightRule: { findMany: vi.fn(), deleteMany: vi.fn(), upsert: vi.fn() },
   accountMetric: { findMany: vi.fn() },
   contentAnalysis: { findMany: vi.fn() },
-  platformAccount: { findFirst: vi.fn() },
   user: { findUnique: vi.fn() },
   actualMetric: { findMany: vi.fn() },
   $transaction: vi.fn(),
@@ -90,9 +89,8 @@ beforeEach(() => {
   prismaMock.cockpitGoalCycle.findMany.mockResolvedValue([]);
   prismaMock.cockpitInsightRule.findMany.mockResolvedValue([]);
   prismaMock.accountMetric.findMany.mockResolvedValue([]);
-  // extras 默认: 无绑定账号, 无 baseline, 无复盘
+  // extras 默认: 无自动同步记录, 无 baseline, 无复盘
   prismaMock.contentAnalysis.findMany.mockResolvedValue([]);
-  prismaMock.platformAccount.findFirst.mockResolvedValue(null);
   prismaMock.user.findUnique.mockResolvedValue(null);
   prismaMock.actualMetric.findMany.mockResolvedValue([]);
   // CAS claim: 默认没抢到行 (count 0)，各测试按需覆盖
@@ -112,7 +110,7 @@ describe('GET /api/v1/cockpit/workspace', () => {
     expect(json.data.state.followerSnapshots).toEqual([]);
     expect(json.data.extras).toEqual({
       predictions: {},
-      account: null,
+      lastAutoSyncAt: null,
       settings: { baselinePlays: null, retroMedian: null, retroCount: 0 },
     });
     expect(json.data.rev).toBe('1970-01-01T00:00:00.000Z');
@@ -216,20 +214,14 @@ describe('GET /api/v1/cockpit/workspace', () => {
     expect(json.data.state.contents[0].editingActProgress).toBeUndefined();
   });
 
-  it('无绑定 PlatformAccount → extras.account 为 null', async () => {
-    prismaMock.platformAccount.findFirst.mockResolvedValue(null);
+  it('User.lastAutoSyncAt 为空 → extras.lastAutoSyncAt 为 null', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(null);
     const res = await GET();
     const json = await res.json();
-    expect(json.data.extras.account).toBeNull();
+    expect(json.data.extras.lastAutoSyncAt).toBeNull();
   });
 
-  it('已绑定 PlatformAccount + 有 lastAutoSyncAt → extras.account 完整形状', async () => {
-    prismaMock.platformAccount.findFirst.mockResolvedValue({
-      nickname: '小林的账号',
-      loginStatus: 'VALID',
-      followerCount: 12345,
-      lastSyncAt: new Date('2026-08-03T02:00:00.000Z'),
-    });
+  it('User.lastAutoSyncAt 有值 → extras.lastAutoSyncAt + settings 完整形状', async () => {
     prismaMock.user.findUnique.mockImplementation(async ({ select }: { select: Record<string, boolean> }) => {
       if (select.lastAutoSyncAt) return { lastAutoSyncAt: new Date('2026-08-04T02:00:00.000Z') };
       if (select.baselinePlays) return { baselinePlays: 8000n };
@@ -242,13 +234,7 @@ describe('GET /api/v1/cockpit/workspace', () => {
     const res = await GET();
     const json = await res.json();
 
-    expect(json.data.extras.account).toEqual({
-      nickname: '小林的账号',
-      loginStatus: 'VALID',
-      followerCount: 12345,
-      lastSyncAt: '2026-08-03T02:00:00.000Z',
-      lastAutoSyncAt: '2026-08-04T02:00:00.000Z',
-    });
+    expect(json.data.extras.lastAutoSyncAt).toBe('2026-08-04T02:00:00.000Z');
     expect(json.data.extras.settings).toEqual({
       baselinePlays: '8000',
       retroMedian: 2000,

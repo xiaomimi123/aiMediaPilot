@@ -7,9 +7,6 @@ const prismaMock = vi.hoisted(() => ({
   contentAnalysis: {
     findMany: vi.fn(),
   },
-  platformAccount: {
-    findFirst: vi.fn(),
-  },
   user: {
     findUnique: vi.fn(),
   },
@@ -23,7 +20,6 @@ import { loadExtras } from '@/lib/cockpit/extras';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  prismaMock.platformAccount.findFirst.mockResolvedValue(null);
   prismaMock.user.findUnique.mockResolvedValue(null);
   prismaMock.actualMetric.findMany.mockResolvedValue([]);
 });
@@ -36,7 +32,7 @@ describe('loadExtras', () => {
 
     expect(result).toEqual({
       predictions: {},
-      account: null,
+      lastAutoSyncAt: null,
       settings: { baselinePlays: null, retroMedian: null, retroCount: 0 },
     });
     expect(prismaMock.contentAnalysis.findMany).not.toHaveBeenCalled();
@@ -93,39 +89,24 @@ describe('loadExtras', () => {
     });
   });
 
-  it('无绑定账号 → account: null, 不查询 user.lastAutoSyncAt', async () => {
+  it('User.lastAutoSyncAt 为空 → lastAutoSyncAt: null', async () => {
     prismaMock.cockpitContent.findMany.mockResolvedValue([]);
-    prismaMock.platformAccount.findFirst.mockResolvedValue(null);
+    prismaMock.user.findUnique.mockResolvedValue(null);
 
     const result = await loadExtras('user1');
 
-    expect(result.account).toBeNull();
+    expect(result.lastAutoSyncAt).toBeNull();
   });
 
-  it('已绑定账号 → account 取 nickname/loginStatus/followerCount/lastSyncAt + user.lastAutoSyncAt', async () => {
+  it('User.lastAutoSyncAt 有值 → 转成 ISO 字符串', async () => {
     prismaMock.cockpitContent.findMany.mockResolvedValue([]);
-    prismaMock.platformAccount.findFirst.mockResolvedValue({
-      nickname: '测试号',
-      loginStatus: 'EXPIRED',
-      followerCount: 999,
-      lastSyncAt: new Date('2026-08-01T00:00:00.000Z'),
-    });
     prismaMock.user.findUnique.mockResolvedValue({
       lastAutoSyncAt: new Date('2026-08-02T00:00:00.000Z'),
     });
 
     const result = await loadExtras('user1');
 
-    expect(result.account).toEqual({
-      nickname: '测试号',
-      loginStatus: 'EXPIRED',
-      followerCount: 999,
-      lastSyncAt: '2026-08-01T00:00:00.000Z',
-      lastAutoSyncAt: '2026-08-02T00:00:00.000Z',
-    });
-    expect(prismaMock.platformAccount.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: 'user1', isActive: true } }),
-    );
+    expect(result.lastAutoSyncAt).toBe('2026-08-02T00:00:00.000Z');
   });
 
   it('settings: baselinePlays + retroCount < 3 → retroMedian null', async () => {
