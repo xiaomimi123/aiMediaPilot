@@ -92,7 +92,11 @@ export function buildSrtFromAlignedActs(
   let output = '';
   let index = 1;
   for (const aligned of sorted) {
-    output += `${index}\n${formatTimestamp(aligned.startMs)} --> ${formatTimestamp(aligned.endMs)}\n${narrations[aligned.act]}\n\n`;
+    const text = narrations[aligned.act];
+    if (text === undefined) {
+      throw new Error(`缺少 ${aligned.act} 幕的字幕文本`);
+    }
+    output += `${index}\n${formatTimestamp(aligned.startMs)} --> ${formatTimestamp(aligned.endMs)}\n${text}\n\n`;
     index += 1;
   }
 

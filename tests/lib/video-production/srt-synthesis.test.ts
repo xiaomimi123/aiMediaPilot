@@ -182,4 +182,10 @@ describe('buildSrtFromAlignedActs', () => {
       /^1\n\d\d:\d\d:\d\d,\d\d\d --> \d\d:\d\d:\d\d,\d\d\d\n/,
     );
   });
+
+  it('narrations 缺失某个非零时长幕的文本 → 抛出明确错误, 而非静默产出 "undefined"', () => {
+    const alignedActs: AlignedAct[] = [{ act: 'hook', startMs: 0, endMs: 1000 }];
+    const { hook: _hook, ...incompleteNarrations } = narrations;
+    expect(() => buildSrtFromAlignedActs(alignedActs, incompleteNarrations)).toThrow(/hook/);
+  });
 });
