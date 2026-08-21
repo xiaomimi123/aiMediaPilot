@@ -7,6 +7,7 @@ import {
   buildEncodeFramesArgs,
   buildConcatArgs,
   buildCompositeCutawayArgs,
+  buildBurnCaptionsArgs,
   parseProbeOutput,
 } from '@/lib/video/ffmpeg';
 
@@ -128,6 +129,21 @@ describe('buildCompositeCutawayArgs', () => {
     expect(args).not.toContain('-filter_complex');
     expect(args).toContain('0:v');
     expect(args).toContain('0:a');
+  });
+});
+
+describe('buildBurnCaptionsArgs', () => {
+  it('用 subtitles filter 烧录字幕', () => {
+    const args = buildBurnCaptionsArgs({
+      videoPath: '/in.mp4',
+      srtPath: '/tmp/captions-abc.srt',
+      outputPath: '/out.mp4',
+    });
+    expect(args).toContain('-i');
+    expect(args).toContain('/in.mp4');
+    expect(args).toContain('-vf');
+    expect(args.join(' ')).toMatch(/subtitles=\/tmp\/captions-abc\.srt/);
+    expect(args[args.length - 1]).toBe('/out.mp4');
   });
 });
 

@@ -1,6 +1,8 @@
 import { execFile } from 'child_process';
+import { randomUUID } from 'crypto';
 import { promisify } from 'util';
 import path from 'path';
+import os from 'os';
 import fs from 'fs/promises';
 
 const execFileAsync = promisify(execFile);
@@ -224,4 +226,34 @@ export function buildCompositeCutawayArgs(opts: CompositeCutawayOpts): string[] 
 
 export async function compositeCutawayVideo(opts: CompositeCutawayOpts): Promise<void> {
   await execFileAsync(FFMPEG_BIN, buildCompositeCutawayArgs(opts), { timeout: 600_000 });
+}
+
+export interface BuildBurnCaptionsArgsOpts {
+  videoPath: string;
+  srtPath: string; // 已写好的 .srt 文件路径(不是字幕内容本身)
+  outputPath: string;
+}
+
+/**
+ * 用普通 .srt + ffmpeg 的 subtitles filter 烧录字幕(第一版实现，不做 .ass 动画字幕，
+ * 详见 spec 风险表：这是既定的范围简化，不是遗漏)。
+ */
+export function buildBurnCaptionsArgs(opts: BuildBurnCaptionsArgsOpts): string[] {
+  return ['-y', '-i', opts.videoPath, '-vf', `subtitles=${opts.srtPath}`, opts.outputPath];
+}
+
+export interface BurnCaptionsOpts {
+  videoPath: string;
+  srt: string; // SRT 格式字幕内容(不是文件路径)，内部负责写临时文件
+  outputPath: string;
+}
+
+export async function burnCaptions(opts: BurnCaptionsOpts): Promise<void> {
+  const srtPath = path.join(os.tmpdir(), `captions-${randomUUID()}.srt`);
+  await fs.writeFile(srtPath, opts.srt, 'utf-8');
+  await execFileAsync(
+    FFMPEG_BIN,
+    buildBurnCaptionsArgs({ videoPath: opts.videoPath, srtPath, outputPath: opts.outputPath }),
+    { timeout: 600_000 },
+  );
 }
