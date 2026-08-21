@@ -35,6 +35,10 @@ describe('burnCaptions', () => {
     async () => {
       const outputPath = path.join(workDir, 'output.mp4');
 
+      const tmpEntriesBefore = new Set(
+        (await fs.readdir(os.tmpdir())).filter((name) => /^captions-.*\.srt$/.test(name)),
+      );
+
       await burnCaptions({
         videoPath: sourceVideoPath,
         srt: SAMPLE_SRT,
@@ -56,6 +60,14 @@ describe('burnCaptions', () => {
       ]);
       const streams = JSON.parse(stdout).streams as Array<{ codec_type: string }>;
       expect(streams.some((s) => s.codec_type === 'video')).toBe(true);
+
+      // burnCaptions 内部写的临时 .srt 文件应在成功返回后被清理，不新增残留在 tmpdir 里
+      // (用调用前后的差集比较，避免被环境里其他历史遗留的 captions-*.srt 文件误伤)
+      const tmpEntriesAfter = (await fs.readdir(os.tmpdir())).filter((name) =>
+        /^captions-.*\.srt$/.test(name),
+      );
+      const newLeftoverSrt = tmpEntriesAfter.filter((name) => !tmpEntriesBefore.has(name));
+      expect(newLeftoverSrt).toEqual([]);
     },
     60_000,
   );

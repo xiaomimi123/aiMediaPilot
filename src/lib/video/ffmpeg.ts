@@ -251,9 +251,13 @@ export interface BurnCaptionsOpts {
 export async function burnCaptions(opts: BurnCaptionsOpts): Promise<void> {
   const srtPath = path.join(os.tmpdir(), `captions-${randomUUID()}.srt`);
   await fs.writeFile(srtPath, opts.srt, 'utf-8');
-  await execFileAsync(
-    FFMPEG_BIN,
-    buildBurnCaptionsArgs({ videoPath: opts.videoPath, srtPath, outputPath: opts.outputPath }),
-    { timeout: 600_000 },
-  );
+  try {
+    await execFileAsync(
+      FFMPEG_BIN,
+      buildBurnCaptionsArgs({ videoPath: opts.videoPath, srtPath, outputPath: opts.outputPath }),
+      { timeout: 600_000 },
+    );
+  } finally {
+    await fs.unlink(srtPath).catch(() => {});
+  }
 }
