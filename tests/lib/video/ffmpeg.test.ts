@@ -8,6 +8,7 @@ import {
   buildConcatArgs,
   buildCompositeCutawayArgs,
   buildBurnCaptionsArgs,
+  buildMuxAudioArgs,
   parseProbeOutput,
 } from '@/lib/video/ffmpeg';
 
@@ -144,6 +145,23 @@ describe('buildBurnCaptionsArgs', () => {
     expect(args).toContain('-vf');
     expect(args.join(' ')).toMatch(/subtitles=\/tmp\/captions-abc\.srt/);
     expect(args[args.length - 1]).toBe('/out.mp4');
+  });
+});
+
+describe('buildMuxAudioArgs', () => {
+  it('用 -map 把视频流和音频流分别绑定到两个输入, -shortest 对齐时长', () => {
+    const args = buildMuxAudioArgs({
+      videoPath: '/tmp/video.mp4',
+      audioPath: '/tmp/voice.wav',
+      outputPath: '/tmp/out.mp4',
+    });
+    expect(args).toContain('/tmp/video.mp4');
+    expect(args).toContain('/tmp/voice.wav');
+    expect(args).toContain('-map');
+    expect(args).toContain('0:v:0');
+    expect(args).toContain('1:a:0');
+    expect(args).toContain('-shortest');
+    expect(args[args.length - 1]).toBe('/tmp/out.mp4');
   });
 });
 

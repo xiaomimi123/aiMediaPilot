@@ -261,3 +261,32 @@ export async function burnCaptions(opts: BurnCaptionsOpts): Promise<void> {
     await fs.unlink(srtPath).catch(() => {});
   }
 }
+
+export interface MuxAudioOpts {
+  videoPath: string; // 只有画面(拼接后的 B-roll 序列)，可能有也可能没有原始音轨
+  audioPath: string; // TTS 合成出的语音轨道
+  outputPath: string;
+}
+
+/**
+ * 把单独生成的音轨(TTS 配音)与无声(或原音轨被忽略)的视频混流：
+ * 视频流直接 copy(不重新编码画面)，音频轨道来自 audioPath 独立编码为 aac，
+ * 用 -shortest 保证输出时长以两者中较短的一方为准，避免音画对不齐的尾部空白/静音。
+ */
+export function buildMuxAudioArgs(opts: MuxAudioOpts): string[] {
+  return [
+    '-y',
+    '-i', opts.videoPath,
+    '-i', opts.audioPath,
+    '-c:v', 'copy',
+    '-c:a', 'aac',
+    '-map', '0:v:0',
+    '-map', '1:a:0',
+    '-shortest',
+    opts.outputPath,
+  ];
+}
+
+export async function muxAudioTrack(opts: MuxAudioOpts): Promise<void> {
+  await execFileAsync(FFMPEG_BIN, buildMuxAudioArgs(opts), { timeout: 600_000 });
+}
