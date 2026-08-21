@@ -56,16 +56,20 @@ export function VideoProductionPanel({ contentId, deliveryMode }: { contentId: s
     rendering: '渲染正式成片中', done: '已完成', failed: '生成失败',
   };
 
-  // talking-head-broll 的生成必须先在「录制」步骤上传出镜视频(该上传本身会创建
-  // VideoProduction 记录并在写入 sourceVideoPath 后自动入队)——所以这里 vp 为空
-  // 就意味着还没上传, "开始生成"没有意义(点了也只会创建一条没有源视频、worker
-  // 会立即报"尚未上传出镜视频"的僵尸记录), 禁用并提示去录制步骤上传。
-  const needsUploadFirst = deliveryMode === 'talking-head-broll' && !vp;
+  // talking-head-broll 的生成必须先在「录制」步骤上传出镜视频。不能只看 vp 是否
+  // 存在——handleUploadSourceVideo 会先创建/复用一条 VideoProduction 记录, 再发
+  // multipart 上传, 如果上传本身失败(网络错误/MIME 被拒/超限), 记录已经落库但
+  // sourceVideoPath 仍是空, 而入队(见 route.ts 的修复)只发生在上传成功之后——
+  // 此时 vp !== null 但 status 会一直停在创建时的初始值 'queued', 永远不会往前走。
+  // 所以判据用 status 而不是"是否存在": 'queued' 对 talking-head-broll 来说只在
+  // "还没上传成功"这一个时间窗口出现(上传成功会立刻把 status 推到
+  // 'source_uploaded' 再入队), 其余任何 status 都意味着视频已经真实落地过。
+  const needsUploadFirst = deliveryMode === 'talking-head-broll' && (!vp || vp.status === 'queued');
 
   if (loading) return <p className="muted">加载中…</p>;
   if (needsUploadFirst) return <div className="video-production-panel">
     <button type="button" className="primary-button" disabled title="请先在「录制」步骤上传出镜视频">开始生成</button>
-    <p className="field-hint">请先在「录制」步骤上传出镜视频，上传成功后会自动开始生成。</p>
+    <p className="field-hint">{vp ? "出镜视频还没有上传成功，请回「录制」步骤重新上传。" : "请先在「录制」步骤上传出镜视频，上传成功后会自动开始生成。"}</p>
   </div>;
   if (!vp) return <button type="button" className="primary-button" onClick={start}>开始生成</button>;
 
