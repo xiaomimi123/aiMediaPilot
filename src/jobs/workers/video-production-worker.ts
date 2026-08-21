@@ -17,11 +17,16 @@ import {
   extractAudio,
   compositeCutawayVideo,
   burnCaptions,
+  muxAudioTrack,
   type CutawaySegment,
 } from '@/lib/video/ffmpeg';
 import { LocalWhisperClient } from '@/lib/llm/local-whisper';
 import type { TranscriptSegment } from '@/lib/llm/whisper';
 import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
+import { synthesizeVolcTts } from '@/lib/tts/volcengine';
+import { decrypt } from '@/lib/crypto';
+import { ttsResultsToAlignedActs, type TtsActResult } from '@/lib/video-production/srt-synthesis';
+import type { AlignedAct } from '@/lib/video-production/aligner-prompt';
 
 type JobData = { videoProductionId: string; mode: 'preview' | 'master' };
 
@@ -297,6 +302,194 @@ async function handleTalkingHeadBroll(
   }
 }
 
+/**
+ * `illustration-tts` 交付模式 (二十期新增) —— 无出镜视频, 用火山引擎 TTS 逐幕合成配音,
+ * 驱动纯 AI 插画分镜(BUILDER visualStyle='illustration')直接拼接。与另外两个分支的关键差异：
+ * - 没有真人出镜视频/ASR，时间轴锚点来自 TTS 逐幕合成的真实音频时长(ttsResultsToAlignedActs)；
+ * - 最终产物是"画面拼接(concatClips)+ TTS 配音轨拼接 + 混流(muxAudioTrack)"，
+ *   不是 compositeCutawayVideo 那种挖空替换。
+ */
+async function handleIllustrationTts(
+  vp: VideoProduction,
+  mode: 'preview' | 'master',
+  setStatus: SetStatusFn,
+  outputFileName: string,
+  readyStatus: string,
+  outputField: 'previewPath' | 'masterPath',
+): Promise<void> {
+  if (mode === 'preview') {
+    // TTS 逐幕配音 (复用现有 directing 状态值，语义上这里是"TTS 配音")
+    await setStatus('directing');
+
+    // 取六幕脚本 (同 handleTalkingHeadBroll 用的同一条查找链)
+    const content = await prisma.cockpitContent.findUnique({ where: { id: vp.contentId } });
+    const draft = content?.scriptDraftId
+      ? await prisma.scriptDraft.findUnique({ where: { id: content.scriptDraftId } })
+      : null;
+    const parsed = draft ? parseDraftOutput(draft.output) : null;
+    if (!parsed?.acts || !parsed.four_dims) throw new Error('需要先生成六幕脚本');
+    const acts = parsed.acts;
+
+    const ttsConfig = await prisma.volcTtsConfig.findUnique({ where: { userId: vp.userId } });
+    if (!ttsConfig) throw new Error('请先在设置页配置火山 TTS');
+    const apiKey = decrypt(ttsConfig.apiKey);
+
+    const ttsResults: TtsActResult[] = [];
+    for (const act of acts) {
+      const audioPath = path.join(vp.productionRoot, `tts-${act.act}.wav`);
+      const { durationMs } = await synthesizeVolcTts(act.narration, audioPath, {
+        apiKey,
+        voiceType: ttsConfig.voiceType,
+        resourceId: ttsConfig.resourceId,
+      });
+      ttsResults.push({ act: act.act, audioPath, durationMs });
+    }
+    const alignedActs = ttsResultsToAlignedActs(ttsResults);
+    // 持久化对齐结果：master 渲染直接复用，不重新调用 TTS(耗真实调用额度)。
+    await prisma.videoProduction.update({
+      where: { id: vp.id },
+      data: {
+        alignedActs: alignedActs as unknown as Prisma.InputJsonValue,
+        updatedAt: new Date().toISOString(),
+      },
+    });
+
+    const narrations = Object.fromEntries(acts.map((a) => [a.act, a.narration]));
+    const srt = buildSrtFromAlignedActs(alignedActs, narrations);
+
+    await setStatus('building');
+    const deepseekKey = await resolveDeepSeekApiKey(vp.userId);
+    if (!deepseekKey) throw new Error('未配置 DeepSeek key');
+    const directorLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-reasoner' });
+    const { result: direction } = await directorLLM.callStructured({
+      systemPrompt: DIRECTOR.buildSystemPrompt(),
+      userMessage: DIRECTOR.buildUserMessage(srt),
+      responseSchema: DIRECTOR.responseSchema,
+    });
+    await fs.writeFile(
+      path.join(vp.productionRoot, 'direction.json'),
+      JSON.stringify(direction),
+      'utf-8',
+    );
+
+    const builderLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-chat' });
+    const clipPaths: string[] = [];
+    let shotIndex = 0;
+    for (const shot of direction.shots) {
+      const { result: built } = await builderLLM.callStructured({
+        systemPrompt: BUILDER.buildSystemPrompt(direction.palette, 'illustration'),
+        userMessage: BUILDER.buildUserMessage(shot),
+        responseSchema: BUILDER.responseSchema,
+      });
+      const shotWorkDir = shotDir(vp.productionRoot, shotIndex);
+      await fs.mkdir(shotWorkDir, { recursive: true });
+      await fs.writeFile(path.join(shotWorkDir, 'source.html'), built.html, 'utf-8');
+      const clipPath = path.join(shotWorkDir, 'clip.mp4');
+      await renderShotToClip({
+        html: built.html,
+        durationMs: shot.endMs - shot.startMs,
+        fps: 15, // 预览档固定 15fps，与另外两个分支一致
+        workDir: shotWorkDir,
+        outputClipPath: clipPath,
+      });
+      clipPaths.push(clipPath);
+      shotIndex += 1;
+    }
+
+    await setStatus('assembling');
+    const videoOnlyPath = path.join(vp.productionRoot, 'video-only.mp4');
+    await concatClips({
+      clipPaths,
+      outputPath: videoOnlyPath,
+      concatListPath: path.join(vp.productionRoot, 'concat-list.txt'),
+    });
+    // 音频轨拼接：ttsResults 天然按六幕固定顺序排列，与合成 alignedActs 的顺序一致。
+    // concatClips 本身只是"写 concat-demuxer 列表文件 + ffmpeg -f concat -c copy"的通用封装，
+    // 不关心输入是视频还是纯音频；这批 wav 均由同一次 synthesizeVolcTts 调用产出、编码参数一致，
+    // 复用同一函数对音频文件做 -c copy 拼接同样成立，不需要另写一套 ffmpeg 拼接逻辑。
+    const concatenatedAudioPath = path.join(vp.productionRoot, 'tts-audio.wav');
+    await concatClips({
+      clipPaths: ttsResults.map((r) => r.audioPath),
+      outputPath: concatenatedAudioPath,
+      concatListPath: path.join(vp.productionRoot, 'concat-audio-list.txt'),
+    });
+
+    const outputPath = path.join(vp.productionRoot, outputFileName);
+    await muxAudioTrack({ videoPath: videoOnlyPath, audioPath: concatenatedAudioPath, outputPath });
+
+    await setStatus(readyStatus, { [outputField]: outputPath });
+  } else {
+    // master 模式：复用持久化的 direction.json/source.html + 已合成的 alignedActs/per-act TTS 音频，
+    // 不重新调用 TTS(真实调用额度)/DeepSeek —— 与另外两个分支 master 分支同一先例。
+    if (!vp.alignedActs) {
+      throw new Error('预览未完成或已损坏，无法确认导出，请重新生成预览');
+    }
+    const alignedActs = vp.alignedActs as unknown as AlignedAct[];
+
+    let direction: DirectorResponse;
+    try {
+      const raw = await fs.readFile(path.join(vp.productionRoot, 'direction.json'), 'utf-8');
+      direction = JSON.parse(raw) as DirectorResponse;
+    } catch {
+      throw new Error('预览未完成或已损坏，无法确认导出，请重新生成预览');
+    }
+
+    await setStatus('building');
+    const clipPaths: string[] = [];
+    let shotIndex = 0;
+    for (const shot of direction.shots) {
+      const shotWorkDir = shotDir(vp.productionRoot, shotIndex);
+      const sourceHtmlPath = path.join(shotWorkDir, 'source.html');
+      let html: string;
+      try {
+        html = await fs.readFile(sourceHtmlPath, 'utf-8');
+      } catch {
+        throw new Error(`预览未完成或已损坏，无法确认导出，请重新生成预览 (镜头缺失: ${shot.shotId})`);
+      }
+      const masterWorkDir = path.join(shotWorkDir, 'master');
+      await fs.mkdir(masterWorkDir, { recursive: true });
+      const clipPath = path.join(shotWorkDir, 'clip-master.mp4');
+      await renderShotToClip({
+        html,
+        durationMs: shot.endMs - shot.startMs,
+        fps: 30, // 正式渲染档固定 30fps，与另外两个分支一致
+        workDir: masterWorkDir,
+        outputClipPath: clipPath,
+      });
+      clipPaths.push(clipPath);
+      shotIndex += 1;
+    }
+
+    await setStatus('assembling');
+    // 用独立文件名，与预览档的 video-only.mp4 分开，避免 approve→master 渲染中途覆盖预览产物。
+    const videoOnlyPath = path.join(vp.productionRoot, 'video-only-master.mp4');
+    await concatClips({
+      clipPaths,
+      outputPath: videoOnlyPath,
+      concatListPath: path.join(vp.productionRoot, 'concat-list-master.txt'),
+    });
+    // 复用预览阶段已经拼接好的完整 TTS 音轨(tts-audio.wav)，音频时长与画面 fps 无关，
+    // 不需要因为画面重渲染为 30fps 就重新合成/重新拼接语音——按 alignedActs 里持久化的顺序
+    // (startMs 升序，等同预览阶段合成 ttsResults 时的六幕固定顺序)找回各幕 wav 文件仅用于
+    // 校验其仍然存在；真正参与混流的是预览阶段已拼好的那条完整音轨。
+    const orderedActs = [...alignedActs].sort((a, b) => a.startMs - b.startMs);
+    for (const a of orderedActs) {
+      const perActPath = path.join(vp.productionRoot, `tts-${a.act}.wav`);
+      try {
+        await fs.access(perActPath);
+      } catch {
+        throw new Error(`预览未完成或已损坏，无法确认导出，请重新生成预览 (缺少 ${a.act} 幕配音)`);
+      }
+    }
+    const concatenatedAudioPath = path.join(vp.productionRoot, 'tts-audio.wav');
+
+    const outputPath = path.join(vp.productionRoot, outputFileName);
+    await muxAudioTrack({ videoPath: videoOnlyPath, audioPath: concatenatedAudioPath, outputPath });
+
+    await setStatus(readyStatus, { [outputField]: outputPath });
+  }
+}
+
 async function handleProduce(job: Job<JobData>) {
   const { videoProductionId, mode } = job.data;
 
@@ -325,6 +518,8 @@ async function handleProduce(job: Job<JobData>) {
       await handleTalkingHeadBroll(vp, mode, setStatus, outputFileName, readyStatus, outputField);
     } else if (vp.mode === 'ppt-narration') {
       await handlePptNarration(vp, mode, setStatus, outputFileName, readyStatus, outputField);
+    } else if (vp.mode === 'illustration-tts') {
+      await handleIllustrationTts(vp, mode, setStatus, outputFileName, readyStatus, outputField);
     } else {
       throw new Error(`暂不支持的交付模式: ${vp.mode}`);
     }
