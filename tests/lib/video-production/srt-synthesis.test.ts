@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildSrtFromAlignedActs, synthesizeSrtFromSixActScript } from '@/lib/video-production/srt-synthesis';
+import {
+  buildSrtFromAlignedActs,
+  synthesizeSrtFromSixActScript,
+  ttsResultsToAlignedActs,
+  type TtsActResult,
+} from '@/lib/video-production/srt-synthesis';
 import { ACT_KEYS, type ActKey, type ScriptAct } from '@/lib/script/six-act';
 import type { AlignedAct } from '@/lib/video-production/aligner-prompt';
 
@@ -187,5 +192,43 @@ describe('buildSrtFromAlignedActs', () => {
     const alignedActs: AlignedAct[] = [{ act: 'hook', startMs: 0, endMs: 1000 }];
     const { hook: _hook, ...incompleteNarrations } = narrations;
     expect(() => buildSrtFromAlignedActs(alignedActs, incompleteNarrations)).toThrow(/hook/);
+  });
+});
+
+describe('ttsResultsToAlignedActs', () => {
+  it('6 幕顺序输入 → 按 durationMs 累加出正确的 startMs/endMs', () => {
+    const results: TtsActResult[] = ACT_KEYS.map((act, i) => ({
+      act,
+      audioPath: `/tmp/${act}.wav`,
+      durationMs: 1000 * (i + 1),
+    }));
+    const aligned = ttsResultsToAlignedActs(results);
+    expect(aligned).toHaveLength(6);
+
+    let cursor = 0;
+    aligned.forEach((a, i) => {
+      expect(a.act).toBe(ACT_KEYS[i]);
+      expect(a.startMs).toBe(cursor);
+      cursor += results[i].durationMs;
+      expect(a.endMs).toBe(cursor);
+    });
+  });
+
+  it('0 时长边界: 不产生负数或 NaN, 该幕零时长且不影响后续累加', () => {
+    const results: TtsActResult[] = [
+      { act: 'hook', audioPath: '/tmp/hook.wav', durationMs: 0 },
+      { act: 'concept_a', audioPath: '/tmp/concept_a.wav', durationMs: 2000 },
+    ];
+    const aligned = ttsResultsToAlignedActs(results);
+    expect(aligned).toEqual<AlignedAct[]>([
+      { act: 'hook', startMs: 0, endMs: 0 },
+      { act: 'concept_a', startMs: 0, endMs: 2000 },
+    ]);
+    aligned.forEach((a) => {
+      expect(a.startMs).toBeGreaterThanOrEqual(0);
+      expect(a.endMs).toBeGreaterThanOrEqual(0);
+      expect(Number.isNaN(a.startMs)).toBe(false);
+      expect(Number.isNaN(a.endMs)).toBe(false);
+    });
   });
 });

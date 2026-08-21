@@ -1,4 +1,4 @@
-import type { ScriptAct } from '@/lib/script/six-act';
+import type { ActKey, ScriptAct } from '@/lib/script/six-act';
 import type { AlignedAct } from './aligner-prompt';
 import type { TranscriptSegment } from '@/lib/llm/whisper';
 
@@ -119,4 +119,30 @@ export function buildCaptionSrtFromTranscript(segments: TranscriptSegment[]): st
     output += `${i + 1}\n${formatTimestamp(segment.startSec * 1000)} --> ${formatTimestamp(segment.endSec * 1000)}\n${segment.text.trim()}\n\n`;
   });
   return output;
+}
+
+/** 单幕 TTS 合成结果 (二十期): 每幕已合成语音的真实文件路径与真实时长。 */
+export interface TtsActResult {
+  act: ActKey;
+  audioPath: string;
+  durationMs: number;
+}
+
+/**
+ * TTS 逐幕合成结果 → AlignedAct[] (二十期, 插画模式)。
+ *
+ * 与 ALIGNER (Task 4, ASR 驱动) 得到 AlignedAct 的方式不同——这里没有真人录音、
+ * 也无需语义对齐: 每幕的语音是逐幕单独合成的, 天然按 results 数组顺序(六幕固定
+ * 顺序)首尾相接拼成一条完整语音轨道, 所以只需按顺序累加 durationMs 即得每幕在
+ * 这条轨道里的 startMs/endMs。输出与 Task 4 的 AlignedAct 同构, 可直接喂给
+ * buildSrtFromAlignedActs。纯函数, 不调用任何 TTS 接口。
+ */
+export function ttsResultsToAlignedActs(results: TtsActResult[]): AlignedAct[] {
+  let cursorMs = 0;
+  return results.map((result) => {
+    const startMs = cursorMs;
+    const endMs = cursorMs + Math.max(0, result.durationMs);
+    cursorMs = endMs;
+    return { act: result.act, startMs, endMs };
+  });
 }
