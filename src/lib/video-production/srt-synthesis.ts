@@ -1,4 +1,5 @@
 import type { ScriptAct } from '@/lib/script/six-act';
+import type { AlignedAct } from './aligner-prompt';
 
 /**
  * 六幕脚本 → SRT 合成纯函数 (十三期任务二)。
@@ -67,6 +68,32 @@ export function synthesizeSrtFromSixActScript(acts: ScriptAct[]): string {
       index += 1;
       cursorMs = endMs;
     }
+  }
+
+  return output;
+}
+
+/**
+ * 对齐结果 → 真实 SRT 合成纯函数 (十九期)。
+ *
+ * 与 synthesizeSrtFromSixActScript 不同, 本函数消费的是语音对齐产出的
+ * 真实起止时间戳 (AlignedAct), 而非按 targetSec/字符数估算的虚拟时长。
+ * 过滤掉零时长 (startMs === endMs, 即未讲到的幕) 的条目, 其余按 startMs
+ * 排序后逐条生成标准 SRT 块, 序号从 1 连续递增、不因跳过的幕留空号。
+ */
+export function buildSrtFromAlignedActs(
+  alignedActs: AlignedAct[],
+  narrations: Record<string, string>,
+): string {
+  const sorted = [...alignedActs]
+    .filter((a) => a.startMs !== a.endMs)
+    .sort((a, b) => a.startMs - b.startMs);
+
+  let output = '';
+  let index = 1;
+  for (const aligned of sorted) {
+    output += `${index}\n${formatTimestamp(aligned.startMs)} --> ${formatTimestamp(aligned.endMs)}\n${narrations[aligned.act]}\n\n`;
+    index += 1;
   }
 
   return output;

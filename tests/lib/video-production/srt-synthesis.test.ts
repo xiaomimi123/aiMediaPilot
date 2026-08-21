@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { synthesizeSrtFromSixActScript } from '@/lib/video-production/srt-synthesis';
+import { buildSrtFromAlignedActs, synthesizeSrtFromSixActScript } from '@/lib/video-production/srt-synthesis';
 import { ACT_KEYS, type ActKey, type ScriptAct } from '@/lib/script/six-act';
+import type { AlignedAct } from '@/lib/video-production/aligner-prompt';
 
 /** 构造一个最小合法幕, 供各测试按需覆盖字段 (风格对齐 tests/lib/script/six-act.test.ts)。 */
 function makeAct(act: ActKey, overrides: Partial<ScriptAct> = {}): ScriptAct {
@@ -127,5 +128,58 @@ describe('synthesizeSrtFromSixActScript', () => {
     expect(entries).toHaveLength(2);
     expect(entries[0].startsWith('1\n')).toBe(true);
     expect(entries[1].startsWith('2\n')).toBe(true);
+  });
+});
+
+describe('buildSrtFromAlignedActs', () => {
+  const narrations: Record<string, string> = {
+    hook: '开场钩子文本',
+    concept_a: '概念A文本',
+    concept_b: '概念B文本',
+    trivia: '冷知识文本',
+    synthesis: '知识串联文本',
+    punchline: '金句收尾文本',
+  };
+
+  it('6 幕全部非零时长 → 产出 6 个 SRT 块, 序号 1-6', () => {
+    const alignedActs: AlignedAct[] = ACT_KEYS.map((act, i) => ({
+      act,
+      startMs: i * 1000,
+      endMs: (i + 1) * 1000,
+    }));
+    const srt = buildSrtFromAlignedActs(alignedActs, narrations);
+    const entries = splitEntries(srt);
+    expect(entries).toHaveLength(6);
+    entries.forEach((entry, i) => {
+      expect(entry.startsWith(`${i + 1}\n`)).toBe(true);
+    });
+  });
+
+  it('某一幕零时长 (startMs===endMs) → 该幕被跳过, 序号仍连续', () => {
+    const alignedActs: AlignedAct[] = [
+      { act: 'hook', startMs: 0, endMs: 1000 },
+      { act: 'concept_a', startMs: 1000, endMs: 1000 },
+      { act: 'concept_b', startMs: 1000, endMs: 2000 },
+      { act: 'trivia', startMs: 2000, endMs: 3000 },
+      { act: 'synthesis', startMs: 3000, endMs: 4000 },
+      { act: 'punchline', startMs: 4000, endMs: 5000 },
+    ];
+    const srt = buildSrtFromAlignedActs(alignedActs, narrations);
+    const entries = splitEntries(srt);
+    expect(entries).toHaveLength(5);
+    expect(entries[0].startsWith('1\n')).toBe(true);
+    expect(entries[1].startsWith('2\n')).toBe(true);
+    expect(entries[4].startsWith('5\n')).toBe(true);
+    expect(entries.some((e) => e.includes('概念A文本'))).toBe(false);
+  });
+
+  it('时间戳格式正确: HH:MM:SS,mmm --> HH:MM:SS,mmm', () => {
+    const alignedActs: AlignedAct[] = [{ act: 'hook', startMs: 1234, endMs: 5678 }];
+    const srt = buildSrtFromAlignedActs(alignedActs, narrations);
+    const entries = splitEntries(srt);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatch(
+      /^1\n\d\d:\d\d:\d\d,\d\d\d --> \d\d:\d\d:\d\d,\d\d\d\n/,
+    );
   });
 });
