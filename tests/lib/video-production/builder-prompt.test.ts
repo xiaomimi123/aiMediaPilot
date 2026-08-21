@@ -14,6 +14,22 @@ describe('BUILDER.buildSystemPrompt', () => {
     const prompt = BUILDER.buildSystemPrompt(['#111', '#eee', '#f80']);
     expect(prompt).toContain('window.__timelines');
   });
+
+  it('不传 visualStyle 时，含"文字卡片"关键字符串（默认分支文本不变）', () => {
+    const prompt = BUILDER.buildSystemPrompt(['#111', '#eee', '#f80']);
+    expect(prompt).toContain('文字卡片');
+  });
+
+  it('显式传 visualStyle: "card" 时，含"文字卡片"关键字符串', () => {
+    const prompt = BUILDER.buildSystemPrompt(['#111', '#eee', '#f80'], 'card');
+    expect(prompt).toContain('文字卡片');
+  });
+
+  it('传 visualStyle: "illustration" 时，含"插画风格"关键字符串，不含"文字卡片"', () => {
+    const prompt = BUILDER.buildSystemPrompt(['#111', '#eee', '#f80'], 'illustration');
+    expect(prompt).toContain('插画风格');
+    expect(prompt).not.toContain('文字卡片');
+  });
 });
 
 describe('BUILDER.buildUserMessage', () => {

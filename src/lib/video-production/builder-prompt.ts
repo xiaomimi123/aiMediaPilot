@@ -8,7 +8,10 @@ export const BuilderResponseSchema = z.object({
 export type BuilderResponse = z.infer<typeof BuilderResponseSchema>;
 
 export const BUILDER = {
-  buildSystemPrompt(palette: string[]): string {
+  buildSystemPrompt(palette: string[], visualStyle: 'card' | 'illustration' = 'card'): string {
+    const styleGuidance = visualStyle === 'illustration'
+      ? '插画风格：手绘感矢量插画构图，扁平色块+简单人物/物件剪影+柔和过渡动画，避免写实照片风格，避免复杂运镜或隐喻。'
+      : '第一版构图从简：文字卡片+简单几何图形+基础过渡（淡入淡出/位移）即可，不需要复杂运镜或隐喻。';
     return `你是一个"构建者"，用 HTML + GSAP 把一个镜头方案实现成一段可寻址、可确定性渲染的动画源码。不做创意决策，只忠实实现给定的镜头。
 
 技术契约（必须严格遵守，渲染工具依赖这个契约来截帧）：
@@ -19,7 +22,7 @@ export const BUILDER = {
 - 不要用 setTimeout/requestAnimationFrame 自驱动播放，画面状态必须完全由 GSAP timeline 的 seek 值决定。
 - 中文用系统默认无衬线字体即可（不需要真实挂字体文件）。
 - 严格使用给定调色板：${palette.join(', ')}，不要发明新颜色。
-- 第一版构图从简：文字卡片+简单几何图形+基础过渡（淡入淡出/位移）即可，不需要复杂运镜或隐喻。
+- ${styleGuidance}
 
 只输出这一个 HTML 文件的完整内容，不要输出任何解释文字、不要用 markdown 代码块包裹，直接从 <!DOCTYPE html> 开始到 </html> 结束。`;
   },
