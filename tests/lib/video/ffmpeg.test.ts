@@ -6,6 +6,7 @@ import {
   buildExtractSingleFrameArgs,
   buildEncodeFramesArgs,
   buildConcatArgs,
+  buildCompositeCutawayArgs,
   parseProbeOutput,
 } from '@/lib/video/ffmpeg';
 
@@ -82,6 +83,51 @@ describe('buildConcatArgs', () => {
     expect(args).toContain('copy');
     expect(args).toContain('/tmp/list.txt');
     expect(args).toContain('/tmp/out.mp4');
+  });
+});
+
+describe('buildCompositeCutawayArgs', () => {
+  it('给定 1 个 segment, 生成含 filter_complex/源视频/B-roll/输出路径的参数', () => {
+    const args = buildCompositeCutawayArgs({
+      sourceVideoPath: '/tmp/source.mp4',
+      segments: [{ startMs: 1000, endMs: 2000, clipPath: '/tmp/broll.mp4' }],
+      outputPath: '/tmp/out.mp4',
+    });
+    expect(args).toContain('-filter_complex');
+    expect(args).toContain('/tmp/source.mp4');
+    expect(args).toContain('/tmp/broll.mp4');
+    expect(args).toContain('/tmp/out.mp4');
+    expect(args).toContain('[outv]');
+  });
+
+  it('按 startMs 防御性排序乱序 segments', () => {
+    const argsUnsorted = buildCompositeCutawayArgs({
+      sourceVideoPath: '/tmp/source.mp4',
+      segments: [
+        { startMs: 2000, endMs: 2500, clipPath: '/tmp/b.mp4' },
+        { startMs: 500, endMs: 1000, clipPath: '/tmp/a.mp4' },
+      ],
+      outputPath: '/tmp/out.mp4',
+    });
+    const filterIdx = argsUnsorted.indexOf('-filter_complex');
+    const filterComplex = argsUnsorted[filterIdx + 1];
+    // a.mp4 对应的 segment(startMs=500)排序后应先于 b.mp4(startMs=2000)出现在拼接顺序里
+    const aLabelPos = filterComplex.indexOf('[2:v]'); // a.mp4 是第二个 -i, 但排在前面处理
+    const bLabelPos = filterComplex.indexOf('[1:v]'); // b.mp4 是第一个 -i, 但排在后面处理
+    expect(aLabelPos).toBeGreaterThan(-1);
+    expect(bLabelPos).toBeGreaterThan(-1);
+    expect(aLabelPos).toBeLessThan(bLabelPos);
+  });
+
+  it('0 个 segment 时直通源视频的视频流和音频流', () => {
+    const args = buildCompositeCutawayArgs({
+      sourceVideoPath: '/tmp/source.mp4',
+      segments: [],
+      outputPath: '/tmp/out.mp4',
+    });
+    expect(args).not.toContain('-filter_complex');
+    expect(args).toContain('0:v');
+    expect(args).toContain('0:a');
   });
 });
 
