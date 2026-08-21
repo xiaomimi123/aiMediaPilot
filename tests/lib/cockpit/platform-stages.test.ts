@@ -200,10 +200,10 @@ describe('schedulableStagesFor', () => {
   });
 });
 
-// 十五期 C: deliveryMode 按 'ai-faceless' 分岔——AI 自动生成成片跳过 recording 阶段。
+// 十五期 C / 十九期: deliveryMode 按 'ppt-narration' 分岔——AI 自动生成成片跳过 recording 阶段。
 describe('stageFlowFor / isStageInFlow / nextStageFor / schedulableStagesFor — deliveryMode 分岔', () => {
-  it("stageFlowFor('douyin', 'ai-faceless') 跳过 recording, 6 项", () => {
-    expect(stageFlowFor('douyin', 'ai-faceless')).toEqual([
+  it("stageFlowFor('douyin', 'ppt-narration') 跳过 recording, 6 项", () => {
+    expect(stageFlowFor('douyin', 'ppt-narration')).toEqual([
       'inbox',
       'topic',
       'script',
@@ -219,25 +219,42 @@ describe('stageFlowFor / isStageInFlow / nextStageFor / schedulableStagesFor —
     expect(stageFlowFor('douyin')).toEqual(stageFlowFor('douyin', 'manual'));
   });
 
-  it('isStageInFlow: ai-faceless 下 recording 不在流内, manual 下仍在', () => {
-    expect(isStageInFlow('douyin', 'recording', 'ai-faceless')).toBe(false);
+  it('isStageInFlow: ppt-narration 下 recording 不在流内, manual 下仍在', () => {
+    expect(isStageInFlow('douyin', 'recording', 'ppt-narration')).toBe(false);
     expect(isStageInFlow('douyin', 'recording')).toBe(true);
     expect(isStageInFlow('douyin', 'recording', 'manual')).toBe(true);
   });
 
-  it('nextStageFor: ai-faceless 下 script 之后直接跳到 editing, manual 下仍是 recording', () => {
-    expect(nextStageFor('douyin', 'script', 'ai-faceless')).toBe('editing');
+  it('nextStageFor: ppt-narration 下 script 之后直接跳到 editing, manual 下仍是 recording', () => {
+    expect(nextStageFor('douyin', 'script', 'ppt-narration')).toBe('editing');
     expect(nextStageFor('douyin', 'script')).toBe('recording');
     expect(nextStageFor('douyin', 'script', 'manual')).toBe('recording');
   });
 
-  it('schedulableStagesFor: ai-faceless 下不含 recording', () => {
-    expect(schedulableStagesFor('douyin', 'ai-faceless')).not.toContain('recording');
-    expect(schedulableStagesFor('douyin', 'ai-faceless')).toEqual([
+  it('schedulableStagesFor: ppt-narration 下不含 recording', () => {
+    expect(schedulableStagesFor('douyin', 'ppt-narration')).not.toContain('recording');
+    expect(schedulableStagesFor('douyin', 'ppt-narration')).toEqual([
       'topic',
       'script',
       'editing',
       'publishing',
     ]);
+  });
+
+  it("stageFlowFor('douyin', 'talking-head-broll') 包含 recording, 7 项", () => {
+    expect(stageFlowFor('douyin', 'talking-head-broll')).toEqual([
+      'inbox',
+      'topic',
+      'script',
+      'recording',
+      'editing',
+      'publishing',
+      'review',
+    ]);
+  });
+
+  it("stageFlowFor('douyin', 'ppt-narration' / 'illustration-tts') 都不含 recording", () => {
+    expect(stageFlowFor('douyin', 'ppt-narration')).not.toContain('recording');
+    expect(stageFlowFor('douyin', 'illustration-tts')).not.toContain('recording');
   });
 });

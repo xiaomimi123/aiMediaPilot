@@ -111,6 +111,10 @@ export interface Review {
   completedAt: string;
 }
 
+// 十九期: 交付模式收敛类型 —— manual(手动出镜) / ppt-narration(AI 图文口播,
+// 原 ai-faceless 改名) / talking-head-broll(真人出镜 + B-roll) / illustration-tts(插画 TTS)。
+export type DeliveryMode = 'manual' | 'ppt-narration' | 'talking-head-broll' | 'illustration-tts';
+
 export interface ContentItem {
   id: string;
   title: string;
@@ -121,9 +125,9 @@ export interface ContentItem {
   platform: ContentPlatformEx;
   // 十期: 账号定位体系 —— 内容意图 (引流/建立信任/转化), 可写字段, 处理方式照 platform。
   intent: ContentIntent;
-  // 十五期 C: 交付模式 (手动出镜/AI 自动生成无人出镜成片), 可选, 缺省=manual, 零迁移。
-  // 驱动 platform-stages.ts 的 stageFlowFor 分岔 (ai-faceless 跳过 recording 阶段)。
-  deliveryMode?: 'manual' | 'ai-faceless';
+  // 十五期 C: 交付模式 (手动出镜/AI 自动生成), 可选, 缺省=manual, 零迁移。
+  // 驱动 platform-stages.ts 的 stageFlowFor 分岔 (非 manual 模式各自跳过/替换阶段)。
+  deliveryMode?: DeliveryMode;
   stage: ContentStage;
   publicationStatus: "draft" | "scheduled" | "published";
   priority: "high" | "normal" | "low";
