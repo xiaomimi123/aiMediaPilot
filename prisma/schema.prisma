@@ -26,6 +26,7 @@ model User {
 
   aiConfigs                  AIConfig[]
   imageGenConfigs            ImageGenConfig[]
+  volcTtsConfig              VolcTtsConfig?
   accounts                   PlatformAccount[]
   contents                   Content[]
   schedules                  PublishTask[]
@@ -171,6 +172,19 @@ model ImageGenConfig {
   user User @relation(fields: [userId], references: [id])
 
   @@unique([userId, provider])
+}
+
+model VolcTtsConfig {
+  id          String   @id @default(cuid())
+  userId      String
+  appId       String
+  accessToken String // 加密存储 (src/lib/crypto.ts encrypt())
+  voiceType   String   @default("")
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId])
 }
 
 enum ImageProvider {
@@ -706,18 +720,22 @@ model CockpitContent {
 }
 
 model VideoProduction {
-  id             String   @id
-  userId         String
-  contentId      String
-  status         String   @default("queued") // queued|directing|building|assembling|preview_ready|approved|rendering|done|failed
-  srt            String
-  productionRoot String
-  previewPath    String?
-  masterPath     String?
-  errorMessage   String?
-  createdAt      String
-  updatedAt      String
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String   @id
+  userId          String
+  contentId       String
+  status          String   @default("queued") // queued|directing|building|assembling|preview_ready|approved|rendering|done|failed
+  mode            String   @default("ppt-narration") // ppt-narration|talking-head-broll|illustration-tts（交付方式，注意与 worker JobData.mode 的 preview/master 是两个不同概念）
+  srt             String
+  productionRoot  String
+  sourceVideoPath String? // talking-head-broll: 用户上传的出镜视频本地路径
+  alignedActs     Json? // talking-head-broll/illustration-tts: 对齐阶段产出的真实六幕边界 [{act,startMs,endMs}]
+  rawTranscript   Json? // talking-head-broll: ASR 原始 segments(真实原话, 供字幕烧录), illustration-tts 不填
+  previewPath     String?
+  masterPath      String?
+  errorMessage    String?
+  createdAt       String
+  updatedAt       String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, contentId])
 }
