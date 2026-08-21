@@ -175,12 +175,12 @@ model ImageGenConfig {
 }
 
 model VolcTtsConfig {
-  id          String   @id @default(cuid())
-  userId      String
-  appId       String
-  accessToken String // 加密存储 (src/lib/crypto.ts encrypt())
-  voiceType   String   @default("")
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  userId     String
+  apiKey     String   // 加密存储 (src/lib/crypto.ts encrypt()) — 替代原来错误假设的 appId+accessToken
+  resourceId String   @default("seed-tts-2.0")
+  voiceType  String   @default("zh_female_vv_uranus_bigtts")
+  createdAt  DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id])
 

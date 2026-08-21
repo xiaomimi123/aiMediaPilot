@@ -12,6 +12,7 @@ import { EditablePageTitle, creatorMark, dashboardTitle, normalizeGoalQuotas } f
 import { AIProviderCard } from "../settings-cards/ai-provider-card";
 import { BaselineCard } from "../settings-cards/baseline-card";
 import { RadarConfigCard } from "../settings-cards/radar-config-card";
+import { VolcTtsConfigCard } from "../settings-cards/volc-tts-config-card";
 
 const DESIGN_STYLE_OPTIONS: ReadonlyArray<{
   id: DesignStyle;
@@ -102,6 +103,7 @@ export function SettingsView({ state, pageTitle, updateTitle, updateDesignStyle,
       <AIProviderCard />
       <BaselineCard baselinePlays={settings.baselinePlays} retroMedian={settings.retroMedian} retroCount={settings.retroCount} />
       <RadarConfigCard />
+      <VolcTtsConfigCard />
     </div>
   </section>;
 }
