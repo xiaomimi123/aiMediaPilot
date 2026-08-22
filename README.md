@@ -398,7 +398,7 @@ describe 块, 3 条用例)。E2E 过程中产生的测试用 `ScriptDraft`(生�
   时间轴→ Director 分镜→ Builder 用插画视觉风格(手绘感矢量插画构图, 区别于读稿模式的文字卡片
   风格)生成分镜→ 画面拼接 + 配音轨拼接 + 混流→预览。
 
-**十六期收尾真实 E2E 走查** (`npm run dev` + 真实本机 Postgres/Redis/worker, 真花 DeepSeek 与
+**十九期收尾真实 E2E 走查** (`npm run dev` + 真实本机 Postgres/Redis/worker, 真花 DeepSeek 与
 火山引擎 TTS 额度, 未 mock 任何外部调用): 三种模式各走了一遍完整流水线并推进到
 `preview_ready`, 额外把三条都「确认导出」推进到 `done`(非必选项, 时间允许下顺带验证; master
 渲染复用预览阶段已持久化的 `direction.json`/分镜源码/对齐结果, 不重新消耗 DeepSeek/TTS 额度,
