@@ -10,7 +10,7 @@ const execFileAsync = promisify(execFile);
 const FFMPEG_BIN = process.env.FFMPEG_BIN || 'ffmpeg';
 
 /**
- * 回归测试 (二十期 code review 发现的真实 bug 修复)：illustration-tts 分支把逐幕 TTS
+ * 回归测试 (十九期 code review 发现的真实 bug 修复)：illustration-tts 分支把逐幕 TTS
  * 输出(mp3 编码内容)拼接成一条完整音轨时, 不能像视频 clip 拼接那样用 concatClips 的
  * `-c copy`——mp3 是帧编码, `-c copy` 在拼接点上不是采样点精确的, 会有可测量的时长漂移。
  * concatAudioTracks 改用 concat demuxer + `-c:a pcm_s16le` 强制重编码, 拼接点采样点精确对齐。

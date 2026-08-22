@@ -121,7 +121,7 @@ export function buildCaptionSrtFromTranscript(segments: TranscriptSegment[]): st
   return output;
 }
 
-/** 单幕 TTS 合成结果 (二十期): 每幕已合成语音的真实文件路径与真实时长。 */
+/** 单幕 TTS 合成结果 (十九期): 每幕已合成语音的真实文件路径与真实时长。 */
 export interface TtsActResult {
   act: ActKey;
   audioPath: string;
@@ -129,7 +129,7 @@ export interface TtsActResult {
 }
 
 /**
- * TTS 逐幕合成结果 → AlignedAct[] (二十期, 插画模式)。
+ * TTS 逐幕合成结果 → AlignedAct[] (十九期, 插画模式)。
  *
  * 与 ALIGNER (Task 4, ASR 驱动) 得到 AlignedAct 的方式不同——这里没有真人录音、
  * 也无需语义对齐: 每幕的语音是逐幕单独合成的, 天然按 results 数组顺序(六幕固定

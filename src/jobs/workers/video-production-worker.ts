@@ -304,7 +304,7 @@ async function handleTalkingHeadBroll(
 }
 
 /**
- * `illustration-tts` 交付模式 (二十期新增) —— 无出镜视频, 用火山引擎 TTS 逐幕合成配音,
+ * `illustration-tts` 交付模式 (十九期新增) —— 无出镜视频, 用火山引擎 TTS 逐幕合成配音,
  * 驱动纯 AI 插画分镜(BUILDER visualStyle='illustration')直接拼接。与另外两个分支的关键差异：
  * - 没有真人出镜视频/ASR，时间轴锚点来自 TTS 逐幕合成的真实音频时长(ttsResultsToAlignedActs)；
  * - 最终产物是"画面拼接(concatClips)+ TTS 配音轨拼接 + 混流(muxAudioTrack)"，
@@ -518,8 +518,8 @@ async function handleProduce(job: Job<JobData>) {
     }
 
     // 外层按交付模式(vp.mode，与本函数的 preview/master 渲染档是两个不同概念)分岔，
-    // 各交付模式的具体流程封装成独立函数——ppt-narration 与 talking-head-broll 互不干扰，
-    // 后续 illustration-tts (二十期) 可以直接照此形状新增一个分支，不需要改动这两个函数。
+    // 各交付模式的具体流程封装成独立函数——ppt-narration、talking-head-broll 与
+    // illustration-tts(十九期新增)互不干扰，照此形状新增分支不需要改动这两个函数。
     if (vp.mode === 'talking-head-broll') {
       await handleTalkingHeadBroll(vp, mode, setStatus, outputFileName, readyStatus, outputField);
     } else if (vp.mode === 'ppt-narration') {

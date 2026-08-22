@@ -861,17 +861,17 @@ src/
 │   │   ├── preflight/             # 视频分析 (Phase 1, L1) — 列表页已删, 子路由保留
 │   │   ├── script/                # 脚本生成详情页 (E) + 分发登记, `script/new` 为深度写稿入口
 │   │   └── retro-sync/            # 抖音半自动复盘 (C)
-│   └── api/v1/                    # 所有 API routes (含 topics/ distributions/ cockpit/workspace/ cockpit/inspirations/ douyin/auto-sync/trigger/ radar/{items,keywords,config,trigger,runs/latest}/ scripts/generate(五期 douyin 两阶段化)/ scripts/[id]/refine(五期新增)/ style/{profile,samples}(五期新增)/ scripts/[id]/images/{plan,route,archive}(七期新增: 出图计划/逐张生图/zip 打包)/ cockpit/video-productions/{[id],[id]/approve,[id]/file,latest}(十五期新增: 触发生成/状态轮询/确认导出/预览-成片文件流))
+│   └── api/v1/                    # 所有 API routes (含 topics/ distributions/ cockpit/workspace/ cockpit/inspirations/ douyin/auto-sync/trigger/ radar/{items,keywords,config,trigger,runs/latest}/ scripts/generate(五期 douyin 两阶段化)/ scripts/[id]/refine(五期新增)/ style/{profile,samples}(五期新增)/ scripts/[id]/images/{plan,route,archive}(七期新增: 出图计划/逐张生图/zip 打包)/ cockpit/video-productions/{[id],[id]/approve,[id]/file,latest}(十五期新增: 触发生成/状态轮询/确认导出/预览-成片文件流)/ cockpit/video-productions/[id]/upload-source(十九期新增: 真人出镜模式的出镜视频上传)/ tts/volc-config(十九期新增: 火山 TTS 单条配置读写))
 ├── components/
 │   ├── cockpit/                   # Creator Cockpit 移植主体
 │   │   ├── Cockpit.tsx             # 顶层组件: state + view 路由 (`NavView`, 三期起见 `lib/cockpit/view-routing.ts`) + 主题/onboarding (侧栏拖拽排序三期已移除)
 │   │   ├── views/                 # inspirations/radar(四期新增, 自取数)/momentum(含 schedule tab)/platform(五平台流水线页共用)/pipeline/analytics(含 goals+review tab) + settings.tsx (独立视图)
 │   │   ├── analytics/              # 二期 (T4) 从 components/dashboard/ 迁移重塑: prediction-panel/performance-panel + 7 个搬迁 widget + use-dashboard-summary hook
-│   │   ├── settings-cards/         # ai-provider-card, baseline-card (二期 T5) + radar-config-card (四期 T6) + style-profile-card (五期新增)
+│   │   ├── settings-cards/         # ai-provider-card, baseline-card (二期 T5) + radar-config-card (四期 T6) + style-profile-card (五期新增) + volc-tts-config-card (十九期新增: 火山 TTS 单条配置卡)
 │   │   ├── sidebar.tsx             # 全站共用侧栏 (cockpit 模式 + external 模式), 二期起「平台」外链组已移除, 四期新增「热点雷达」项
 │   │   ├── external-shell.tsx      # 站外页面外壳 (侧栏 + mobile-nav + 主题同步), 仅剩 /agent/discover /content/* 使用 (十七期起 /accounts 已删除)
 │   │   ├── content-drawer.tsx      # 内容详情抽屉, 二期 (T2) 脚本 tab 加入就地 AI 生成 + 标题实时建议; 五期新增素材框/时长/简报折叠区/分块渲染/换一版/整体指令; 六期新增挂载时懒加载拉回改稿 UI (parseDraftOutput) + 小红书两阶段面板(`XhsScriptPanel`, 与 douyin 分块面板共用 `ResearchBriefDetails` 素材简报子组件) + 素材框对小红书开放 + 生成/改稿/hook 动作四类互斥扩到小红书整稿指令; 七期新增「配图」区块 (一键全生成 + 并发 2 逐张渲染 + 单张重试 + 打包下载链接), 生图动作并入同一互斥矩阵
-│   │   ├── video-production-panel.tsx # 十五期新增: 无人出镜成片生成面板 (内容详情页「剪辑」tab, deliveryMode==='ai-faceless' 时替换原剪辑清单), 3 秒轮询状态 + 预览播放器 + 确认导出/重新生成/下载
+│   │   ├── video-production-panel.tsx # 十五期新增, 十九期扩展为三种 AI 交付方式共用: 内容详情页「剪辑」tab 上的成片生成面板, 按 deliveryMode prop ('ppt-narration'/'talking-head-broll'/'illustration-tts') 替换原剪辑清单, 3 秒轮询状态 + 预览播放器 + 确认导出/重新生成/下载
 │   │   ├── onboarding.tsx / shared.tsx
 │   ├── content/                   # script-form, script-result (深度写稿入口用), publish-checklist, prediction-card, 分发登记弹窗 etc
 │   └── layout/                    # main-layout.tsx (按路径决定是否套 ExternalShell)
@@ -880,7 +880,8 @@ src/
 │   ├── radar/                     # 四期新增: search.ts(SearchProvider 抽象 + Tavily 实现) / config.ts(RadarConfig 读写+加解密) / scoring.ts(titleFingerprint/clusterByTopic/composeHeat/applyTimeDecay 纯函数) / run.ts(runRadarScan 管线主体)
 │   ├── script/                    # 五期新增: research.ts(runResearch 两阶段生成的阶段一, 雷达种子+Tavily+素材框合并→DeepSeek 提炼简报) / style.ts(getStyleContext 风格上下文切换 + depositStyleSample 定稿沉淀)
 │   ├── image/                     # 七期新增: provider.ts(ImageProvider 抽象 + GptImageProvider, 直连 api.openai.com, b64_json 返回)
-│   ├── video-production/          # 十五期新增: srt-synthesis.ts(六幕脚本→SRT 纯函数) / director-prompt.ts + builder-prompt.ts(DeepSeek 导演/构建者两阶段 prompt+schema) / shot-renderer.ts(headless Chromium 逐帧截图→ffmpeg 编码单镜头 clip) / assets/gsap.min.js(构建者产出的 HTML 固定引入的本地 GSAP 资产)
+│   ├── video-production/          # 十五期新增: srt-synthesis.ts(六幕脚本→SRT 纯函数) / director-prompt.ts + builder-prompt.ts(DeepSeek 导演/构建者两阶段 prompt+schema) / shot-renderer.ts(headless Chromium 逐帧截图→ffmpeg 编码单镜头 clip) / assets/gsap.min.js(构建者产出的 HTML 固定引入的本地 GSAP 资产); 十九期新增: aligner-prompt.ts(真人出镜录音 → 六幕时间戳对齐的 DeepSeek prompt+schema)
+│   ├── tts/                       # 十九期新增: volcengine.ts(火山引擎/豆包语音 TTS 客户端封装, X-Api-Key 单 Key 鉴权 + resourceId 资源档位 + SSE 分行 JSON 响应拼接 mp3)
 │   ├── llm/                       # DeepSeekTextLLM + OpenAIVisionLLM + prompts/ (四期新增 radar-read.ts; 五期新增 research-brief.ts / script-write-douyin.ts / script-refine.ts; 七期新增 image-plan.ts / resolve-image-key.ts(gpt-image key 解析, 无 .env 回退))
 │   ├── pipeline/                  # deriveStage 纯函数 + platforms.ts 分发平台注册表
 │   ├── prediction/                # L1 formula + baseline
