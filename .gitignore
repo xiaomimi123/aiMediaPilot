@@ -16,3 +16,5 @@ prisma/migrations/dev.db*
 # Phase 3: user video uploads (analyzed content)
 uploads/
 vendor/
+# 十九期: AI 视频生成产物 (VIDEO_PRODUCTION_ROOT 默认值), 与 uploads/ 同类, 纯本机运行时产物
+video-productions/
