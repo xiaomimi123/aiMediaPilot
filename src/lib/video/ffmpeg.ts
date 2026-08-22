@@ -38,6 +38,35 @@ export async function probeVideo(videoPath: string): Promise<ProbeResult> {
   return parseProbeOutput(stdout);
 }
 
+export interface VideoDimensions {
+  width: number;
+  height: number;
+}
+
+export function buildProbeDimensionsArgs(videoPath: string): string[] {
+  return ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json', videoPath];
+}
+
+export function parseProbeDimensionsOutput(stdout: string): VideoDimensions {
+  const json = JSON.parse(stdout);
+  const stream = json?.streams?.[0];
+  if (!stream || typeof stream.width !== 'number' || typeof stream.height !== 'number') {
+    throw new Error('ffprobe output missing width/height');
+  }
+  return { width: stream.width, height: stream.height };
+}
+
+/**
+ * 探测视频画面宽高（真实走查发现：真人出镜素材(如手机竖拍 2160x3840)与
+ * Builder 固定产出的 1920x1080 横屏 B-roll 分镜尺寸不一致，`compositeCutawayVideo`
+ * 挖空替换合成时 concat filter 要求参与拼接的所有视频流尺寸严格一致，否则直接报错退出。
+ * 需要先知道源视频真实宽高，才能把 B-roll 分镜缩放/加黑边对齐到同一尺寸。
+ */
+export async function probeVideoDimensions(videoPath: string): Promise<VideoDimensions> {
+  const { stdout } = await execFileAsync(FFPROBE_BIN, buildProbeDimensionsArgs(videoPath), { timeout: 30_000 });
+  return parseProbeDimensionsOutput(stdout);
+}
+
 export interface ExtractFramesOpts {
   videoPath: string;
   framesDir: string;
@@ -189,6 +218,21 @@ export interface CompositeCutawayOpts {
 }
 
 /**
+ * `buildCompositeCutawayArgs` 专用扩展：真实源视频的画面宽高。B-roll 分镜由
+ * `renderShotToClip` 固定按 1920x1080 渲染(与 Builder 提示词的画布尺寸契约一致，见
+ * `builder-prompt.ts`)，但真人出镜素材常见不是这个尺寸——尤其是手机竖拍的抖音口播
+ * (真实走查用的 iPhone 素材是 2160x3840 竖屏)。concat filter 要求参与拼接的所有
+ * 视频流尺寸严格一致，尺寸不一致会直接报错退出(真实走查复现过这个崩溃：
+ * `Input link ... parameters (size 2160x3840 ...) do not match ... (1920x1080 ...)`).
+ * 调用方(`compositeCutawayVideo`)先用 `probeVideoDimensions` 探测源视频真实宽高，
+ * 再传进来，纯函数本身不做任何探测(保持可脱离真实文件系统单测)。
+ */
+export interface CompositeCutawayArgsOpts extends CompositeCutawayOpts {
+  sourceWidth: number;
+  sourceHeight: number;
+}
+
+/**
  * 挖空替换合成：把 sourceVideoPath 按 segments 时间点切成"原始片段/替换片段"交替序列，
  * 用 concat filter 拼成一条连续画面流；音频轨道始终整段直接用源文件的原始音轨，不做任何切分——
  * 画面切到 B-roll 期间，人声依然连续播放。
@@ -196,13 +240,14 @@ export interface CompositeCutawayOpts {
  * B-roll 时长对齐策略：每个 B-roll 输入都以 `-stream_loop -1` 打开(无限循环该输入文件)，
  * 再在 filter 里用 `trim=0:<segment 目标时长>` 精确截到 segment 需要的长度——
  * 这样无论 B-roll 素材本身比 segment 短(会被循环补齐)还是比 segment 长(会被直接截断)都能正确处理，
- * 不需要提前判断素材实际时长。
+ * 不需要提前判断素材实际时长。B-roll 分镜的固定 1920x1080 画布再用 `scale`+`pad` 缩放/加黑边对齐到
+ * 源视频真实尺寸(等比缩放不拉伸变形, 多出的空间用黑边填充), 源视频自身片段不做任何缩放(保持原画质)。
  *
  * 已知局限：如果某个 segment 的 endMs 恰好等于源视频总时长，尾部会生成一段 `trim=start=<end>`
  * (无 end 参数、理论上长度为 0) 的片段传给 concat，可能导致 ffmpeg 报错。当前实现未特殊处理这个
  * 边界(需要提前 ffprobe 源时长才能识别)，如果实际使用中遇到该场景需要额外处理。
  */
-export function buildCompositeCutawayArgs(opts: CompositeCutawayOpts): string[] {
+export function buildCompositeCutawayArgs(opts: CompositeCutawayArgsOpts): string[] {
   const indexed = opts.segments.map((seg, i) => ({ ...seg, inputIndex: i + 1 }));
   const sorted = [...indexed].sort((a, b) => a.startMs - b.startMs);
 
@@ -212,8 +257,12 @@ export function buildCompositeCutawayArgs(opts: CompositeCutawayOpts): string[] 
   }
 
   if (sorted.length === 0) {
-    // 没有 segment：原样直通源视频的视频流与音频流
-    return [...inputArgs, '-map', '0:v', '-map', '0:a', '-c:v', 'libx264', '-c:a', 'aac', opts.outputPath];
+    // 没有 segment：原样直通源视频的视频流与音频流。
+    // `0:a:0` 而非 `0:a`：真实 iPhone 录制的 .mov 常见不止一条音轨(如 iPhone 17 Pro Max
+    // 除标准 stereo AAC 外还会带一条 apple_apac 空间音频轨), `-map 0:a` 会把所有匹配的音频流
+    // 都映射进输出——ffmpeg 本机版本没有 apple_apac 解码器，整个命令直接报错退出。
+    // 只取索引 0 (即源文件里排第一的音轨, 实测就是人声主音轨) 规避这个问题。
+    return [...inputArgs, '-map', '0:v', '-map', '0:a:0', '-c:v', 'libx264', '-c:a', 'aac', opts.outputPath];
   }
 
   const filterParts: string[] = [];
@@ -232,7 +281,10 @@ export function buildCompositeCutawayArgs(opts: CompositeCutawayOpts): string[] 
     }
     const durSec = (seg.endMs - seg.startMs) / 1000;
     const label = `b${pieceIdx}`;
-    filterParts.push(`[${seg.inputIndex}:v]trim=start=0:end=${durSec},setpts=PTS-STARTPTS[${label}]`);
+    const { sourceWidth: W, sourceHeight: H } = opts;
+    filterParts.push(
+      `[${seg.inputIndex}:v]trim=start=0:end=${durSec},setpts=PTS-STARTPTS,scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1[${label}]`,
+    );
     concatLabels.push(`[${label}]`);
     pieceIdx++;
     cursorMs = seg.endMs;
@@ -250,7 +302,9 @@ export function buildCompositeCutawayArgs(opts: CompositeCutawayOpts): string[] 
     ...inputArgs,
     '-filter_complex', filterParts.join(';'),
     '-map', '[outv]',
-    '-map', '0:a',
+    // `0:a:0` 而非 `0:a`：同上——多音轨源文件下只取第一条音轨，避免 ffmpeg 因缺少
+    // 副音轨(如 apple_apac)解码器而整体失败。
+    '-map', '0:a:0',
     '-c:v', 'libx264',
     '-c:a', 'aac',
     opts.outputPath,
@@ -258,7 +312,8 @@ export function buildCompositeCutawayArgs(opts: CompositeCutawayOpts): string[] 
 }
 
 export async function compositeCutawayVideo(opts: CompositeCutawayOpts): Promise<void> {
-  await execFileAsync(FFMPEG_BIN, buildCompositeCutawayArgs(opts), { timeout: 600_000 });
+  const { width: sourceWidth, height: sourceHeight } = await probeVideoDimensions(opts.sourceVideoPath);
+  await execFileAsync(FFMPEG_BIN, buildCompositeCutawayArgs({ ...opts, sourceWidth, sourceHeight }), { timeout: 600_000 });
 }
 
 export interface BuildBurnCaptionsArgsOpts {

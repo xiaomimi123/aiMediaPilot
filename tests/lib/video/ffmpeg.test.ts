@@ -11,6 +11,8 @@ import {
   buildBurnCaptionsArgs,
   buildMuxAudioArgs,
   parseProbeOutput,
+  buildProbeDimensionsArgs,
+  parseProbeDimensionsOutput,
 } from '@/lib/video/ffmpeg';
 
 describe('buildProbeArgs', () => {
@@ -114,6 +116,8 @@ describe('buildCompositeCutawayArgs', () => {
       sourceVideoPath: '/tmp/source.mp4',
       segments: [{ startMs: 1000, endMs: 2000, clipPath: '/tmp/broll.mp4' }],
       outputPath: '/tmp/out.mp4',
+      sourceWidth: 1920,
+      sourceHeight: 1080,
     });
     expect(args).toContain('-filter_complex');
     expect(args).toContain('/tmp/source.mp4');
@@ -130,6 +134,8 @@ describe('buildCompositeCutawayArgs', () => {
         { startMs: 500, endMs: 1000, clipPath: '/tmp/a.mp4' },
       ],
       outputPath: '/tmp/out.mp4',
+      sourceWidth: 1920,
+      sourceHeight: 1080,
     });
     const filterIdx = argsUnsorted.indexOf('-filter_complex');
     const filterComplex = argsUnsorted[filterIdx + 1];
@@ -146,10 +152,51 @@ describe('buildCompositeCutawayArgs', () => {
       sourceVideoPath: '/tmp/source.mp4',
       segments: [],
       outputPath: '/tmp/out.mp4',
+      sourceWidth: 1920,
+      sourceHeight: 1080,
     });
     expect(args).not.toContain('-filter_complex');
     expect(args).toContain('0:v');
-    expect(args).toContain('0:a');
+    // 只取第一条音轨(0:a:0), 不是 0:a(会匹配源文件里全部音轨,
+    // 真实多音轨 .mov 素材下会因副音轨编解码器缺失导致 ffmpeg 报错, 见下方专项用例)
+    expect(args).toContain('0:a:0');
+  });
+
+  it('只映射第一条音轨(0:a:0), 不映射源文件全部音轨', () => {
+    // 真实场景: 现代 iPhone 录制的 .mov 常见不止一条音轨(标准 stereo AAC + 一条
+    // apple_apac 空间音频副轨), `-map 0:a` 会把两条都映射进输出, ffmpeg 本机版本
+    // 没有 apple_apac 解码器会导致整条合成命令直接报错退出(真实走查复现过这个崩溃)。
+    const args = buildCompositeCutawayArgs({
+      sourceVideoPath: '/tmp/source.mov',
+      segments: [{ startMs: 1000, endMs: 2000, clipPath: '/tmp/broll.mp4' }],
+      outputPath: '/tmp/out.mp4',
+      sourceWidth: 1920,
+      sourceHeight: 1080,
+    });
+    expect(args).toContain('0:a:0');
+    expect(args).not.toContain('0:a');
+  });
+
+  it('B-roll 分镜按源视频真实宽高 scale+pad 对齐(真实竖屏素材场景), 源视频自身片段不缩放', () => {
+    // 真实走查复现: 手机竖拍出镜素材 2160x3840, Builder 分镜固定 1920x1080 横屏,
+    // concat filter 要求所有参与拼接的视频流尺寸严格一致, 尺寸不一致会直接报错退出
+    // (`Input link ... parameters (size 2160x3840...) do not match ... (1920x1080...)`)。
+    const args = buildCompositeCutawayArgs({
+      sourceVideoPath: '/tmp/source.mov',
+      segments: [{ startMs: 1000, endMs: 2000, clipPath: '/tmp/broll.mp4' }],
+      outputPath: '/tmp/out.mp4',
+      sourceWidth: 2160,
+      sourceHeight: 3840,
+    });
+    const filterIdx = args.indexOf('-filter_complex');
+    const filterComplex = args[filterIdx + 1];
+    // B-roll 输入([1:v], 唯一的 segment)的 trim 之后必须紧跟 scale+pad 到源视频真实尺寸
+    expect(filterComplex).toMatch(
+      /\[1:v\]trim=start=0:end=1,setpts=PTS-STARTPTS,scale=2160:3840:force_original_aspect_ratio=decrease,pad=2160:3840:\(ow-iw\)\/2:\(oh-ih\)\/2:color=black,setsar=1\[b\d+\]/,
+    );
+    // 源视频自身片段([0:v]的 trim)不应该被 scale/pad 影响——它已经就是目标尺寸
+    const sourceSegmentMatch = filterComplex.match(/\[0:v\]trim=start=\d+,setpts=PTS-STARTPTS\[s\d+\]/);
+    expect(sourceSegmentMatch).not.toBeNull();
   });
 });
 
@@ -205,5 +252,32 @@ describe('parseProbeOutput', () => {
 
   it('duration 缺失抛错', () => {
     expect(() => parseProbeOutput(JSON.stringify({ format: { format_name: 'mp4' } }))).toThrow(/invalid duration/);
+  });
+});
+
+describe('buildProbeDimensionsArgs', () => {
+  it('构造 ffprobe 取第一条视频流的 width/height', () => {
+    const args = buildProbeDimensionsArgs('/tmp/a.mp4');
+    expect(args).toContain('-select_streams');
+    expect(args).toContain('v:0');
+    expect(args.join(' ')).toMatch(/stream=width,height/);
+    expect(args[args.length - 1]).toBe('/tmp/a.mp4');
+  });
+});
+
+describe('parseProbeDimensionsOutput', () => {
+  it('从 ffprobe JSON 解出 width/height', () => {
+    const json = JSON.stringify({ streams: [{ width: 2160, height: 3840 }] });
+    const result = parseProbeDimensionsOutput(json);
+    expect(result).toEqual({ width: 2160, height: 3840 });
+  });
+
+  it('损坏的 JSON 抛错', () => {
+    expect(() => parseProbeDimensionsOutput('not json')).toThrow();
+  });
+
+  it('streams 缺失或为空抛错', () => {
+    expect(() => parseProbeDimensionsOutput('{}')).toThrow(/missing width\/height/);
+    expect(() => parseProbeDimensionsOutput(JSON.stringify({ streams: [] }))).toThrow(/missing width\/height/);
   });
 });
