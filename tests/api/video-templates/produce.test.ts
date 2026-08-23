@@ -22,6 +22,11 @@ vi.mock('fs/promises', () => {
 });
 
 import { POST } from '@/app/api/v1/video-templates/[id]/produce/route';
+// 一致性测试特意不 mock draft-restore —— 要证明 produce 路由自己写进
+// scriptDraft.create 的 output 形状能被 worker 三处消费点唯一认的真实
+// parseDraftOutput 解析出 acts/four_dims, 而不是靠一个跟 parseDraftOutput 判别口径
+// 脱钩的假设自我证明。
+import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
 
 const SIX_ACT = {
   acts: ['hook', 'concept_a', 'concept_b', 'trivia', 'synthesis', 'punchline'].map((act) => ({
@@ -36,6 +41,13 @@ const SIX_ACT = {
   })),
   four_dims: { gain: 'g', surprise: 's', clarity: 'c', appeal: 'a' },
 };
+
+// `ScriptDraft.output` 的真实落库形状(照抄 scripts/generate/route.ts:194 的嵌套约定:
+// `script: { acts }` + 顶层 `four_dims`) —— `parseDraftOutput` 唯一认这个形状, 也是
+// video-production-worker.ts 三处消费点(handleTalkingHeadBroll/handleIllustrationTts/
+// loadNarrations)读六幕稿的唯一入口。Prisma 的 Json 列读回来是解析好的对象(不是
+// JSON 字符串), mock 也必须是对象, 不能再套一层 JSON.stringify。
+const NESTED_OUTPUT = { script: { acts: SIX_ACT.acts }, four_dims: SIX_ACT.four_dims };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -54,7 +66,7 @@ describe('POST /api/v1/video-templates/[id]/produce', () => {
     prismaMock.cockpitContent.findUnique.mockResolvedValue({
       id: 'c1', userId: 'user1', scriptDraftId: 'd1',
     });
-    prismaMock.scriptDraft.findUnique.mockResolvedValue({ id: 'd1', output: JSON.stringify(SIX_ACT) });
+    prismaMock.scriptDraft.findUnique.mockResolvedValue({ id: 'd1', output: NESTED_OUTPUT });
 
     const res = await POST(req({ contentId: 'c1' }) as any, { params: { id: 't1' } });
 
@@ -91,7 +103,7 @@ describe('POST /api/v1/video-templates/[id]/produce', () => {
       id: 't1', userId: 'user1', deliveryMode: 'talking-head-broll', voicePreset: null,
     });
     prismaMock.cockpitContent.findUnique.mockResolvedValue({ id: 'c1', userId: 'user1', scriptDraftId: 'd1' });
-    prismaMock.scriptDraft.findUnique.mockResolvedValue({ id: 'd1', output: JSON.stringify(SIX_ACT) });
+    prismaMock.scriptDraft.findUnique.mockResolvedValue({ id: 'd1', output: NESTED_OUTPUT });
 
     const res = await POST(req({ contentId: 'c1' }) as any, { params: { id: 't1' } });
 
@@ -129,5 +141,26 @@ describe('POST /api/v1/video-templates/[id]/produce', () => {
   it('script 形状不是合法六幕 → 400', async () => {
     const res = await POST(req({ script: { acts: [] } }) as any, { params: { id: 't1' } });
     expect(res.status).toBe(400);
+  });
+
+  // 跨路径一致性回归测试(修复 review 指出的 parseDraftOutput 不兼容后新增):
+  // 自动建卡分支写进 scriptDraft.create 的 output, 必须能被真实的(未 mock 的)
+  // parseDraftOutput 解析出 acts/four_dims —— 这正是 worker 三处消费点读六幕稿的
+  // 唯一入口。这个测试的价值在于它会对"写库形状"的回归失真:上一版把 output 写成
+  // 扁平 `{ acts, four_dims }`(没有 script 包装层)时, 这里会真的失败(证据见
+  // task-9-report.md 的 red→green 记录), 不是靠自我一致的假设通过。
+  it('script(粘贴/灵感出稿) 建卡时写进 scriptDraft.create 的 output 能被真实 parseDraftOutput 解析出 acts/four_dims', async () => {
+    prismaMock.cockpitContent.create.mockResolvedValue({ id: 'newc1', userId: 'user1' });
+    prismaMock.scriptDraft.create.mockResolvedValue({ id: 'newd1' });
+
+    const res = await POST(req({ script: SIX_ACT, title: '我的新内容' }) as any, { params: { id: 't1' } });
+
+    expect(res.status).toBe(200);
+    const writtenOutput = prismaMock.scriptDraft.create.mock.calls[0][0].data.output;
+    const parsed = parseDraftOutput(writtenOutput);
+    expect(parsed?.acts).toBeDefined();
+    expect(parsed?.four_dims).toBeDefined();
+    expect(parsed?.acts?.map((a) => a.act)).toEqual(SIX_ACT.acts.map((a) => a.act));
+    expect(parsed?.four_dims).toEqual(SIX_ACT.four_dims);
   });
 });

@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { videoProductionQueue } from '@/jobs/queue';
 import { synthesizeSrtFromSixActScript } from '@/lib/video-production/srt-synthesis';
 import { SixActScriptSchema, type ScriptAct } from '@/lib/script/six-act';
+import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
 import { bumpCockpitRev } from '@/lib/cockpit/server-store';
 
 /**
@@ -16,12 +17,16 @@ import { bumpCockpitRev } from '@/lib/cockpit/server-store';
  * - `script`: 粘贴/灵感出稿确认后的六幕稿 —— 自动建一张内容卡再发起, 让成片天然进入
  *   现有内容总览与复盘闭环, 而不是另起一套平行体系。
  *
- * 读取 `contentId` 分支下 `ScriptDraft.output` 时**不复用** `draft-restore.ts` 的
- * `parseDraftOutput` —— 那个解析器认的是 `/scripts/generate` 的落库形状
- * (`{ script: { acts }, four_dims, ... }`, acts 嵌在 `script` 键下)。本路由自己写的
- * `ScriptDraft`(见下面 script 分支)落的是 `SixActScriptSchema` 的原生扁平形状
- * (`{ acts, four_dims }`, 没有 `script` 包装层), 两种形状不通用, 直接用
- * `SixActScriptSchema` 校验/解析即可, 不必绕道 draft-restore 的多形态判别。
+ * 修复(收到 review 反馈后): `ScriptDraft.output` 落库/读取**必须**统一走
+ * `parseDraftOutput`(`draft-restore.ts`)认的嵌套形状 `{ script: { acts }, four_dims, ... }`
+ * —— 这不只是本路由自己的读取约定, 更是 `video-production-worker.ts` 里
+ * `handleTalkingHeadBroll`/`handleIllustrationTts`/`loadNarrations` 三处消费同一份
+ * `ScriptDraft.output` 时唯一认的判别入口。上一版把 script 分支写成扁平
+ * `{ acts, four_dims }`(没有 `script` 包装层), worker 侧 `parseDraftOutput` 解不出
+ * `acts`, 会导致「粘贴新写」「灵感出稿」两条来源在真人出镜/插画配音两种模式下
+ * 直接抛错「需要先生成六幕脚本」, 字幕烧录也会因 `loadNarrations` 拿到 `{}` 丢台词。
+ * 现在写库改回嵌套形状、contentId 分支的读取改回 `parseDraftOutput`, 与
+ * `video-productions/route.ts`/worker 保持同一套判别口径。
  */
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   let body: { contentId?: unknown; script?: unknown; title?: unknown };
@@ -40,13 +45,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const draft = content.scriptDraftId
       ? await prisma.scriptDraft.findUnique({ where: { id: content.scriptDraftId } })
       : null;
-    // ScriptDraft.output 是 Json 列, 真实 Prisma 读回来已是解析好的对象; 但也容错
-    // 处理字符串形态(例如测试 mock 直接塞了 JSON.stringify 的结果), 双路径都能解析。
-    const rawOutput = draft ? (typeof draft.output === 'string' ? safeJsonParse(draft.output) : draft.output) : null;
-    const parsed = rawOutput ? SixActScriptSchema.safeParse(rawOutput) : null;
-    if (!parsed?.success) return fail('需要先生成六幕脚本', 400);
+    const parsed = draft ? parseDraftOutput(draft.output) : null;
+    if (!parsed?.acts || !parsed.four_dims) return fail('需要先生成六幕脚本', 400);
     contentId = content.id;
-    acts = parsed.data.acts;
+    acts = parsed.acts;
   } else if (body.script) {
     const parsed = SixActScriptSchema.safeParse(body.script);
     if (!parsed.success) return fail('六幕脚本形状不合法', 400);
@@ -88,13 +90,26 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     // ScriptDraft 必填字段 (topic/niche) 照 prisma/schema.prisma 的 ScriptDraft model:
     // topic/niche 都是必填 String, 不是 Json 里的自由字段——topic 用写稿主题本身,
     // niche 与本路由写稿时用的默认垂类保持一致 (见 script/route.ts 的 DEFAULT_NICHE)。
+    //
+    // output 形状必须照抄 `scripts/generate/route.ts:194` 的嵌套约定
+    // (`script: { acts }` + 顶层 `four_dims`) —— 这是 `parseDraftOutput` 唯一认的判据,
+    // 也是 worker 三处消费点(见上方函数注释)读六幕稿的唯一入口。research/hooks/titles/
+    // cover 这几个字段属于完整写稿链路(研究/多候选标题与钩子/封面文案)的产物, 模板这条
+    // 简化路径(粘贴/灵感 → 直接六幕稿, 没有 research 阶段, 也没有多候选)天然没有,
+    // 缺省不写(parseDraftOutput 对应字段解析失败即跳过, 不影响 acts/four_dims 判别);
+    // durationSec 有模板配置就带上, 供改稿抽屉重开时时长选择器正确回填。
+    const durationSec = (template.scriptPrompt as { targetDurationSec?: number } | null)?.targetDurationSec;
     const draft = await prisma.scriptDraft.create({
       data: {
         userId: user.id,
         topic: title,
         niche: 'ai-knowledge',
         platform: 'douyin',
-        output: parsed.data as unknown as Prisma.InputJsonValue,
+        output: {
+          script: { acts: parsed.data.acts },
+          four_dims: parsed.data.four_dims,
+          ...(durationSec !== undefined ? { durationSec } : {}),
+        } as unknown as Prisma.InputJsonValue,
       },
     });
     await prisma.cockpitContent.update({
@@ -138,12 +153,4 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   }
 
   return ok({ videoProductionId: vp.id, status: vp.status, contentId });
-}
-
-function safeJsonParse(raw: string): unknown {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
 }
