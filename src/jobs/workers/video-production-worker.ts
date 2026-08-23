@@ -26,6 +26,7 @@ import type { TranscriptSegment } from '@/lib/llm/whisper';
 import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
 import { synthesizeVolcTts } from '@/lib/tts/volcengine';
 import { decrypt } from '@/lib/crypto';
+import { resolveTtsVoiceSelection, type VoiceSelectable } from '@/lib/video-production/voice-resolve';
 import { ttsResultsToAlignedActs, type TtsActResult } from '@/lib/video-production/srt-synthesis';
 import type { AlignedAct } from '@/lib/video-production/aligner-prompt';
 import type { DeliveryMode } from '@/lib/cockpit/model';
@@ -350,6 +351,18 @@ async function handleIllustrationTts(
     if (!ttsConfig) throw new Error('请先在设置页配置火山 TTS');
     const apiKey = decrypt(ttsConfig.apiKey);
 
+    // 音色/资源档位优先级(task-10b 缺口1): 本次任务的临时覆盖 > 模板 voicePreset > 全局配置兜底。
+    // apiKey 不参与这条链——它是账号级密钥, 上面已经直接从全局 ttsConfig 取好, 不受模板/覆盖影响。
+    // templateId 为空(内容详情页旧入口)时 template 为 null, 优先级链自然落到全局配置, 零迁移。
+    const template = vp.templateId
+      ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
+      : null;
+    const { voiceType, resourceId } = resolveTtsVoiceSelection({
+      voiceOverride: vp.voiceOverride as VoiceSelectable | null,
+      templateVoicePreset: (template?.voicePreset as VoiceSelectable | null) ?? null,
+      globalConfig: { voiceType: ttsConfig.voiceType, resourceId: ttsConfig.resourceId },
+    });
+
     const ttsResults: TtsActResult[] = [];
     for (const act of acts) {
       // 扩展名用 .mp3：synthesizeVolcTts 实际写出的是 mp3 编码字节(audio_params.format:'mp3')，
@@ -357,8 +370,8 @@ async function handleIllustrationTts(
       const audioPath = path.join(vp.productionRoot, `tts-${act.act}.mp3`);
       const { durationMs } = await synthesizeVolcTts(act.narration, audioPath, {
         apiKey,
-        voiceType: ttsConfig.voiceType,
-        resourceId: ttsConfig.resourceId,
+        voiceType,
+        resourceId,
       });
       ttsResults.push({ act: act.act, audioPath, durationMs });
     }

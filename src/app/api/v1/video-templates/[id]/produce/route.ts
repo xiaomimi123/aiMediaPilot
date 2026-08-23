@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
@@ -28,9 +29,23 @@ import { bumpCockpitRev } from '@/lib/cockpit/server-store';
  * 现在写库改回嵌套形状、contentId 分支的读取改回 `parseDraftOutput`, 与
  * `video-productions/route.ts`/worker 保持同一套判别口径。
  */
+// 缺口2(task-10b): 本次任务的临时配音覆盖, 只对 illustration-tts 有意义——但这里不按
+// 交付模式收窄校验, 因为字段本身跟交付模式无关, 校验该独立于"是否会被消费"存在。
+const VoiceOverrideSchema = z.object({
+  voiceType: z.string().min(1).optional(),
+  resourceId: z.string().min(1).optional(),
+}).strict();
+
 export async function POST(req: Request, { params }: { params: { id: string } }) {
-  let body: { contentId?: unknown; script?: unknown; title?: unknown };
+  let body: { contentId?: unknown; script?: unknown; title?: unknown; voiceOverride?: unknown };
   try { body = await req.json(); } catch { return fail('请求体不是合法 JSON', 400); }
+
+  let voiceOverride: Prisma.InputJsonValue | null = null;
+  if (body.voiceOverride !== undefined) {
+    const parsedVoiceOverride = VoiceOverrideSchema.safeParse(body.voiceOverride);
+    if (!parsedVoiceOverride.success) return fail('临时配音覆盖格式不合法', 400);
+    voiceOverride = parsedVoiceOverride.data as unknown as Prisma.InputJsonValue;
+  }
 
   const user = await getOrCreateDefaultUser();
   const template = await prisma.videoTemplate.findUnique({ where: { id: params.id } });
@@ -138,6 +153,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       contentId,
       templateId: template.id,
       mode: template.deliveryMode,
+      // Prisma 对可空 Json 字段的"未设置"用 undefined 表达(与本项目 palette/voicePreset
+      // 等既有 Json? 字段一致的惯用法), null 需要专门的 Prisma.JsonNull——这里没有那个必要。
+      voiceOverride: voiceOverride ?? undefined,
       srt,
       productionRoot,
       status: 'queued',

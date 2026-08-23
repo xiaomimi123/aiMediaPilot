@@ -143,6 +143,84 @@ describe('POST /api/v1/video-templates/[id]/produce', () => {
     expect(res.status).toBe(400);
   });
 
+  // 缺口2(task-10b): produce 路由接受临时配音覆盖 voiceOverride, 持久化到 VideoProduction
+  // 供 worker 消费(见 voice-resolve.test.ts 与 worker 侧的优先级链接线)。
+  describe('voiceOverride(缺口2)', () => {
+    beforeEach(() => {
+      prismaMock.cockpitContent.findUnique.mockResolvedValue({ id: 'c1', userId: 'user1', scriptDraftId: 'd1' });
+      prismaMock.scriptDraft.findUnique.mockResolvedValue({ id: 'd1', output: NESTED_OUTPUT });
+    });
+
+    it('带合法 voiceOverride 时落库', async () => {
+      prismaMock.videoTemplate.findUnique.mockResolvedValue({
+        id: 't1', userId: 'user1', deliveryMode: 'illustration-tts', voicePreset: { voiceType: 'template-voice' },
+      });
+
+      const res = await POST(
+        req({ contentId: 'c1', voiceOverride: { voiceType: 'override-voice', resourceId: 'override-resource' } }) as any,
+        { params: { id: 't1' } },
+      );
+
+      expect(res.status).toBe(200);
+      const created = prismaMock.videoProduction.create.mock.calls[0][0].data;
+      expect(created.voiceOverride).toEqual({ voiceType: 'override-voice', resourceId: 'override-resource' });
+    });
+
+    it('voiceOverride 非法(字段不是字符串) → 400, 不建任务', async () => {
+      prismaMock.videoTemplate.findUnique.mockResolvedValue({
+        id: 't1', userId: 'user1', deliveryMode: 'illustration-tts', voicePreset: null,
+      });
+
+      const res = await POST(
+        req({ contentId: 'c1', voiceOverride: { voiceType: 123 } }) as any,
+        { params: { id: 't1' } },
+      );
+
+      expect(res.status).toBe(400);
+      expect(prismaMock.videoProduction.create).not.toHaveBeenCalled();
+    });
+
+    it('voiceOverride 非法(空字符串) → 400, 不建任务', async () => {
+      prismaMock.videoTemplate.findUnique.mockResolvedValue({
+        id: 't1', userId: 'user1', deliveryMode: 'illustration-tts', voicePreset: null,
+      });
+
+      const res = await POST(
+        req({ contentId: 'c1', voiceOverride: { voiceType: '' } }) as any,
+        { params: { id: 't1' } },
+      );
+
+      expect(res.status).toBe(400);
+      expect(prismaMock.videoProduction.create).not.toHaveBeenCalled();
+    });
+
+    it('不传 voiceOverride 时该字段为空', async () => {
+      prismaMock.videoTemplate.findUnique.mockResolvedValue({
+        id: 't1', userId: 'user1', deliveryMode: 'illustration-tts', voicePreset: null,
+      });
+
+      const res = await POST(req({ contentId: 'c1' }) as any, { params: { id: 't1' } });
+
+      expect(res.status).toBe(200);
+      const created = prismaMock.videoProduction.create.mock.calls[0][0].data;
+      expect(created.voiceOverride).toBeUndefined();
+    });
+
+    it('非 illustration-tts 模板传了 voiceOverride 不报错(前端不会传, 但要防御)', async () => {
+      prismaMock.videoTemplate.findUnique.mockResolvedValue({
+        id: 't1', userId: 'user1', deliveryMode: 'ppt-narration', voicePreset: null,
+      });
+
+      const res = await POST(
+        req({ contentId: 'c1', voiceOverride: { voiceType: 'override-voice' } }) as any,
+        { params: { id: 't1' } },
+      );
+
+      expect(res.status).toBe(200);
+      expect(prismaMock.videoProduction.create).toHaveBeenCalledTimes(1);
+    });
+  });
+
   // 跨路径一致性回归测试(修复 review 指出的 parseDraftOutput 不兼容后新增):
   // 自动建卡分支写进 scriptDraft.create 的 output, 必须能被真实的(未 mock 的)
   // parseDraftOutput 解析出 acts/four_dims —— 这正是 worker 三处消费点读六幕稿的

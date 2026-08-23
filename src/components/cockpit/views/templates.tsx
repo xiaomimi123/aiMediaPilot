@@ -63,6 +63,10 @@ interface HistoryProduction {
   id: string;
   status: string;
   masterPath: string | null;
+  mode?: string;
+  previewPath?: string | null;
+  contentId?: string;
+  createdAt?: string;
 }
 
 /** 统一读取 `{ data }` 包装体——`ok`/`success` 字段名两处不一致(见 api.ts 与本任务测试
@@ -129,6 +133,7 @@ export function TemplatesView() {
   const [scriptError, setScriptError] = useState<string | null>(null);
   const [generatedScript, setGeneratedScript] = useState<SixActPreview | null>(null);
   const [uploadVideoFile, setUploadVideoFile] = useState<File | null>(null);
+  const [voiceTypeInput, setVoiceTypeInput] = useState("");
   const [producing, setProducing] = useState(false);
   const [produceError, setProduceError] = useState<string | null>(null);
   const [producedContentId, setProducedContentId] = useState<string | null>(null);
@@ -186,6 +191,7 @@ export function TemplatesView() {
     setGeneratedScript(null);
     setScriptError(null);
     setUploadVideoFile(null);
+    setVoiceTypeInput(template.voicePreset?.voiceType ?? "");
     setProduceError(null);
     setProducedContentId(null);
     setHistory([]);
@@ -305,9 +311,17 @@ export function TemplatesView() {
     setProducing(true);
     setProduceError(null);
     try {
-      const body = scriptSource === "existing"
-        ? { contentId: selectedContentId }
-        : { script: generatedScript };
+      // 只有真的改动过配音音色才带 voiceOverride——原样把模板预设值回传会让 produce 路由
+      // 把"用模板预设"误判成"本次要临时覆盖", 语义上不是一回事(task-10b 缺口2)。
+      const trimmedVoiceType = voiceTypeInput.trim();
+      const templateVoiceType = activeTemplate.voicePreset?.voiceType ?? "";
+      const voiceOverride = activeTemplate.deliveryMode === "illustration-tts" && trimmedVoiceType && trimmedVoiceType !== templateVoiceType
+        ? { voiceType: trimmedVoiceType }
+        : undefined;
+      const body = {
+        ...(scriptSource === "existing" ? { contentId: selectedContentId } : { script: generatedScript }),
+        ...(voiceOverride ? { voiceOverride } : {}),
+      };
       const res = await fetch(`/api/v1/video-templates/${activeTemplate.id}/produce`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -325,7 +339,11 @@ export function TemplatesView() {
         });
       }
 
-      setHistory((prev) => [{ id: data.videoProductionId, status: data.status, masterPath: null }, ...prev]);
+      setHistory((prev) => [{
+        id: data.videoProductionId, status: data.status, masterPath: null,
+        mode: activeTemplate.deliveryMode, previewPath: null, contentId: data.contentId,
+        createdAt: new Date().toISOString(),
+      }, ...prev]);
       setProducedContentId(data.contentId);
     } catch {
       setProduceError("发起生成失败，请检查网络后重试");
@@ -334,8 +352,19 @@ export function TemplatesView() {
     }
   }
 
-  // 历史出片轮询——没有按模板列出成片的后端接口(见 task-10-report.md 记录的契约缺口),
-  // 只能轮询本次会话里通过向导发起过的那几条, 刷新页面即丢失。
+  // 打开向导时从后端拉取本模板的历史出片列表(task-10b 缺口3, 补齐 task-10-report.md
+  // 记录的契约缺口)——不再只是会话内临时列表, 刷新页面/重新进入模板都能看到之前的记录。
+  useEffect(() => {
+    if (mode !== "produce" || !activeTemplate) return;
+    let cancelled = false;
+    fetch(`/api/v1/video-templates/${activeTemplate.id}/productions`)
+      .then((res) => readData<{ productions: HistoryProduction[] }>(res))
+      .then((data) => { if (!cancelled) setHistory(data?.productions ?? []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [mode, activeTemplate]);
+
+  // 历史列表里未完成的记录仍需要轮询状态——上面的接口只在打开向导时拉一次快照。
   useEffect(() => {
     const pending = history.filter((h) => !["done", "failed"].includes(h.status));
     if (!pending.length) return;
@@ -429,8 +458,11 @@ export function TemplatesView() {
       </section> : null}
 
       {currentStep === "voice" ? <section className="panel template-wizard-panel">
-        <p>本模板默认配音：{activeTemplate.voicePreset?.voiceType ?? "未设置"}</p>
-        <small className="field-hint">如需更换默认配音，请回到「编辑」修改并保存模板——生成接口只读模板已保存的配音设置，向导内不支持临时覆盖。</small>
+        <label className="field">
+          <span>配音音色（可临时覆盖）</span>
+          <input value={voiceTypeInput} onChange={(e) => setVoiceTypeInput(e.target.value)} placeholder="例如 zh_female_vv_uranus_bigtts" />
+        </label>
+        <small className="field-hint">默认带出模板保存的配音音色，可在此临时修改，仅本次生成生效，不会改动模板本身。</small>
       </section> : null}
 
       {currentStep === "produce" ? <section className="panel template-wizard-panel">
@@ -447,7 +479,7 @@ export function TemplatesView() {
       </div> : null}
 
       {history.length ? <section className="panel template-history-panel">
-        <div className="panel-heading"><div><span className="eyebrow">HISTORY</span><h2>本次会话出片记录</h2></div></div>
+        <div className="panel-heading"><div><span className="eyebrow">HISTORY</span><h2>本模板历史出片</h2></div></div>
         <ul className="template-history-list">
           {history.map((h) => <li key={h.id}>
             <span>{PRODUCTION_STATUS_LABELS[h.status] ?? h.status}</span>
