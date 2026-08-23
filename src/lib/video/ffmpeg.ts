@@ -467,3 +467,139 @@ export async function mixBgm(opts: Omit<MixBgmOpts, 'hasVoiceTrack'>): Promise<v
   const hasVoiceTrack = await hasAudioStream(opts.videoPath);
   await execFileAsync(FFMPEG_BIN, buildMixBgmArgs({ ...opts, hasVoiceTrack }), { timeout: 600_000 });
 }
+
+export interface ConcatWithReencodeOpts {
+  videoPaths: string[];
+  targetWidth: number;
+  targetHeight: number;
+  outputPath: string;
+  /**
+   * 每一路是否含音轨(与 videoPaths 顺序对应), 省略的路视为"有音轨"。
+   *
+   * 真实验证偏差(与本任务 brief 字面不同, 有依据): brief 原方案对每一路都用
+   * `[i:a?]` 可选流标记, 指望没有音轨的输入被 ffmpeg 静默跳过、只留 anullsrc 参与
+   * amix。本机真实 ffmpeg 9.0.1 实测: 当某路输入确实不存在音频流时, `?` 在
+   * `-filter_complex` 里不生效, 直接报错退出——
+   * `Stream specifier ':a?' in filtergraph description ... matches no streams.`
+   * (`?` 是 `-map` 选项的语义, 不是 filtergraph linklabel 的语义; 同一条流若真实
+   * 存在, `[i:a?]` 能正常工作, 只有"确实不存在"这个分支会炸)。因此不能像
+   * `buildCompositeCutawayArgs` 那样在纯函数内部对音轨存在性做静默假设——必须由
+   * 调用方(`attachIntroOutro`)先用 `hasAudioStream` 逐路探测, 显式告知每一路有没有
+   * 音轨, 纯函数据此决定该路是 `amix` 真实音轨与静音, 还是直接把 anullsrc 当作该路
+   * 音轨(不引用任何不存在的 `i:a` 流)。
+   */
+  hasAudioFlags?: boolean[];
+  /**
+   * 每一路的真实时长(秒, 与 videoPaths 顺序对应), 用于把该路的 anullsrc 裁剪到
+   * 对应长度。真实验证发现的第二处偏差: anullsrc 输入固定开 `-t 3600` 兜底"够长",
+   * 对无音轨路(`hasAudioFlags[i] === false`)直接把这路静音源重打标签当整段音轨时,
+   * concat filter 的 a=1 段落要等该段所有流都到 EOF 才切下一段——静音源不裁剪的话
+   * 整体输出时长会被拖到 3600s+ 量级(真实集成测试复现: 输出探测到 durationSec≈3606,
+   * 而不是预期的 ~8)。省略时保留原始未裁剪行为(仅用于无需真实执行的纯函数单测)。
+   */
+  durationsSec?: number[];
+}
+
+/**
+ * 重编码式拼接 —— 用于把片头/正片/片尾这类**非同源**素材接在一起。
+ * 与 `buildConcatArgs`(concat demuxer + `-c copy`)的关键差异:
+ * - `-c copy` 只对同一渲染器产出、编码参数严格一致的分镜安全; 用户自己上传的
+ *   片头片尾编码参数任意, 字节拼接会漂移甚至直接失败(十九期已实测, 见 buildConcatAudioArgs 注释)。
+ * - concat filter 要求所有输入流尺寸/SAR 严格一致, 所以每一路都 scale+pad 到正片尺寸
+ *   (等比缩放不变形, 多余空间补黑边)。
+ * - 无音轨的片段参与 `concat=a=1` 会直接报错, 所以每一路都额外开一个 anullsrc 静音输入
+ *   兜底; 有音轨的路与静音 amix(听感不变), 没音轨的路直接把静音源当作该路音轨
+ *   (`hasAudioFlags` 的由来见上方接口注释)。
+ */
+export function buildConcatWithReencodeArgs(opts: ConcatWithReencodeOpts): string[] {
+  const { targetWidth: W, targetHeight: H } = opts;
+  const inputArgs: string[] = ['-y'];
+  const filterParts: string[] = [];
+  const concatLabels: string[] = [];
+
+  opts.videoPaths.forEach((p, i) => {
+    inputArgs.push('-i', p);
+    // 每个真实输入后紧跟一路无限长的静音源(靠 concat 的 v/a 段长度收敛, 不会拖长输出)
+    inputArgs.push('-f', 'lavfi', '-t', '3600', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100');
+    const vIn = i * 2;
+    const aNull = i * 2 + 1;
+    filterParts.push(
+      `[${vIn}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30[v${i}]`,
+    );
+    const dur = opts.durationsSec?.[i];
+    let anullRef = `${aNull}:a`;
+    if (dur !== undefined) {
+      filterParts.push(`[${aNull}:a]atrim=0:${dur},asetpts=PTS-STARTPTS[an${i}]`);
+      anullRef = `an${i}`;
+    }
+
+    const hasAudio = opts.hasAudioFlags ? opts.hasAudioFlags[i] !== false : true;
+    if (hasAudio) {
+      // `${vIn}:a:0` 而非 `${vIn}:a`: 与 `compositeCutawayVideo`/`buildMixBgmArgs`
+      // 同源的既定约定——用户上传的片头片尾若是 iPhone 直出的 .mov, 可能带 apple_apac
+      // 空间音频副轨, 显式只取每路输入的第一条音频流, 不依赖 filtergraph 标签在
+      // 有歧义时"静默取第一条"的未文档化行为。
+      filterParts.push(
+        `[${vIn}:a:0][${anullRef}]amix=inputs=2:duration=first:dropout_transition=0,aresample=44100[a${i}]`,
+      );
+    } else {
+      // 不引用 `[${vIn}:a:0]` —— 该路确实没有音频流, 直接把(裁剪过的)静音源重打标签当作该路音轨。
+      filterParts.push(`[${anullRef}]anull[a${i}]`);
+    }
+    concatLabels.push(`[v${i}][a${i}]`);
+  });
+
+  filterParts.push(`${concatLabels.join('')}concat=n=${opts.videoPaths.length}:v=1:a=1[outv][outa]`);
+
+  return [
+    ...inputArgs,
+    '-filter_complex', filterParts.join(';'),
+    '-map', '[outv]',
+    '-map', '[outa]',
+    '-c:v', 'libx264',
+    '-c:a', 'aac',
+    opts.outputPath,
+  ];
+}
+
+export interface AttachIntroOutroOpts {
+  videoPath: string;
+  introPath?: string | null;
+  outroPath?: string | null;
+  outputPath: string;
+}
+
+/**
+ * 把片头/片尾接到正片前后。两者都没配时直接把正片复制到 outputPath(不白跑一次转码)。
+ * 目标尺寸取**正片**的真实尺寸 —— 片头片尾迁就正片, 而不是反过来。
+ */
+export async function attachIntroOutro(opts: AttachIntroOutroOpts): Promise<void> {
+  const paths = [opts.introPath, opts.videoPath, opts.outroPath].filter(
+    (p): p is string => typeof p === 'string' && p.length > 0,
+  );
+  if (paths.length === 1) {
+    await fs.copyFile(opts.videoPath, opts.outputPath);
+    return;
+  }
+  const { width, height } = await probeVideoDimensions(opts.videoPath);
+  // 逐路探测音轨存在性 —— 原因见 `ConcatWithReencodeOpts.hasAudioFlags` 注释:
+  // 真实 ffmpeg 不接受在 filtergraph 里对确实不存在的流用 `?` 静默跳过。
+  // 逐路探测真实时长 —— 原因见 `ConcatWithReencodeOpts.durationsSec` 注释:
+  // 无音轨路的 anullsrc 不裁剪到该路真实时长, concat 会被拖到静音源的 3600s 长度。
+  const [hasAudioFlags, durationsSec] = await Promise.all([
+    Promise.all(paths.map((p) => hasAudioStream(p))),
+    Promise.all(paths.map((p) => probeVideo(p).then((r) => r.durationSec))),
+  ]);
+  await execFileAsync(
+    FFMPEG_BIN,
+    buildConcatWithReencodeArgs({
+      videoPaths: paths,
+      targetWidth: width,
+      targetHeight: height,
+      hasAudioFlags,
+      durationsSec,
+      outputPath: opts.outputPath,
+    }),
+    { timeout: 900_000 },
+  );
+}

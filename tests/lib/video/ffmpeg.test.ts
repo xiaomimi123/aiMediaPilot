@@ -16,6 +16,7 @@ import {
   buildMixBgmArgs,
   buildProbeAudioStreamArgs,
   parseHasAudioStream,
+  buildConcatWithReencodeArgs,
 } from '@/lib/video/ffmpeg';
 
 describe('buildProbeArgs', () => {
@@ -347,6 +348,57 @@ describe('buildMixBgmArgs', () => {
       hasVoiceTrack: true,
     });
     expect(args).toContain('0:v:0');
+  });
+});
+
+describe('buildConcatWithReencodeArgs', () => {
+  it('每个输入都 scale+pad 到目标尺寸, 用 concat filter 而非 -c copy', () => {
+    const args = buildConcatWithReencodeArgs({
+      videoPaths: ['/tmp/intro.mp4', '/tmp/main.mp4'],
+      targetWidth: 1080,
+      targetHeight: 1920,
+      outputPath: '/tmp/out.mp4',
+    });
+    expect(args).not.toContain('copy');
+    const filter = args[args.indexOf('-filter_complex') + 1];
+    expect(filter).toContain('scale=1080:1920:force_original_aspect_ratio=decrease');
+    expect(filter).toContain('pad=1080:1920');
+    expect(filter).toContain('concat=n=2:v=1:a=1');
+    expect(args).toContain('libx264');
+    expect(args).toContain('aac');
+  });
+
+  it('每个输入都补一路静音轨兜底, 避免无声片段让 concat a=1 失败', () => {
+    const args = buildConcatWithReencodeArgs({
+      videoPaths: ['/tmp/a.mp4', '/tmp/b.mp4'],
+      targetWidth: 1920,
+      targetHeight: 1080,
+      outputPath: '/tmp/out.mp4',
+    });
+    // 每个输入后面都跟一路 anullsrc 输入, 用 amix 与真实音轨合并(无音轨时即静音)
+    const anullCount = args.filter((a) => typeof a === 'string' && a.includes('anullsrc')).length;
+    expect(anullCount).toBe(2);
+  });
+
+  it('单个输入也能正常构造(concat=n=1)', () => {
+    const args = buildConcatWithReencodeArgs({
+      videoPaths: ['/tmp/only.mp4'],
+      targetWidth: 1920,
+      targetHeight: 1080,
+      outputPath: '/tmp/out.mp4',
+    });
+    const filter = args[args.indexOf('-filter_complex') + 1];
+    expect(filter).toContain('concat=n=1:v=1:a=1');
+  });
+
+  it('输出路径永远是最后一个参数', () => {
+    const args = buildConcatWithReencodeArgs({
+      videoPaths: ['/tmp/a.mp4'],
+      targetWidth: 1920,
+      targetHeight: 1080,
+      outputPath: '/tmp/final.mp4',
+    });
+    expect(args[args.length - 1]).toBe('/tmp/final.mp4');
   });
 });
 
