@@ -18,3 +18,7 @@ uploads/
 vendor/
 # 十九期: AI 视频生成产物 (VIDEO_PRODUCTION_ROOT 默认值), 与 uploads/ 同类, 纯本机运行时产物
 video-productions/
+# 二十期: 模板素材 (VIDEO_TEMPLATE_ROOT 默认值), 与 video-productions/ 同类, 纯本机运行时产物
+# 用根锚定 (/) 而非 video-productions/ 那种不锚定写法 —— 源码里同样存在
+# src/app/api/v1/video-templates/、tests/api/video-templates/ 目录, 不锚定会把它们也吃掉。
+/video-templates/
