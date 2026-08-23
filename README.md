@@ -440,6 +440,75 @@ describe 块, 3 条用例)。E2E 过程中产生的测试用 `ScriptDraft`(生�
 - **插画动画形式必须先配置火山 TTS 才能用**——「设置」页没有配置有效的 `apiKey` 时,
   `illustration-tts` 生成会在 directing 阶段直接失败并提示去设置页配置, 不会静默跳过配音。
 
+### 视频模板板块 (二十期新增)
+
+一句话: 十九期的三种 AI 交付模式(读稿/口播/插画)每次生成都要重新配一遍参数; 二十期新增侧栏
+「模板」板块, 把交付模式+视觉风格、配音音色预设、写稿提示、字幕/BGM/片头片尾包装样式固化为
+可复用的**视频模板**, 出片流程收敛为「选模板 → 定文案 → 自动出片」, 并一次性补齐管线原来缺失
+的包装能力(样式化字幕/BGM 混音/片头片尾拼接)。详见
+`docs/superpowers/specs/2026-08-23-video-template-design.md`。
+
+**用法**: 侧栏常驻项新增「模板」(十六期收窄后的账号定位/灵感库选题/热点雷达/内容数据分析 4 项之间, 排在热点雷达之后、内容数据分析之前, 现为 5 项), 首次进入自动播种 3 个内置预设(图文口播/真人出镜+B-roll/
+插画配音各一, `isPreset=true` 仅作 UI 徽标, 可正常改/复制/删除, 播种只在该用户 0 条模板时
+发生, 幂等); 模板卡片「用它出片」进出片向导, 步骤随模板动态收缩: **定文案**(三 tab——选已
+定稿六幕稿/粘贴新写/从灵感选题出稿, 后两种生成六幕稿预览、确认后自动建一张 `CockpitContent`
+落入内容总览与复盘闭环)→ **上传出镜视频**(仅 `talking-head-broll` 模板出现)→ **确认配音**
+(仅 `illustration-tts` 模板出现, 默认带出模板 `voicePreset.voiceType` 可临时覆盖一次)→
+**生成与审片**(复用十九期的排队/预览/确认导出面板)。内容详情页现有生成入口保持现状不动
+(模板驱动的生成流程只在模板页发起)。
+
+**包装三件套**(仅 master 渲染完成后执行, 预览阶段不包装; 只有带 `templateId` 且模板配了
+对应项的任务才走, 三步各自独立可缺省, 任一步失败任务进 `failed` 但保留已产出的未包装
+master 路径不白跑):
+1. **样式化字幕**: 以 `.ass` 替代真人出镜模式原来的默认 `.srt` 烧录, 支持字体/字号/颜色/
+   描边/底部边距; 三种模式各自的时间轴来源——真人出镜用 ASR 原话、插画配音用逐幕 TTS 真实
+   时长、图文口播按分镜时长铺排文案; 带模板且配了 `captionStyle` 的真人出镜任务会跳过原有
+   默认 `.srt` 烧录, 由包装段统一烧 `.ass`, 避免双层字幕。
+2. **BGM 混音**: 循环补齐到正片时长, 音量按 `bgmVolume`(0~1) 压低后与人声混合; 图文口播
+   无人声时 BGM 即唯一音轨。v1 固定音量, 不做 sidechain 自动闪避。
+3. **片头/片尾拼接**: 探测正片尺寸后对片头片尾做 scale+pad 对齐, 统一重编码(不走 `-c copy`,
+   十九期已验证过 copy 拼接会漂移), 无声片段补静音轨保证 concat 流结构一致。
+
+**数据模型**: 新表 `VideoTemplate`(`deliveryMode`/`visualStyle`/`palette`/`voicePreset`/
+`scriptPrompt`/`captionStyle`/`bgmPath`+`bgmVolume`/`introPath`/`outroPath`/`isPreset`,
+`userId` 级联删除); `VideoProduction` 新增 `templateId String?`(为空 = 旧入口任务, 包装段
+整段跳过, 零迁移)与 `status` 枚举新增 `packaging`(位于 master 完成之后、`done` 之前)。
+
+**API**: `GET/POST /api/v1/video-templates`(列表含首访播种/新建)、`GET/PUT/DELETE
+/api/v1/video-templates/[id]`(详情/更新/删除连素材目录)、`POST .../duplicate`(复制,
+素材**复制文件本体**到新模板目录, 只复制引用会在原模板删除时悬空)、`POST .../assets`
+(上传 BGM/片头/片尾, `kind=bgm|intro|outro`, MIME 白名单+大小上限+`safeExt` 防路径穿越,
+校验通过后落 `<root>/<templateId>/` 并回写对应字段)、`POST .../script`(文案生成: 粘贴/
+灵感来源 + 模板 `scriptPrompt` 注入六幕写稿管线, 返回预览不落库)、`POST .../produce`(发起
+出片: 已定稿 `contentId` 或确认后的六幕稿自动建卡 + 可选一次性音色覆盖, 创建带 `templateId`
+的 `VideoProduction`)。
+
+**收尾本地走查**(合并前, 不花 DeepSeek/火山 TTS 额度的部分, 详见
+`.superpowers/sdd/2026-08-23-video-template/task-11-report.md`): 预设播种(3 条, 徽标正确)、
+播种幂等(连续刷新 3 次仍是同 3 条记录)、模板编辑(名称/字幕字号颜色/BGM 音量改后**直接查库**
+确认落库, 非只看 UI)、素材上传(真实 ffmpeg 生成的 mp3/mp4 落在 `VIDEO_TEMPLATE_ROOT` 目录下、
+路径字段回写)、复制(副本素材是独立文件, 删除原模板后副本文件仍在)、删除(记录与素材目录一并
+清理)、出片向导步骤收缩(三预设模板步骤条与 §「用法」描述一致, 由源码逻辑+既有组件测试双重
+核实)、零迁移(全期改动零触碰内容详情页/生成入口相关文件, 全量测试套件未见回归)八项全部通过,
+过程零 bug; 服务端 Next.js 日志全程无 4xx/5xx(浏览器控制台/网络面板受限于本轮 Chrome 扩展工具
+连接不稳定未能持续取样, 已用服务端日志作为替代信号)。**真实三模式端到端
+出片(会真花 DeepSeek/火山 TTS 额度, 真人出镜还需真实出镜素材)未在本轮执行, 留待用户本人验收**,
+验收清单: ①三个预设模板各真实出一条片 ②检查包装三件套(字幕样式/BGM/片头片尾)是否实际生效
+③真人出镜模式确认字幕样式来自模板 `captionStyle` 而非旧默认样式 ④插画模式确认配音音色用了
+模板 `voicePreset`(而非全局火山 TTS 配置)。
+
+**已知限制**:
+- **`.ass` 字幕字体依赖渲染机器已装** —— 字体白名单收敛为 macOS 自带中文字体(苹方/冬青黑体/
+  华文黑体/宋体, 见 `CAPTION_FONT_WHITELIST`), 不支持字体上传; 换到没装这些字体的机器上渲染,
+  libass 会静默回退默认字体。
+- **BGM 无自动闪避(ducking)** —— v1 固定音量压低, 不做人声出现时自动降低 BGM 音量的
+  sidechain 处理, 列为后续可选项。
+- **预览(preview)阶段不包装** —— 包装三件套只在 master 渲染完成后跑一次, 省一遍渲染成本;
+  预览片看到的画面/字幕仍是未包装的原始版本。
+- **模板音色优先级**: 一次性临时覆盖(出片向导「确认配音」步骤手动改的值) → 模板
+  `voicePreset` 预设 → 全局火山 TTS 配置(设置页「火山 TTS」卡), 逐级回落, 仅 `illustration-tts`
+  模式消费。
+
 ### 前端视觉重构 + 首页整合 (十六期新增)
 
 一句话: 十一期到十五期陆续新增了账号定位/热点雷达/人物志等视图, 视觉风格 (间距/圆角/
@@ -788,6 +857,8 @@ npm run worker:dev   # BullMQ workers (analyze / retro / auto-sync / radar 四�
 
 账号定位体系 (十期, 见 §3「账号定位体系 · 作战室」小节) 不新增配置项, 复用上面已有的两张卡: 访谈起草/体系报告只需要 DeepSeek key (各约几分钱); 市场调研额外需要 Tavily key (同雷达功能), 缺 key 时 400 引导去雷达配置卡配置, 不阻断其余建档步骤; 单次市场调研约几毛钱, 可重跑。
 
+视频模板板块 (二十期, 见 §3「视频模板板块」小节) 新增一个环境变量 `VIDEO_TEMPLATE_ROOT` —— 模板素材(BGM/片头/片尾)的服务端存储根目录, 未设置时默认 `./video-templates`(与既有 `VIDEO_PRODUCTION_ROOT` 同一范式), 每个模板一个子目录 `<root>/<templateId>/`。生成侧不新增配置项, 复用十九期已有的 DeepSeek key(写稿/导演/构建者)与火山 TTS 配置(插画配音模式)。
+
 ### 测试
 
 ```bash
@@ -861,11 +932,11 @@ src/
 │   │   ├── preflight/             # 视频分析 (Phase 1, L1) — 列表页已删, 子路由保留
 │   │   ├── script/                # 脚本生成详情页 (E) + 分发登记, `script/new` 为深度写稿入口
 │   │   └── retro-sync/            # 抖音半自动复盘 (C)
-│   └── api/v1/                    # 所有 API routes (含 topics/ distributions/ cockpit/workspace/ cockpit/inspirations/ douyin/auto-sync/trigger/ radar/{items,keywords,config,trigger,runs/latest}/ scripts/generate(五期 douyin 两阶段化)/ scripts/[id]/refine(五期新增)/ style/{profile,samples}(五期新增)/ scripts/[id]/images/{plan,route,archive}(七期新增: 出图计划/逐张生图/zip 打包)/ cockpit/video-productions/{[id],[id]/approve,[id]/file,latest}(十五期新增: 触发生成/状态轮询/确认导出/预览-成片文件流)/ cockpit/video-productions/[id]/upload-source(十九期新增: 真人出镜模式的出镜视频上传)/ tts/volc-config(十九期新增: 火山 TTS 单条配置读写))
+│   └── api/v1/                    # 所有 API routes (含 topics/ distributions/ cockpit/workspace/ cockpit/inspirations/ douyin/auto-sync/trigger/ radar/{items,keywords,config,trigger,runs/latest}/ scripts/generate(五期 douyin 两阶段化)/ scripts/[id]/refine(五期新增)/ style/{profile,samples}(五期新增)/ scripts/[id]/images/{plan,route,archive}(七期新增: 出图计划/逐张生图/zip 打包)/ cockpit/video-productions/{[id],[id]/approve,[id]/file,latest}(十五期新增: 触发生成/状态轮询/确认导出/预览-成片文件流)/ cockpit/video-productions/[id]/upload-source(十九期新增: 真人出镜模式的出镜视频上传)/ tts/volc-config(十九期新增: 火山 TTS 单条配置读写)/ video-templates/{[id],[id]/duplicate,[id]/assets,[id]/script,[id]/produce}(二十期新增: 模板 CRUD+首访播种/复制/素材上传/文案生成/发起出片))
 ├── components/
 │   ├── cockpit/                   # Creator Cockpit 移植主体
 │   │   ├── Cockpit.tsx             # 顶层组件: state + view 路由 (`NavView`, 三期起见 `lib/cockpit/view-routing.ts`) + 主题/onboarding (侧栏拖拽排序三期已移除)
-│   │   ├── views/                 # inspirations/radar(四期新增, 自取数)/momentum(含 schedule tab)/platform(五平台流水线页共用)/pipeline/analytics(含 goals+review tab) + settings.tsx (独立视图)
+│   │   ├── views/                 # inspirations/radar(四期新增, 自取数)/momentum(含 schedule tab)/platform(五平台流水线页共用)/pipeline/analytics(含 goals+review tab)/templates.tsx(二十期新增: 模板列表/编辑器/出片向导三块) + settings.tsx (独立视图)
 │   │   ├── analytics/              # 二期 (T4) 从 components/dashboard/ 迁移重塑: prediction-panel/performance-panel + 7 个搬迁 widget + use-dashboard-summary hook
 │   │   ├── settings-cards/         # ai-provider-card, baseline-card (二期 T5) + radar-config-card (四期 T6) + style-profile-card (五期新增) + volc-tts-config-card (十九期新增: 火山 TTS 单条配置卡)
 │   │   ├── sidebar.tsx             # 全站共用侧栏 (cockpit 模式 + external 模式), 二期起「平台」外链组已移除, 四期新增「热点雷达」项
@@ -880,7 +951,8 @@ src/
 │   ├── radar/                     # 四期新增: search.ts(SearchProvider 抽象 + Tavily 实现) / config.ts(RadarConfig 读写+加解密) / scoring.ts(titleFingerprint/clusterByTopic/composeHeat/applyTimeDecay 纯函数) / run.ts(runRadarScan 管线主体)
 │   ├── script/                    # 五期新增: research.ts(runResearch 两阶段生成的阶段一, 雷达种子+Tavily+素材框合并→DeepSeek 提炼简报) / style.ts(getStyleContext 风格上下文切换 + depositStyleSample 定稿沉淀)
 │   ├── image/                     # 七期新增: provider.ts(ImageProvider 抽象 + GptImageProvider, 直连 api.openai.com, b64_json 返回)
-│   ├── video-production/          # 十五期新增: srt-synthesis.ts(六幕脚本→SRT 纯函数) / director-prompt.ts + builder-prompt.ts(DeepSeek 导演/构建者两阶段 prompt+schema) / shot-renderer.ts(headless Chromium 逐帧截图→ffmpeg 编码单镜头 clip) / assets/gsap.min.js(构建者产出的 HTML 固定引入的本地 GSAP 资产); 十九期新增: aligner-prompt.ts(真人出镜录音 → 六幕时间戳对齐的 DeepSeek prompt+schema)
+│   ├── video-production/          # 十五期新增: srt-synthesis.ts(六幕脚本→SRT 纯函数) / director-prompt.ts + builder-prompt.ts(DeepSeek 导演/构建者两阶段 prompt+schema) / shot-renderer.ts(headless Chromium 逐帧截图→ffmpeg 编码单镜头 clip) / assets/gsap.min.js(构建者产出的 HTML 固定引入的本地 GSAP 资产); 十九期新增: aligner-prompt.ts(真人出镜录音 → 六幕时间戳对齐的 DeepSeek prompt+schema); 二十期新增: ass-captions.ts(.ass 样式化字幕生成器, 三种模式时间轴来源转换) / packaging.ts(字幕→BGM→片头片尾三步包装编排) / packaging-input.ts(三种模式字幕时间轴来源分岔选取) / voice-resolve.ts(插画配音模式的音色优先级链: 临时覆盖→模板预设→全局配置)
+│   ├── video-template/            # 二十期新增: model.ts(`VideoTemplateConfig`/`CaptionStyle` 类型+zod schema+3 个内置预设定义) / store.ts(模板素材目录 `templateAssetDir`+首访播种 `seedPresetsIfEmpty`+id 生成)
 │   ├── tts/                       # 十九期新增: volcengine.ts(火山引擎/豆包语音 TTS 客户端封装, X-Api-Key 单 Key 鉴权 + resourceId 资源档位 + SSE 分行 JSON 响应拼接 mp3)
 │   ├── llm/                       # DeepSeekTextLLM + OpenAIVisionLLM + prompts/ (四期新增 radar-read.ts; 五期新增 research-brief.ts / script-write-douyin.ts / script-refine.ts; 七期新增 image-plan.ts / resolve-image-key.ts(gpt-image key 解析, 无 .env 回退))
 │   ├── pipeline/                  # deriveStage 纯函数 + platforms.ts 分发平台注册表
@@ -897,7 +969,7 @@ scripts/
 ├── migrate-cockpit.ts             # 存量数据 → Cockpit 表, dry-run 默认 / --apply 写库
 └── migrate-xhs-stages.ts          # 九期: xhs 存量 recording/editing 归并回 script, dry-run 默认 / --apply 写库
 prisma/
-└── schema.prisma                  # User / ContentAnalysis / ActualMetric / ScriptDraft / TopicIdea / Distribution / Cockpit* (10 张) / Radar*(4 张, 四期新增) / StyleProfile / StyleSample (五期新增) / VideoProduction (十五期新增) 等
+└── schema.prisma                  # User / ContentAnalysis / ActualMetric / ScriptDraft / TopicIdea / Distribution / Cockpit* (10 张) / Radar*(4 张, 四期新增) / StyleProfile / StyleSample (五期新增) / VideoProduction (十五期新增, 二十期新增 templateId 字段+packaging 状态) / VideoTemplate (二十期新增) 等
 vendor/
 └── creator-cockpit/                # 移植源固定副本 (pinned 197d49b, MIT), tsconfig 排除, 不参与构建, 只读参考
 docs/superpowers/

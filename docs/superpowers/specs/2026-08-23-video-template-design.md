@@ -150,3 +150,117 @@
 | 包装三步串接的中间产物膨胀 | 每步落 `productionRoot` 内命名中间文件,`done` 后按需清理(保留最终成片与未包装 master) |
 | 外部 API/ffmpeg 契约假设 | 十九期教训:一切 ffmpeg 组合先真实集成测试再定实现;不信任 `-c copy` 拼接 |
 | 粘贴/灵感出稿的自动建卡与现有看板语义冲突 | 建卡走现有创建路径(与 CreateContentModal 同一服务端逻辑),不绕过 bumpCockpitRev |
+
+## 9. 实施记录
+
+11 个任务(T1-T10 + T10b 补缺 + T11 本收尾)全部完成,合并前全量 `npx vitest run`(151 文件 /
+1833 用例)与 `npx tsc --noEmit` 全绿。
+
+### 9.1 实际实现与设计的偏差
+
+- **`filter_complex` 里 `?` 可选流标记的语义与预期不符**(T4, 片头/片尾重编码拼接):设计时
+  假设每路视频写 `[i:a?][anull:a]amix=...` 能让缺音轨的流被静默跳过(套用 `-map` 里 `?` 的
+  "可选映射, 缺失跳过"语义)。真实 ffmpeg 9.0.1 实测:`?` 在 filtergraph linklabel 里只对
+  "未知/延迟绑定"生效, 流**确实不存在**时直接报错退出, 不是静默跳过。改为 `buildConcatWithReencodeArgs`
+  新增可选入参 `hasAudioFlags?: boolean[]`, 由调用方 `attachIntroOutro` 用 `hasAudioStream`
+  逐路探测后传入, 纯函数据此在"有音轨用 `[i:a:0]` 显式索引"与"无音轨直接用静音源当该路音轨"
+  之间显式二选一。
+- **`anullsrc` 兜底静音源的无限时长在"该路真正只有静音"分支会拖长整体输出**(T4, 同一处):
+  修完上一条后, concat 的 `a=1` 段落要等所有参与流到达 EOF 才切下一段, 未裁剪的
+  `anullsrc -t 3600` 会把整条输出拖到 3600 秒量级。改为再加一个可选入参
+  `durationsSec?: number[]`, 用 `probeVideo` 探测真实时长后对静音源做 `atrim` 裁剪。两处修正
+  都只加可选参数, 不改变原有纯函数单测的断言。
+- **BGM 混音 filter 标签改用显式音轨索引**(T3 复审):`[0:a]/[1:a]` 与项目已确立的
+  `0:a:0` 显式索引约定(源于十九期 iPhone `.mov` 多音轨踩坑)不一致——虽实测 ffmpeg 对歧义标签
+  会静默取第一条流, 但不应依赖未文档化的默认行为, 改为 `[0:a:0]/[1:a:0]` 并补真实多音轨源
+  集成测试固化。
+- **图文口播模式的兜底字幕源从"分镜 `claim` 字段"改为解析 `vp.srt`**(T6):brief 原计划假设
+  用 `direction.json` 里每个镜头的 `claim`(导演给的语义摘要)当字幕文本。协调者复核后裁决两个
+  选项都不取——`claim` 是摘要不是台词, 烧成字幕会让屏幕出现观众没听到的抽象总结; 返回空数组
+  又会让图文口播模式(全程无配音, 字幕是获取文字的唯一途径)配了 `captionStyle` 却什么都不出。
+  改为新增纯函数 `captionEventsFromSrt`(`src/lib/video-production/ass-captions.ts`)解析
+  `VideoProduction.srt`(六幕脚本→SRT 的既有产物, 时间轴天然对齐、粒度到句), worker 侧因此
+  删掉了原计划要读 `direction.json` 的 `loadShotCaptionEvents` 辅助函数。
+- **模板驱动出片(`produce` 路由 `script` 分支)落库 `ScriptDraft.output` 的形状曾短暂偏离
+  又被审查纠正回设计**(T9 → 审查修复):T9 最初为了让 brief 给定的测试通过, 把 `output`
+  写成扁平 `{acts, four_dims}` 并绕开了 `parseDraftOutput`(brief 顶层接口清单本就没列它)。
+  审查发现 `video-production-worker.ts` 的三处消费点(真人出镜/插画配音/字幕加载)全部只认
+  `parseDraftOutput` 的嵌套判别口径 `{script:{acts}, four_dims}`, 扁平形状会让模板页"粘贴
+  新写"/"灵感出稿"两条来源建卡后, 在真人出镜/插画配音模式下直接抛错"需要先生成六幕脚本"。
+  修复为写库改回嵌套形状、`contentId` 分支读取改用 `parseDraftOutput`, 与
+  `cockpit/video-productions/route.ts`、worker 保持同一判别入口(测试夹具与新增跨路径一致性
+  测试一并修正, 详见下文 9.2)。
+- **出片向导「确认配音」步骤与「历史出片列表」两处功能缺口, T10 先做只读/临时降级, T10b 补齐
+  后端契约后转正**:T10 实现前端时发现 `produce` 路由请求体不接受一次性音色覆盖、也没有按
+  `templateId` 查历史出片的接口, 于是把「确认配音」做成只读展示+引导去编辑器改, 「历史出片
+  列表」做成仅当次向导会话内的临时前端状态(刷新即丢)。T10b 补上这两处后端契约(`produce`
+  请求体新增可选 `voiceOverride`, worker 侧音色优先级链改为纯函数 `resolveTtsVoiceSelection`
+  消费; 新增 `GET /api/v1/video-templates/[id]/productions`, `select` 精简掉大字段)后,
+  「确认配音」改为可编辑覆盖、「历史出片列表」改为持久化查询, T10 报告里记录的这两条"依据"
+  已不再是当前行为, 以 T10b 为准。
+
+### 9.2 审查抓到的真问题及修复
+
+- **模板页 CSS 缺失结构性样式 + 6 个写操作(保存/文案生成/发起出片/复制/删除/素材上传)缺少
+  错误处理**(review 后 `6c3a137`):`cockpit.css` 没有补 `template-*` 系列样式(卡片网格/
+  步骤条/tab/素材网格), 组件挂载即错位; `handleSave`/`handleGenerateScript`/`handleProduce`/
+  `handleDuplicate`/`handleDelete`/`handleAssetUpload` 六处网络失败时用户拿不到任何提示,
+  其中复制/删除**不检查响应就假装刷新成功**(网络失败时 UI 显示"已删除"但记录其实还在)。
+  修复:补齐 CSS(全部走既有设计变量, 不写死 px)+ 六处 catch 补用户可见错误提示 + 复制/删除
+  改为先查响应再刷新; 新增 9 个边界用例(零模板空态/加载中/请求失败/上传失败等), 用"还原到
+  审查前提交"的方式验证过先红(7 failed)后绿(14 passed)。
+- **`ScriptDraft.output` 嵌套形状偏离**(见上文 9.1 最后一条),按真问题记录一次: 若不修复,
+  模板页三种文案来源里的"粘贴新写"与"从灵感出稿"两条(唯一会真正新建 `ScriptDraft` 的路径)
+  会在真人出镜与插画配音两种交付模式下 100% 失败。
+- **`deliveryMode` 类型收窄**(`f988870`):`VideoTemplateConfig.deliveryMode` 最初复用
+  `DeliveryMode`(含 `'manual'`), 但模板语义上不可能是 `manual`(模板一定驱动某条 AI 生成
+  管线), zod schema 因此需要一层与 TS 类型不同步的"双重断言"。改为
+  `TemplateDeliveryMode = Exclude<DeliveryMode, 'manual'>`, 类型与 schema 重新对齐。
+- **worker 侧音色优先级链缺可回归测试**(T10b 审查修复):`resolveTtsVoiceSelection` 纯函数
+  本身有单测, 但 worker 里"取哪个 `apiKey`/`voiceType`/`resourceId` 传给
+  `synthesizeVolcTts`"这段接线最初只靠人工读 diff 确认。补了一个 mock `synthesizeVolcTts`
+  的轻量 worker 级测试(`tests/jobs/video-production-worker.test.ts`), 并用"故意改回旧写法
+  →确认真的变红→改回来"的方式验证测试有效(不是自我一致的摆设)。
+
+### 9.3 遗留 minor(deferred)
+
+以下均为审查判定"不影响正确性、留待后续", 摘自各任务收尾报告与 `progress.md`:
+
+- `hexToAssColor` 不校验输入格式(当前唯一调用路径已过 zod 校验, 安全)。
+- `bgmVolume` 纯函数层无边界校验(模板层 zod 已校验 0~1, 上游覆盖);无人声分支未像有人声
+  分支那样断言音轨数恰为 1(覆盖不对称)。
+- `hasAudioFlags`/`durationsSec` 做成可选参数, 生产路径永远传全, 存在两套隐含契约;
+  `attachIntroOutro` 对有真实音轨的路也跑 `probeVideo`(atrim 边界舍入风险已评估可接受);
+  集成测试未覆盖"只配片尾"组合。
+- `runPackaging` 不清理中间产物(`packaging-captions.mp4` 等), 留在 `workDir`。
+- 包装段内 `refreshed` 重查 `videoProduction` 时 `rawTranscript`/`alignedActs` 与外层 `vp`
+  等价, 可省一次 I/O(仅 `masterPath` 必须重查); `packaging-input.ts` 里
+  `parsed.data as CaptionStyle` 断言可能可去掉; 模板存在但配置全空时仍会多一次
+  `fs.copyFile` 生成 `packaged.mp4`。
+- 同 `kind` 重复上传且扩展名变化时留孤儿文件(如先 `bgm.wav` 后 `bgm.mp3`);素材路由 5 处
+  `findUnique`+归属校验+404 样板重复(抽象收益有限);`DELETE` 清理失败静默吞掉无日志。
+- `buildTemplateSection` 参数用内联匿名类型而非引用 `VideoTemplateConfig['scriptPrompt']`
+  (有意选择: 避免 prompt 层依赖 `video-template`/model)。
+- 字幕颜色字段是纯文本输入无颜色选择器(无格式校验提示, 交给保存时后端 zod 报笼统错误)。
+- 非 `illustration-tts` 模板传合法 `voiceOverride` 仍落库(无消费方读取), 功能上等价于"忽略"
+  但不体现在是否落库; `produce/route.ts` 里 `voiceOverride ?? undefined` 写法略绕
+  (沿用项目既有 `Json?` 字段惯用法)。
+
+### 9.4 真实三模式 E2E:未执行,留待用户验收
+
+本轮(T11)只做了不消耗外部 API 额度的本地走查(预设播种/幂等/编辑持久化/素材上传/复制悬空
+防御/删除/出片向导步骤收缩/零迁移七项, 详见
+`.superpowers/sdd/2026-08-23-video-template/task-11-report.md`), **没有真实调用 DeepSeek
+写稿或火山引擎 TTS 走完任何一条模板出片流程**——会真实消耗用户的付费额度, 真人出镜那条还
+需要用户本人的实拍素材, 均已明确划出本任务范围。
+
+**验收清单**(用户本人执行):
+
+1. 三个预设模板(图文口播/真人出镜+B-roll/插画配音)各真实出一条片, 走完排队→预览就绪→
+   确认导出。
+2. 检查包装三件套是否实际生效: 成片带样式化字幕(非默认 `.srt` 观感)、BGM 可听见且音量
+   与模板 `bgmVolume` 大致相符、片头/片尾若配置了则出现在成片首尾。
+3. 真人出镜模式确认烧录的字幕样式来自模板 `captionStyle`(字体/字号/颜色), 而不是十九期
+   遗留的默认 `.srt` 样式。
+4. 插画模式确认配音音色用了模板 `voicePreset`(而不是设置页的全局火山 TTS 配置)——若出片
+   向导「确认配音」步骤填了临时覆盖, 应以覆盖值为准。
