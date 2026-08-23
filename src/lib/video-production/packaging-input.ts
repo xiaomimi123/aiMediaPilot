@@ -5,6 +5,7 @@ import { CaptionStyleSchema, type CaptionStyle } from '@/lib/video-template/mode
 import {
   captionEventsFromTranscript,
   captionEventsFromAlignedActs,
+  captionEventsFromSrt,
   type CaptionEvent,
 } from '@/lib/video-production/ass-captions';
 import type { PackagingOptions } from '@/lib/video-production/packaging';
@@ -35,7 +36,13 @@ export function buildPackagingOptions(input: {
   transcript: TranscriptSegment[] | null;
   alignedActs: AlignedAct[] | null;
   narrations: Record<string, string>;
-  shotEvents: CaptionEvent[];
+  /**
+   * 图文口播模式的字幕兜底源(既没有 ASR 也没有对齐幕边界时)。
+   * 复核后改用 `vp.srt`(由 synthesizeSrtFromSixActScript 产出、驱动 Director 分镜
+   * 的那份逐句 SRT), 而不是 Director shots 的 `claim` 字段——claim 是导演给镜头写的
+   * 语义摘要, 不是观众能听懂的口播原文, 详见 task-6-report.md「复核后修正」。
+   */
+  srt: string;
 }): PackagingOptions {
   if (!input.template) {
     return {
@@ -57,7 +64,7 @@ export function buildPackagingOptions(input: {
     } else if (input.alignedActs?.length) {
       captionEvents = captionEventsFromAlignedActs(input.alignedActs, input.narrations);
     } else {
-      captionEvents = input.shotEvents;
+      captionEvents = captionEventsFromSrt(input.srt);
     }
   }
 

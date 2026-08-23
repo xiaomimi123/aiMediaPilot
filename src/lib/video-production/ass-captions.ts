@@ -91,3 +91,43 @@ export function captionEventsFromAlignedActs(
     .map((a) => ({ startMs: a.startMs, endMs: a.endMs, text: (narrations[a.act] ?? '').trim() }))
     .filter((e) => e.text.length > 0);
 }
+
+const SRT_TIMESTAMP = /(\d{2}):(\d{2}):(\d{2}),(\d{3})/;
+const SRT_TIMESTAMP_LINE = new RegExp(`^${SRT_TIMESTAMP.source}\\s*-->\\s*${SRT_TIMESTAMP.source}`);
+
+function parseSrtTimestamp(h: string, m: string, s: string, ms: string): number {
+  return ((Number(h) * 60 + Number(m)) * 60 + Number(s)) * 1000 + Number(ms);
+}
+
+/**
+ * 图文口播模式的字幕兜底源(二十期)—— 该模式没有 ASR、也没有对齐后的幕边界(无配音,
+ * 见 packaging-input.ts 里 buildPackagingOptions 的优先级说明), `vp.srt` 才是整条片子
+ * 时间轴的真相来源(由 synthesizeSrtFromSixActScript 产出、驱动 Director 分镜), 逐句
+ * 粒度天然比整幕铺排更适合当字幕。
+ * SRT 来自 DB 列, 形状不可信 —— 畸形块直接跳过而不是抛错, 与其它 captionEventsFrom*
+ * 系列函数的"缺数据就丢弃, 不产出垃圾字幕"策略一致。
+ */
+export function captionEventsFromSrt(srt: string): CaptionEvent[] {
+  if (!srt.trim()) return [];
+
+  return srt
+    .split(/\r?\n\r?\n/)
+    .map((block) => {
+      const lines = block.split(/\r?\n/).filter((l) => l.length > 0);
+      // 标准 SRT 块: [序号, 时间戳, ...文本行]; 序号行本身不参与解析(不校验递增),
+      // 时间戳行必须匹配, 否则整块视为畸形。
+      const timestampLineIndex = lines.findIndex((l) => SRT_TIMESTAMP_LINE.test(l));
+      if (timestampLineIndex === -1) return null;
+      const match = lines[timestampLineIndex].match(SRT_TIMESTAMP_LINE);
+      if (!match) return null;
+      const [, h1, m1, s1, ms1, h2, m2, s2, ms2] = match;
+      const text = lines.slice(timestampLineIndex + 1).join('\n').trim();
+      if (!text) return null;
+      return {
+        startMs: parseSrtTimestamp(h1, m1, s1, ms1),
+        endMs: parseSrtTimestamp(h2, m2, s2, ms2),
+        text,
+      };
+    })
+    .filter((e): e is CaptionEvent => e !== null);
+}

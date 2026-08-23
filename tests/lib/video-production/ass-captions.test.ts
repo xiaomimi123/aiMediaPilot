@@ -5,6 +5,7 @@ import {
   buildAssCaptions,
   captionEventsFromTranscript,
   captionEventsFromAlignedActs,
+  captionEventsFromSrt,
 } from '@/lib/video-production/ass-captions';
 import { defaultCaptionStyle } from '@/lib/video-template/model';
 
@@ -146,5 +147,41 @@ describe('captionEventsFromAlignedActs', () => {
       { hook: 'A', concept_a: 'B' },
     );
     expect(events.map((e) => e.text)).toEqual(['A', 'B']);
+  });
+});
+
+describe('captionEventsFromSrt', () => {
+  it('解析标准多块 SRT: 序号行/时间戳行/文本行/空行分隔', () => {
+    const srt =
+      '1\n00:00:00,000 --> 00:00:01,500\n第一句\n\n2\n00:00:01,500 --> 00:00:03,250\n第二句\n\n';
+    expect(captionEventsFromSrt(srt)).toEqual([
+      { startMs: 0, endMs: 1500, text: '第一句' },
+      { startMs: 1500, endMs: 3250, text: '第二句' },
+    ]);
+  });
+
+  it('多行文本合并保留换行(交给 buildAssCaptions 转 \\N)', () => {
+    const srt = '1\n00:00:00,000 --> 00:00:02,000\n上一行\n下一行\n\n';
+    const events = captionEventsFromSrt(srt);
+    expect(events).toHaveLength(1);
+    expect(events[0].text).toBe('上一行\n下一行');
+  });
+
+  it('空串输入返回空数组', () => {
+    expect(captionEventsFromSrt('')).toEqual([]);
+  });
+
+  it('畸形块(时间戳行缺失/格式不对)整块跳过, 不抛错', () => {
+    const srt =
+      '1\n这不是时间戳\n坏块文本\n\n2\n00:00:00,000 --> 00:00:01,000\n好块文本\n\n';
+    const events = captionEventsFromSrt(srt);
+    expect(events).toEqual([{ startMs: 0, endMs: 1000, text: '好块文本' }]);
+  });
+
+  it('时间戳跨分钟/跨小时正确换算成毫秒', () => {
+    const srt = '1\n01:02:03,004 --> 01:02:05,500\n跨界文本\n\n';
+    const events = captionEventsFromSrt(srt);
+    // 1h2m3.004s = 3723004ms; 1h2m5.5s = 3725500ms
+    expect(events).toEqual([{ startMs: 3723004, endMs: 3725500, text: '跨界文本' }]);
   });
 });

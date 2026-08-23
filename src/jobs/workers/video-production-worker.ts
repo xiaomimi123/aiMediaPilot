@@ -31,7 +31,6 @@ import type { AlignedAct } from '@/lib/video-production/aligner-prompt';
 import type { DeliveryMode } from '@/lib/cockpit/model';
 import { runPackaging } from '@/lib/video-production/packaging';
 import { buildPackagingOptions } from '@/lib/video-production/packaging-input';
-import type { CaptionEvent } from '@/lib/video-production/ass-captions';
 
 type JobData = { videoProductionId: string; mode: 'preview' | 'master' };
 
@@ -56,25 +55,6 @@ async function loadNarrations(contentId: string): Promise<Record<string, string>
   return Object.fromEntries(parsed.acts.map((a) => [a.act, a.narration]));
 }
 
-/**
- * 图文口播模式没有 ASR 也没有 TTS 时长, 字幕时间轴只能来自 Director 排布的分镜边界 ——
- * 直接读回持久化的 direction.json(master 渲染本来就复用它)。
- * 核实结论(见 task-6-report.md): DirectorResponse 的 shot 形状里并没有 brief 假设的
- * `caption` 字段(见 director-prompt.ts ShotSchema), 但有 `claim`(观众理解到的主张,
- * 每镜一句), 三个交付模式都会经过 Director 且必填 —— 语义上正好是"这一镜要让观众
- * 明白什么", 拿来做图文口播 fallback 档的字幕文本是合理映射, 因此没有直接返回 []。
- */
-async function loadShotCaptionEvents(productionRoot: string): Promise<CaptionEvent[]> {
-  try {
-    const raw = await fs.readFile(path.join(productionRoot, 'direction.json'), 'utf-8');
-    const direction = JSON.parse(raw) as DirectorResponse;
-    return direction.shots
-      .map((s) => ({ startMs: s.startMs, endMs: s.endMs, text: s.claim.trim() }))
-      .filter((e) => e.text.length > 0);
-  } catch {
-    return [];
-  }
-}
 
 /**
  * `ppt-narration` 交付模式 (十八期既有行为，原样从 handleProduce 里抽出，零行为改动)。
@@ -585,7 +565,7 @@ async function handleProduce(job: Job<JobData>) {
             transcript: (refreshed?.rawTranscript as unknown as TranscriptSegment[] | null) ?? null,
             alignedActs: (refreshed?.alignedActs as unknown as AlignedAct[] | null) ?? null,
             narrations,
-            shotEvents: await loadShotCaptionEvents(vp.productionRoot),
+            srt: vp.srt,
           }),
         });
         // 包装后的成片取代原 masterPath 作为交付物; 未包装的 master.mp4 保留在

@@ -14,7 +14,7 @@ const BASE = {
   transcript: null,
   alignedActs: null,
   narrations: {},
-  shotEvents: [],
+  srt: '',
 };
 
 describe('buildPackagingOptions', () => {
@@ -59,12 +59,12 @@ describe('buildPackagingOptions', () => {
     expect(opts.captionEvents).toEqual([{ startMs: 0, endMs: 2000, text: '稿子上的台词' }]);
   });
 
-  it('图文口播(无对齐无转写): 字幕事件来自分镜时长铺排', () => {
+  it('图文口播(无对齐无转写): 字幕事件来自 vp.srt 兜底(逐句解析)', () => {
     const opts = buildPackagingOptions({
       ...BASE,
       template: TEMPLATE,
       mode: 'ppt-narration',
-      shotEvents: [{ startMs: 0, endMs: 3000, text: '分镜文案' }],
+      srt: '1\n00:00:00,000 --> 00:00:03,000\n分镜文案\n\n',
     });
     expect(opts.captionEvents).toEqual([{ startMs: 0, endMs: 3000, text: '分镜文案' }]);
   });
@@ -85,7 +85,7 @@ describe('buildPackagingOptions', () => {
       ...BASE,
       template: { ...TEMPLATE, captionStyle: { fontFamily: 'Comic Sans MS' } },
       mode: 'ppt-narration',
-      shotEvents: [{ startMs: 0, endMs: 1000, text: 'x' }],
+      srt: '1\n00:00:00,000 --> 00:00:01,000\nx\n\n',
     });
     expect(opts.captionStyle).toBeNull();
     expect(opts.captionEvents).toEqual([]);
