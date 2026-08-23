@@ -39,6 +39,7 @@ model User {
   topicIdeas                 TopicIdea[]
   cockpitContents            CockpitContent[]
   videoProductions           VideoProduction[]
+  videoTemplates             VideoTemplate[]
   cockpitInspirations        CockpitInspiration[]
   cockpitStageEvents         CockpitStageEvent[]
   cockpitReviewDays          CockpitReviewDay[]
@@ -732,12 +733,36 @@ model VideoProduction {
   rawTranscript   Json? // talking-head-broll: ASR 原始 segments(真实原话, 供字幕烧录), illustration-tts 不填
   previewPath     String?
   masterPath      String?
+  templateId      String? // 二十期: 由哪个模板发起; null = 内容详情页旧入口, 包装段整段跳过
   errorMessage    String?
   createdAt       String
   updatedAt       String
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, contentId])
+}
+
+model VideoTemplate {
+  id           String  @id
+  userId       String
+  name         String
+  description  String  @default("")
+  deliveryMode String  // ppt-narration|talking-head-broll|illustration-tts
+  visualStyle  String  @default("card") // card|illustration
+  palette      Json?
+  voicePreset  Json?   // { voiceType?, resourceId? } — 仅 illustration-tts 消费
+  scriptPrompt Json?   // { tone?, targetDurationSec?, hookHint?, extraGuidance? }
+  captionStyle Json?   // null = 不烧字幕
+  bgmPath      String?
+  bgmVolume    Float   @default(0.15)
+  introPath    String?
+  outroPath    String?
+  isPreset     Boolean @default(false)
+  createdAt    String
+  updatedAt    String
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model CockpitInspiration {
