@@ -61,7 +61,9 @@ async function loadNarrations(contentId: string): Promise<Record<string, string>
  * `ppt-narration` 交付模式 (十八期既有行为，原样从 handleProduce 里抽出，零行为改动)。
  * Director 产出的 SRT 驱动分镜, 全部镜头串联成完整片子(无源出镜视频, 无挖空替换)。
  */
-async function handlePptNarration(
+/** 导出仅供测试用(见 tests/jobs/video-production-worker-visual-style.test.ts) —— 终审发现2
+ * 校验 template.visualStyle 真的接线到了 BUILDER.buildSystemPrompt 调用参数上。 */
+export async function handlePptNarration(
   vp: VideoProduction,
   mode: 'preview' | 'master',
   setStatus: SetStatusFn,
@@ -89,12 +91,20 @@ async function handlePptNarration(
       'utf-8',
     );
 
+    // 终审发现2: template.visualStyle 此前从未被读到调用点, 用户在模板编辑器改这个下拉会被
+    // 静默丢弃。templateId 为空(内容详情页旧入口)时 template 为 null, 落回硬编码默认值 'card',
+    // 零迁移。
+    const template = vp.templateId
+      ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
+      : null;
+    const visualStyle = (template?.visualStyle as 'card' | 'illustration' | undefined) ?? 'card';
+
     await setStatus('building');
     const builderLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-chat' });
     let shotIndex = 0;
     for (const shot of direction.shots) {
       const { result: built } = await builderLLM.callStructured({
-        systemPrompt: BUILDER.buildSystemPrompt(direction.palette),
+        systemPrompt: BUILDER.buildSystemPrompt(direction.palette, visualStyle),
         userMessage: BUILDER.buildUserMessage(shot),
         responseSchema: BUILDER.responseSchema,
       });
@@ -171,7 +181,9 @@ async function handlePptNarration(
  * - 最终产物是"挖空替换"(compositeCutawayVideo)+"字幕烧录"(burnCaptions)两步合成，
  *   不是纯 AI 分镜片段直接拼接(concatClips)。
  */
-async function handleTalkingHeadBroll(
+/** 导出仅供测试用(见 tests/jobs/video-production-worker-wrap-fixes.test.ts) —— 终审发现1
+ * (模板配了 captionStyle 时跳过默认 .srt 烧录) 与发现2 (visualStyle 接线) 的回归测试。 */
+export async function handleTalkingHeadBroll(
   vp: VideoProduction,
   mode: 'preview' | 'master',
   setStatus: SetStatusFn,
@@ -233,12 +245,18 @@ async function handleTalkingHeadBroll(
       'utf-8',
     );
 
+    // 终审发现2: template.visualStyle 此前从未被读到调用点。
+    const visualStyleTemplate = vp.templateId
+      ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
+      : null;
+    const visualStyle = (visualStyleTemplate?.visualStyle as 'card' | 'illustration' | undefined) ?? 'card';
+
     const builderLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-chat' });
     const cutawaySegments: CutawaySegment[] = [];
     let shotIndex = 0;
     for (const shot of direction.shots) {
       const { result: built } = await builderLLM.callStructured({
-        systemPrompt: BUILDER.buildSystemPrompt(direction.palette),
+        systemPrompt: BUILDER.buildSystemPrompt(direction.palette, visualStyle),
         userMessage: BUILDER.buildUserMessage(shot),
         responseSchema: BUILDER.responseSchema,
       });
@@ -405,12 +423,16 @@ export async function handleIllustrationTts(
       'utf-8',
     );
 
+    // 终审发现2: template.visualStyle 此前从未被读到调用点, 一直硬编码 'illustration'——
+    // 复用上面(音色优先级链)已经取过的同一个 template, 不重复查询。
+    const visualStyle = (template?.visualStyle as 'card' | 'illustration' | undefined) ?? 'illustration';
+
     const builderLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-chat' });
     const clipPaths: string[] = [];
     let shotIndex = 0;
     for (const shot of direction.shots) {
       const { result: built } = await builderLLM.callStructured({
-        systemPrompt: BUILDER.buildSystemPrompt(direction.palette, 'illustration'),
+        systemPrompt: BUILDER.buildSystemPrompt(direction.palette, visualStyle),
         userMessage: BUILDER.buildUserMessage(shot),
         responseSchema: BUILDER.responseSchema,
       });
