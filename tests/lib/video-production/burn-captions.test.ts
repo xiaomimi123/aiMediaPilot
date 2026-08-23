@@ -36,7 +36,7 @@ describe('burnCaptions', () => {
       const outputPath = path.join(workDir, 'output.mp4');
 
       const tmpEntriesBefore = new Set(
-        (await fs.readdir(os.tmpdir())).filter((name) => /^captions-.*\.srt$/.test(name)),
+        (await fs.readdir(os.tmpdir())).filter((name) => /^captions-.*\.(srt|ass)$/.test(name)),
       );
 
       await burnCaptions({
@@ -64,7 +64,7 @@ describe('burnCaptions', () => {
       // burnCaptions 内部写的临时 .srt 文件应在成功返回后被清理，不新增残留在 tmpdir 里
       // (用调用前后的差集比较，避免被环境里其他历史遗留的 captions-*.srt 文件误伤)
       const tmpEntriesAfter = (await fs.readdir(os.tmpdir())).filter((name) =>
-        /^captions-.*\.srt$/.test(name),
+        /^captions-.*\.(srt|ass)$/.test(name),
       );
       const newLeftoverSrt = tmpEntriesAfter.filter((name) => !tmpEntriesBefore.has(name));
       expect(newLeftoverSrt).toEqual([]);
@@ -88,6 +88,30 @@ describe('burnCaptions', () => {
         buildBurnCaptionsArgs({ videoPath: sourceVideoPath, srtPath, outputPath }),
         { timeout: 60_000 },
       );
+
+      const probeResult = await probeVideo(outputPath);
+      expect(probeResult.durationSec).toBeGreaterThan(1.5);
+      expect(probeResult.durationSec).toBeLessThan(2.5);
+    },
+    60_000,
+  );
+
+  it(
+    '真实烧录 .ass 样式字幕: 输出成功且时长不变',
+    async () => {
+      const outputPath = path.join(workDir, 'output-ass.mp4');
+      const ass = `[Script Info]
+ScriptType: v4.00+
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,PingFang SC,56,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,3,0,2,40,40,90,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,中文样式字幕
+`;
+      await burnCaptions({ videoPath: sourceVideoPath, srt: ass, outputPath, format: 'ass' });
 
       const probeResult = await probeVideo(outputPath);
       expect(probeResult.durationSec).toBeGreaterThan(1.5);

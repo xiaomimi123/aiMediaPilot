@@ -360,12 +360,19 @@ export function buildBurnCaptionsArgs(opts: BuildBurnCaptionsArgsOpts): string[]
 
 export interface BurnCaptionsOpts {
   videoPath: string;
-  srt: string; // SRT 格式字幕内容(不是文件路径)，内部负责写临时文件
+  srt: string; // 字幕内容(不是文件路径)，内部负责写临时文件
   outputPath: string;
+  /**
+   * 字幕格式。默认 'srt' —— 旧调用方(十九期真人出镜默认字幕)零改动。
+   * 'ass' 时临时文件写 .ass 扩展名: libass 靠扩展名选解析器, 写成 .srt 会把
+   * 整个 ASS 头部当成字幕正文渲染出来。
+   */
+  format?: 'srt' | 'ass';
 }
 
 export async function burnCaptions(opts: BurnCaptionsOpts): Promise<void> {
-  const srtPath = path.join(os.tmpdir(), `captions-${randomUUID()}.srt`);
+  const ext = opts.format === 'ass' ? 'ass' : 'srt';
+  const srtPath = path.join(os.tmpdir(), `captions-${randomUUID()}.${ext}`);
   await fs.writeFile(srtPath, opts.srt, 'utf-8');
   try {
     await execFileAsync(
