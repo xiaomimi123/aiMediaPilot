@@ -5,6 +5,7 @@ import {
   defaultCaptionStyle,
   CAPTION_FONT_WHITELIST,
 } from '@/lib/video-template/model';
+import type { VideoTemplateConfig } from '@/lib/video-template/model';
 
 describe('PRESET_TEMPLATES', () => {
   it('恰好 3 个预设, 三种交付模式各一个', () => {
@@ -65,5 +66,15 @@ describe('VideoTemplateConfigSchema', () => {
 describe('defaultCaptionStyle', () => {
   it('默认字体在白名单内', () => {
     expect(CAPTION_FONT_WHITELIST).toContain(defaultCaptionStyle().fontFamily);
+  });
+});
+
+describe('VideoTemplateConfig 的 deliveryMode 类型收窄(编译期)', () => {
+  it('manual 赋值给 deliveryMode 在编译期就被拒绝, 不必等到运行时过 zod 才报错', () => {
+    // @ts-expect-error 'manual' 不在 TemplateDeliveryMode(= Exclude<DeliveryMode, 'manual'>)里 ——
+    // 若这层类型收窄被移除(deliveryMode 退回宽的 DeliveryMode), 本行会变成"不再报错",
+    // 下面这个 @ts-expect-error 指令本身就会因"未使用"而让 tsc --noEmit 失败, 从而暴露回归。
+    const bad: VideoTemplateConfig = { ...PRESET_TEMPLATES[0], deliveryMode: 'manual' };
+    expect(bad.deliveryMode).toBe('manual');
   });
 });

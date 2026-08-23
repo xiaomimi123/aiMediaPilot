@@ -22,10 +22,13 @@ export interface CaptionStyle {
   marginV: number;       // 距画面底部的边距(像素)
 }
 
+/** 模板的交付模式 —— 不含 'manual': 模板一定驱动某条 AI 生成管线。 */
+export type TemplateDeliveryMode = Exclude<DeliveryMode, 'manual'>;
+
 export interface VideoTemplateConfig {
   name: string;
   description: string;
-  deliveryMode: DeliveryMode;
+  deliveryMode: TemplateDeliveryMode;
   visualStyle: 'card' | 'illustration';
   palette: string[] | null;
   voicePreset: { voiceType?: string; resourceId?: string } | null;
@@ -53,7 +56,7 @@ export const CaptionStyleSchema = z.object({
   marginV: z.number().int().min(0).max(500),
 });
 
-export const VideoTemplateConfigSchema = z.object({
+export const VideoTemplateConfigSchema: z.ZodType<VideoTemplateConfig> = z.object({
   name: z.string().min(1).max(40),
   description: z.string().max(200),
   // 'manual' 不是模板的合法值 —— 模板一定驱动某条 AI 生成管线
@@ -74,7 +77,7 @@ export const VideoTemplateConfigSchema = z.object({
   bgmVolume: z.number().min(0).max(1),
   introPath: z.string().nullable(),
   outroPath: z.string().nullable(),
-}) as unknown as z.ZodType<VideoTemplateConfig>;
+});
 
 export function defaultCaptionStyle(): CaptionStyle {
   return {
