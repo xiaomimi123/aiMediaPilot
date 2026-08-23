@@ -28,6 +28,10 @@ import { synthesizeVolcTts } from '@/lib/tts/volcengine';
 import { decrypt } from '@/lib/crypto';
 import { ttsResultsToAlignedActs, type TtsActResult } from '@/lib/video-production/srt-synthesis';
 import type { AlignedAct } from '@/lib/video-production/aligner-prompt';
+import type { DeliveryMode } from '@/lib/cockpit/model';
+import { runPackaging } from '@/lib/video-production/packaging';
+import { buildPackagingOptions } from '@/lib/video-production/packaging-input';
+import type { CaptionEvent } from '@/lib/video-production/ass-captions';
 
 type JobData = { videoProductionId: string; mode: 'preview' | 'master' };
 
@@ -39,6 +43,37 @@ function shotDir(productionRoot: string, shotIndex: number): string {
   // (可能包含 `..` 等构造出越权写入路径)。目录名固定用数组下标，
   // preview 与 master 两条渲染路径共用同一套下标规则，保证互相能对上。
   return path.join(productionRoot, 'shots', String(shotIndex));
+}
+
+/** 取该内容六幕稿的逐幕台词(act → narration), 供字幕按幕边界铺排; 取不到时返回空表。 */
+async function loadNarrations(contentId: string): Promise<Record<string, string>> {
+  const content = await prisma.cockpitContent.findUnique({ where: { id: contentId } });
+  const draft = content?.scriptDraftId
+    ? await prisma.scriptDraft.findUnique({ where: { id: content.scriptDraftId } })
+    : null;
+  const parsed = draft ? parseDraftOutput(draft.output) : null;
+  if (!parsed?.acts) return {};
+  return Object.fromEntries(parsed.acts.map((a) => [a.act, a.narration]));
+}
+
+/**
+ * 图文口播模式没有 ASR 也没有 TTS 时长, 字幕时间轴只能来自 Director 排布的分镜边界 ——
+ * 直接读回持久化的 direction.json(master 渲染本来就复用它)。
+ * 核实结论(见 task-6-report.md): DirectorResponse 的 shot 形状里并没有 brief 假设的
+ * `caption` 字段(见 director-prompt.ts ShotSchema), 但有 `claim`(观众理解到的主张,
+ * 每镜一句), 三个交付模式都会经过 Director 且必填 —— 语义上正好是"这一镜要让观众
+ * 明白什么", 拿来做图文口播 fallback 档的字幕文本是合理映射, 因此没有直接返回 []。
+ */
+async function loadShotCaptionEvents(productionRoot: string): Promise<CaptionEvent[]> {
+  try {
+    const raw = await fs.readFile(path.join(productionRoot, 'direction.json'), 'utf-8');
+    const direction = JSON.parse(raw) as DirectorResponse;
+    return direction.shots
+      .map((s) => ({ startMs: s.startMs, endMs: s.endMs, text: s.claim.trim() }))
+      .filter((e) => e.text.length > 0);
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -528,6 +563,35 @@ async function handleProduce(job: Job<JobData>) {
       await handleIllustrationTts(vp, mode, setStatus, outputFileName, readyStatus, outputField);
     } else {
       throw new Error(`暂不支持的交付模式: ${vp.mode}`);
+    }
+
+    // 二十期: 成片包装段 —— 三交付模式共用, 只在 master 渲染完成后执行(预览审内容, 不包装)。
+    // templateId 为空(内容详情页旧入口)时整段跳过, 行为与十九期字符级一致(零迁移)。
+    if (mode === 'master' && vp.templateId) {
+      const template = await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } });
+      const refreshed = await prisma.videoProduction.findUnique({ where: { id: videoProductionId } });
+      const masterPath = refreshed?.masterPath;
+      if (template && masterPath) {
+        await setStatus('packaging');
+        const narrations = await loadNarrations(vp.contentId);
+        const packagedPath = path.join(vp.productionRoot, 'packaged.mp4');
+        await runPackaging({
+          masterPath,
+          workDir: vp.productionRoot,
+          outputPath: packagedPath,
+          options: buildPackagingOptions({
+            template,
+            mode: vp.mode as DeliveryMode,
+            transcript: (refreshed?.rawTranscript as unknown as TranscriptSegment[] | null) ?? null,
+            alignedActs: (refreshed?.alignedActs as unknown as AlignedAct[] | null) ?? null,
+            narrations,
+            shotEvents: await loadShotCaptionEvents(vp.productionRoot),
+          }),
+        });
+        // 包装后的成片取代原 masterPath 作为交付物; 未包装的 master.mp4 保留在
+        // productionRoot 里(包装若失败也有东西可下, spec §3.1)。
+        await setStatus('done', { masterPath: packagedPath });
+      }
     }
   } catch (err) {
     await setStatus('failed', { errorMessage: err instanceof Error ? err.message : String(err) });
