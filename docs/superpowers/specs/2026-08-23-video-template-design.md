@@ -232,7 +232,10 @@
 - `hasAudioFlags`/`durationsSec` 做成可选参数, 生产路径永远传全, 存在两套隐含契约;
   `attachIntroOutro` 对有真实音轨的路也跑 `probeVideo`(atrim 边界舍入风险已评估可接受);
   集成测试未覆盖"只配片尾"组合。
-- `runPackaging` 不清理中间产物(`packaging-captions.mp4` 等), 留在 `workDir`。
+- ~~`runPackaging` 不清理中间产物(`packaging-captions.mp4` 等), 留在 `workDir`。~~
+  **已于 2026-08-24 合并后补上**: 包装全部成功后删除本函数自己产生的中间文件;
+  `masterPath`(包装失败时的兜底交付物)与 `outputPath` 不动; 中途失败**不清理**——
+  中间产物是排查"崩在哪一步"的现场证据; 删除失败静默忽略, 不让已成功的包装反过来失败。
 - 包装段内 `refreshed` 重查 `videoProduction` 时 `rawTranscript`/`alignedActs` 与外层 `vp`
   等价, 可省一次 I/O(仅 `masterPath` 必须重查); `packaging-input.ts` 里
   `parsed.data as CaptionStyle` 断言可能可去掉; 模板存在但配置全空时仍会多一次

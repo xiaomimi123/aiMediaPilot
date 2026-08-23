@@ -80,6 +80,7 @@ export async function runPackaging(input: {
   }
 
   let current = masterPath;
+  const intermediates: string[] = [];
   for (let i = 0; i < steps.length; i += 1) {
     const step = steps[i];
     const isLast = i === steps.length - 1;
@@ -89,8 +90,14 @@ export async function runPackaging(input: {
       await step.run(current, stepOutput);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      // 中途失败时不清理: 中间产物是排查"崩在哪一步"的现场证据。
       throw new Error(`成片包装失败于「${step.label}」步骤: ${msg}`);
     }
+    if (!isLast) intermediates.push(stepOutput);
     current = stepOutput;
   }
+
+  // 只删本函数自己产生的中间文件 —— masterPath(包装失败时的兜底交付物)与 outputPath
+  // 都不在这个列表里。删不掉只是留下垃圾文件, 不该让已经成功的包装反过来失败。
+  await Promise.all(intermediates.map((p) => fs.unlink(p).catch(() => {})));
 }

@@ -16,7 +16,10 @@ const ffmpegMock = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/video/ffmpeg', () => ffmpegMock);
 
-const fsMock = vi.hoisted(() => ({ copyFile: vi.fn(async () => undefined) }));
+const fsMock = vi.hoisted(() => ({
+  copyFile: vi.fn(async () => undefined),
+  unlink: vi.fn(async (_p: string) => undefined),
+}));
 vi.mock('fs/promises', () => ({ default: fsMock, ...fsMock }));
 
 import { needsPackaging, runPackaging } from '@/lib/video-production/packaging';
@@ -155,6 +158,61 @@ describe('runPackaging', () => {
       onStep: async (s) => { steps.push(s); },
     });
     expect(steps).toEqual(['bgm', 'intro-outro']);
+  });
+
+  it('全部成功后清理自己产生的中间产物, 不动 master 与最终成片', async () => {
+    await runPackaging({
+      ...base,
+      options: {
+        captionStyle: defaultCaptionStyle(),
+        captionEvents: [{ startMs: 0, endMs: 1000, text: 'x' }],
+        bgmPath: '/tmp/bgm.mp3',
+        bgmVolume: 0.2,
+        introPath: '/tmp/intro.mp4',
+        outroPath: null,
+      },
+    });
+
+    // 三步 → 两个中间文件(最后一步直接写 outputPath, 不算中间产物)
+    const unlinked = fsMock.unlink.mock.calls.map((c) => c[0]);
+    expect(unlinked).toEqual(['/root/packaging-captions.mp4', '/root/packaging-bgm.mp4']);
+    // master 与最终成片必须留着 —— 前者是包装失败时的兜底交付物
+    expect(unlinked).not.toContain('/root/master.mp4');
+    expect(unlinked).not.toContain('/root/packaged.mp4');
+  });
+
+  it('只有一步时没有中间产物可清理', async () => {
+    await runPackaging({ ...base, options: { ...EMPTY, bgmPath: '/tmp/bgm.mp3' } });
+    expect(fsMock.unlink).not.toHaveBeenCalled();
+  });
+
+  it('中途失败时保留中间产物(供排查是哪一步崩的)', async () => {
+    ffmpegMock.attachIntroOutro.mockRejectedValueOnce(new Error('ffmpeg 崩了'));
+    await expect(
+      runPackaging({
+        ...base,
+        options: {
+          ...EMPTY,
+          bgmPath: '/tmp/bgm.mp3',
+          introPath: '/tmp/intro.mp4',
+        },
+      }),
+    ).rejects.toThrow();
+    expect(fsMock.unlink).not.toHaveBeenCalled();
+  });
+
+  it('清理失败不影响包装结果(中间产物删不掉只是留下垃圾, 不该让整条任务失败)', async () => {
+    fsMock.unlink.mockRejectedValueOnce(new Error('EACCES'));
+    await expect(
+      runPackaging({
+        ...base,
+        options: {
+          ...EMPTY,
+          bgmPath: '/tmp/bgm.mp3',
+          introPath: '/tmp/intro.mp4',
+        },
+      }),
+    ).resolves.toBeUndefined();
   });
 
   it('某一步失败时错误带上步骤名(便于定位)', async () => {
