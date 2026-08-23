@@ -441,9 +441,13 @@ export interface MixBgmOpts {
  * v1 用固定音量不做 sidechain 自动闪避(spec §3.3: 效果可预期, 闪避列为后续可选)。
  */
 export function buildMixBgmArgs(opts: MixBgmOpts): string[] {
+  // `0:a:0`/`1:a:0` 而非 `0:a`/`1:a`：与 `compositeCutawayVideo`/`buildConcatArgs`
+  // 同源的既定约定——真实 iPhone 出镜素材(.mov)常带多条音轨(如 apple_apac 空间音频
+  // 副轨，本机 ffmpeg 无解码器)，BGM 混音必然作用在同一批出镜素材上，显式只取每路
+  // 输入的第一条音频流，不依赖 filtergraph 标签在有歧义时"静默取第一条"的未文档化行为。
   const filter = opts.hasVoiceTrack
-    ? `[1:a]volume=${opts.bgmVolume}[bgm];[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=0[outa]`
-    : `[1:a]volume=${opts.bgmVolume}[outa]`;
+    ? `[1:a:0]volume=${opts.bgmVolume}[bgm];[0:a:0][bgm]amix=inputs=2:duration=first:dropout_transition=0[outa]`
+    : `[1:a:0]volume=${opts.bgmVolume}[outa]`;
 
   return [
     '-y',
