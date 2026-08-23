@@ -279,8 +279,20 @@ export async function handleTalkingHeadBroll(
     const compositedPath = path.join(vp.productionRoot, 'composited.mp4');
     await compositeCutawayVideo({ sourceVideoPath, segments: cutawaySegments, outputPath: compositedPath });
     const outputPath = path.join(vp.productionRoot, outputFileName);
-    const captionSrt = buildCaptionSrtFromTranscript(transcription.segments);
-    await burnCaptions({ videoPath: compositedPath, srt: captionSrt, outputPath });
+    const captionTemplate = vp.templateId
+      ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
+      : null;
+    if (captionTemplate?.captionStyle) {
+      // 终审发现1(spec §3.2 去重规则): 模板配了 captionStyle 时, 默认 .srt 烧录整段跳过,
+      // 交给成片包装段(runPackaging, 见 handleProduce)统一烧 .ass, 避免两层字幕叠在一起。
+      // 预览档不跑包装段(spec §3.1: 预览审内容不包装), 所以这里预览产物就是"裸画面,
+      // 无字幕"——这是设计取舍, 不是遗漏: 预览审的是分镜与内容, 字幕样式要等 master
+      // 包装段才最终呈现。不要因为预览没字幕就把这段烧录加回来。
+      await fs.copyFile(compositedPath, outputPath);
+    } else {
+      const captionSrt = buildCaptionSrtFromTranscript(transcription.segments);
+      await burnCaptions({ videoPath: compositedPath, srt: captionSrt, outputPath });
+    }
 
     await setStatus(readyStatus, { [outputField]: outputPath });
   } else {
@@ -330,8 +342,18 @@ export async function handleTalkingHeadBroll(
     const compositedPath = path.join(vp.productionRoot, 'composited-master.mp4');
     await compositeCutawayVideo({ sourceVideoPath, segments: cutawaySegments, outputPath: compositedPath });
     const outputPath = path.join(vp.productionRoot, outputFileName);
-    const captionSrt = buildCaptionSrtFromTranscript(rawTranscript);
-    await burnCaptions({ videoPath: compositedPath, srt: captionSrt, outputPath });
+    const captionTemplate = vp.templateId
+      ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
+      : null;
+    if (captionTemplate?.captionStyle) {
+      // 同预览分支(终审发现1): 交给包装段统一烧 .ass, 这里只原样搬运合成结果, 保证
+      // master 与 preview 观感一致(两个分支都要改, 否则用户预览看到的字幕样式和最终
+      // 成片对不上)。
+      await fs.copyFile(compositedPath, outputPath);
+    } else {
+      const captionSrt = buildCaptionSrtFromTranscript(rawTranscript);
+      await burnCaptions({ videoPath: compositedPath, srt: captionSrt, outputPath });
+    }
 
     await setStatus(readyStatus, { [outputField]: outputPath });
   }
