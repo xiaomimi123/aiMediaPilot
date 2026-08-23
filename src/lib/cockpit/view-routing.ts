@@ -25,6 +25,8 @@ export type PlatformNavId = `platform-${RoutingPlatform}`;
 // 合法的 `?view=` 目的地, 供 T2 挂载消费。
 // 十六期新增: 新首页默认视图; momentum/pipeline/platform-* 三个值保留仅供
 // resolveInitialView 内部兼容识别历史链接, 不再是可达的 view 状态。
+// 二十期 T10: 新增 "templates" 固定视图 (视频模板), 挂在侧栏内容数据分析之前——
+// 模板是出片入口, 语义上与「内容数据分析」并列, 不属于工作台组的选题/写稿流程。
 export type NavView =
   | "positioning"
   | "inspirations"
@@ -33,6 +35,7 @@ export type NavView =
   | "momentum"
   | "pipeline"
   | "analytics"
+  | "templates"
   | "settings"
   | PlatformNavId;
 
@@ -49,6 +52,7 @@ const FIXED_VIEW_IDS: ReadonlyArray<string> = [
   "momentum",
   "pipeline",
   "analytics",
+  "templates",
   ...CONTENT_PLATFORMS.map((platform) => `platform-${platform}`),
 ];
 

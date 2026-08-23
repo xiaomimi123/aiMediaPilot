@@ -32,3 +32,11 @@ describe('派生导航列表同步收到 positioning', () => {
     expect(ALL_NAV_ITEMS.filter((item) => item.id === 'positioning')).toHaveLength(1);
   });
 });
+
+describe('模板导航项(二十期)', () => {
+  it('ALL_NAV_ITEMS 含「模板」项', () => {
+    const item = ALL_NAV_ITEMS.find((i) => i.id === 'templates');
+    expect(item).toBeDefined();
+    expect(item!.label).toBe('模板');
+  });
+});

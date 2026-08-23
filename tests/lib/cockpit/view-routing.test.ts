@@ -201,3 +201,9 @@ describe('resolveInitialHomePlatform', () => {
     expect(resolveInitialHomePlatform(params, view)).toBeUndefined();
   });
 });
+
+describe('templates 视图路由(二十期)', () => {
+  it('?view=templates 能解析到 templates 视图', () => {
+    expect(resolveInitialView(new URLSearchParams('view=templates'))).toBe('templates');
+  });
+});

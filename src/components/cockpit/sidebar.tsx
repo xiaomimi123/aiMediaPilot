@@ -36,8 +36,14 @@ export const PLATFORM_NAV_ITEMS: ReadonlyArray<SidebarNavItem> = CONTENT_PLATFOR
   icon: "platform",
 }));
 
+// ▦ 模板 (二十期新增): 放在「内容数据分析」之前——模板管理与出片是内容生产的
+// 出口, 语义上和数据分析并列, 但先看模板再看数据更符合创作顺序。图标复用 Icon
+// 组件里 "pipeline" 键 (▦ 网格字形, shared.tsx 未在任何侧栏项里被引用——内容总览
+// 早已并入首页不再占用图标, 见上方 PLATFORM_NAV_ITEMS 注释), 网格意象也贴近
+// 「模板卡片」的直觉, 不新增 Icon 图标资源。
 // ◎ 内容数据分析。十六期 (T3): 「内容总览」从这里移除——并入新首页 (T4/T5)。
 export const OVERVIEW_NAV_ITEMS: ReadonlyArray<SidebarNavItem> = [
+  { id: "templates", label: "模板", icon: "pipeline" },
   { id: "analytics", label: "内容数据分析", icon: "analytics" },
 ];
 
