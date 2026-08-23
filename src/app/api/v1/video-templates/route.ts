@@ -22,6 +22,13 @@ export async function POST(req: Request) {
   if (!parsed.success) return fail('模板配置不合法', 400);
   const cfg = parsed.data;
 
+  // 新建时模板 id 还没确定, 无法校验这三个路径是否落在"自己的"素材目录下(终审发现4)——
+  // 素材本来就只能通过 /assets 上传接口写入(先建模板拿到 id, 再上传), 所以新建请求体
+  // 里这三个字段一律要求 null, 非 null 直接拒绝(不静默丢弃, 免得调用方误以为已生效)。
+  if (cfg.bgmPath !== null || cfg.introPath !== null || cfg.outroPath !== null) {
+    return fail('新建模板时素材路径必须为空, 请先创建后通过素材上传接口写入', 400);
+  }
+
   const user = await getOrCreateDefaultUser();
   const now = new Date().toISOString();
   const created = await prisma.videoTemplate.create({

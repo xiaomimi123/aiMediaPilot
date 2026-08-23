@@ -88,6 +88,16 @@ describe('POST /api/v1/video-templates', () => {
     const res = await POST(new Request('http://x', { method: 'POST', body: 'not-json' }));
     expect(res.status).toBe(400);
   });
+
+  // 终审发现4(防御性): 新建时模板 id 还没确定, templateAssetDir 前缀校验无从谈起——
+  // 素材本来就只能通过 /assets 上传接口(先 POST 建模板拿到 id, 再传素材), 所以新建
+  // 请求体里这三个字段必须是 null, 非 null 直接拒绝, 不做静默丢弃(静默丢弃会让调用方
+  // 误以为素材已经生效)。
+  it('新建时素材路径字段非 null → 400, 不落库', async () => {
+    const res = await POST(jsonReq({ ...PRESET_TEMPLATES[0], bgmPath: 'video-templates/other/bgm.mp3' }));
+    expect(res.status).toBe(400);
+    expect(prismaMock.videoTemplate.create).not.toHaveBeenCalled();
+  });
 });
 
 describe('PUT /api/v1/video-templates/[id]', () => {
@@ -104,6 +114,53 @@ describe('PUT /api/v1/video-templates/[id]', () => {
     const res = await PUT(jsonReq({ ...PRESET_TEMPLATES[0], name: '改过的' }) as any, { params: { id: 't1' } });
     expect(res.status).toBe(200);
     expect(prismaMock.videoTemplate.update.mock.calls[0][0].data.name).toBe('改过的');
+  });
+
+  // 终审发现4(防御性): bgmPath/introPath/outroPath 直接拼进 ffmpeg -i 参数, 必须落在
+  // 该模板自己的素材目录下, 否则绕开 /assets 上传路由的 MIME 白名单/大小上限/safeExt 防护。
+  describe('素材路径越权校验(终审发现4)', () => {
+    it('三个素材路径都落在本模板素材目录前缀内 → 通过', async () => {
+      prismaMock.videoTemplate.findUnique.mockResolvedValue({ id: 't1', userId: 'user1' });
+      prismaMock.videoTemplate.update.mockResolvedValue({ id: 't1' });
+      const res = await PUT(jsonReq({
+        ...PRESET_TEMPLATES[0],
+        bgmPath: 'video-templates/t1/bgm.mp3',
+        introPath: 'video-templates/t1/intro.mp4',
+        outroPath: 'video-templates/t1/outro.mp4',
+      }) as any, { params: { id: 't1' } });
+      expect(res.status).toBe(200);
+      expect(prismaMock.videoTemplate.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('bgmPath 指向别的模板目录 → 400, 不落库', async () => {
+      prismaMock.videoTemplate.findUnique.mockResolvedValue({ id: 't1', userId: 'user1' });
+      const res = await PUT(jsonReq({
+        ...PRESET_TEMPLATES[0],
+        bgmPath: 'video-templates/t2/bgm.mp3',
+      }) as any, { params: { id: 't1' } });
+      expect(res.status).toBe(400);
+      expect(prismaMock.videoTemplate.update).not.toHaveBeenCalled();
+    });
+
+    it('introPath 指向任意文件系统路径(如 /etc/passwd) → 400, 不落库', async () => {
+      prismaMock.videoTemplate.findUnique.mockResolvedValue({ id: 't1', userId: 'user1' });
+      const res = await PUT(jsonReq({
+        ...PRESET_TEMPLATES[0],
+        introPath: '/etc/passwd',
+      }) as any, { params: { id: 't1' } });
+      expect(res.status).toBe(400);
+      expect(prismaMock.videoTemplate.update).not.toHaveBeenCalled();
+    });
+
+    it('目录名前缀碰撞(t1 vs t12)不能被越权 —— t12 的路径不能通过 t1 的校验', async () => {
+      prismaMock.videoTemplate.findUnique.mockResolvedValue({ id: 't1', userId: 'user1' });
+      const res = await PUT(jsonReq({
+        ...PRESET_TEMPLATES[0],
+        outroPath: 'video-templates/t12/outro.mp4',
+      }) as any, { params: { id: 't1' } });
+      expect(res.status).toBe(400);
+      expect(prismaMock.videoTemplate.update).not.toHaveBeenCalled();
+    });
   });
 });
 

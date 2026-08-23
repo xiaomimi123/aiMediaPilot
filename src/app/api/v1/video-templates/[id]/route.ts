@@ -1,4 +1,5 @@
 import fs from 'fs/promises';
+import path from 'path';
 import type { Prisma } from '@prisma/client';
 import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
@@ -13,6 +14,18 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   return ok({ template: t });
 }
 
+/**
+ * bgmPath/introPath/outroPath 会被直接拼进 ffmpeg -i 参数(见 mixBgm/attachIntroOutro),
+ * 完全绕开 /assets 上传路由的 MIME 白名单/大小上限/safeExt 防护——非 null 时必须落在
+ * 该模板自己的素材目录下。用路径分隔符做边界判断(而非裸 startsWith), 避免 "t1" 前缀
+ * 误配到 "t12" 这类兄弟目录。
+ */
+function isWithinTemplateAssetDir(templateId: string, p: string): boolean {
+  const dir = path.resolve(templateAssetDir(templateId));
+  const resolved = path.resolve(p);
+  return resolved === dir || resolved.startsWith(dir + path.sep);
+}
+
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   let body: unknown;
   try { body = await req.json(); } catch { return fail('请求体不是合法 JSON', 400); }
@@ -23,6 +36,12 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   const user = await getOrCreateDefaultUser();
   const t = await prisma.videoTemplate.findUnique({ where: { id: params.id } });
   if (!t || t.userId !== user.id) return fail('模板不存在', 404);
+
+  for (const p of [cfg.bgmPath, cfg.introPath, cfg.outroPath]) {
+    if (p !== null && !isWithinTemplateAssetDir(params.id, p)) {
+      return fail('素材路径必须落在本模板的素材目录下, 请通过素材上传接口获取', 400);
+    }
+  }
 
   // isPreset 只是 UI 徽标, 预设模板同样可改(用户明确要求"对某一个模板不断调整")。
   const updated = await prisma.videoTemplate.update({
