@@ -406,3 +406,60 @@ export function buildMuxAudioArgs(opts: MuxAudioOpts): string[] {
 export async function muxAudioTrack(opts: MuxAudioOpts): Promise<void> {
   await execFileAsync(FFMPEG_BIN, buildMuxAudioArgs(opts), { timeout: 600_000 });
 }
+
+export function buildProbeAudioStreamArgs(videoPath: string): string[] {
+  return ['-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=codec_type', '-of', 'json', videoPath];
+}
+
+export function parseHasAudioStream(stdout: string): boolean {
+  try {
+    const json = JSON.parse(stdout);
+    return Array.isArray(json?.streams) && json.streams.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** 探测视频是否带音轨 —— 决定 BGM 是与人声 amix 还是直接作为唯一音轨。 */
+export async function hasAudioStream(videoPath: string): Promise<boolean> {
+  const { stdout } = await execFileAsync(FFPROBE_BIN, buildProbeAudioStreamArgs(videoPath), { timeout: 30_000 });
+  return parseHasAudioStream(stdout);
+}
+
+export interface MixBgmOpts {
+  videoPath: string;
+  bgmPath: string;
+  bgmVolume: number; // 0~1, BGM 相对音量
+  outputPath: string;
+  hasVoiceTrack: boolean; // 正片是否已有人声音轨(由 hasAudioStream 探测)
+}
+
+/**
+ * BGM 混音。BGM 素材通常比正片短, 用 `-stream_loop -1` 无限循环该输入补齐;
+ * 长度靠 amix 的 `duration=first`(以人声为准)或 `-shortest`(无人声时以画面为准)收敛,
+ * 不需要提前知道 BGM 实际时长。画面 `-c:v copy` 不重编码(混音不动画面, 省一次转码)。
+ * v1 用固定音量不做 sidechain 自动闪避(spec §3.3: 效果可预期, 闪避列为后续可选)。
+ */
+export function buildMixBgmArgs(opts: MixBgmOpts): string[] {
+  const filter = opts.hasVoiceTrack
+    ? `[1:a]volume=${opts.bgmVolume}[bgm];[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=0[outa]`
+    : `[1:a]volume=${opts.bgmVolume}[outa]`;
+
+  return [
+    '-y',
+    '-i', opts.videoPath,
+    '-stream_loop', '-1', '-i', opts.bgmPath,
+    '-filter_complex', filter,
+    '-map', '0:v:0',
+    '-map', '[outa]',
+    '-c:v', 'copy',
+    '-c:a', 'aac',
+    ...(opts.hasVoiceTrack ? [] : ['-shortest']),
+    opts.outputPath,
+  ];
+}
+
+export async function mixBgm(opts: Omit<MixBgmOpts, 'hasVoiceTrack'>): Promise<void> {
+  const hasVoiceTrack = await hasAudioStream(opts.videoPath);
+  await execFileAsync(FFMPEG_BIN, buildMixBgmArgs({ ...opts, hasVoiceTrack }), { timeout: 600_000 });
+}

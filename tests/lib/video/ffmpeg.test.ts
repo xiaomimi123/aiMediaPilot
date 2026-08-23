@@ -13,6 +13,9 @@ import {
   parseProbeOutput,
   buildProbeDimensionsArgs,
   parseProbeDimensionsOutput,
+  buildMixBgmArgs,
+  buildProbeAudioStreamArgs,
+  parseHasAudioStream,
 } from '@/lib/video/ffmpeg';
 
 describe('buildProbeArgs', () => {
@@ -275,6 +278,75 @@ describe('buildMuxAudioArgs', () => {
     expect(args).toContain('1:a:0');
     expect(args).toContain('-shortest');
     expect(args[args.length - 1]).toBe('/tmp/out.mp4');
+  });
+});
+
+describe('buildProbeAudioStreamArgs / parseHasAudioStream', () => {
+  it('构造只查音频流的 ffprobe 参数', () => {
+    const args = buildProbeAudioStreamArgs('/tmp/v.mp4');
+    expect(args).toContain('-select_streams');
+    expect(args).toContain('a');
+    expect(args).toContain('/tmp/v.mp4');
+  });
+
+  it('有音频流 → true', () => {
+    expect(parseHasAudioStream(JSON.stringify({ streams: [{ codec_type: 'audio' }] }))).toBe(true);
+  });
+
+  it('无音频流 → false', () => {
+    expect(parseHasAudioStream(JSON.stringify({ streams: [] }))).toBe(false);
+  });
+
+  it('streams 字段缺失 → false(不抛错)', () => {
+    expect(parseHasAudioStream('{}')).toBe(false);
+  });
+});
+
+describe('buildMixBgmArgs', () => {
+  it('有人声时: BGM 循环+压低音量后与人声 amix, 时长以人声为准', () => {
+    const args = buildMixBgmArgs({
+      videoPath: '/tmp/in.mp4',
+      bgmPath: '/tmp/bgm.mp3',
+      bgmVolume: 0.15,
+      outputPath: '/tmp/out.mp4',
+      hasVoiceTrack: true,
+    });
+    // BGM 输入必须循环补齐(BGM 通常比正片短)
+    expect(args).toContain('-stream_loop');
+    const filter = args[args.indexOf('-filter_complex') + 1];
+    expect(filter).toContain('volume=0.15');
+    expect(filter).toContain('amix');
+    // duration=first: 以第一路(人声)为准, 不被循环的 BGM 拖长
+    expect(filter).toContain('duration=first');
+    expect(args).toContain('-c:v');
+    expect(args).toContain('copy'); // 画面不重编码
+    expect(args[args.length - 1]).toBe('/tmp/out.mp4');
+  });
+
+  it('无人声时: BGM 即唯一音轨, 不用 amix, 用 -shortest 对齐画面时长', () => {
+    const args = buildMixBgmArgs({
+      videoPath: '/tmp/in.mp4',
+      bgmPath: '/tmp/bgm.mp3',
+      bgmVolume: 0.3,
+      outputPath: '/tmp/out.mp4',
+      hasVoiceTrack: false,
+    });
+    const filter = args[args.indexOf('-filter_complex') + 1];
+    expect(filter).toContain('volume=0.3');
+    expect(filter).not.toContain('amix');
+    expect(args).toContain('-shortest');
+    expect(args).toContain('-stream_loop');
+  });
+
+  it('画面流始终来自第一个输入(0:v)', () => {
+    const args = buildMixBgmArgs({
+      videoPath: '/tmp/in.mp4',
+      bgmPath: '/tmp/bgm.mp3',
+      bgmVolume: 0.15,
+      outputPath: '/tmp/out.mp4',
+      hasVoiceTrack: true,
+    });
+    expect(args).toContain('0:v:0');
   });
 });
 
