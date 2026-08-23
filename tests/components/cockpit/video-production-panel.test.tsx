@@ -52,3 +52,13 @@ describe("VideoProductionPanel — talking-head-broll 前置校验", () => {
     expect(screen.queryByRole("button", { name: "开始生成" })).toBeNull();
   });
 });
+
+// 终审发现3: 二十期新增的 packaging 状态缺中文标签, 会在成片包装阶段短暂显示裸英文。
+describe("VideoProductionPanel — packaging 状态标签", () => {
+  it("status=packaging 时显示中文「包装成片中」, 不是裸英文 packaging", async () => {
+    mockLatest({ id: "vp1", status: "packaging", previewPath: null, masterPath: null, errorMessage: null });
+    render(<VideoProductionPanel contentId="c1" deliveryMode="ppt-narration" />);
+    await waitFor(() => expect(screen.getByText("包装成片中")).toBeTruthy());
+    expect(screen.queryByText("packaging")).toBeNull();
+  });
+});

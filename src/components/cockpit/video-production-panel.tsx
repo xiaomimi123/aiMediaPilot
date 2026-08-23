@@ -53,7 +53,7 @@ export function VideoProductionPanel({ contentId, deliveryMode }: { contentId: s
   const STATUS_LABEL: Record<string, string> = {
     queued: '排队中', source_uploaded: '视频已上传，等待生成', directing: '构思分镜中', building: '搭建画面中',
     assembling: '拼接预览中', preview_ready: '预览就绪', approved: '已确认，渲染正式成片中',
-    rendering: '渲染正式成片中', done: '已完成', failed: '生成失败',
+    rendering: '渲染正式成片中', packaging: '包装成片中', done: '已完成', failed: '生成失败',
   };
 
   // talking-head-broll 的生成必须先在「录制」步骤上传出镜视频。不能只看 vp 是否

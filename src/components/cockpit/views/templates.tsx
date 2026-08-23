@@ -41,7 +41,7 @@ const STEP_LABELS: Record<WizardStep, string> = {
 const PRODUCTION_STATUS_LABELS: Record<string, string> = {
   queued: "排队中", source_uploaded: "视频已上传", directing: "构思分镜中", building: "搭建画面中",
   assembling: "拼接预览中", preview_ready: "预览就绪", approved: "确认渲染中",
-  rendering: "渲染中", done: "已完成", failed: "生成失败",
+  rendering: "渲染中", packaging: "包装成片中", done: "已完成", failed: "生成失败",
 };
 
 interface SixActPreview {

@@ -300,4 +300,24 @@ describe('临时配音覆盖与历史出片(task-10b)', () => {
     await waitFor(() => expect(screen.getByText('已完成')).toBeTruthy());
     expect(screen.getByRole('link', { name: '下载成片' })).toBeTruthy();
   });
+
+  // 终审发现3: packaging 状态缺中文标签, 模板驱动的历史出片列表会在包装阶段短暂显示裸英文。
+  it('历史出片 status=packaging 时显示中文「包装成片中」, 不是裸英文', async () => {
+    const fetchMock = routedFetch({
+      productions: () => ({
+        ok: true,
+        json: async () => ({ ok: true, data: { productions: [
+          { id: 'old-vp2', status: 'packaging', mode: 'illustration-tts', masterPath: null, previewPath: null, contentId: 'c-old', createdAt: '2026-08-01T00:00:00.000Z' },
+        ] } }),
+      } as Response),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<TemplatesView />);
+    await waitFor(() => expect(screen.getByText('插画配音')).toBeTruthy());
+
+    fireEvent.click(screen.getAllByRole('button', { name: '用它出片' })[2]);
+
+    await waitFor(() => expect(screen.getByText('包装成片中')).toBeTruthy());
+    expect(screen.queryByText('packaging')).toBeNull();
+  });
 });
