@@ -230,6 +230,12 @@ export interface CompositeCutawayOpts {
 export interface CompositeCutawayArgsOpts extends CompositeCutawayOpts {
   sourceWidth: number;
   sourceHeight: number;
+  /**
+   * 源视频总时长(毫秒), 可选。提供时用于识别"最后一个 segment 的 endMs 恰好到达
+   * (或超过)源视频末尾"的边界——此时不再生成零长度的开放尾段 trim(concat filter
+   * 会因空片段报错退出)。不提供时保持原行为(始终生成尾段)。
+   */
+  sourceDurationMs?: number;
 }
 
 /**
@@ -290,10 +296,14 @@ export function buildCompositeCutawayArgs(opts: CompositeCutawayArgsOpts): strin
     cursorMs = seg.endMs;
   }
 
-  // 尾段：从最后一个 segment 结束到源视频结尾(不带 end 参数，trim 自动取到输入末尾)
-  const tailLabel = `s${pieceIdx}`;
-  filterParts.push(`[0:v]trim=start=${cursorMs / 1000},setpts=PTS-STARTPTS[${tailLabel}]`);
-  concatLabels.push(`[${tailLabel}]`);
+  // 尾段：从最后一个 segment 结束到源视频结尾(不带 end 参数，trim 自动取到输入末尾)。
+  // 提供了 sourceDurationMs 且最后一个 segment 已顶到(或超过)源视频末尾时跳过——
+  // 否则会生成零长度的空 trim 段传给 concat, 部分 ffmpeg 版本会直接报错退出。
+  if (opts.sourceDurationMs === undefined || cursorMs < opts.sourceDurationMs) {
+    const tailLabel = `s${pieceIdx}`;
+    filterParts.push(`[0:v]trim=start=${cursorMs / 1000},setpts=PTS-STARTPTS[${tailLabel}]`);
+    concatLabels.push(`[${tailLabel}]`);
+  }
 
   const concatFilter = `${concatLabels.join('')}concat=n=${concatLabels.length}:v=1:a=0[outv]`;
   filterParts.push(concatFilter);
@@ -313,7 +323,13 @@ export function buildCompositeCutawayArgs(opts: CompositeCutawayArgsOpts): strin
 
 export async function compositeCutawayVideo(opts: CompositeCutawayOpts): Promise<void> {
   const { width: sourceWidth, height: sourceHeight } = await probeVideoDimensions(opts.sourceVideoPath);
-  await execFileAsync(FFMPEG_BIN, buildCompositeCutawayArgs({ ...opts, sourceWidth, sourceHeight }), { timeout: 600_000 });
+  const { durationSec } = await probeVideo(opts.sourceVideoPath);
+  const sourceDurationMs = Math.round(durationSec * 1000);
+  await execFileAsync(
+    FFMPEG_BIN,
+    buildCompositeCutawayArgs({ ...opts, sourceWidth, sourceHeight, sourceDurationMs }),
+    { timeout: 600_000 },
+  );
 }
 
 export interface BuildBurnCaptionsArgsOpts {
@@ -323,11 +339,23 @@ export interface BuildBurnCaptionsArgsOpts {
 }
 
 /**
+ * subtitles filter 的文件路径要过 ffmpeg 两层解析：先是 filtergraph 级(按未转义的
+ * `,;[]'\` 切分 filter 链)，再是选项级(按 `:` 切分选项、识别 `'...'` 引号)。
+ * 路径里的特殊字符(尤其空格/单引号/逗号/方括号)不转义会导致解析错位或直接打不开文件。
+ * 两级转义方案：选项级先用单引号整体包裹(内部单引号以 '\'' 逃出)，再对结果做
+ * filtergraph 级转义(`\ ' , ; [ ]` 各加 `\` 前缀)。
+ */
+function escapeSubtitlesFilterPath(p: string): string {
+  const optionQuoted = `'${p.replace(/'/g, "'\\''")}'`;
+  return optionQuoted.replace(/([\\',;[\]])/g, '\\$1');
+}
+
+/**
  * 用普通 .srt + ffmpeg 的 subtitles filter 烧录字幕(第一版实现，不做 .ass 动画字幕，
  * 详见 spec 风险表：这是既定的范围简化，不是遗漏)。
  */
 export function buildBurnCaptionsArgs(opts: BuildBurnCaptionsArgsOpts): string[] {
-  return ['-y', '-i', opts.videoPath, '-vf', `subtitles=${opts.srtPath}`, opts.outputPath];
+  return ['-y', '-i', opts.videoPath, '-vf', `subtitles=${escapeSubtitlesFilterPath(opts.srtPath)}`, opts.outputPath];
 }
 
 export interface BurnCaptionsOpts {

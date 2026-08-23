@@ -190,6 +190,34 @@ describe('compositeCutawayVideo', () => {
   );
 
   it(
+    '真实合成: 最后一个 segment 的 endMs 恰好等于源视频总时长时不报错(零长度尾段边界)',
+    async () => {
+      const outputPath = path.join(workDir, 'output-tail-boundary.mp4');
+
+      // 用真实探测到的源时长做 endMs, 复现"对齐结果最后一幕顶到视频末尾"的场景
+      const { durationSec } = await probeVideo(sourceVideoPath);
+      const endMs = Math.round(durationSec * 1000);
+
+      await compositeCutawayVideo({
+        sourceVideoPath,
+        segments: [{ startMs: 1000, endMs, clipPath: brollClipPath }],
+        outputPath,
+      });
+
+      const probeResult = await probeVideo(outputPath);
+      expect(probeResult.durationSec).toBeGreaterThan(durationSec - 0.5);
+      expect(probeResult.durationSec).toBeLessThan(durationSec + 0.5);
+
+      // 1s 之前是源视频(蓝), 1s 之后一直到结尾都是 B-roll(红)
+      const beforeSeg = await sampleFrameColor(outputPath, 0.5);
+      const insideSegTail = await sampleFrameColor(outputPath, durationSec - 0.3);
+      expect(isCloseToColor(beforeSeg, BLUE)).toBe(true);
+      expect(isCloseToColor(insideSegTail, { r: 255, g: 0, b: 0 })).toBe(true);
+    },
+    60_000,
+  );
+
+  it(
     '0 个 segment 时直通合成, 时长与源视频一致',
     async () => {
       const outputPath = path.join(workDir, 'output-zero.mp4');

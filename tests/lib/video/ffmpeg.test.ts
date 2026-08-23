@@ -177,6 +177,38 @@ describe('buildCompositeCutawayArgs', () => {
     expect(args).not.toContain('0:a');
   });
 
+  it('sourceDurationMs 等于最后一个 segment 的 endMs 时不生成零长度尾段', () => {
+    // 终审遗留边界: 对齐结果的最后一幕 endMs 恰好等于源视频总时长时, 尾段是
+    // `[0:v]trim=start=<总时长>`(零长度), concat filter 会因空片段直接报错退出。
+    const args = buildCompositeCutawayArgs({
+      sourceVideoPath: '/tmp/source.mp4',
+      segments: [{ startMs: 1000, endMs: 3000, clipPath: '/tmp/broll.mp4' }],
+      outputPath: '/tmp/out.mp4',
+      sourceWidth: 1920,
+      sourceHeight: 1080,
+      sourceDurationMs: 3000,
+    });
+    const filterComplex = args[args.indexOf('-filter_complex') + 1];
+    // 不应出现 start=3 的开放尾段 trim
+    expect(filterComplex).not.toMatch(/\[0:v\]trim=start=3,/);
+    // 拼接片段只有: 开头源视频片段(0~1s) + B-roll 片段, 共 2 段
+    expect(filterComplex).toContain('concat=n=2');
+  });
+
+  it('sourceDurationMs 大于最后一个 segment 的 endMs 时仍生成尾段(原行为不变)', () => {
+    const args = buildCompositeCutawayArgs({
+      sourceVideoPath: '/tmp/source.mp4',
+      segments: [{ startMs: 1000, endMs: 2000, clipPath: '/tmp/broll.mp4' }],
+      outputPath: '/tmp/out.mp4',
+      sourceWidth: 1920,
+      sourceHeight: 1080,
+      sourceDurationMs: 3000,
+    });
+    const filterComplex = args[args.indexOf('-filter_complex') + 1];
+    expect(filterComplex).toMatch(/\[0:v\]trim=start=2,setpts=PTS-STARTPTS\[s\d+\]/);
+    expect(filterComplex).toContain('concat=n=3');
+  });
+
   it('B-roll 分镜按源视频真实宽高 scale+pad 对齐(真实竖屏素材场景), 源视频自身片段不缩放', () => {
     // 真实走查复现: 手机竖拍出镜素材 2160x3840, Builder 分镜固定 1920x1080 横屏,
     // concat filter 要求所有参与拼接的视频流尺寸严格一致, 尺寸不一致会直接报错退出
@@ -201,7 +233,7 @@ describe('buildCompositeCutawayArgs', () => {
 });
 
 describe('buildBurnCaptionsArgs', () => {
-  it('用 subtitles filter 烧录字幕', () => {
+  it('用 subtitles filter 烧录字幕, 路径以引号包裹形式传给 filter', () => {
     const args = buildBurnCaptionsArgs({
       videoPath: '/in.mp4',
       srtPath: '/tmp/captions-abc.srt',
@@ -210,8 +242,22 @@ describe('buildBurnCaptionsArgs', () => {
     expect(args).toContain('-i');
     expect(args).toContain('/in.mp4');
     expect(args).toContain('-vf');
-    expect(args.join(' ')).toMatch(/subtitles=\/tmp\/captions-abc\.srt/);
+    // 选项级单引号包裹 + 图级转义(\'):普通路径的转义结果
+    const vfIdx = args.indexOf('-vf');
+    expect(args[vfIdx + 1]).toBe(String.raw`subtitles=\'/tmp/captions-abc.srt\'`);
     expect(args[args.length - 1]).toBe('/out.mp4');
+  });
+
+  it('路径含 filter 特殊字符(空格/单引号/逗号/方括号)时做两级转义', () => {
+    // 终审遗留: subtitles= 的值要过 ffmpeg 两层解析(filtergraph 级 + 选项级),
+    // 路径里的 ' , [ ] ; \ 未转义会破坏 filtergraph 解析或被当成下一个 filter 选项。
+    const args = buildBurnCaptionsArgs({
+      videoPath: '/in.mp4',
+      srtPath: String.raw`/tmp/a b's [x],c.srt`,
+      outputPath: '/out.mp4',
+    });
+    const vfIdx = args.indexOf('-vf');
+    expect(args[vfIdx + 1]).toBe(String.raw`subtitles=\'/tmp/a b\'\\\'\'s \[x\]\,c.srt\'`);
   });
 });
 

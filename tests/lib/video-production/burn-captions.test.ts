@@ -4,7 +4,7 @@ import path from 'path';
 import os from 'os';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { burnCaptions, probeVideo } from '@/lib/video/ffmpeg';
+import { burnCaptions, buildBurnCaptionsArgs, probeVideo } from '@/lib/video/ffmpeg';
 
 const execFileAsync = promisify(execFile);
 const FFMPEG_BIN = process.env.FFMPEG_BIN || 'ffmpeg';
@@ -68,6 +68,30 @@ describe('burnCaptions', () => {
       );
       const newLeftoverSrt = tmpEntriesAfter.filter((name) => !tmpEntriesBefore.has(name));
       expect(newLeftoverSrt).toEqual([]);
+    },
+    60_000,
+  );
+
+  it(
+    '真实烧录: .srt 路径含 filter 特殊字符(空格/单引号/逗号/方括号)时转义后仍能成功',
+    async () => {
+      // 终审遗留验证: subtitles= 的值要过 ffmpeg filtergraph 两层解析,
+      // 未转义的特殊字符路径会直接解析失败。这里用真实 ffmpeg 证明转义方案有效。
+      const weirdDir = path.join(workDir, "sub dir's [x],v1");
+      await fs.mkdir(weirdDir, { recursive: true });
+      const srtPath = path.join(weirdDir, 'captions.srt');
+      await fs.writeFile(srtPath, SAMPLE_SRT, 'utf-8');
+      const outputPath = path.join(workDir, 'output-weird-path.mp4');
+
+      await execFileAsync(
+        FFMPEG_BIN,
+        buildBurnCaptionsArgs({ videoPath: sourceVideoPath, srtPath, outputPath }),
+        { timeout: 60_000 },
+      );
+
+      const probeResult = await probeVideo(outputPath);
+      expect(probeResult.durationSec).toBeGreaterThan(1.5);
+      expect(probeResult.durationSec).toBeLessThan(2.5);
     },
     60_000,
   );
