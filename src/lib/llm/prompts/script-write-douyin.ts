@@ -107,6 +107,22 @@ const ACT_RESPONSIBILITY: Record<ActKey, string> = {
 
 const ACT_TABLE_TEXT = ACT_KEYS.map((key) => `- ${key} (${ACT_LABELS[key]}): ${ACT_RESPONSIBILITY[key]}`).join('\n');
 
+/**
+ * 二十期: 模板写稿提示注入段。无配置时返回空串 —— buildSystemPrompt 在空串时
+ * 输出与不传参数**字符级一致**(与 personaSection/voiceSection 同一约定, 零迁移)。
+ */
+export function buildTemplateSection(
+  scriptPrompt: { tone?: string; targetDurationSec?: number; hookHint?: string; extraGuidance?: string } | null,
+): string {
+  if (!scriptPrompt) return '';
+  const lines: string[] = [];
+  if (scriptPrompt.tone?.trim()) lines.push(`- 整体语气: ${scriptPrompt.tone.trim()}`);
+  if (scriptPrompt.hookHint?.trim()) lines.push(`- 开场钩子套路: ${scriptPrompt.hookHint.trim()}`);
+  if (scriptPrompt.extraGuidance?.trim()) lines.push(`- 额外要求: ${scriptPrompt.extraGuidance.trim()}`);
+  if (lines.length === 0) return '';
+  return `\n\n本条内容套用的模板对写稿有额外要求 (与上面的通用规则冲突时, 以上面的硬性要求为准):\n${lines.join('\n')}`;
+}
+
 export const SCRIPT_WRITE_DOUYIN = {
   /**
    * personaSection 缺省/空串时, 输出必须与不传参数时字符级一致 (现有测试断言)。
@@ -117,13 +133,16 @@ export const SCRIPT_WRITE_DOUYIN = {
     style: StyleContext,
     personaSection?: string,
     voiceSection?: string,
+    templateSection?: string,
   ): string {
     const hasPersona = Boolean(personaSection && personaSection.trim());
     const personaBlock = hasPersona ? `\n\n你的定位:\n${personaSection}` : '';
     // 十二期: 人物志与经历独立成块 —— 与人设定位档案是两份互不依赖的档案,
     // 只建了其中一份时另一份仍须注入 (voiceSection 自带前导换行, 见 buildVoiceSection)。
     const voiceBlock = voiceSection && voiceSection.trim() ? voiceSection : '';
-    return `${getExpertPersona(niche)}${personaBlock}${voiceBlock}
+    // 二十期: 模板写稿提示 —— 空串时与不传参数字符级一致(同 personaSection/voiceSection 约定)
+    const templateBlock = templateSection && templateSection.trim() ? templateSection : '';
+    return `${getExpertPersona(niche)}${personaBlock}${voiceBlock}${templateBlock}
 
 任务: 为这条抖音口播短视频写一份可以直接照着念的口播逐字稿, 按固定六幕 (acts) 分镜产出, 不是坐下来听课的科普稿, 而是面向刷视频时被拦下来的观众——每一句话要么在推进理解, 要么在制造继续看下去的理由, 没有第三种句子。
 
