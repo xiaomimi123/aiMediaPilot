@@ -107,11 +107,15 @@ export function TemplatesView() {
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  const [listError, setListError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<VideoTemplateConfig>(emptyTemplateConfig());
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [assetUploading, setAssetUploading] = useState<"bgm" | "intro" | "outro" | null>(null);
+  const [assetError, setAssetError] = useState<string | null>(null);
 
   const [activeTemplate, setActiveTemplate] = useState<StoredTemplate | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
@@ -133,9 +137,17 @@ export function TemplatesView() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setListError(null);
     fetch("/api/v1/video-templates")
       .then((res) => readData<{ templates: StoredTemplate[] }>(res))
-      .then((data) => { if (!cancelled) setTemplates(data?.templates ?? []); })
+      .then((data) => {
+        if (cancelled) return;
+        // data 为 null 说明响应体没带 templates 字段(网络成功但形状不对/后端报错),
+        // 与"确实一条模板都没有"(templates: [])区分开——后者是合法空态, 不算失败。
+        if (!data) { setListError("加载模板列表失败，请刷新重试"); return; }
+        setTemplates(data.templates ?? []);
+      })
+      .catch(() => { if (!cancelled) setListError("加载模板列表失败，请检查网络后重试"); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [refreshKey]);
@@ -181,14 +193,30 @@ export function TemplatesView() {
   }
 
   async function handleDuplicate(id: string) {
-    await fetch(`/api/v1/video-templates/${id}/duplicate`, { method: "POST" });
-    setRefreshKey((k) => k + 1);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/v1/video-templates/${id}/duplicate`, { method: "POST" });
+      const data = await readData<{ template: StoredTemplate }>(res);
+      // 复制成功以「拿到新模板记录」为准, 不是「请求发出去了」——旧实现不检查响应就
+      // 直接刷新列表, 复制失败时列表纹丝不动却让用户误以为"已经复制好了"。
+      if (!data?.template) { setActionError("复制失败，请重试"); return; }
+      setRefreshKey((k) => k + 1);
+    } catch {
+      setActionError("复制失败，请检查网络后重试");
+    }
   }
 
   async function handleDelete(id: string) {
     if (!window.confirm("确定删除这个模板吗？删除后不可恢复。")) return;
-    await fetch(`/api/v1/video-templates/${id}`, { method: "DELETE" });
-    setRefreshKey((k) => k + 1);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/v1/video-templates/${id}`, { method: "DELETE" });
+      const data = await readData<{ deleted: boolean }>(res);
+      if (!data?.deleted) { setActionError("删除失败，请重试"); return; }
+      setRefreshKey((k) => k + 1);
+    } catch {
+      setActionError("删除失败，请检查网络后重试");
+    }
   }
 
   async function handleSave() {
@@ -211,6 +239,8 @@ export function TemplatesView() {
       setEditingId(data.template.id);
       setRefreshKey((k) => k + 1);
       setMode("list");
+    } catch {
+      setSaveError("保存失败，请检查网络后重试");
     } finally {
       setSaving(false);
     }
@@ -219,6 +249,7 @@ export function TemplatesView() {
   async function handleAssetUpload(kind: "bgm" | "intro" | "outro", file: File) {
     if (!editingId) return;
     setAssetUploading(kind);
+    setAssetError(null);
     try {
       const fd = new FormData();
       fd.append("kind", kind);
@@ -228,7 +259,11 @@ export function TemplatesView() {
       const field = kind === "bgm" ? "bgmPath" : kind === "intro" ? "introPath" : "outroPath";
       if (data && typeof data[field] === "string") {
         setForm((prev) => ({ ...prev, [field]: data[field] }));
+      } else {
+        setAssetError("素材上传失败，请重试");
       }
+    } catch {
+      setAssetError("素材上传失败，请检查网络后重试");
     } finally {
       setAssetUploading(null);
     }
@@ -250,6 +285,8 @@ export function TemplatesView() {
       const data = await readData<{ script: SixActPreview }>(res);
       if (!data?.script) { setScriptError("生成失败，请重试"); return; }
       setGeneratedScript(data.script);
+    } catch {
+      setScriptError("生成失败，请检查网络后重试");
     } finally {
       setScriptGenerating(false);
     }
@@ -290,6 +327,8 @@ export function TemplatesView() {
 
       setHistory((prev) => [{ id: data.videoProductionId, status: data.status, masterPath: null }, ...prev]);
       setProducedContentId(data.contentId);
+    } catch {
+      setProduceError("发起生成失败，请检查网络后重试");
     } finally {
       setProducing(false);
     }
@@ -316,7 +355,7 @@ export function TemplatesView() {
   if (mode === "edit") {
     return <EditorView
       form={form} setForm={setForm} editingId={editingId} saving={saving} saveError={saveError}
-      assetUploading={assetUploading} onSave={handleSave} onUploadAsset={handleAssetUpload}
+      assetUploading={assetUploading} assetError={assetError} onSave={handleSave} onUploadAsset={handleAssetUpload}
       onCancel={() => setMode("list")}
     />;
   }
@@ -427,7 +466,11 @@ export function TemplatesView() {
       <button type="button" className="primary-button" onClick={() => openEditor(null)}><Icon name="plus" />新建模板</button>
     </div>
 
-    {loading ? <p className="muted">加载中…</p> : templates.length ? <div className="template-grid">
+    {actionError ? <p className="validation-note">{actionError}</p> : null}
+
+    {loading ? <p className="muted">加载中…</p>
+      : listError ? <p className="validation-note">{listError}</p>
+      : templates.length ? <div className="template-grid">
       {templates.map((t) => <article key={t.id} className="template-card">
         <div className="template-card-heading">
           <h3>{t.name}</h3>
@@ -439,20 +482,21 @@ export function TemplatesView() {
           <button type="button" className="primary-button" onClick={() => openWizard(t)}>用它出片</button>
           <button type="button" className="secondary-button" onClick={() => openEditor(t)}>编辑</button>
           <button type="button" className="text-button" onClick={() => handleDuplicate(t.id)}>复制</button>
-          <button type="button" className="text-button danger-text" onClick={() => handleDelete(t.id)}>删除</button>
+          <button type="button" className="text-button danger" onClick={() => handleDelete(t.id)}>删除</button>
         </div>
       </article>)}
     </div> : <p className="muted">还没有模板。</p>}
   </section>;
 }
 
-function EditorView({ form, setForm, editingId, saving, saveError, assetUploading, onSave, onUploadAsset, onCancel }: {
+function EditorView({ form, setForm, editingId, saving, saveError, assetUploading, assetError, onSave, onUploadAsset, onCancel }: {
   form: VideoTemplateConfig;
   setForm: (updater: (prev: VideoTemplateConfig) => VideoTemplateConfig) => void;
   editingId: string | null;
   saving: boolean;
   saveError: string | null;
   assetUploading: "bgm" | "intro" | "outro" | null;
+  assetError: string | null;
   onSave: () => void;
   onUploadAsset: (kind: "bgm" | "intro" | "outro", file: File) => void;
   onCancel: () => void;
@@ -564,6 +608,7 @@ function EditorView({ form, setForm, editingId, saving, saveError, assetUploadin
           {form.outroPath ? <small className="field-hint">已上传</small> : null}
         </label>
         {!editingId ? <small className="field-hint">保存模板后才能上传素材</small> : null}
+        {assetError ? <p className="validation-note">{assetError}</p> : null}
       </div>
 
       {saveError ? <p className="validation-note">{saveError}</p> : null}
