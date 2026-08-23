@@ -326,7 +326,9 @@ async function handleTalkingHeadBroll(
  * - 最终产物是"画面拼接(concatClips)+ TTS 配音轨拼接 + 混流(muxAudioTrack)"，
  *   不是 compositeCutawayVideo 那种挖空替换。
  */
-async function handleIllustrationTts(
+/** 导出仅供测试用(见 tests/jobs/video-production-worker.test.ts) —— 校验缺口1 的音色优先级链
+ * 真的接线到了 TTS 调用参数上, 且 apiKey 始终来自全局配置、不受模板/覆盖影响。 */
+export async function handleIllustrationTts(
   vp: VideoProduction,
   mode: 'preview' | 'master',
   setStatus: SetStatusFn,
