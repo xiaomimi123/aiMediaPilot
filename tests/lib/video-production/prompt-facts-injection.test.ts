@@ -58,6 +58,23 @@ describe('BUILDER 事实护栏注入', () => {
     expect(p.trimEnd().endsWith('</html> 结束。')).toBe(true);
   });
 
+  it('必须带可读性约束: 前景与背景不得同色', () => {
+    // 真实出片踩过: 第一镜在 2.5s 把背景动画成 #F8FAFC, 而文字本身也是 #F8FAFC ——
+    // 白字白底, 开场 9 秒里有 6 秒整屏纯白, 抽帧每个像素都是 249。两个颜色都来自
+    // 调色板, Builder 遵守了"不要发明新颜色"却把同一色值同时用在了前景和背景。
+    const p = BUILDER.buildSystemPrompt(PALETTE, 'card');
+    expect(p).toMatch(/对比度|同一个色值|同色/);
+    expect(p).toMatch(/背景/);
+  });
+
+  it('可读性约束不依赖 factsSection —— 没有六幕稿的老任务同样需要', () => {
+    expect(BUILDER.buildSystemPrompt(PALETTE)).toMatch(/对比度|同一个色值|同色/);
+  });
+
+  it('必须禁止出现整屏空白(没有任何可读内容的时间段)', () => {
+    expect(BUILDER.buildSystemPrompt(PALETTE, 'card')).toMatch(/空屏|纯色|空白/);
+  });
+
   it('插画风格与事实护栏可以同时生效', () => {
     const p = BUILDER.buildSystemPrompt(PALETTE, 'illustration', SECTION);
     expect(p).toContain('插画风格');
