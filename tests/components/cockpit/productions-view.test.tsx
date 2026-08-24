@@ -20,8 +20,11 @@ const FAILED = {
   contentTitle: '失败的那条', templateName: null,
 };
 
+// 显式标注参数类型 —— 否则 vi.fn(async () => ...) 推出的调用记录是空元组 `[]`,
+// 后面读 `calls[i][1]` 在本项目的 strict tsconfig 下过不了 tsc(同 packaging.test.ts 先例)。
 function mockFetch(productions: unknown[]) {
-  return vi.fn(async () => ({ ok: true, json: async () => ({ success: true, data: { productions } }) }) as Response);
+  return vi.fn(async (_url: string, _init?: RequestInit) =>
+    ({ ok: true, json: async () => ({ success: true, data: { productions } }) }) as Response);
 }
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -73,6 +76,66 @@ describe('ProductionsView 成片库', () => {
     vi.stubGlobal('fetch', mockFetch([]));
     render(<ProductionsView />);
     await waitFor(() => expect(screen.getByText(/还没有/)).toBeTruthy());
+  });
+
+  it('每条片子都有删除入口', async () => {
+    vi.stubGlobal('fetch', mockFetch([READY]));
+    render(<ProductionsView />);
+    await waitFor(() => expect(screen.getByRole('button', { name: '删除' })).toBeTruthy());
+  });
+
+  it('删除前必须二次确认; 取消则不发请求', async () => {
+    const fetchMock = mockFetch([READY]);
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('confirm', vi.fn(() => false));
+    render(<ProductionsView />);
+    await waitFor(() => expect(screen.getByRole('button', { name: '删除' })).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: '删除' }));
+
+    // 只有最初那次列表拉取, 没有 DELETE
+    expect(fetchMock.mock.calls.every((c) => (c[1] as RequestInit | undefined)?.method !== 'DELETE')).toBe(true);
+  });
+
+  it('确认后发 DELETE 到该任务, 并刷新列表', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'DELETE') {
+        return { ok: true, json: async () => ({ success: true, data: { deleted: true } }) } as Response;
+      }
+      return { ok: true, json: async () => ({ success: true, data: { productions: [READY] } }) } as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    render(<ProductionsView />);
+    await waitFor(() => expect(screen.getByRole('button', { name: '删除' })).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: '删除' }));
+
+    await waitFor(() => {
+      const del = fetchMock.mock.calls.find((c) => (c[1] as RequestInit | undefined)?.method === 'DELETE');
+      expect(del).toBeTruthy();
+      expect(String(del![0])).toContain('vp-ready');
+    });
+    // 删完要重新拉列表, 否则页面上那条已经不存在的片子还杵在那儿
+    await waitFor(() => {
+      const listCalls = fetchMock.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method !== 'DELETE');
+      expect(listCalls.length).toBeGreaterThan(1);
+    });
+  });
+
+  it('删除失败时给出可见提示, 不静默吞掉', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'DELETE') throw new Error('任务进行中');
+      return { ok: true, json: async () => ({ success: true, data: { productions: [READY] } }) } as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    render(<ProductionsView />);
+    await waitFor(() => expect(screen.getByRole('button', { name: '删除' })).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: '删除' }));
+
+    await waitFor(() => expect(screen.getByText(/删除失败/)).toBeTruthy());
   });
 
   it('加载失败时给出可见提示', async () => {

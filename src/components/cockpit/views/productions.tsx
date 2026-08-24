@@ -38,6 +38,8 @@ export function ProductionsView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState<{ id: string; kind: "preview" | "master" } | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,6 +58,25 @@ export function ProductionsView() {
 
   useEffect(() => { void load(); }, [load]);
 
+  const handleDelete = useCallback(async (p: LibraryProduction) => {
+    const label = p.contentTitle ?? "这条片子";
+    if (!window.confirm(`删除「${label}」这次生成？分镜、预览与成片文件会一并删掉，不可恢复。`)) return;
+    setDeleteError(null);
+    setDeleting(p.id);
+    try {
+      const res = await fetch(`/api/v1/cockpit/video-productions/${p.id}`, { method: "DELETE" });
+      const body = await res.json();
+      if (!body?.data?.deleted) throw new Error(body?.message || "服务端未确认删除");
+      // 正在播的那条被删了就把播放器收起来, 否则会指向一个已经不存在的流
+      setPlaying((cur) => (cur?.id === p.id ? null : cur));
+      await load();
+    } catch (e) {
+      setDeleteError(e instanceof Error ? `删除失败：${e.message}` : "删除失败");
+    } finally {
+      setDeleting(null);
+    }
+  }, [load]);
+
   return <section className="page productions-page">
     <div className="page-heading">
       <span className="eyebrow">LIBRARY</span>
@@ -64,6 +85,7 @@ export function ProductionsView() {
     </div>
 
     {error ? <p className="validation-note">{error}</p> : null}
+    {deleteError ? <p className="validation-note">{deleteError}</p> : null}
     {loading && !productions.length ? <p>加载中…</p> : null}
 
     {!loading && !error && !productions.length
@@ -100,6 +122,12 @@ export function ProductionsView() {
             {canMaster
               ? <a href={fileUrl(p.id, "master")} target="_blank" rel="noreferrer">下载</a>
               : null}
+            <button
+              type="button"
+              className="text-button danger"
+              disabled={deleting === p.id}
+              onClick={() => void handleDelete(p)}
+            >{deleting === p.id ? "删除中…" : "删除"}</button>
           </div>
 
           {isPlaying
