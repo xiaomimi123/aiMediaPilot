@@ -25,7 +25,7 @@ type Mode = "list" | "edit" | "produce";
 
 type WizardStep = "script" | "upload" | "voice" | "produce";
 
-const DELIVERY_MODE_LABELS: Record<TemplateDeliveryMode, string> = {
+export const DELIVERY_MODE_LABELS: Record<string, string> = {
   "ppt-narration": "图文口播",
   "talking-head-broll": "真人出镜 + B-roll",
   "illustration-tts": "插画配音",
@@ -38,7 +38,7 @@ const STEP_LABELS: Record<WizardStep, string> = {
   produce: "生成与审片",
 };
 
-const PRODUCTION_STATUS_LABELS: Record<string, string> = {
+export const PRODUCTION_STATUS_LABELS: Record<string, string> = {
   queued: "排队中", source_uploaded: "视频已上传", directing: "构思分镜中", building: "搭建画面中",
   assembling: "拼接预览中", preview_ready: "预览就绪", approved: "确认渲染中",
   rendering: "渲染中", packaging: "包装成片中", done: "已完成", failed: "生成失败",
@@ -484,6 +484,9 @@ export function TemplatesView() {
         <ul className="template-history-list">
           {history.map((h) => <li key={h.id}>
             <span>{PRODUCTION_STATUS_LABELS[h.status] ?? h.status}</span>
+            {/* 预览就绪的任务只有 previewPath —— 旧实现只认 masterPath, 导致这类任务在
+                列表里只剩一行状态文字, 用户看不到自己刚生成出来的片子。 */}
+            {h.previewPath ? <a href={`/api/v1/cockpit/video-productions/${h.id}/file?type=preview`} target="_blank" rel="noreferrer">看预览</a> : null}
             {h.masterPath ? <a href={`/api/v1/cockpit/video-productions/${h.id}/file?type=master`} target="_blank" rel="noreferrer">下载成片</a> : null}
             {/* 失败原因直接摊开 —— 只显示"生成失败"会逼用户去翻 worker 日志 */}
             {h.status === "failed" && h.errorMessage

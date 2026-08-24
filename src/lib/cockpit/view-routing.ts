@@ -36,6 +36,7 @@ export type NavView =
   | "pipeline"
   | "analytics"
   | "templates"
+  | "productions"
   | "settings"
   | PlatformNavId;
 
@@ -53,6 +54,7 @@ const FIXED_VIEW_IDS: ReadonlyArray<string> = [
   "pipeline",
   "analytics",
   "templates",
+  "productions",
   ...CONTENT_PLATFORMS.map((platform) => `platform-${platform}`),
 ];
 

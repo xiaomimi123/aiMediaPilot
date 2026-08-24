@@ -2087,6 +2087,16 @@ html[data-style="bauhaus"] .review-kpi-grid > article:nth-child(4) {
 .template-history-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); padding: var(--space-xs) 0; border-bottom: 1px solid var(--line); font-size: var(--text-xs); }
 .template-history-list li:last-child { border-bottom: 0; }
 
+/* 成片库(二十一期) —— 复用 .panel 作卡片底, 只补列表与播放器的排布 */
+.production-list { display: flex; flex-direction: column; gap: var(--space-md); margin: 0; padding: 0; list-style: none; }
+.production-card { display: flex; flex-direction: column; gap: var(--space-xs); padding: var(--space-md); }
+.production-card-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-sm); }
+.production-card-heading h2 { margin: 0; font-size: var(--text-md); }
+.production-card-meta { margin: 0; color: var(--muted); font-size: var(--text-xs); }
+.production-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); padding-top: var(--space-xs); }
+/* 播放器按 16:9 自适应容器宽度, 不撑破卡片 */
+.production-player { width: 100%; max-width: 720px; aspect-ratio: 16 / 9; margin-top: var(--space-sm); border-radius: var(--radius-sm); background: #000; }
+
 @media (max-width: 860px) {
   .template-grid { grid-template-columns: 1fr; }
   .template-assets-grid { grid-template-columns: 1fr; }

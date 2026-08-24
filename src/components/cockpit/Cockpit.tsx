@@ -82,6 +82,7 @@ import { AnalyticsView } from "./views/analytics";
 import { HomePipelineView } from "./views/home-pipeline";
 import { SettingsView } from "./views/settings";
 import { TemplatesView } from "./views/templates";
+import { ProductionsView } from "./views/productions";
 import { Onboarding } from "./onboarding";
 import type { ContentDrawerTab } from "./content-detail";
 
@@ -685,6 +686,7 @@ export default function Cockpit() {
           {/* T4: analytics 挂载合并后的 AnalyticsView（目标/复盘 两个 tab，取代 T2 的 GoalsView 占位共享分支）。 */}
           {view === "analytics" ? <AnalyticsView analyticsTab={analyticsTab} setAnalyticsTab={setAnalyticsTab} state={state} goalsPageTitle={state.pageTitles.goals} updateGoalsTitle={(value) => updatePageTitle("goals", value)} health={health} followers={followers} published={publishedQuarter} updateGoal={updateGoal} notify={setToast} reviewPageTitle={state.pageTitles.review} updateReviewTitle={(value) => updatePageTitle("review", value)} open={(id) => openContent(id, "review")} setState={setState} /> : null}
           {view === "templates" ? <TemplatesView /> : null}
+          {view === "productions" ? <ProductionsView /> : null}
           {view === "settings" ? <SettingsView state={state} pageTitle={state.pageTitles.settings} updateTitle={(value) => updatePageTitle("settings", value)} updateDesignStyle={updateDesignStyle} setState={setState} onReset={() => { if (window.confirm("确定清空全部内容与目标数据吗？个人设置会保留，请先导出备份。")) { setState({ ...createBlankState(), designStyle: state.designStyle, navigationOrder: state.navigationOrder, profile: state.profile, pageTitles: state.pageTitles }); setToast("已清空内容与目标，个人设置已保留"); } }} /> : null}
         </div>
       </main>

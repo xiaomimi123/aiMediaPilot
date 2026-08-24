@@ -44,6 +44,9 @@ export const PLATFORM_NAV_ITEMS: ReadonlyArray<SidebarNavItem> = CONTENT_PLATFOR
 // ◎ 内容数据分析。十六期 (T3): 「内容总览」从这里移除——并入新首页 (T4/T5)。
 export const OVERVIEW_NAV_ITEMS: ReadonlyArray<SidebarNavItem> = [
   { id: "templates", label: "模板", icon: "pipeline" },
+  // ◫ (momentum 键) 在当前侧栏未被任何项占用, 形似画框, 贴合「成片」; 不复用
+  // ✣ (inspiration) —— 它已被「灵感库选题」占用, 相邻复用会造成视觉混淆。
+  { id: "productions", label: "成片", icon: "momentum" },
   { id: "analytics", label: "内容数据分析", icon: "analytics" },
 ];
 
