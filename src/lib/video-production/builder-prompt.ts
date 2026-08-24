@@ -8,7 +8,13 @@ export const BuilderResponseSchema = z.object({
 export type BuilderResponse = z.infer<typeof BuilderResponseSchema>;
 
 export const BUILDER = {
-  buildSystemPrompt(palette: string[], visualStyle: 'card' | 'illustration' = 'card'): string {
+  /**
+   * `factsSection` 为空(或不传)时输出与二十期之前字符级一致 —— 老任务零迁移。
+   * 非空时由 `buildFactsSection` 产出, 自带前导换行。Builder 是幻觉数字真正落到画面上的
+   * 那一层(实测它会把台词里的"好几倍"编成带货币符号的对比表), 护栏必须下到这里。
+   */
+  buildSystemPrompt(palette: string[], visualStyle: 'card' | 'illustration' = 'card', factsSection?: string): string {
+    const factsBlock = factsSection && factsSection.trim() ? factsSection : '';
     const styleGuidance = visualStyle === 'illustration'
       ? '插画风格：手绘感矢量插画构图，扁平色块+简单人物/物件剪影+柔和过渡动画，避免写实照片风格，避免复杂运镜或隐喻。'
       : '第一版构图从简：文字卡片+简单几何图形+基础过渡（淡入淡出/位移）即可，不需要复杂运镜或隐喻。';
@@ -24,7 +30,7 @@ export const BUILDER = {
 - 严格使用给定调色板：${palette.join(', ')}，不要发明新颜色。
 - ${styleGuidance}
 
-只输出这一个 HTML 文件的完整内容，不要输出任何解释文字、不要用 markdown 代码块包裹，直接从 <!DOCTYPE html> 开始到 </html> 结束。`;
+只输出这一个 HTML 文件的完整内容，不要输出任何解释文字、不要用 markdown 代码块包裹，直接从 <!DOCTYPE html> 开始到 </html> 结束。${factsBlock}`;
   },
   buildUserMessage(shot: Shot): ContentPart[] {
     const beatsText = shot.beats.map((b, i) => `${i + 1}. 画面变成: ${b.visibleState}；变化: ${b.development}`).join('\n');

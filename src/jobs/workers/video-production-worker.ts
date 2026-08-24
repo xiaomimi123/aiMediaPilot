@@ -24,6 +24,8 @@ import {
 import { LocalWhisperClient } from '@/lib/llm/local-whisper';
 import type { TranscriptSegment } from '@/lib/llm/whisper';
 import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
+import { buildFactsSection } from '@/lib/video-production/facts-guard';
+import type { ScriptAct } from '@/lib/script/six-act';
 import { synthesizeVolcTts } from '@/lib/tts/volcengine';
 import { decrypt } from '@/lib/crypto';
 import { resolveTtsVoiceSelection, type VoiceSelectable } from '@/lib/video-production/voice-resolve';
@@ -45,15 +47,20 @@ function shotDir(productionRoot: string, shotIndex: number): string {
   return path.join(productionRoot, 'shots', String(shotIndex));
 }
 
-/** 取该内容六幕稿的逐幕台词(act → narration), 供字幕按幕边界铺排; 取不到时返回空表。 */
-async function loadNarrations(contentId: string): Promise<Record<string, string>> {
+/** 取该内容的六幕稿; 取不到(旧稿/未生成)时返回空数组, 调用方据此退回原行为。 */
+async function loadActs(contentId: string): Promise<ScriptAct[]> {
   const content = await prisma.cockpitContent.findUnique({ where: { id: contentId } });
   const draft = content?.scriptDraftId
     ? await prisma.scriptDraft.findUnique({ where: { id: content.scriptDraftId } })
     : null;
   const parsed = draft ? parseDraftOutput(draft.output) : null;
-  if (!parsed?.acts) return {};
-  return Object.fromEntries(parsed.acts.map((a) => [a.act, a.narration]));
+  return parsed?.acts ?? [];
+}
+
+/** 取该内容六幕稿的逐幕台词(act → narration), 供字幕按幕边界铺排; 取不到时返回空表。 */
+async function loadNarrations(contentId: string): Promise<Record<string, string>> {
+  const acts = await loadActs(contentId);
+  return Object.fromEntries(acts.map((a) => [a.act, a.narration]));
 }
 
 
@@ -77,9 +84,12 @@ export async function handlePptNarration(
     await setStatus('directing');
     const deepseekKey = await resolveDeepSeekApiKey(vp.userId);
     if (!deepseekKey) throw new Error('未配置 DeepSeek key');
+    // 二十一期: 六幕稿的 facts 台账下发到画面层, 约束哪些数字允许被具象化(见 facts-guard.ts)。
+    // 取不到六幕稿(旧稿)时 factsSection 为空串, prompt 与改动前字符级一致。
+    const factsSection = buildFactsSection(await loadActs(vp.contentId));
     const llm = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-reasoner' });
     const { result: direction } = await llm.callStructured({
-      systemPrompt: DIRECTOR.buildSystemPrompt(),
+      systemPrompt: DIRECTOR.buildSystemPrompt(factsSection),
       userMessage: DIRECTOR.buildUserMessage(vp.srt),
       responseSchema: DIRECTOR.responseSchema,
     });
@@ -104,7 +114,7 @@ export async function handlePptNarration(
     let shotIndex = 0;
     for (const shot of direction.shots) {
       const { result: built } = await builderLLM.callStructured({
-        systemPrompt: BUILDER.buildSystemPrompt(direction.palette, visualStyle),
+        systemPrompt: BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection),
         userMessage: BUILDER.buildUserMessage(shot),
         responseSchema: BUILDER.responseSchema,
       });
@@ -233,9 +243,11 @@ export async function handleTalkingHeadBroll(
     const srt = buildSrtFromAlignedActs(aligned.acts, narrations);
 
     await setStatus('building');
+    // 二十一期: acts 已在上方取到, 直接派生画面层的事实护栏(见 facts-guard.ts)。
+    const factsSection = buildFactsSection(acts);
     const directorLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-reasoner' });
     const { result: direction } = await directorLLM.callStructured({
-      systemPrompt: DIRECTOR.buildSystemPrompt(),
+      systemPrompt: DIRECTOR.buildSystemPrompt(factsSection),
       userMessage: DIRECTOR.buildUserMessage(srt),
       responseSchema: DIRECTOR.responseSchema,
     });
@@ -256,7 +268,7 @@ export async function handleTalkingHeadBroll(
     let shotIndex = 0;
     for (const shot of direction.shots) {
       const { result: built } = await builderLLM.callStructured({
-        systemPrompt: BUILDER.buildSystemPrompt(direction.palette, visualStyle),
+        systemPrompt: BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection),
         userMessage: BUILDER.buildUserMessage(shot),
         responseSchema: BUILDER.responseSchema,
       });
@@ -433,9 +445,11 @@ export async function handleIllustrationTts(
     await setStatus('building');
     const deepseekKey = await resolveDeepSeekApiKey(vp.userId);
     if (!deepseekKey) throw new Error('未配置 DeepSeek key');
+    // 二十一期: acts 已在上方取到, 直接派生画面层的事实护栏(见 facts-guard.ts)。
+    const factsSection = buildFactsSection(acts);
     const directorLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-reasoner' });
     const { result: direction } = await directorLLM.callStructured({
-      systemPrompt: DIRECTOR.buildSystemPrompt(),
+      systemPrompt: DIRECTOR.buildSystemPrompt(factsSection),
       userMessage: DIRECTOR.buildUserMessage(srt),
       responseSchema: DIRECTOR.responseSchema,
     });
@@ -454,7 +468,7 @@ export async function handleIllustrationTts(
     let shotIndex = 0;
     for (const shot of direction.shots) {
       const { result: built } = await builderLLM.callStructured({
-        systemPrompt: BUILDER.buildSystemPrompt(direction.palette, visualStyle),
+        systemPrompt: BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection),
         userMessage: BUILDER.buildUserMessage(shot),
         responseSchema: BUILDER.responseSchema,
       });
