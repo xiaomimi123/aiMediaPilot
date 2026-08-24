@@ -55,7 +55,7 @@ describe('GET /api/v1/video-templates/[id]/productions', () => {
     prismaMock.videoProduction.findMany.mockResolvedValue([{
       id: 'vp1', status: 'done', mode: 'illustration-tts',
       masterPath: '/x/master.mp4', previewPath: '/x/preview.mp4', contentId: 'c1',
-      createdAt: '2026-08-01T00:00:00.000Z',
+      createdAt: '2026-08-01T00:00:00.000Z', errorMessage: null,
     }]);
 
     const res = await GET(new Request('http://x'), { params: { id: 't1' } });
@@ -65,16 +65,32 @@ describe('GET /api/v1/video-templates/[id]/productions', () => {
     expect(item).toEqual({
       id: 'vp1', status: 'done', mode: 'illustration-tts',
       masterPath: '/x/master.mp4', previewPath: '/x/preview.mp4', contentId: 'c1',
-      createdAt: '2026-08-01T00:00:00.000Z',
+      createdAt: '2026-08-01T00:00:00.000Z', errorMessage: null,
     });
 
     const args = prismaMock.videoProduction.findMany.mock.calls[0][0];
     expect(args.select).toEqual({
       id: true, status: true, mode: true, masterPath: true, previewPath: true,
-      contentId: true, createdAt: true,
+      contentId: true, createdAt: true, errorMessage: true,
     });
     expect(args.select.srt).toBeUndefined();
     expect(args.select.alignedActs).toBeUndefined();
     expect(args.select.rawTranscript).toBeUndefined();
+  });
+
+  it('失败任务必须带回 errorMessage —— 否则历史列表只能显示"失败"两个字, 用户无从排查', async () => {
+    // 真实出片踩过: 一次 Builder 产物缺时间线导致渲染崩, 列表里只有"生成失败", 原因全靠翻 worker 日志。
+    prismaMock.videoTemplate.findUnique.mockResolvedValue({ id: 't1', userId: 'user1' });
+    prismaMock.videoProduction.findMany.mockResolvedValue([{
+      id: 'vp9', status: 'failed', mode: 'ppt-narration',
+      masterPath: null, previewPath: null, contentId: 'c1',
+      createdAt: '2026-08-01T00:00:00.000Z',
+      errorMessage: "page.evaluate: Error: window.__timelines['shot'] 不存在，无法 seek",
+    }]);
+
+    const res = await GET(new Request('http://x'), { params: { id: 't1' } });
+    const json = await res.json();
+
+    expect(json.data.productions[0].errorMessage).toContain('__timelines');
   });
 });

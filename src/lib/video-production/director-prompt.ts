@@ -38,7 +38,9 @@ export const DIRECTOR = {
 - 第一版要求构图从简：优先保证时长覆盖完整、字幕/文字清晰可读，不追求视觉丰富度和复杂运镜——用简单的文字卡片+基础过渡即可，不要设计复杂的隐喻或多层构图。
 - 统一的调色板(palette)只给 3-8 个十六进制色值，覆盖全片使用。
 
-只输出 JSON，不要 markdown 代码块标记，不要解释文字。字段：concept(一句话视觉概念)、palette(色值数组)、shots(镜头数组，每个镜头含 shotId/startMs/endMs/claim/visualJob/beats)。${factsBlock}`;
+${factsBlock}
+
+只输出 JSON，不要 markdown 代码块标记，不要解释文字。字段：concept(一句话视觉概念)、palette(色值数组)、shots(镜头数组，每个镜头含 shotId/startMs/endMs/claim/visualJob/beats)。`;
   },
   buildUserMessage(srt: string): ContentPart[] {
     return [{ type: 'text', text: `完整 SRT 字幕：\n\n${srt}\n\n请给出完整的分镜方案。` }];

@@ -28,6 +28,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       previewPath: true,
       contentId: true,
       createdAt: true,
+      // 失败原因必须带回 —— 否则历史列表只能显示"生成失败"三个字, 用户只能去翻 worker 日志。
+      errorMessage: true,
     },
   });
 

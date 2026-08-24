@@ -30,7 +30,9 @@ export const BUILDER = {
 - 严格使用给定调色板：${palette.join(', ')}，不要发明新颜色。
 - ${styleGuidance}
 
-只输出这一个 HTML 文件的完整内容，不要输出任何解释文字、不要用 markdown 代码块包裹，直接从 <!DOCTYPE html> 开始到 </html> 结束。${factsBlock}`;
+${factsBlock}
+
+只输出这一个 HTML 文件的完整内容，不要输出任何解释文字、不要用 markdown 代码块包裹，直接从 <!DOCTYPE html> 开始到 </html> 结束。`;
   },
   buildUserMessage(shot: Shot): ContentPart[] {
     const beatsText = shot.beats.map((b, i) => `${i + 1}. 画面变成: ${b.visibleState}；变化: ${b.development}`).join('\n');

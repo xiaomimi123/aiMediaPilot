@@ -19,6 +19,12 @@ describe('DIRECTOR 事实护栏注入', () => {
     expect(p).toContain('整数毫秒');
     expect(p).toContain('palette');
   });
+
+  it('输出格式契约必须仍在 prompt 末尾, 不被事实护栏挤走', () => {
+    // 真实出片踩过: 护栏加在最末尾会把"只输出 JSON"从末位挤走, 模型跟随度下降。
+    const p = DIRECTOR.buildSystemPrompt(SECTION);
+    expect(p.indexOf('只输出 JSON')).toBeGreaterThan(p.indexOf('只有 A 允许上画面'));
+  });
 });
 
 describe('BUILDER 事实护栏注入', () => {
@@ -42,6 +48,14 @@ describe('BUILDER 事实护栏注入', () => {
     expect(p).toContain('1920x1080');
     expect(p).toContain('window.__timelines');
     expect(p).toContain(PALETTE.join(', '));
+  });
+
+  it('输出格式契约必须仍在 prompt 末尾, 不被事实护栏挤走', () => {
+    // 真实出片踩过: 护栏加在最末尾时, Builder 有一镜漏写 window.__timelines["shot"] = tl,
+    // 整条任务在渲染阶段崩掉。技术契约必须保持末位。
+    const p = BUILDER.buildSystemPrompt(PALETTE, 'card', SECTION);
+    expect(p.indexOf('只输出这一个 HTML')).toBeGreaterThan(p.indexOf('只有 A 允许上画面'));
+    expect(p.trimEnd().endsWith('</html> 结束。')).toBe(true);
   });
 
   it('插画风格与事实护栏可以同时生效', () => {

@@ -67,6 +67,7 @@ interface HistoryProduction {
   previewPath?: string | null;
   contentId?: string;
   createdAt?: string;
+  errorMessage?: string | null;
 }
 
 /** 统一读取 `{ data }` 包装体——`ok`/`success` 字段名两处不一致(见 api.ts 与本任务测试
@@ -484,6 +485,10 @@ export function TemplatesView() {
           {history.map((h) => <li key={h.id}>
             <span>{PRODUCTION_STATUS_LABELS[h.status] ?? h.status}</span>
             {h.masterPath ? <a href={`/api/v1/cockpit/video-productions/${h.id}/file?type=master`} target="_blank" rel="noreferrer">下载成片</a> : null}
+            {/* 失败原因直接摊开 —— 只显示"生成失败"会逼用户去翻 worker 日志 */}
+            {h.status === "failed" && h.errorMessage
+              ? <span className="validation-note">{h.errorMessage}</span>
+              : null}
           </li>)}
         </ul>
       </section> : null}
