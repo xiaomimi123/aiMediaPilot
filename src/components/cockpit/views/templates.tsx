@@ -137,6 +137,9 @@ export function TemplatesView() {
   const [scriptGenerating, setScriptGenerating] = useState(false);
   const [scriptError, setScriptError] = useState<string | null>(null);
   const [generatedScript, setGeneratedScript] = useState<SixActPreview | null>(null);
+  // 写稿阶段采到的素材简报: 必须随出片一并带给后端落库, 否则 worker 取不到、画面层
+  // 没有真实素材可铺(真实出片踩过这一环断掉)。
+  const [generatedResearch, setGeneratedResearch] = useState<unknown>(null);
   const [uploadVideoFile, setUploadVideoFile] = useState<File | null>(null);
   const [voiceTypeInput, setVoiceTypeInput] = useState("");
   const [producing, setProducing] = useState(false);
@@ -194,6 +197,7 @@ export function TemplatesView() {
     setSelectedInspirationId("");
     setPasteText("");
     setGeneratedScript(null);
+    setGeneratedResearch(null);
     setScriptError(null);
     setUploadVideoFile(null);
     setVoiceTypeInput(template.voicePreset?.voiceType ?? "");
@@ -293,9 +297,10 @@ export function TemplatesView() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = await readData<{ script: SixActPreview }>(res);
+      const data = await readData<{ script: SixActPreview; research?: unknown }>(res);
       if (!data?.script) { setScriptError("生成失败，请重试"); return; }
       setGeneratedScript(data.script);
+      setGeneratedResearch(data.research ?? null);
     } catch {
       setScriptError("生成失败，请检查网络后重试");
     } finally {
@@ -324,7 +329,9 @@ export function TemplatesView() {
         ? { voiceType: trimmedVoiceType }
         : undefined;
       const body = {
-        ...(scriptSource === "existing" ? { contentId: selectedContentId } : { script: generatedScript }),
+        ...(scriptSource === "existing"
+          ? { contentId: selectedContentId }
+          : { script: generatedScript, research: generatedResearch }),
         ...(voiceOverride ? { voiceOverride } : {}),
       };
       const res = await fetch(`/api/v1/video-templates/${activeTemplate.id}/produce`, {

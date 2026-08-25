@@ -37,8 +37,16 @@ const VoiceOverrideSchema = z.object({
 }).strict();
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
-  let body: { contentId?: unknown; script?: unknown; title?: unknown; voiceOverride?: unknown };
+  let body: { contentId?: unknown; script?: unknown; title?: unknown; voiceOverride?: unknown; research?: unknown };
   try { body = await req.json(); } catch { return fail('请求体不是合法 JSON', 400); }
+
+  // 写稿阶段(/script)采到的素材简报, 由前端原样带回来一并落库 —— 见下方 output.research 注释。
+  // 形状校验从宽: 只要求是带非空 points 数组的对象, 内容由 /script 那边的 schema 保证。
+  const rawResearch = body.research as { points?: unknown } | null | undefined;
+  const research =
+    rawResearch && Array.isArray(rawResearch.points) && rawResearch.points.length > 0
+      ? (rawResearch as Prisma.InputJsonValue)
+      : null;
 
   let voiceOverride: Prisma.InputJsonValue | null = null;
   if (body.voiceOverride !== undefined) {
@@ -109,9 +117,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     // output 形状必须照抄 `scripts/generate/route.ts:194` 的嵌套约定
     // (`script: { acts }` + 顶层 `four_dims`) —— 这是 `parseDraftOutput` 唯一认的判据,
     // 也是 worker 三处消费点(见上方函数注释)读六幕稿的唯一入口。research/hooks/titles/
-    // cover 这几个字段属于完整写稿链路(研究/多候选标题与钩子/封面文案)的产物, 模板这条
-    // 简化路径(粘贴/灵感 → 直接六幕稿, 没有 research 阶段, 也没有多候选)天然没有,
-    // 缺省不写(parseDraftOutput 对应字段解析失败即跳过, 不影响 acts/four_dims 判别);
+    // cover 这几个字段属于完整写稿链路的产物; hooks/titles/cover 模板路径天然没有, 缺省不写
+    // (parseDraftOutput 对应字段解析失败即跳过, 不影响 acts/four_dims 判别)。
+    // research 是例外(二十一期): 模板写稿现在也跑素材研究了, 采到的简报**必须一并落库**——
+    // worker 靠 ScriptDraft.output.research 给画面层供料, 不落库等于 Builder 手上还是没有
+    // 真实素材可铺, 整条"素材注入"链就断在这里(真实出片踩过: 采到 5 条料但画面照旧空)。
     // durationSec 有模板配置就带上, 供改稿抽屉重开时时长选择器正确回填。
     const durationSec = (template.scriptPrompt as { targetDurationSec?: number } | null)?.targetDurationSec;
     const draft = await prisma.scriptDraft.create({
@@ -123,6 +133,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         output: {
           script: { acts: parsed.data.acts },
           four_dims: parsed.data.four_dims,
+          ...(research ? { research } : {}),
           ...(durationSec !== undefined ? { durationSec } : {}),
         } as unknown as Prisma.InputJsonValue,
       },

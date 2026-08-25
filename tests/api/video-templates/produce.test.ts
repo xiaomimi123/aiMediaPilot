@@ -242,3 +242,39 @@ describe('POST /api/v1/video-templates/[id]/produce', () => {
     expect(parsed?.four_dims).toEqual(SIX_ACT.four_dims);
   });
 });
+
+describe('研究简报随稿子一并落库(二十一期 A2)', () => {
+  it('传了 research 时写进 ScriptDraft.output.research —— worker 靠它给画面层供料', async () => {
+    prismaMock.cockpitContent.create.mockResolvedValue({ id: 'newc1', userId: 'user1' });
+    prismaMock.scriptDraft.create.mockResolvedValue({ id: 'newd1' });
+    const research = { points: [{ fact: '低谷价为高峰价的 50%', source: 'https://x.com/a', usage: '讲错峰' }] };
+
+    await POST(req({ script: SIX_ACT, title: 'x', research }) as never, { params: { id: 't1' } });
+
+    const output = prismaMock.scriptDraft.create.mock.calls[0][0].data.output;
+    expect(output.research).toEqual(research);
+  });
+
+  it('没传 research 时不写该字段, 老行为不变', async () => {
+    prismaMock.cockpitContent.create.mockResolvedValue({ id: 'newc1', userId: 'user1' });
+    prismaMock.scriptDraft.create.mockResolvedValue({ id: 'newd1' });
+
+    await POST(req({ script: SIX_ACT, title: 'x' }) as never, { params: { id: 't1' } });
+
+    const output = prismaMock.scriptDraft.create.mock.calls[0][0].data.output;
+    expect(output.research ?? null).toBeNull();
+  });
+
+  it('落库形状仍然过 parseDraftOutput —— 加了 research 不许破坏六幕判据', async () => {
+    prismaMock.cockpitContent.create.mockResolvedValue({ id: 'newc1', userId: 'user1' });
+    prismaMock.scriptDraft.create.mockResolvedValue({ id: 'newd1' });
+    const research = { points: [{ fact: 'f', source: 's', usage: 'u' }] };
+
+    await POST(req({ script: SIX_ACT, title: 'x', research }) as never, { params: { id: 't1' } });
+
+    const output = prismaMock.scriptDraft.create.mock.calls[0][0].data.output;
+    const parsed = parseDraftOutput(output);
+    expect(parsed?.acts).toBeDefined();
+    expect(parsed?.research).toEqual(research);
+  });
+});

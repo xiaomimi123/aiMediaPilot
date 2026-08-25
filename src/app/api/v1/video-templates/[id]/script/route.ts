@@ -71,8 +71,17 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   // 二十一期: 模板写稿原本 brief 恒为 null —— 手上没有带来源的真实事实点, 画面层
   // 只能画抽象图形, 这正是成片"没有实感"的源头(见参考视频拆解 §2.1)。开了研究的
   // 模板先跑一次 Tavily 采集素材; runResearch 内部已 fail-soft, 失败返回 null 不阻断出稿。
+  // 搜索词只取首行标题, 正文整段当素材 —— 真实出片踩过: 灵感文本是"标题/角度/摘要/URL"
+  // 四行拼在一起的一整段, 整段丢给 Tavily 当查询词搜不到任何东西, 素材池空 → 研究降级。
+  // 而那段摘要本身就是带来源的真实素材(日期/倍数/融资额/出处俱全), 白白浪费了。
+  const searchTopic = topic.split('\n')[0].trim() || topic;
   const research = template.researchEnabled
-    ? await runResearch(user.id, { topic, niche: DEFAULT_NICHE, userMaterials: '', experiences: [] })
+    ? await runResearch(user.id, {
+        topic: searchTopic,
+        niche: DEFAULT_NICHE,
+        userMaterials: topic,
+        experiences: [],
+      })
     : null;
 
   const llm = getDeepSeekTextLLM(apiKey);
