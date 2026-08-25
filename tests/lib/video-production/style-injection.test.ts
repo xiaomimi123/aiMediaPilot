@@ -52,9 +52,9 @@ describe('buildChapterNavSection (Builder 用)', () => {
     expect(s).toContain('金句收尾');
   });
 
-  it('标出当前章节, 让 Builder 知道该高亮哪个', () => {
+  it('标出当前章节, 让 Builder 知道该高亮哪个(用序号, 不往标题里塞标记)', () => {
     const s = buildChapterNavSection(true, acts, 'concept_a');
-    expect(s).toMatch(/当前.*概念一|概念一.*当前/s);
+    expect(s).toContain('高亮第 2 章');
   });
 
   it('要求导航常驻整个镜头, 不许中途消失', () => {
@@ -117,5 +117,24 @@ describe('actAtMs 镜头→幕映射', () => {
 
   it('没有幕信息时返回 null', () => {
     expect(actAtMs([], 100)).toBeNull();
+  });
+});
+
+describe('章节条标记不许泄漏成画面文字', () => {
+  const acts = [
+    { act: 'hook', title: '开场钩子' },
+    { act: 'concept_a', title: '概念一' },
+  ];
+
+  it('提示词里不出现会被 Builder 照抄成标题的标记(真实出片踩过: 【当前】被画进了章节名)', () => {
+    const s = buildChapterNavSection(true, acts, 'concept_a');
+    expect(s).not.toContain('【当前】');
+    // 章节名必须以干净的原文出现, 不带任何后缀装饰
+    expect(s).toContain('概念一');
+  });
+
+  it('仍然能让 Builder 知道高亮第几章 —— 用序号而不是往标题里塞字', () => {
+    const s = buildChapterNavSection(true, acts, 'concept_a');
+    expect(s).toMatch(/第\s*2\s*章|第 2 个|索引.*2|序号.*2/);
   });
 });

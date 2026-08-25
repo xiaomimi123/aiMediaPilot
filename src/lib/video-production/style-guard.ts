@@ -74,13 +74,17 @@ export function buildChapterNavSection(
   // 拿不到幕信息时宁可不画, 也不要画一条只有半截、或者高亮不出当前位置的假导航。
   if (!enabled || acts.length === 0) return '';
 
-  const list = acts
-    .map((a) => (a.act === currentAct ? `${a.title}【当前】` : a.title))
-    .join(' / ');
+  // 真实出片踩过: 早先把当前章标成 `标题【当前】` 一并写进列表, Builder 把标记
+  // 当成章节名的一部分照抄进了画面, 顶部出现「普通人怎么应对【当前】」。
+  // 改为章节名保持干净原文, 用**序号**在正文里另行指明高亮哪一个。
+  const list = acts.map((a, i) => `${i + 1}. ${a.title}`).join(' / ');
+  const currentIndex = acts.findIndex((a) => a.act === currentAct);
+  const highlight = currentIndex >= 0 ? currentIndex + 1 : 1;
 
   return `\n\n本镜头必须画一条常驻章节进度条:
 - 位置在画面顶部, 一行排开全部章节: ${list}
-- 标着【当前】的那一章要明显高亮(加粗/变色/加下划线均可), 其余章节弱化为次要色。
+- **高亮第 ${highlight} 章**(加粗/变色/加下划线均可), 其余章节弱化为次要色。
+- 画上去的章节名只写标题本身, 上面的序号和这段说明文字都**不要**画进画面。
 - 这条进度条在本镜头**全程常驻**, 不许中途淡出或被其它元素遮挡; 它是观众判断"讲到哪了、还剩多少"的唯一依据。
 - 进度条占高度不超过画面的 8%, 不要喧宾夺主。`;
 }
