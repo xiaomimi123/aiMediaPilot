@@ -121,3 +121,33 @@ describe('素材铺排(二十一期 A2)', () => {
     expect(s).toBe(buildFactsSection([act({ facts: [] })]));
   });
 });
+
+describe('版面模板(压排版能力)', () => {
+  const s = () => buildFactsSection([act({ facts: [] })], {
+    points: [
+      { fact: 'A 事实', source: 'a', usage: 'x' },
+      { fact: 'B 事实', source: 'b', usage: 'y' },
+    ],
+  });
+
+  it('给出可直接照做的版面骨架, 而不是只说"可以放多块"', () => {
+    expect(s()).toMatch(/左右分栏|上下|骨架|版面/);
+  });
+
+  it('要求每个区块内部有层次(标题+要点), 不是并排放两个大字', () => {
+    expect(s()).toMatch(/层次|小标题.*要点|要点/);
+  });
+
+  it('给出一屏信息块数量的下限, 不能一屏只放一句话', () => {
+    expect(s()).toMatch(/至少|不少于/);
+  });
+
+  it('明确禁止大面积留白撑版面', () => {
+    expect(s()).toMatch(/留白|空/);
+  });
+
+  it('没有素材时不强推密度 —— 硬凑会退化成编造', () => {
+    const empty = buildFactsSection([act({ facts: [] })]);
+    expect(empty).not.toMatch(/至少|不少于/);
+  });
+});
