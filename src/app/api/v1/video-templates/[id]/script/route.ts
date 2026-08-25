@@ -6,6 +6,7 @@ import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
 import { SCRIPT_WRITE_DOUYIN, buildTemplateSection } from '@/lib/llm/prompts/script-write-douyin';
 import { getStyleContext } from '@/lib/script/style';
 import { allocateActSeconds } from '@/lib/script/six-act';
+import { runResearch } from '@/lib/script/research';
 import { loadPersonaProfile } from '@/lib/persona/profile';
 import { buildPersonaSection } from '@/lib/llm/prompts/persona-section';
 import { buildVoiceSection } from '@/lib/llm/prompts/voice-section';
@@ -67,6 +68,13 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const voice = await loadCreatorVoice(user.id);
   const voiceSection = buildVoiceSection(voice, matchedExperiences);
 
+  // 二十一期: 模板写稿原本 brief 恒为 null —— 手上没有带来源的真实事实点, 画面层
+  // 只能画抽象图形, 这正是成片"没有实感"的源头(见参考视频拆解 §2.1)。开了研究的
+  // 模板先跑一次 Tavily 采集素材; runResearch 内部已 fail-soft, 失败返回 null 不阻断出稿。
+  const research = template.researchEnabled
+    ? await runResearch(user.id, { topic, niche: DEFAULT_NICHE, userMaterials: '', experiences: [] })
+    : null;
+
   const llm = getDeepSeekTextLLM(apiKey);
   const { result } = await llm.callStructured({
     systemPrompt: SCRIPT_WRITE_DOUYIN.buildSystemPrompt(
@@ -75,11 +83,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     userMessage: SCRIPT_WRITE_DOUYIN.buildUserMessage({
       topic,
       durationSec,
-      brief: null,
+      brief: research,
       actSeconds: allocateActSeconds(durationSec),
     }),
     responseSchema: SCRIPT_WRITE_DOUYIN.responseSchema,
   });
 
-  return ok({ script: result });
+  // 简报随响应返回: 前端能展示"这稿子基于哪些素材", 降级时也如实标出来而不是假装有料
+  return ok({ script: result, research, researchDegraded: research === null });
 }

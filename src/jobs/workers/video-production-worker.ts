@@ -88,6 +88,21 @@ async function loadActs(contentId: string): Promise<ScriptAct[]> {
   return parsed?.acts ?? [];
 }
 
+/**
+ * 取该内容写稿时采集的素材简报(二十一期 A2)。它是带来源的真实事实点, 是画面最好的
+ * 填充料 —— 此前只喂给了写稿, 画面层从来没见过, 于是只能画抽象图形。
+ */
+async function loadResearch(
+  contentId: string,
+): Promise<{ points: Array<{ fact: string; source: string; usage?: string }> } | null> {
+  const content = await prisma.cockpitContent.findUnique({ where: { id: contentId } });
+  const draft = content?.scriptDraftId
+    ? await prisma.scriptDraft.findUnique({ where: { id: content.scriptDraftId } })
+    : null;
+  const parsed = draft ? parseDraftOutput(draft.output) : null;
+  return parsed?.research ?? null;
+}
+
 /** 取该内容六幕稿的逐幕台词(act → narration), 供字幕按幕边界铺排; 取不到时返回空表。 */
 async function loadNarrations(contentId: string): Promise<Record<string, string>> {
   const acts = await loadActs(contentId);
@@ -118,7 +133,7 @@ export async function handlePptNarration(
     // 二十一期: 六幕稿的 facts 台账下发到画面层, 约束哪些数字允许被具象化(见 facts-guard.ts)。
     // 取不到六幕稿(旧稿)时 factsSection 为空串, prompt 与改动前字符级一致。
     const acts = await loadActs(vp.contentId);
-    const factsSection = buildFactsSection(acts);
+    const factsSection = buildFactsSection(acts, await loadResearch(vp.contentId));
     // 二十一期: 模板的风格(亮/暗基调、切镜节奏)要在 Director 阶段就生效——调色板与
     // 分镜时长都是它决定的。所以模板查询提前到 Director 调用之前。
     const template = vp.templateId
@@ -293,7 +308,7 @@ export async function handleTalkingHeadBroll(
 
     await setStatus('building');
     // 二十一期: acts 已在上方取到, 直接派生画面层的事实护栏(见 facts-guard.ts)。
-    const factsSection = buildFactsSection(acts);
+    const factsSection = buildFactsSection(acts, await loadResearch(vp.contentId));
     const directorLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-reasoner' });
     const { result: direction } = await directorLLM.callStructured({
       systemPrompt: DIRECTOR.buildSystemPrompt(factsSection),
@@ -496,7 +511,7 @@ export async function handleIllustrationTts(
     const deepseekKey = await resolveDeepSeekApiKey(vp.userId);
     if (!deepseekKey) throw new Error('未配置 DeepSeek key');
     // 二十一期: acts 已在上方取到, 直接派生画面层的事实护栏(见 facts-guard.ts)。
-    const factsSection = buildFactsSection(acts);
+    const factsSection = buildFactsSection(acts, await loadResearch(vp.contentId));
     const directorLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-reasoner' });
     const { result: direction } = await directorLLM.callStructured({
       systemPrompt: DIRECTOR.buildSystemPrompt(factsSection),

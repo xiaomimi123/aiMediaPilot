@@ -55,6 +55,7 @@ export async function POST(req: Request) {
       visualTone: cfg.visualTone,
       shotPaceSec: cfg.shotPaceSec,
       showChapterNav: cfg.showChapterNav,
+      researchEnabled: cfg.researchEnabled,
     },
   });
   return ok({ template: created });

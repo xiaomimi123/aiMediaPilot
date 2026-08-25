@@ -54,6 +54,12 @@ export interface VideoTemplateConfig {
    * 讲到哪、还剩多少 —— 我们的六幕结构天然适合做这个。
    */
   showChapterNav: boolean;
+  /**
+   * 写稿前是否先跑素材研究(Tavily 搜索 → 带来源的事实点)。
+   * 关掉时模板写稿直接凭主题空写 —— 那正是画面没有实感的源头: 手上没有可铺的真料,
+   * Builder 只能画抽象图形。开着会多花一次 Tavily 额度与几十秒。
+   */
+  researchEnabled: boolean;
   captionStyle: CaptionStyle | null;  // null = 不烧字幕
   bgmPath: string | null;
   bgmVolume: number;                  // 0~1
@@ -102,6 +108,7 @@ export const VideoTemplateConfigSchema: z.ZodType<VideoTemplateConfig> = z.objec
   // 下限 1 秒: 比这更短就不是"切镜"而是闪频了, 属于明显的误配
   shotPaceSec: z.number().min(1).max(60).nullable(),
   showChapterNav: z.boolean(),
+  researchEnabled: z.boolean(),
 });
 
 export function defaultCaptionStyle(): CaptionStyle {
@@ -137,6 +144,7 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     visualTone: 'dark',
     shotPaceSec: null,
     showChapterNav: false,
+    researchEnabled: false,
   },
   {
     name: '真人出镜 + B-roll',
@@ -154,6 +162,7 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     visualTone: 'dark',
     shotPaceSec: null,
     showChapterNav: false,
+    researchEnabled: false,
   },
   {
     name: '插画配音',
@@ -171,6 +180,7 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     visualTone: 'dark',
     shotPaceSec: null,
     showChapterNav: false,
+    researchEnabled: false,
   },
   {
     // 二十一期: 按同行参考视频拆解结论复刻
@@ -203,5 +213,7 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     visualTone: 'light',
     shotPaceSec: 4,
     showChapterNav: true,
+    // 这个预设的立身之本就是"有实感", 素材研究必须开 —— 没有真料铺不出密度
+    researchEnabled: true,
   },
 ];

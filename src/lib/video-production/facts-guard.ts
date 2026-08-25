@@ -15,13 +15,23 @@ import type { ScriptAct } from '@/lib/script/six-act';
  *
  * 传空数组(取不到六幕稿的老任务)时返回空串, 上游 prompt 与改动前字符级一致。
  */
-export function buildFactsSection(acts: ScriptAct[]): string {
+export function buildFactsSection(
+  acts: ScriptAct[],
+  brief?: { points: Array<{ fact: string; source: string; usage?: string }> } | null,
+): string {
   if (acts.length === 0) return '';
 
   const solid = acts.flatMap((a) => a.facts ?? []).filter((f) => f.confidence === 'high');
+  const briefPoints = brief?.points ?? [];
 
-  const ledger = solid.length > 0
-    ? solid.map((f) => `- ${f.claim}: ${f.value}(来源: ${f.source})`).join('\n')
+  const entries = [
+    ...solid.map((f) => `- ${f.claim}: ${f.value}(来源: ${f.source})`),
+    // 研究简报的事实点本身就是"带出处的真实文字", 是画面最好的填充料
+    ...briefPoints.map((p) => `- ${p.fact}(来源: ${p.source})`),
+  ];
+
+  const ledger = entries.length > 0
+    ? entries.join('\n')
     : '(空 —— 本条内容没有任何经得起坐实的数字, 画面上不许出现数字)';
 
   return `
@@ -34,5 +44,10 @@ ${ledger}
 - 台词里的模糊表述(如"好几倍""便宜很多""大幅上涨")在画面上**保持模糊**, 用相对大小的形状或箭头示意即可, 不许具体化成数字。
 - 不许把不同口径的量放进同一张对比表(不同货币、不同单位、不同时间口径), 混口径的对比比没有对比更误导。
 - 素材里没有明确因果关系的, 不许做成箭头图/流程图/因果链这类断言式图形。
-- 拿不准时, 用文字卡片复述台词, 不要自己补充信息。`;
+- 拿不准时, 用文字卡片复述台词, 不要自己补充信息。
+
+画面填充优先级(参考视频拆解 §2.1 的核心结论):
+- **优先把上面清单里的真实文字直接铺到画面上** —— 做成带出处的清单、卡片组、引用块、对照表都可以。观众信的是"这人真查过", 不是"这人会画图"。
+- 抽象图形(色块、没有数据的折线图、空标签、装饰性图标)只在实在没有真实文字可铺时才用, **不要拿它们撑场面**。一个没有数据的图表比没有图表更糟。
+- 一屏可以放多块信息(清单 + 出处 + 小标题), 靠留白、圆角卡、分栏做层次; 不要一屏只放一句话。`;
 }

@@ -53,6 +53,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       visualTone: src.visualTone,
       shotPaceSec: src.shotPaceSec,
       showChapterNav: src.showChapterNav,
+      researchEnabled: src.researchEnabled,
     },
   });
   return ok({ template: created });

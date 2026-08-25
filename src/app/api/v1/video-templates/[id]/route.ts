@@ -64,6 +64,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       visualTone: cfg.visualTone,
       shotPaceSec: cfg.shotPaceSec,
       showChapterNav: cfg.showChapterNav,
+      researchEnabled: cfg.researchEnabled,
       updatedAt: new Date().toISOString(),
     },
   });

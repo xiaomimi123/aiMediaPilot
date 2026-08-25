@@ -106,6 +106,7 @@ function emptyTemplateConfig(): VideoTemplateConfig {
     visualTone: "dark",
     shotPaceSec: null,
     showChapterNav: false,
+    researchEnabled: false,
   };
 }
 

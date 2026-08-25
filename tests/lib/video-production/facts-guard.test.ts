@@ -81,3 +81,43 @@ describe('buildFactsSection', () => {
     expect(s).toContain('b 值');
   });
 });
+
+describe('素材铺排(二十一期 A2)', () => {
+  const brief = {
+    points: [
+      { fact: 'DeepSeek V4 高峰时段单价为平时的 4 倍', source: 'https://wsj.com/a', usage: '澄清涨幅' },
+      { fact: '本轮融资 74 亿美元', source: 'https://wsj.com/b', usage: '说明不缺钱' },
+    ],
+  };
+
+  it('研究简报的事实点进清单, 带来源', () => {
+    const s = buildFactsSection([act({ facts: [] })], brief);
+    expect(s).toContain('高峰时段单价为平时的 4 倍');
+    expect(s).toContain('wsj.com/a');
+  });
+
+  it('明确要求画面优先铺这些真实文字, 而不是画抽象图形', () => {
+    const s = buildFactsSection([act({ facts: [] })], brief);
+    expect(s).toMatch(/优先.*铺|优先.*真实|不要.*抽象|抽象图形/);
+  });
+
+  it('不给简报时行为与之前一致(只有六幕 facts)', () => {
+    const withoutBrief = buildFactsSection([act({ facts: [] })]);
+    const withNull = buildFactsSection([act({ facts: [] })], null);
+    expect(withNull).toBe(withoutBrief);
+  });
+
+  it('简报与六幕 facts 同时存在时都列出来', () => {
+    const s = buildFactsSection(
+      [act({ facts: [{ claim: '融资额', value: '74 亿美元', source: 'WSJ', confidence: 'high' }] })],
+      brief,
+    );
+    expect(s).toContain('74 亿美元');
+    expect(s).toContain('高峰时段单价为平时的 4 倍');
+  });
+
+  it('空简报(points 为空)等同于没有简报', () => {
+    const s = buildFactsSection([act({ facts: [] })], { points: [] });
+    expect(s).toBe(buildFactsSection([act({ facts: [] })]));
+  });
+});
