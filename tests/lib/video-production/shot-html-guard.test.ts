@@ -55,3 +55,35 @@ describe('validateShotHtml', () => {
     expect(r.reason).toMatch(/markdown|代码块/);
   });
 });
+
+describe('脚本语法体检(真实出片踩过: 颜色值没加引号导致整段 JS 不执行)', () => {
+  it('脚本有语法错误 → 不合格', () => {
+    const bad = `<!DOCTYPE html><html><body><script src='gsap.min.js'></script><script>
+const tl = gsap.timeline({ paused: true });
+const c = splitChars(el, #1F1F1F);
+window.__timelines["shot"] = tl;
+</script></body></html>`;
+    const r = validateShotHtml(bad);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/语法/);
+  });
+
+  it('语法正确的脚本照常通过', () => {
+    expect(validateShotHtml(GOOD).ok).toBe(true);
+  });
+
+  it('含现代语法(可选链/展开/模板串)不误判', () => {
+    const modern = `<!DOCTYPE html><html><body><script src='gsap.min.js'></script><script>
+const tl = gsap.timeline({ paused: true });
+const o = { a: 1 }; const p = { ...o }; const q = o?.a ?? 0;
+tl.to('#x', { opacity: q, duration: \`\${p.a}\` });
+window.__timelines['shot'] = tl;
+</script></body></html>`;
+    expect(validateShotHtml(modern).ok).toBe(true);
+  });
+
+  it('没有 <script> 块时不因语法检查误报', () => {
+    const noScript = `<!DOCTYPE html><html><body><script src='gsap.min.js'></script><script>window.__timelines["shot"]=1;</script></body></html>`;
+    expect(validateShotHtml(noScript).ok).toBe(true);
+  });
+});

@@ -1,3 +1,5 @@
+import vm from 'vm';
+
 export interface ShotHtmlCheck {
   ok: boolean;
   reason?: string;
@@ -31,6 +33,21 @@ export function validateShotHtml(html: string): ShotHtmlCheck {
   // 两种引号都接受 —— 实测模型两种都会用
   if (!/__timelines\s*\[\s*['"]shot['"]\s*\]\s*=/.test(s)) {
     return { ok: false, reason: '缺少 window.__timelines["shot"] 挂载, 渲染器无法 seek 截帧' };
+  }
+
+  // 语法体检 —— 真实出片踩过: Builder 写出 `splitChars(el, #1F1F1F)`(十六进制颜色没加
+  // 引号), 整段脚本因 SyntaxError 一行都没执行, 时间线自然挂不上。此前的检查只看
+  // "有没有那行字符串", 看不出"这段 JS 能不能跑"。
+  // 用 Node 内建 vm 只做**编译**不执行(不碰 DOM/网络, 也不会真跑动画), 拿到的是
+  // 确定性结论而非猜测。
+  for (const [, code] of s.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)) {
+    if (!code.trim()) continue;
+    try {
+      new vm.Script(code);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ok: false, reason: `内联脚本语法错误: ${msg}` };
+    }
   }
 
   return { ok: true };

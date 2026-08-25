@@ -97,6 +97,13 @@ export async function renderShotToClip(opts: RenderShotOpts): Promise<void> {
     // page.goto 会以 net::ERR_INVALID_URL 拒绝 (真实 E2E 走查触发, building 阶段每个
     // 镜头必现)。用 path.resolve 转成绝对路径后再拼 URL, 与 ffmpeg.ts concatClips
     // 里 `path.resolve(p)` 写 concat 列表的处理方式一致。
+    // 页面内 JS 抛错时不捕获的话, 只能看到下面"__timelines['shot'] 不存在"这个**症状**,
+    // 说不出根因 —— 真实排查踩过: 37 镜静态检查全过, 渲染照样失败, 查了半天才想到
+    // 是脚本运行时抛错导致时间线没挂上。把页面错误收下来, 失败时一并报出。
+    const pageErrors: string[] = [];
+    page.on('pageerror', (e) => pageErrors.push(e.message));
+    page.on('console', (m) => { if (m.type() === 'error') pageErrors.push(m.text()); });
+
     await page.goto(`file://${path.resolve(indexHtmlPath)}`);
 
     const totalFrames = Math.ceil((durationMs / 1000) * fps);
@@ -110,7 +117,10 @@ export async function renderShotToClip(opts: RenderShotOpts): Promise<void> {
           throw new Error("window.__timelines['shot'] 不存在，无法 seek");
         }
         tl.seek(s);
-      }, sec);
+      }, sec).catch((e: unknown) => {
+        const detail = pageErrors.length ? ` 页面内报错: ${pageErrors.slice(0, 3).join(' | ')}` : ' 页面内无 JS 报错(时间线可能压根没写)';
+        throw new Error(`${e instanceof Error ? e.message : String(e)}${detail}`);
+      });
 
       const frameFileName = `frame_${String(frameIndex).padStart(4, '0')}.png`;
       await page.screenshot({ path: path.join(framesDir, frameFileName) });
