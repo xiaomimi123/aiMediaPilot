@@ -13,8 +13,15 @@ export const BUILDER = {
    * 非空时由 `buildFactsSection` 产出, 自带前导换行。Builder 是幻觉数字真正落到画面上的
    * 那一层(实测它会把台词里的"好几倍"编成带货币符号的对比表), 护栏必须下到这里。
    */
-  buildSystemPrompt(palette: string[], visualStyle: 'card' | 'illustration' = 'card', factsSection?: string): string {
+  buildSystemPrompt(
+    palette: string[],
+    visualStyle: 'card' | 'illustration' = 'card',
+    factsSection?: string,
+    chapterNavSection?: string,
+  ): string {
     const factsBlock = factsSection && factsSection.trim() ? factsSection : '';
+    // 章节进度条(二十一期): 由模板 showChapterNav 驱动; 空串时输出不变
+    const navBlock = chapterNavSection && chapterNavSection.trim() ? chapterNavSection : '';
     const styleGuidance = visualStyle === 'illustration'
       ? '插画风格：手绘感矢量插画构图，扁平色块+简单人物/物件剪影+柔和过渡动画，避免写实照片风格，避免复杂运镜或隐喻。'
       : '第一版构图从简：文字卡片+简单几何图形+基础过渡（淡入淡出/位移）即可，不需要复杂运镜或隐喻。';
@@ -32,7 +39,7 @@ export const BUILDER = {
 - 镜头的任何时刻都必须有可读内容：不许出现整屏纯色、没有任何文字或图形的空屏时间段；动画结束后画面要停在有内容的终态，而不是淡出成空白。
 - ${styleGuidance}
 
-${factsBlock}
+${navBlock}${factsBlock}
 
 只输出这一个 HTML 文件的完整内容，不要输出任何解释文字、不要用 markdown 代码块包裹，直接从 <!DOCTYPE html> 开始到 </html> 结束。`;
   },

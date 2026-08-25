@@ -8,10 +8,12 @@ import {
 import type { VideoTemplateConfig } from '@/lib/video-template/model';
 
 describe('PRESET_TEMPLATES', () => {
-  it('恰好 3 个预设, 三种交付模式各一个', () => {
-    expect(PRESET_TEMPLATES).toHaveLength(3);
-    const modes = PRESET_TEMPLATES.map((t) => t.deliveryMode).sort();
-    expect(modes).toEqual(['illustration-tts', 'ppt-narration', 'talking-head-broll']);
+  it('三种交付模式各至少一个预设', () => {
+    // 二十一期新增「知识长视频(横屏)」后不再是恰好 3 个 —— 断言改为覆盖性检查,
+    // 这样以后再按参考视频复刻新预设也不会误伤。
+    const modes = new Set(PRESET_TEMPLATES.map((t) => t.deliveryMode));
+    expect(modes).toEqual(new Set(['illustration-tts', 'ppt-narration', 'talking-head-broll']));
+    expect(PRESET_TEMPLATES.length).toBeGreaterThanOrEqual(3);
   });
 
   it('每个预设都能通过 schema 校验', () => {

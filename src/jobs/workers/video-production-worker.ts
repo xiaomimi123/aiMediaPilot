@@ -25,6 +25,7 @@ import { LocalWhisperClient } from '@/lib/llm/local-whisper';
 import type { TranscriptSegment } from '@/lib/llm/whisper';
 import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
 import { buildFactsSection } from '@/lib/video-production/facts-guard';
+import { buildStyleSection, buildChapterNavSection, actAtMs } from '@/lib/video-production/style-guard';
 import type { ScriptAct } from '@/lib/script/six-act';
 import { synthesizeVolcTts } from '@/lib/tts/volcengine';
 import { decrypt } from '@/lib/crypto';
@@ -86,10 +87,24 @@ export async function handlePptNarration(
     if (!deepseekKey) throw new Error('未配置 DeepSeek key');
     // 二十一期: 六幕稿的 facts 台账下发到画面层, 约束哪些数字允许被具象化(见 facts-guard.ts)。
     // 取不到六幕稿(旧稿)时 factsSection 为空串, prompt 与改动前字符级一致。
-    const factsSection = buildFactsSection(await loadActs(vp.contentId));
+    const acts = await loadActs(vp.contentId);
+    const factsSection = buildFactsSection(acts);
+    // 二十一期: 模板的风格(亮/暗基调、切镜节奏)要在 Director 阶段就生效——调色板与
+    // 分镜时长都是它决定的。所以模板查询提前到 Director 调用之前。
+    const template = vp.templateId
+      ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
+      : null;
+    const styleSection = buildStyleSection(
+      template
+        ? {
+            visualTone: (template.visualTone as 'light' | 'dark' | undefined) ?? 'dark',
+            shotPaceSec: template.shotPaceSec ?? null,
+          }
+        : null,
+    );
     const llm = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-reasoner' });
     const { result: direction } = await llm.callStructured({
-      systemPrompt: DIRECTOR.buildSystemPrompt(factsSection),
+      systemPrompt: DIRECTOR.buildSystemPrompt(factsSection, styleSection),
       userMessage: DIRECTOR.buildUserMessage(vp.srt),
       responseSchema: DIRECTOR.responseSchema,
     });
@@ -102,19 +117,22 @@ export async function handlePptNarration(
     );
 
     // 终审发现2: template.visualStyle 此前从未被读到调用点, 用户在模板编辑器改这个下拉会被
-    // 静默丢弃。templateId 为空(内容详情页旧入口)时 template 为 null, 落回硬编码默认值 'card',
-    // 零迁移。
-    const template = vp.templateId
-      ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
-      : null;
+    // 静默丢弃。templateId 为空(内容详情页旧入口)时 template 为 null, 落回硬编码默认值 'card'。
     const visualStyle = (template?.visualStyle as 'card' | 'illustration' | undefined) ?? 'card';
+    const chapterActs = acts.map((a) => ({ act: a.act, title: a.title }));
 
     await setStatus('building');
     const builderLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-chat' });
     let shotIndex = 0;
     for (const shot of direction.shots) {
+      // 章节条要高亮"这一镜讲到哪一幕", 用镜头起点落在哪个幕区间来判定
+      const navSection = buildChapterNavSection(
+        template?.showChapterNav ?? false,
+        chapterActs,
+        actAtMs(acts, shot.startMs),
+      );
       const { result: built } = await builderLLM.callStructured({
-        systemPrompt: BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection),
+        systemPrompt: BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection, navSection),
         userMessage: BUILDER.buildUserMessage(shot),
         responseSchema: BUILDER.responseSchema,
       });

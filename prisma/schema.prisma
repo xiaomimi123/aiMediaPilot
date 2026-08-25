@@ -759,6 +759,9 @@ model VideoTemplate {
   introPath    String?
   outroPath    String?
   isPreset     Boolean @default(false)
+  visualTone     String  @default("dark")  // light|dark — 二十一期: 参考视频是米白亮底
+  shotPaceSec    Float?                    // 目标切镜节奏(秒), null = 不约束(老行为)
+  showChapterNav Boolean @default(false)   // 顶部常驻六章进度条
   createdAt    String
   updatedAt    String
   user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)

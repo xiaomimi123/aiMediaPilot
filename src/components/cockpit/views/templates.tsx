@@ -103,6 +103,9 @@ function emptyTemplateConfig(): VideoTemplateConfig {
     bgmVolume: 0.15,
     introPath: null,
     outroPath: null,
+    visualTone: "dark",
+    shotPaceSec: null,
+    showChapterNav: false,
   };
 }
 

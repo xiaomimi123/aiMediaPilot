@@ -50,6 +50,9 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       bgmVolume: src.bgmVolume,
       introPath: await copyAsset(src.introPath),
       outroPath: await copyAsset(src.outroPath),
+      visualTone: src.visualTone,
+      shotPaceSec: src.shotPaceSec,
+      showChapterNav: src.showChapterNav,
     },
   });
   return ok({ template: created });

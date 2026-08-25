@@ -52,6 +52,9 @@ export async function POST(req: Request) {
       bgmVolume: cfg.bgmVolume,
       introPath: cfg.introPath,
       outroPath: cfg.outroPath,
+      visualTone: cfg.visualTone,
+      shotPaceSec: cfg.shotPaceSec,
+      showChapterNav: cfg.showChapterNav,
     },
   });
   return ok({ template: created });

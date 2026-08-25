@@ -37,7 +37,7 @@ function jsonReq(body: unknown): Request {
 }
 
 describe('GET /api/v1/video-templates', () => {
-  it('用户 0 条模板时播种 3 个预设', async () => {
+  it('用户 0 条模板时按 PRESET_TEMPLATES 播种全部预设', async () => {
     prismaMock.videoTemplate.count.mockResolvedValue(0);
     prismaMock.videoTemplate.findMany.mockResolvedValue([]);
 
@@ -45,7 +45,8 @@ describe('GET /api/v1/video-templates', () => {
 
     expect(prismaMock.videoTemplate.createMany).toHaveBeenCalledTimes(1);
     const seeded = prismaMock.videoTemplate.createMany.mock.calls[0][0].data;
-    expect(seeded).toHaveLength(3);
+    // 预设条数随参考视频复刻而增长, 断言改为"与 PRESET_TEMPLATES 一致"而不是写死数字
+    expect(seeded).toHaveLength(PRESET_TEMPLATES.length);
     expect(seeded.every((t: any) => t.isPreset === true)).toBe(true);
     expect(seeded.every((t: any) => t.userId === 'user1')).toBe(true);
   });

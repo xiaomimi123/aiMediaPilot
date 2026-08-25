@@ -34,10 +34,26 @@ export interface VideoTemplateConfig {
   voicePreset: { voiceType?: string; resourceId?: string } | null;
   scriptPrompt: {
     tone?: string;
-    targetDurationSec?: 30 | 45 | 60 | 90;
+    // 120/180/240 是二十一期按同行参考视频(110~240 秒)补的档位, 原有四档保留不动
+    targetDurationSec?: 30 | 45 | 60 | 90 | 120 | 180 | 240;
     hookHint?: string;
     extraGuidance?: string;
   } | null;
+  /**
+   * 画面明暗基调(二十一期)。参考视频实测是米白亮底 + 深色字(帧均值亮度 215),
+   * 我们原来固定深蓝底 + 白字。默认 'dark' 保持老模板行为不变。
+   */
+  visualTone: 'light' | 'dark';
+  /**
+   * 目标切镜节奏(秒)。参考视频 2.8~6 秒就有一次画面变化, 我们原来 Director 上限
+   * 放到 40 秒、实际每镜 10 秒。null = 不约束(老行为)。
+   */
+  shotPaceSec: number | null;
+  /**
+   * 是否画常驻章节进度条。参考视频顶部有一条六章导航并高亮当前章, 观众随时知道
+   * 讲到哪、还剩多少 —— 我们的六幕结构天然适合做这个。
+   */
+  showChapterNav: boolean;
   captionStyle: CaptionStyle | null;  // null = 不烧字幕
   bgmPath: string | null;
   bgmVolume: number;                  // 0~1
@@ -67,7 +83,12 @@ export const VideoTemplateConfigSchema: z.ZodType<VideoTemplateConfig> = z.objec
   scriptPrompt: z
     .object({
       tone: z.string().max(100).optional(),
-      targetDurationSec: z.union([z.literal(30), z.literal(45), z.literal(60), z.literal(90)]).optional(),
+      targetDurationSec: z
+        .union([
+          z.literal(30), z.literal(45), z.literal(60), z.literal(90),
+          z.literal(120), z.literal(180), z.literal(240),
+        ])
+        .optional(),
       hookHint: z.string().max(200).optional(),
       extraGuidance: z.string().max(500).optional(),
     })
@@ -77,6 +98,10 @@ export const VideoTemplateConfigSchema: z.ZodType<VideoTemplateConfig> = z.objec
   bgmVolume: z.number().min(0).max(1),
   introPath: z.string().nullable(),
   outroPath: z.string().nullable(),
+  visualTone: z.enum(['light', 'dark']),
+  // 下限 1 秒: 比这更短就不是"切镜"而是闪频了, 属于明显的误配
+  shotPaceSec: z.number().min(1).max(60).nullable(),
+  showChapterNav: z.boolean(),
 });
 
 export function defaultCaptionStyle(): CaptionStyle {
@@ -109,6 +134,9 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     bgmVolume: 0.15,
     introPath: null,
     outroPath: null,
+    visualTone: 'dark',
+    shotPaceSec: null,
+    showChapterNav: false,
   },
   {
     name: '真人出镜 + B-roll',
@@ -123,6 +151,9 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     bgmVolume: 0.12,
     introPath: null,
     outroPath: null,
+    visualTone: 'dark',
+    shotPaceSec: null,
+    showChapterNav: false,
   },
   {
     name: '插画配音',
@@ -137,5 +168,40 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     bgmVolume: 0.15,
     introPath: null,
     outroPath: null,
+    visualTone: 'dark',
+    shotPaceSec: null,
+    showChapterNav: false,
+  },
+  {
+    // 二十一期: 按同行参考视频拆解结论复刻
+    // (docs/superpowers/specs/2026-08-25-reference-video-teardown.md)。
+    // 每个取值都来自实测, 不是拍脑袋:
+    //   亮底 —— 参考帧均值亮度 215(米白), 我们原来是深蓝 #0F172A
+    //   4 秒 —— 参考三条分别是 2.8 / 6.1 / 13.8 秒每镜, 取密集档的量级
+    //   180 秒 —— 参考三条是 110 / 196 / 240 秒, 全部远长于我们原来的 90 秒
+    //   章节条 —— 参考在顶部常驻六章导航并高亮当前章
+    //   字幕 72px 深色 —— 亮底不需要白字描边, 参考的字幕明显大于我们的 56px
+    name: '知识长视频(横屏)',
+    description: '对标同行知识区横屏长视频: 亮底、快切镜、常驻章节进度条、大号深色字幕',
+    deliveryMode: 'ppt-narration',
+    visualStyle: 'card',
+    palette: null,
+    voicePreset: null,
+    scriptPrompt: { targetDurationSec: 180 },
+    captionStyle: {
+      fontFamily: 'PingFang SC',
+      fontSize: 72,
+      primaryColor: '#1A1A1A',
+      outlineColor: '#FFFFFF',
+      outlineWidth: 2,
+      marginV: 70,
+    },
+    bgmPath: null,
+    bgmVolume: 0.15,
+    introPath: null,
+    outroPath: null,
+    visualTone: 'light',
+    shotPaceSec: 4,
+    showChapterNav: true,
   },
 ];

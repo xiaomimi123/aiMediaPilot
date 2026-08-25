@@ -43,6 +43,9 @@ export async function seedPresetsIfEmpty(userId: string): Promise<void> {
       bgmVolume: preset.bgmVolume,
       introPath: preset.introPath,
       outroPath: preset.outroPath,
+      visualTone: preset.visualTone,
+      shotPaceSec: preset.shotPaceSec,
+      showChapterNav: preset.showChapterNav,
     })),
   });
 }

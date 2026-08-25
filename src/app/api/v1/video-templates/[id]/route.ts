@@ -61,6 +61,9 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       bgmVolume: cfg.bgmVolume,
       introPath: cfg.introPath,
       outroPath: cfg.outroPath,
+      visualTone: cfg.visualTone,
+      shotPaceSec: cfg.shotPaceSec,
+      showChapterNav: cfg.showChapterNav,
       updatedAt: new Date().toISOString(),
     },
   });

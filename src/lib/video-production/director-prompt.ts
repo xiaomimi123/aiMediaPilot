@@ -26,8 +26,10 @@ export const DIRECTOR = {
    * `factsSection` 为空(或不传)时输出与二十期之前字符级一致 —— 老任务零迁移。
    * 非空时由 `buildFactsSection` 产出, 自带前导换行(同 personaSection 的既有约定)。
    */
-  buildSystemPrompt(factsSection?: string): string {
+  buildSystemPrompt(factsSection?: string, styleSection?: string): string {
     const factsBlock = factsSection && factsSection.trim() ? factsSection : '';
+    // 风格段(二十一期): 亮/暗基调与切镜节奏, 由模板配置驱动; 空串时输出不变
+    const styleBlock = styleSection && styleSection.trim() ? styleSection : '';
     return `你是一个 B-roll 视频的"导演"，只负责影片的意义和视觉方向。
 
 规则：
@@ -38,7 +40,7 @@ export const DIRECTOR = {
 - 第一版要求构图从简：优先保证时长覆盖完整、字幕/文字清晰可读，不追求视觉丰富度和复杂运镜——用简单的文字卡片+基础过渡即可，不要设计复杂的隐喻或多层构图。
 - 统一的调色板(palette)只给 3-8 个十六进制色值，覆盖全片使用。
 
-${factsBlock}
+${styleBlock}${factsBlock}
 
 只输出 JSON，不要 markdown 代码块标记，不要解释文字。字段：concept(一句话视觉概念)、palette(色值数组)、shots(镜头数组，每个镜头含 shotId/startMs/endMs/claim/visualJob/beats)。`;
   },

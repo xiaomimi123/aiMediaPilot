@@ -196,7 +196,7 @@ ${JSON_STRICTNESS}`;
   },
   buildUserMessage(input: {
     topic: string;
-    durationSec: 30 | 45 | 60 | 90;
+    durationSec: 30 | 45 | 60 | 90 | 120 | 180 | 240;
     brief: ResearchBrief | null;
     actSeconds: Record<ActKey, number>;
   }): ContentPart[] {
