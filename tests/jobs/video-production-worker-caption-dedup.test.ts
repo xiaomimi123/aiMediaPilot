@@ -64,7 +64,9 @@ vi.mock('@/lib/llm/deepseek', () => ({
         };
       }
       if (opts.systemPrompt.includes('构建者')) {
-        return { result: { html: '<html></html>' }, usage: { inputTokens: 0, outputTokens: 0 } };
+        // 必须是能通过 validateShotHtml 体检的最小合格产物 —— 否则 worker 会判定
+        // Builder 翻车并重试(二十一期新增的分镜产物体检)
+        return { result: { html: '<!DOCTYPE html><html><body><script src=\'gsap.min.js\'></script><script>const tl=gsap.timeline({paused:true});window.__timelines["shot"]=tl;</script></body></html>' }, usage: { inputTokens: 0, outputTokens: 0 } };
       }
       throw new Error(`测试没预期到这个 LLM 调用: ${opts.systemPrompt.slice(0, 20)}`);
     }

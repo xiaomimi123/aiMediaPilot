@@ -26,6 +26,7 @@ import type { TranscriptSegment } from '@/lib/llm/whisper';
 import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
 import { buildFactsSection } from '@/lib/video-production/facts-guard';
 import { buildStyleSection, buildChapterNavSection, actAtMs } from '@/lib/video-production/style-guard';
+import { validateShotHtml } from '@/lib/video-production/shot-html-guard';
 import type { ScriptAct } from '@/lib/script/six-act';
 import { synthesizeVolcTts } from '@/lib/tts/volcengine';
 import { decrypt } from '@/lib/crypto';
@@ -46,6 +47,35 @@ function shotDir(productionRoot: string, shotIndex: number): string {
   // (可能包含 `..` 等构造出越权写入路径)。目录名固定用数组下标，
   // preview 与 master 两条渲染路径共用同一套下标规则，保证互相能对上。
   return path.join(productionRoot, 'shots', String(shotIndex));
+}
+
+/**
+ * 调一次 Builder 并体检产物, 不合格就重来一次(二十一期)。
+ *
+ * 单个分镜的一次生成翻车会让整条任务失败, 而一条片子有十几到几十镜、跑十几分钟——
+ * 真实出片五次里踩中两次(漏挂时间线 / 写成自言自语而非代码)。重试一次能把
+ * "整条任务失败"降级成"这一镜多花一次调用"。
+ * 重试仍失败才抛错, 错误信息带上体检结论, 便于定位是哪一类翻车。
+ */
+async function buildShotHtmlWithRetry(
+  llm: DeepSeekTextLLM,
+  systemPrompt: string,
+  shot: { shotId: string },
+  userMessage: ReturnType<typeof BUILDER.buildUserMessage>,
+): Promise<string> {
+  let lastReason = '';
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const { result } = await llm.callStructured({
+      systemPrompt,
+      userMessage,
+      responseSchema: BUILDER.responseSchema,
+    });
+    const check = validateShotHtml(result.html);
+    if (check.ok) return result.html;
+    lastReason = check.reason ?? '未知';
+    console.warn(`[video-production] 镜头 ${shot.shotId} 第 ${attempt} 次产物不合格: ${lastReason}`);
+  }
+  throw new Error(`镜头 ${shot.shotId} 连续两次产出不合格: ${lastReason}`);
 }
 
 /** 取该内容的六幕稿; 取不到(旧稿/未生成)时返回空数组, 调用方据此退回原行为。 */
@@ -131,19 +161,20 @@ export async function handlePptNarration(
         chapterActs,
         actAtMs(acts, shot.startMs),
       );
-      const { result: built } = await builderLLM.callStructured({
-        systemPrompt: BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection, navSection),
-        userMessage: BUILDER.buildUserMessage(shot),
-        responseSchema: BUILDER.responseSchema,
-      });
+      const builtHtml = await buildShotHtmlWithRetry(
+        builderLLM,
+        BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection, navSection),
+        shot,
+        BUILDER.buildUserMessage(shot),
+      );
       const shotWorkDir = shotDir(vp.productionRoot, shotIndex);
       await fs.mkdir(shotWorkDir, { recursive: true });
       // 先落盘原始 HTML（与 renderShotToClip 自己写的 workDir/index.html 分开保存），
       // 这样即便这一镜的渲染后续失败，产出的 HTML 依然能保留下来供 master 复用。
-      await fs.writeFile(path.join(shotWorkDir, 'source.html'), built.html, 'utf-8');
+      await fs.writeFile(path.join(shotWorkDir, 'source.html'), builtHtml, 'utf-8');
       const clipPath = path.join(shotWorkDir, 'clip.mp4');
       await renderShotToClip({
-        html: built.html,
+        html: builtHtml,
         durationMs: shot.endMs - shot.startMs,
         fps: 15, // 预览档固定 15fps
         workDir: shotWorkDir,
@@ -285,17 +316,18 @@ export async function handleTalkingHeadBroll(
     const cutawaySegments: CutawaySegment[] = [];
     let shotIndex = 0;
     for (const shot of direction.shots) {
-      const { result: built } = await builderLLM.callStructured({
-        systemPrompt: BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection),
-        userMessage: BUILDER.buildUserMessage(shot),
-        responseSchema: BUILDER.responseSchema,
-      });
+      const builtHtml = await buildShotHtmlWithRetry(
+        builderLLM,
+        BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection),
+        shot,
+        BUILDER.buildUserMessage(shot),
+      );
       const shotWorkDir = shotDir(vp.productionRoot, shotIndex);
       await fs.mkdir(shotWorkDir, { recursive: true });
-      await fs.writeFile(path.join(shotWorkDir, 'source.html'), built.html, 'utf-8');
+      await fs.writeFile(path.join(shotWorkDir, 'source.html'), builtHtml, 'utf-8');
       const clipPath = path.join(shotWorkDir, 'clip.mp4');
       await renderShotToClip({
-        html: built.html,
+        html: builtHtml,
         durationMs: shot.endMs - shot.startMs,
         fps: 15, // 预览档固定 15fps，与 ppt-narration 分支一致
         workDir: shotWorkDir,
@@ -485,17 +517,18 @@ export async function handleIllustrationTts(
     const clipPaths: string[] = [];
     let shotIndex = 0;
     for (const shot of direction.shots) {
-      const { result: built } = await builderLLM.callStructured({
-        systemPrompt: BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection),
-        userMessage: BUILDER.buildUserMessage(shot),
-        responseSchema: BUILDER.responseSchema,
-      });
+      const builtHtml = await buildShotHtmlWithRetry(
+        builderLLM,
+        BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection),
+        shot,
+        BUILDER.buildUserMessage(shot),
+      );
       const shotWorkDir = shotDir(vp.productionRoot, shotIndex);
       await fs.mkdir(shotWorkDir, { recursive: true });
-      await fs.writeFile(path.join(shotWorkDir, 'source.html'), built.html, 'utf-8');
+      await fs.writeFile(path.join(shotWorkDir, 'source.html'), builtHtml, 'utf-8');
       const clipPath = path.join(shotWorkDir, 'clip.mp4');
       await renderShotToClip({
-        html: built.html,
+        html: builtHtml,
         durationMs: shot.endMs - shot.startMs,
         fps: 15, // 预览档固定 15fps，与另外两个分支一致
         workDir: shotWorkDir,
