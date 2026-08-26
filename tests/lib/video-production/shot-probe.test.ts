@@ -24,17 +24,25 @@ async function workDir(): Promise<string> {
 }
 
 describe('probeShotDensity', () => {
-  it('几乎空白的画面 → 量出极低占比, 被整镜判定拦下', async () => {
+  it('真正的空屏(什么都没渲出来)→ 被整镜判定拦下', async () => {
+    // 阈值 2026-08-26 重标定后: 一行小字(约 5%)与参考视频的标题页同量级, 属正常构图,
+    // 不该拦。这里用完全没有可见元素的页面 —— 那才是渲染事故。
+    const dir = await workDir();
+    const samples = await probeShotDensity({ html: page(''), durationMs: 4000, workDir: dir });
+
+    expect(samples.length).toBeGreaterThan(0);
+    expect(samples[0].contentRatio).toBeLessThan(0.01);
+    expect(judgeShotDensity(samples).ok).toBe(false);
+  }, 120_000);
+
+  it('一行小字的标题页 → 通过(与参考视频标题页同量级, 不是缺陷)', async () => {
     const dir = await workDir();
     const samples = await probeShotDensity({
-      html: page('<div style="position:absolute;top:50%;left:50%;font-size:48px">为什么?</div>'),
+      html: page('<div style="position:absolute;top:45%;left:35%;font-size:48px">为什么?</div>'),
       durationMs: 4000,
       workDir: dir,
     });
-
-    expect(samples.length).toBeGreaterThan(0);
-    expect(samples[0].contentRatio).toBeLessThan(0.05);
-    expect(judgeShotDensity(samples).ok).toBe(false);
+    expect(judgeShotDensity(samples).ok).toBe(true);
   }, 120_000);
 
   it('铺满内容的画面 → 通过判定', async () => {

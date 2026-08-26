@@ -51,35 +51,46 @@ describe('measureFrameDensity', () => {
 });
 
 describe('judgeFrameDensity', () => {
-  it('参考视频量级(0.30/8 格)→ 合格', () => {
+  it('参考视频铺满的帧(0.30/8 格)→ 合格', () => {
     expect(judgeFrameDensity({ contentRatio: 0.30, cellsUsed: 8, background: '#F3EFE5' }).ok).toBe(true);
   });
 
-  it('我们最差那帧(0.013/3 格)→ 不合格, 且说明是空得离谱', () => {
-    const r = judgeFrameDensity({ contentRatio: 0.013, cellsUsed: 3, background: '#F9F6ED' });
+  it('真正的空屏(0.0)→ 不合格', () => {
+    const r = judgeFrameDensity({ contentRatio: 0.0, cellsUsed: 0, background: '#F9F6ED' });
     expect(r.ok).toBe(false);
-    expect(r.reason).toMatch(/空|占比/);
+    expect(r.reason).toMatch(/空/);
   });
 
-  it('我们的典型帧(0.05/5 格)→ 不合格', () => {
-    expect(judgeFrameDensity({ contentRatio: 0.05, cellsUsed: 5, background: '#F6F4E9' }).ok).toBe(false);
+  it('参考视频自己的标题页/转场(0.042~0.056)→ 必须合格', () => {
+    // 2026-08-26 复核: 参考视频 t=3s 标题页 5.6%、t=45s 转场 5.4%、t=106s 收尾 4.2%。
+    // 原阈值 0.12 会把参考视频自己的正常帧判为不合格 —— 那是拿峰值当均值定错了线。
+    for (const ratio of [0.042, 0.054, 0.056]) {
+      expect(judgeFrameDensity({ contentRatio: ratio, cellsUsed: 5, background: '#F3EFE5' }).ok).toBe(true);
+    }
   });
 
-  it('内容够多但全挤在一格 → 不合格(分布也要看)', () => {
-    const r = judgeFrameDensity({ contentRatio: 0.25, cellsUsed: 1, background: '#FFFFFF' });
-    expect(r.ok).toBe(false);
-    expect(r.reason).toMatch(/集中|分布|格/);
+  it('我们的典型帧(0.05/5 格)→ 现在算合格 —— 它和参考的标题页是同一量级', () => {
+    expect(judgeFrameDensity({ contentRatio: 0.05, cellsUsed: 5, background: '#F6F4E9' }).ok).toBe(true);
+  });
+
+  it('内容集中在中间但确实有内容 → 合格 —— 参考视频的标题页就是这样, 那是排版不是缺陷', () => {
+    // 同上一条复核: 原来把"只占 1 格"也判为不合格, 等于禁止居中标题页这种正常构图
+    expect(judgeFrameDensity({ contentRatio: 0.25, cellsUsed: 1, background: '#FFFFFF' }).ok).toBe(true);
+  });
+
+  it('一格都没有 → 不合格(那是真的什么都没渲出来)', () => {
+    expect(judgeFrameDensity({ contentRatio: 0.5, cellsUsed: 0, background: '#FFFFFF' }).ok).toBe(false);
   });
 
   it('反馈文案里带上实测数字, 好让模型知道差多少', () => {
-    const r = judgeFrameDensity({ contentRatio: 0.013, cellsUsed: 3, background: '#F9F6ED' });
-    expect(r.reason).toMatch(/1\.3%|0\.013/);
+    const r = judgeFrameDensity({ contentRatio: 0.005, cellsUsed: 1, background: '#F9F6ED' });
+    expect(r.reason).toMatch(/0\.5%|0\.005/);
   });
 });
 
 describe('整镜判定(允许合理留白, 只拦普遍性空洞)', () => {
   const dense = { contentRatio: 0.35, cellsUsed: 8, background: '#F3EFE5' };
-  const empty = { contentRatio: 0.02, cellsUsed: 2, background: '#F9F6ED' };
+  const empty = { contentRatio: 0.004, cellsUsed: 1, background: '#F9F6ED' };
 
   it('多数取样帧都空 → 判为不合格', () => {
     const r = judgeShotDensity([empty, empty, empty]);

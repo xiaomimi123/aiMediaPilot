@@ -27,6 +27,19 @@ const IN_FLIGHT = new Set([
 ]);
 
 /**
+ * 进行中的任务多久没动就算"卡死"。worker 每完成一镜就 setStatus 刷新 updatedAt,
+ * 正常跑动时不会静默这么久; 超过就说明进程已经没了(真实踩过: 强杀 worker 后任务
+ * 永远停在 building, 既跑不完也删不掉, 只能手动改库)。
+ */
+const STALE_MS = 30 * 60 * 1000;
+
+function isStale(updatedAt: string | null | undefined): boolean {
+  if (!updatedAt) return false; // 拿不准就保守拒绝, 别误删真在跑的任务
+  const t = Date.parse(updatedAt);
+  return Number.isFinite(t) && Date.now() - t > STALE_MS;
+}
+
+/**
  * 删除一次生成任务(二十一期) —— 真实使用提出: 成片库里堆着不满意的版本和失败的任务,
  * 没有任何清理手段。连同 productionRoot 下的分镜/中间产物/成片一并清掉, 否则磁盘只增不减。
  *
@@ -38,7 +51,7 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   const vp = await prisma.videoProduction.findUnique({ where: { id: params.id } });
   if (!vp || vp.userId !== user.id) return fail('不存在', 404);
 
-  if (IN_FLIGHT.has(vp.status)) {
+  if (IN_FLIGHT.has(vp.status) && !isStale(vp.updatedAt)) {
     return fail('任务进行中，等它跑完或失败后再删', 400);
   }
 

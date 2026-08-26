@@ -87,3 +87,32 @@ describe('DELETE /api/v1/cockpit/video-productions/[id]', () => {
     expect(prismaMock.videoProduction.delete).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('卡死任务的清理(worker 被强杀后状态永远停在进行中)', () => {
+  it('进行中但已超时的任务 → 允许删除', async () => {
+    // 真实踩过: 强杀 worker 后任务停在 building, 既跑不完也删不掉, 只能手动改库
+    const old = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+    prismaMock.videoProduction.findUnique.mockResolvedValue(vp({ status: 'building', updatedAt: old }));
+    prismaMock.videoProduction.delete.mockResolvedValue({ id: 'vp1' });
+
+    const res = await DELETE(req(), { params: { id: 'vp1' } });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.videoProduction.delete).toHaveBeenCalledTimes(1);
+  });
+
+  it('进行中且刚更新过 → 仍然拒绝(worker 可能真在跑)', async () => {
+    prismaMock.videoProduction.findUnique.mockResolvedValue(
+      vp({ status: 'building', updatedAt: new Date().toISOString() }),
+    );
+    const res = await DELETE(req(), { params: { id: 'vp1' } });
+    expect(res.status).toBe(400);
+    expect(prismaMock.videoProduction.delete).not.toHaveBeenCalled();
+  });
+
+  it('updatedAt 缺失时保守处理: 拒绝删除', async () => {
+    prismaMock.videoProduction.findUnique.mockResolvedValue(vp({ status: 'building', updatedAt: null }));
+    const res = await DELETE(req(), { params: { id: 'vp1' } });
+    expect(res.status).toBe(400);
+  });
+});
