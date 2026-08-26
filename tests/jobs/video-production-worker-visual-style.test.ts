@@ -10,6 +10,7 @@ vi.mock('@/lib/redis', () => ({ redis: {} }));
 vi.mock('@/jobs/queue', () => ({ QUEUES: { VIDEO_PRODUCTION: 'video-production' } }));
 
 const prismaMock = vi.hoisted(() => ({
+  contentAsset: { findMany: vi.fn(async () => []) },
   videoTemplate: { findUnique: vi.fn() },
   volcTtsConfig: { findUnique: vi.fn() },
   cockpitContent: { findUnique: vi.fn(async () => ({ id: 'c1', scriptDraftId: 'd1' })) },

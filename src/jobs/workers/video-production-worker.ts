@@ -25,6 +25,7 @@ import { LocalWhisperClient } from '@/lib/llm/local-whisper';
 import type { TranscriptSegment } from '@/lib/llm/whisper';
 import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
 import { buildFactsSection } from '@/lib/video-production/facts-guard';
+import { buildAssetSection, type ContentAsset } from '@/lib/video-production/asset-manifest';
 import { buildStyleSection, buildChapterNavSection, actAtMs } from '@/lib/video-production/style-guard';
 import { validateShotHtml } from '@/lib/video-production/shot-html-guard';
 import { probeShotHealth } from '@/lib/video-production/shot-renderer';
@@ -128,6 +129,39 @@ async function buildShotHtmlWithRetry(
   return fallback.html;
 }
 
+/**
+ * 取该内容挂的真实素材(二十一期方向 B)。参考视频里密度最高的那几帧靠的就是这类
+ * 整块真实截图/表格 —— 纯文字排版结构上达不到那个量级(实测参考自己的纯文字帧也
+ * 只有 5% 左右), 所以要有实感只能把真材料喂进去。
+ */
+async function loadContentAssets(userId: string, contentId: string): Promise<ContentAsset[]> {
+  const rows = await prisma.contentAsset.findMany({
+    where: { userId, contentId },
+    orderBy: { createdAt: 'asc' },
+  });
+  return rows.map((r) => ({
+    id: r.id, kind: r.kind as ContentAsset['kind'], description: r.description,
+    fileName: r.fileName, text: r.text,
+  }));
+}
+
+/**
+ * 把图片素材拷进镜头 workDir —— HTML 里用相对路径引用(与 gsap.min.js 同一套路),
+ * 写绝对路径换台机器就失效。拷不动的单个文件跳过, 不让一份坏素材废掉整镜。
+ */
+async function copyAssetsInto(workDir: string, assets: ContentAsset[], contentId: string): Promise<void> {
+  const dir = path.join(process.env.CONTENT_ASSET_ROOT || './content-assets', contentId);
+  await fs.mkdir(workDir, { recursive: true });
+  for (const a of assets) {
+    if (a.kind !== 'image' || !a.fileName) continue;
+    try {
+      await fs.copyFile(path.join(dir, a.fileName), path.join(workDir, a.fileName));
+    } catch (e) {
+      console.warn(`[video-production] 素材 ${a.fileName} 拷贝失败, 跳过:`, e instanceof Error ? e.message : e);
+    }
+  }
+}
+
 /** 取该内容的六幕稿; 取不到(旧稿/未生成)时返回空数组, 调用方据此退回原行为。 */
 async function loadActs(contentId: string): Promise<ScriptAct[]> {
   const content = await prisma.cockpitContent.findUnique({ where: { id: contentId } });
@@ -184,6 +218,10 @@ export async function handlePptNarration(
     // 取不到六幕稿(旧稿)时 factsSection 为空串, prompt 与改动前字符级一致。
     const acts = await loadActs(vp.contentId);
     const factsSection = buildFactsSection(acts, await loadResearch(vp.contentId));
+    // 二十一期方向 B: 内容挂的真实素材(截图/表格/长文)。参考视频密度最高的那几帧
+    // 靠的就是这类整块真材料, 纯文字排版达不到那个量级。
+    const contentAssets = await loadContentAssets(vp.userId, vp.contentId);
+    const assetSection = buildAssetSection(contentAssets);
     // 二十一期: 模板的风格(亮/暗基调、切镜节奏)要在 Director 阶段就生效——调色板与
     // 分镜时长都是它决定的。所以模板查询提前到 Director 调用之前。
     const template = vp.templateId
@@ -224,6 +262,8 @@ export async function handlePptNarration(
     let shotIndex = 0;
     for (const shot of direction.shots) {
       // 章节条要高亮"这一镜讲到哪一幕", 用镜头起点落在哪个幕区间来判定
+      // 素材文件要拷进这一镜的 workDir, HTML 才能用相对路径引用
+      await copyAssetsInto(shotDir(vp.productionRoot, shotIndex), contentAssets, vp.contentId);
       const navSection = buildChapterNavSection(
         template?.showChapterNav ?? false,
         chapterActs,
@@ -231,7 +271,7 @@ export async function handlePptNarration(
       );
       const builtHtml = await buildShotHtmlWithRetry(
         builderLLM,
-        BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection, navSection),
+        BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection + assetSection, navSection),
         shot,
         BUILDER.buildUserMessage(shot),
         // 密度体检的临时渲染目录; 只有走模板的任务开这一关(内容详情页旧入口

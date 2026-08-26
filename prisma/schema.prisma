@@ -40,6 +40,7 @@ model User {
   cockpitContents            CockpitContent[]
   videoProductions           VideoProduction[]
   videoTemplates             VideoTemplate[]
+  contentAssets              ContentAsset[]
   cockpitInspirations        CockpitInspiration[]
   cockpitStageEvents         CockpitStageEvent[]
   cockpitReviewDays          CockpitReviewDay[]
@@ -739,6 +740,23 @@ model VideoProduction {
   createdAt       String
   updatedAt       String
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, contentId])
+}
+
+/// 内容专属的真实素材(二十一期方向 B) —— 截图/表格/长文。
+/// 挂在内容而非模板上: 每条片子的素材都不一样, 挂模板会变成每条视频塞同一批图。
+model ContentAsset {
+  id          String @id
+  userId      String
+  contentId   String
+  kind        String // image|table|text
+  description String // 用户写的一句话说明, Builder 靠它判断该在哪一镜用
+  fileName    String? // 图片素材的文件名(相对 assetRoot)
+  filePath    String? // 服务端绝对路径
+  text        String? // 表格/长文的原始内容
+  createdAt   String
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, contentId])
 }
