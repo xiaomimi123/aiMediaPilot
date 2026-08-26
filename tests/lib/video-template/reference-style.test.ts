@@ -84,3 +84,21 @@ describe('「知识长视频」预设', () => {
     expect(() => VideoTemplateConfigSchema.parse(preset)).not.toThrow();
   });
 });
+
+describe('Builder 模型可配(二十一期)', () => {
+  const base = PRESET_TEMPLATES[0];
+
+  it('默认沿用 deepseek-chat —— 老模板行为不变', () => {
+    expect(base.builderModel).toBe('deepseek-chat');
+  });
+
+  it('「知识长视频」用更强的模型 —— 排版是设计活, 实测 deepseek-chat 密度只到 5%~8%', () => {
+    const preset = PRESET_TEMPLATES.find((t) => t.name.includes('知识长视频'))!;
+    expect(preset.builderModel).toBe('deepseek-reasoner');
+  });
+
+  it('只接受已知模型名, 防手滑写错导致整条任务失败', () => {
+    expect(() => VideoTemplateConfigSchema.parse({ ...base, builderModel: 'gpt-9' })).toThrow();
+    expect(() => VideoTemplateConfigSchema.parse({ ...base, builderModel: 'deepseek-reasoner' })).not.toThrow();
+  });
+});

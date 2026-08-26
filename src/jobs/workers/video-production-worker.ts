@@ -27,7 +27,7 @@ import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
 import { buildFactsSection } from '@/lib/video-production/facts-guard';
 import { buildStyleSection, buildChapterNavSection, actAtMs } from '@/lib/video-production/style-guard';
 import { validateShotHtml } from '@/lib/video-production/shot-html-guard';
-import { probeShotDensity } from '@/lib/video-production/shot-renderer';
+import { probeShotHealth } from '@/lib/video-production/shot-renderer';
 import { judgeShotDensity } from '@/lib/video-production/frame-density';
 import type { ScriptAct } from '@/lib/script/six-act';
 import { synthesizeVolcTts } from '@/lib/tts/volcengine';
@@ -91,12 +91,23 @@ async function buildShotHtmlWithRetry(
     // (以及单测)保持原来的行为。
     if (!probeDir) return result.html;
 
-    const samples = await probeShotDensity({
+    const health = await probeShotHealth({
       html: result.html,
       durationMs: shot.endMs - shot.startMs,
       workDir: path.join(probeDir, `probe-${attempt}`),
     });
-    const density = judgeShotDensity(samples);
+
+    // 运行时错误优先于密度 —— 页面报错时画面本来就是空的, 报"太空"会指向错的方向。
+    // 真实出片踩过 `t.duration is not a function`: 语法对、时间线也挂了, 直到正式
+    // 渲染跑完几十镜才炸。体检本来就在真跑页面, 顺手拦下不额外花渲染。
+    if (health.runtimeErrors.length > 0) {
+      lastReason = `页面运行时报错: ${health.runtimeErrors.slice(0, 2).join(' | ')}`;
+      feedback = `\n\n上一版在浏览器里跑不起来: ${lastReason} 请检查 GSAP 用法与选择器是否正确, 重写。`;
+      console.warn(`[video-production] 镜头 ${shot.shotId} 第 ${attempt} 次运行时报错: ${lastReason}`);
+      continue;
+    }
+
+    const density = judgeShotDensity(health.samples);
     if (density.ok) return result.html;
 
     lastReason = density.reason ?? '画面密度不足';
@@ -206,7 +217,10 @@ export async function handlePptNarration(
     const chapterActs = acts.map((a) => ({ act: a.act, title: a.title }));
 
     await setStatus('building');
-    const builderLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-chat' });
+    // 排版吃模型能力: 实测 deepseek-chat 即便有素材+骨架+渲染反馈, 画面密度也只到
+    // 5%~8%(参考视频 30%~54%)。模板可以指定更强的模型; 缺省沿用 deepseek-chat。
+    const builderModel = (template?.builderModel as 'deepseek-chat' | 'deepseek-reasoner' | undefined) ?? 'deepseek-chat';
+    const builderLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: builderModel });
     let shotIndex = 0;
     for (const shot of direction.shots) {
       // 章节条要高亮"这一镜讲到哪一幕", 用镜头起点落在哪个幕区间来判定

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { probeShotDensity } from '@/lib/video-production/shot-renderer';
+import { probeShotDensity, probeShotHealth } from '@/lib/video-production/shot-renderer';
 import { judgeShotDensity } from '@/lib/video-production/frame-density';
 import fs from 'fs/promises';
 import path from 'path';
@@ -66,5 +66,43 @@ describe('probeShotDensity', () => {
     <script>const c = f(el, #1F1F1F);</script></body></html>`;
     const samples = await probeShotDensity({ html: broken, durationMs: 4000, workDir: dir });
     expect(judgeShotDensity(samples).ok).toBe(true);
+  }, 120_000);
+});
+
+describe('运行时错误捕获(真实出片踩过: t.duration is not a function)', () => {
+  it('GSAP 用法错误 → 报告运行时错误, 而不是当成"画面太空"', async () => {
+    const dir = await workDir();
+    // 时间线挂上了、语法也对, 但 tl.to 的参数用法错误 —— 两道静态体检都拦不住
+    const html = `<!DOCTYPE html><html><head><style>body{margin:0;width:1920px;height:1080px;background:#F6F4E9}</style></head>
+    <body><p>x</p><script src='gsap.min.js'></script>
+    <script>window.__timelines=window.__timelines||{};const tl=gsap.timeline({paused:true});
+    tl.to('#nope', { duration: 1 }, {}); tl.seek(0); window.__timelines["shot"]=tl;
+    document.body.appendChild(Object.assign(document.createElement('div'),{textContent:'y'}));
+    undefinedFunctionCall();
+    </script></body></html>`;
+    const r = await probeShotHealth({ html, durationMs: 4000, workDir: dir });
+    expect(r.runtimeErrors.length).toBeGreaterThan(0);
+    expect(r.runtimeErrors.join(' ')).toMatch(/undefinedFunctionCall|not a function|not defined/);
+  }, 120_000);
+
+  it('正常页面 → 无运行时错误', async () => {
+    const dir = await workDir();
+    const r = await probeShotHealth({ html: page('<p>x</p>'), durationMs: 4000, workDir: dir });
+    expect(r.runtimeErrors).toEqual([]);
+    expect(r.samples.length).toBeGreaterThan(0);
+  }, 120_000);
+
+  it('seek 阶段抛错也会被收下 —— 有些错误只在跳转时才触发', async () => {
+    const dir = await workDir();
+    // 注: GSAP 会吞掉 eventCallback 里抛的异常, 那条路径测不出来。这里用"时间线对象
+    // 本身不是合法 timeline"来触发 seek 阶段的报错 —— 与真实出片遇到的
+    // `t.duration is not a function` 是同一类(结构体检放行、seek 时才炸)。
+    const html = `<!DOCTYPE html><html><head><style>body{margin:0;width:1920px;height:1080px;background:#F6F4E9}</style></head>
+    <body><p>x</p><script src='gsap.min.js'></script>
+    <script>window.__timelines=window.__timelines||{};
+    window.__timelines["shot"]={ seek(){ throw new Error('seek 时炸了'); } };</script></body></html>`;
+    const r = await probeShotHealth({ html, durationMs: 4000, workDir: dir });
+    expect(r.runtimeErrors.join(' ')).toMatch(/seek 时炸了/);
+    expect(r.samples).toEqual([]);
   }, 120_000);
 });

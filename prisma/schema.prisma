@@ -763,6 +763,7 @@ model VideoTemplate {
   shotPaceSec    Float?                    // 目标切镜节奏(秒), null = 不约束(老行为)
   showChapterNav Boolean @default(false)   // 顶部常驻六章进度条
   researchEnabled Boolean @default(false)  // 写稿前跑 Tavily 素材研究
+  builderModel   String  @default("deepseek-chat") // Builder 用哪个模型: 排版吃能力
   createdAt    String
   updatedAt    String
   user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -47,6 +47,7 @@ export async function seedPresetsIfEmpty(userId: string): Promise<void> {
       shotPaceSec: preset.shotPaceSec,
       showChapterNav: preset.showChapterNav,
       researchEnabled: preset.researchEnabled,
+      builderModel: preset.builderModel,
     })),
   });
 }

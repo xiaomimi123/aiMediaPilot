@@ -155,8 +155,24 @@ const PROBE_POINTS = [0.35, 0.6, 0.85];
  * 任何异常(脚本坏掉、时间线没挂)都返回空数组而不是抛错 —— 那些属于语法/结构体检
  * 的职责, 在这里重复报错只会让失败原因互相掩盖。
  */
-export async function probeShotDensity(opts: ProbeShotOpts): Promise<FrameDensity[]> {
+export interface ShotHealth {
+  samples: FrameDensity[];
+  /** 页面内抛出的 JS 错误 —— 语法与结构体检都拦不住的运行时问题(如 GSAP 用法错误)。 */
+  runtimeErrors: string[];
+}
+
+/**
+ * 一次渲染同时体检两件事(二十一期): 画面密度 + 运行时错误。
+ *
+ * 真实出片踩过 `t.duration is not a function` —— 语法正确、时间线也挂上了, 但 GSAP
+ * 调用方式不对, 两道静态体检全部放行, 直到正式渲染(几十镜跑完)才炸。而体检本来就
+ * 在真跑页面, 顺手把错误收下来即可, 不额外花一次渲染。
+ *
+ * 任何异常都返回已收集到的结果而不是抛错 —— 判定交给调用方。
+ */
+export async function probeShotHealth(opts: ProbeShotOpts): Promise<ShotHealth> {
   const { html, durationMs, workDir } = opts;
+  const runtimeErrors: string[] = [];
   await fs.mkdir(workDir, { recursive: true });
   const indexHtmlPath = path.join(workDir, 'index.html');
   await fs.writeFile(indexHtmlPath, html, 'utf-8');
@@ -166,23 +182,27 @@ export async function probeShotDensity(opts: ProbeShotOpts): Promise<FrameDensit
   try {
     browser = await chromium.launch({ executablePath: await findChromiumExecutable(), headless: true });
     const page = await browser.newPage({ viewport: { width: PROBE_W, height: PROBE_H } });
+    page.on('pageerror', (e) => runtimeErrors.push(e.message));
+    page.on('console', (m) => { if (m.type() === 'error') runtimeErrors.push(m.text()); });
     await page.goto(`file://${path.resolve(indexHtmlPath)}`);
 
     const samples: FrameDensity[] = [];
     for (const ratio of PROBE_POINTS) {
       const sec = (durationMs / 1000) * ratio;
-      // 时间线不存在说明脚本压根没跑起来(语法错误/漏挂载)——那是语法与结构体检的
-      // 职责。这里直接放弃取样返回空数组, 否则会把"脚本坏了"误报成"画面太空",
-      // 两个失败原因互相掩盖, 排查时看到的是错的那个。
-      const hasTimeline = await page.evaluate((s) => {
+      // 时间线不存在说明脚本压根没跑起来 —— 那是语法与结构体检的职责。这里放弃取样,
+      // 否则会把"脚本坏了"误报成"画面太空", 两个失败原因互相掩盖。
+      const hasTimeline = await page.evaluate((sv) => {
         const tl = (window as unknown as { __timelines?: Record<string, { seek: (s: number) => void }> }).__timelines?.['shot'];
         if (!tl) return false;
-        tl.seek(s);
+        tl.seek(sv);
         return true;
-      }, sec);
-      if (!hasTimeline) return [];
+      }, sec).catch((e: unknown) => {
+        runtimeErrors.push(e instanceof Error ? e.message : String(e));
+        return false;
+      });
+      if (!hasTimeline) return { samples: [], runtimeErrors };
+
       const png = await page.screenshot({ type: 'png' });
-      // 截图是 PNG, 需要解成原始像素才能统计 —— 用 Chromium 自己解, 不引图像库依赖
       const rgb = await page.evaluate(async (dataUrl) => {
         const img = new Image();
         img.src = dataUrl;
@@ -198,10 +218,16 @@ export async function probeShotDensity(opts: ProbeShotOpts): Promise<FrameDensit
       }, `data:image/png;base64,${png.toString('base64')}`);
       samples.push(measureFrameDensity(Buffer.from(rgb.data), rgb.w, rgb.h));
     }
-    return samples;
-  } catch {
-    return [];
+    return { samples, runtimeErrors };
+  } catch (e) {
+    runtimeErrors.push(e instanceof Error ? e.message : String(e));
+    return { samples: [], runtimeErrors };
   } finally {
     await browser?.close();
   }
+}
+
+/** 只要密度的薄封装 —— 保留给不关心运行时错误的调用方。 */
+export async function probeShotDensity(opts: ProbeShotOpts): Promise<FrameDensity[]> {
+  return (await probeShotHealth(opts)).samples;
 }

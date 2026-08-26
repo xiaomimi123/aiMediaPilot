@@ -107,6 +107,7 @@ function emptyTemplateConfig(): VideoTemplateConfig {
     shotPaceSec: null,
     showChapterNav: false,
     researchEnabled: false,
+    builderModel: "deepseek-chat",
   };
 }
 

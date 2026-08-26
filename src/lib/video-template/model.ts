@@ -60,6 +60,13 @@ export interface VideoTemplateConfig {
    * Builder 只能画抽象图形。开着会多花一次 Tavily 额度与几十秒。
    */
   researchEnabled: boolean;
+  /**
+   * Builder(写分镜 HTML/CSS/GSAP)用哪个模型。
+   * 排版是设计活: 实测 deepseek-chat 即便拿到真实素材 + 版面骨架 + 渲染反馈,
+   * 画面内容占比也只到 5%~8%(参考视频 30%~54%), 收敛慢且上限低。
+   * 默认沿用 deepseek-chat 保持老模板行为不变。
+   */
+  builderModel: 'deepseek-chat' | 'deepseek-reasoner';
   captionStyle: CaptionStyle | null;  // null = 不烧字幕
   bgmPath: string | null;
   bgmVolume: number;                  // 0~1
@@ -109,6 +116,7 @@ export const VideoTemplateConfigSchema: z.ZodType<VideoTemplateConfig> = z.objec
   shotPaceSec: z.number().min(1).max(60).nullable(),
   showChapterNav: z.boolean(),
   researchEnabled: z.boolean(),
+  builderModel: z.enum(['deepseek-chat', 'deepseek-reasoner']),
 });
 
 export function defaultCaptionStyle(): CaptionStyle {
@@ -145,6 +153,7 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     shotPaceSec: null,
     showChapterNav: false,
     researchEnabled: false,
+    builderModel: 'deepseek-chat',
   },
   {
     name: '真人出镜 + B-roll',
@@ -163,6 +172,7 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     shotPaceSec: null,
     showChapterNav: false,
     researchEnabled: false,
+    builderModel: 'deepseek-chat',
   },
   {
     name: '插画配音',
@@ -181,6 +191,7 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     shotPaceSec: null,
     showChapterNav: false,
     researchEnabled: false,
+    builderModel: 'deepseek-chat',
   },
   {
     // 二十一期: 按同行参考视频拆解结论复刻
@@ -215,5 +226,7 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     showChapterNav: true,
     // 这个预设的立身之本就是"有实感", 素材研究必须开 —— 没有真料铺不出密度
     researchEnabled: true,
+    // 排版对 deepseek-chat 是硬骨头(实测密度只到 5%~8%), 这个预设吃排版, 上强模型
+    builderModel: 'deepseek-reasoner',
   },
 ];
