@@ -76,7 +76,11 @@ vi.mock('@/lib/llm/deepseek', () => ({
   },
 }));
 
-vi.mock('@/lib/video-production/shot-renderer', () => ({ renderShotToClip: vi.fn(async () => undefined) }));
+vi.mock('@/lib/video-production/shot-renderer', () => ({
+  renderShotToClip: vi.fn(async () => undefined),
+  // 密度体检真跑 Chromium, 本测试只关心接线参数, 给一份"合格"样本让它直接放行
+  probeShotDensity: vi.fn(async () => [{ contentRatio: 0.4, cellsUsed: 8, background: '#FFFFFF' }]),
+}));
 
 vi.mock('@/lib/video/ffmpeg', () => ({
   concatClips: vi.fn(async () => undefined),

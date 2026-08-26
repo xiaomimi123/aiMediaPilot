@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { measureFrameDensity, type FrameDensity } from '@/lib/video-production/frame-density';
 import os from 'os';
 import { chromium } from 'playwright-core';
 import { encodeFramesToClip } from '@/lib/video/ffmpeg';
@@ -130,4 +131,77 @@ export async function renderShotToClip(opts: RenderShotOpts): Promise<void> {
   }
 
   await encodeFramesToClip({ framesDir, fps, outputPath: outputClipPath });
+}
+
+export interface ProbeShotOpts {
+  html: string;
+  durationMs: number;
+  workDir: string;
+}
+
+/** 体检取样的宽高 —— 缩到很小不影响占比/分布统计, 但快得多(整帧 1920x1080 没必要)。 */
+const PROBE_W = 160;
+const PROBE_H = 90;
+/** 在镜头中段等距取几帧: 避开开头入场、结尾退场这两段天然稀疏的时间。 */
+const PROBE_POINTS = [0.35, 0.6, 0.85];
+
+/**
+ * 只渲几帧来体检画面密度(二十一期), 不产出视频。
+ *
+ * 与 `renderShotToClip` 的关键差别: 那个要跑满 fps × 时长帧再编码, 一镜几十秒;
+ * 这个只 seek 三个时间点各截一帧、缩到 160x90 量统计, 一镜一两秒。用于在正式渲染
+ * **之前**判断 Builder 排的版是不是整屏空白, 空了就带着诊断让它重写。
+ *
+ * 任何异常(脚本坏掉、时间线没挂)都返回空数组而不是抛错 —— 那些属于语法/结构体检
+ * 的职责, 在这里重复报错只会让失败原因互相掩盖。
+ */
+export async function probeShotDensity(opts: ProbeShotOpts): Promise<FrameDensity[]> {
+  const { html, durationMs, workDir } = opts;
+  await fs.mkdir(workDir, { recursive: true });
+  const indexHtmlPath = path.join(workDir, 'index.html');
+  await fs.writeFile(indexHtmlPath, html, 'utf-8');
+  await fs.copyFile(GSAP_ASSET_PATH, path.join(workDir, 'gsap.min.js'));
+
+  let browser;
+  try {
+    browser = await chromium.launch({ executablePath: await findChromiumExecutable(), headless: true });
+    const page = await browser.newPage({ viewport: { width: PROBE_W, height: PROBE_H } });
+    await page.goto(`file://${path.resolve(indexHtmlPath)}`);
+
+    const samples: FrameDensity[] = [];
+    for (const ratio of PROBE_POINTS) {
+      const sec = (durationMs / 1000) * ratio;
+      // 时间线不存在说明脚本压根没跑起来(语法错误/漏挂载)——那是语法与结构体检的
+      // 职责。这里直接放弃取样返回空数组, 否则会把"脚本坏了"误报成"画面太空",
+      // 两个失败原因互相掩盖, 排查时看到的是错的那个。
+      const hasTimeline = await page.evaluate((s) => {
+        const tl = (window as unknown as { __timelines?: Record<string, { seek: (s: number) => void }> }).__timelines?.['shot'];
+        if (!tl) return false;
+        tl.seek(s);
+        return true;
+      }, sec);
+      if (!hasTimeline) return [];
+      const png = await page.screenshot({ type: 'png' });
+      // 截图是 PNG, 需要解成原始像素才能统计 —— 用 Chromium 自己解, 不引图像库依赖
+      const rgb = await page.evaluate(async (dataUrl) => {
+        const img = new Image();
+        img.src = dataUrl;
+        await img.decode();
+        const c = document.createElement('canvas');
+        c.width = img.width; c.height = img.height;
+        const ctx = c.getContext('2d')!;
+        ctx.drawImage(img, 0, 0);
+        const d = ctx.getImageData(0, 0, c.width, c.height).data;
+        const out: number[] = [];
+        for (let i = 0; i < d.length; i += 4) { out.push(d[i], d[i + 1], d[i + 2]); }
+        return { w: c.width, h: c.height, data: out };
+      }, `data:image/png;base64,${png.toString('base64')}`);
+      samples.push(measureFrameDensity(Buffer.from(rgb.data), rgb.w, rgb.h));
+    }
+    return samples;
+  } catch {
+    return [];
+  } finally {
+    await browser?.close();
+  }
 }

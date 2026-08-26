@@ -27,6 +27,8 @@ import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
 import { buildFactsSection } from '@/lib/video-production/facts-guard';
 import { buildStyleSection, buildChapterNavSection, actAtMs } from '@/lib/video-production/style-guard';
 import { validateShotHtml } from '@/lib/video-production/shot-html-guard';
+import { probeShotDensity } from '@/lib/video-production/shot-renderer';
+import { judgeShotDensity } from '@/lib/video-production/frame-density';
 import type { ScriptAct } from '@/lib/script/six-act';
 import { synthesizeVolcTts } from '@/lib/tts/volcengine';
 import { decrypt } from '@/lib/crypto';
@@ -60,22 +62,59 @@ function shotDir(productionRoot: string, shotIndex: number): string {
 async function buildShotHtmlWithRetry(
   llm: DeepSeekTextLLM,
   systemPrompt: string,
-  shot: { shotId: string },
+  shot: { shotId: string; startMs: number; endMs: number },
   userMessage: ReturnType<typeof BUILDER.buildUserMessage>,
+  probeDir?: string,
 ): Promise<string> {
   let lastReason = '';
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
+  // 上一轮的诊断结论 —— 下一轮拼进 systemPrompt 喂回给模型。Builder 是盲写的,
+  // 不把渲染结果告诉它, 它永远不知道自己排出来是整屏空白(用户点出的本质问题)。
+  let feedback = '';
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
     const { result } = await llm.callStructured({
-      systemPrompt,
+      systemPrompt: systemPrompt + feedback,
       userMessage,
       responseSchema: BUILDER.responseSchema,
     });
+
+    // 第一关: 结构与语法体检(确定性, 不花渲染时间)
     const check = validateShotHtml(result.html);
-    if (check.ok) return result.html;
-    lastReason = check.reason ?? '未知';
-    console.warn(`[video-production] 镜头 ${shot.shotId} 第 ${attempt} 次产物不合格: ${lastReason}`);
+    if (!check.ok) {
+      lastReason = check.reason ?? '未知';
+      feedback = `\n\n上一版产出不合格: ${lastReason} 请修正后重写。`;
+      console.warn(`[video-production] 镜头 ${shot.shotId} 第 ${attempt} 次产物不合格: ${lastReason}`);
+      continue;
+    }
+
+    // 第二关: 真渲几帧量画面密度。probeDir 缺省时跳过 —— 让不关心密度的调用方
+    // (以及单测)保持原来的行为。
+    if (!probeDir) return result.html;
+
+    const samples = await probeShotDensity({
+      html: result.html,
+      durationMs: shot.endMs - shot.startMs,
+      workDir: path.join(probeDir, `probe-${attempt}`),
+    });
+    const density = judgeShotDensity(samples);
+    if (density.ok) return result.html;
+
+    lastReason = density.reason ?? '画面密度不足';
+    feedback = `\n\n上一版渲染出来的实际效果不合格: ${lastReason}`;
+    console.warn(`[video-production] 镜头 ${shot.shotId} 第 ${attempt} 次密度不足: ${lastReason}`);
   }
-  throw new Error(`镜头 ${shot.shotId} 连续两次产出不合格: ${lastReason}`);
+
+  // 三次都不达标就放行最后一版 —— 密度是质量问题不是可用性问题, 为它废掉整条
+  // 任务不划算(结构/语法不合格才是真的不能用, 那条路上面已经 continue 掉了)。
+  console.warn(`[video-production] 镜头 ${shot.shotId} 三次仍未达标, 放行最后一版: ${lastReason}`);
+  const { result: fallback } = await llm.callStructured({
+    systemPrompt: systemPrompt + feedback,
+    userMessage,
+    responseSchema: BUILDER.responseSchema,
+  });
+  const finalCheck = validateShotHtml(fallback.html);
+  if (!finalCheck.ok) throw new Error(`镜头 ${shot.shotId} 连续多次产出不合格: ${finalCheck.reason}`);
+  return fallback.html;
 }
 
 /** 取该内容的六幕稿; 取不到(旧稿/未生成)时返回空数组, 调用方据此退回原行为。 */
@@ -181,6 +220,9 @@ export async function handlePptNarration(
         BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection, navSection),
         shot,
         BUILDER.buildUserMessage(shot),
+        // 密度体检的临时渲染目录; 只有走模板的任务开这一关(内容详情页旧入口
+        // 不传 probeDir, 行为与之前完全一致)
+        vp.templateId ? shotDir(vp.productionRoot, shotIndex) : undefined,
       );
       const shotWorkDir = shotDir(vp.productionRoot, shotIndex);
       await fs.mkdir(shotWorkDir, { recursive: true });
