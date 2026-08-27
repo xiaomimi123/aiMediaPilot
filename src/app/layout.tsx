@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { APP_NAME } from '@/lib/constants';
+import { Sidebar } from '@/components/layout/sidebar';
 import './globals.css';
 
 /**
@@ -21,7 +22,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-CN" suppressHydrationWarning>
-      <body>{children}</body>
+      <body className="flex h-screen overflow-hidden">
+        <Sidebar />
+        {children}
+      </body>
     </html>
   );
 }
