@@ -49,6 +49,7 @@ model User {
   radarItems                 RadarItem[]
   radarRuns                  RadarRun[]
   radarConfig                RadarConfig?
+  materials                  Material[]
 }
 
 // Sub-project G: 灵感视频库 — 用户精选爆款 + AI 总结共性
@@ -367,6 +368,31 @@ model ContentAsset {
   user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, contentId])
+}
+
+/// 素材库(v5 阶段 D1) —— 写稿时按幕检索的具体材料。
+///
+/// 为什么要它: 六幕稿写到需要具体材料的地方, 没有素材 AI 就会开始编 ——
+/// 这是当前最大的失真来源。其中 experience(亲身经历)只有本人能录, 书摘和数据
+/// AI 自己也查得到, 所以那一类才是账号差异化的唯一来源。
+model Material {
+  id        String   @id @default(cuid())
+  userId    String
+  /// quote(书摘) | data(数据) | story(故事) | punchline(金句) | experience(亲身经历)
+  kind      String
+  content   String   @db.Text
+  /// 出处。数据类和书摘类没有出处等于不能用 —— 说错了要掉粉。
+  source    String   @default("")
+  /// 检索用的关键词, 用户自己填或从 content 里提。
+  tags      Json     @default("[]")
+  /// 被写进稿子几次 —— 用得多的素材说明这个方向有货。
+  usedCount Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind])
+  @@index([userId, createdAt])
 }
 
 model VideoTemplate {

@@ -70,10 +70,28 @@ describe('ScriptWorkspace', () => {
     expect(screen.getByText(/\d+ 字 · \d+\.\d+s/)).toBeTruthy();
   });
 
-  it('右栏三个 tab; 素材与变体如实说明还没做, 不假装有内容', () => {
+  it('素材库为空时明说「AI 就会开始编」, 不假装有内容', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ data: { materials: [] } }) } as Response);
     renderWorkspace();
     fireEvent.click(screen.getByRole('tab', { name: '素材' }));
-    expect(screen.getByText(/素材库还没建/)).toBeTruthy();
+    await waitFor(() => expect(screen.getByText(/AI 就会开始编/)).toBeTruthy());
+  });
+
+  it('这一幕匹配不到素材时明说匹配不到, **不退回展示最近几条** —— 无关素材会诱导人写进稿子', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: { materials: [{ id: 'm1', kind: 'quote', content: '量子力学入门', source: '', tags: [] }] },
+      }),
+    } as Response);
+    renderWorkspace();
+    fireEvent.click(screen.getByRole('tab', { name: '素材' }));
+    await waitFor(() => expect(screen.getByText(/一条都没匹配上/)).toBeTruthy());
+    expect(screen.queryByText('量子力学入门')).toBeNull();
+  });
+
+  it('变体如实说明还没做', () => {
+    renderWorkspace();
     fireEvent.click(screen.getByRole('tab', { name: '变体' }));
     expect(screen.getByText(/变体还没做/)).toBeTruthy();
   });

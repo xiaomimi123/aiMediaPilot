@@ -7,6 +7,7 @@ import { buildActPlan } from '@/lib/script/act-plan';
 import { scoreHardDimensions, type ScoreDimension } from '@/lib/cockpit/script-score';
 import { buttonVariants } from '@/components/ui/button';
 import { Tabs } from '@/components/ui/tabs';
+import { MaterialPanel } from './material-panel';
 import { ActStrip } from './act-strip';
 import { ActEditor } from './act-editor';
 import { ScorePanel } from './score-panel';
@@ -180,7 +181,12 @@ export function ScriptWorkspace({
             value={panel}
             onChange={setPanel}
           />
-          {panel === 'score' ? (
+          {panel === 'material' ? (
+            <MaterialPanel
+              narration={current.narration}
+              beats={current.beats.map((b) => b.keyword)}
+            />
+          ) : panel === 'score' ? (
             <ScorePanel
               hard={hard.total}
               hardMax={hard.max}
@@ -193,9 +199,7 @@ export function ScriptWorkspace({
             />
           ) : (
             <p className="text-xs leading-relaxed text-muted-foreground">
-              {panel === 'material'
-                ? '素材库还没建。建好之后这里按当前幕自动检索你记过的书摘、数据和亲身经历——不够用的时候 AI 就会开始编。'
-                : '变体还没做。它会让同一幕生成几个不同写法并排比较，而不是覆盖掉你已经写好的。'}
+              变体还没做。它会让同一幕生成几个不同写法并排比较，而不是覆盖掉你已经写好的。
             </p>
           )}
         </aside>

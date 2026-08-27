@@ -1,13 +1,34 @@
+import { prisma } from '@/lib/prisma';
+import { getOrCreateDefaultUser } from '@/lib/user';
 import { PageShell } from '@/components/layout/page-shell';
-import { NotBuiltYet } from '@/components/layout/not-built-yet';
+import { materialGaps } from '@/lib/materials/model';
+import { MaterialLibrary } from '@/components/materials/material-library';
 
-export default function MaterialsPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function MaterialsPage() {
+  const user = await getOrCreateDefaultUser();
+  const materials = await prisma.material.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: 'desc' },
+    take: 300,
+  });
+
+  const rows = materials.map((m) => ({
+    id: m.id,
+    kind: m.kind,
+    content: m.content,
+    source: m.source,
+    tags: Array.isArray(m.tags) ? (m.tags as string[]) : [],
+    createdAt: m.createdAt.toISOString().slice(0, 10),
+  }));
+
   return (
-    <PageShell title="素材库" description="读到、想到、经历过的具体材料。写稿时按幕检索。">
-      <NotBuiltYet
-        what="素材库还没建"
-        why="它要存书摘、数据、故事、金句和亲身经历五类材料，写稿时按当前幕自动检索。没有它的时候，AI 写到需要具体材料的地方就会开始编——这是六幕稿目前最大的失真来源。其中「亲身经历」只有你自己能录，书摘和数据 AI 也查得到，所以那一类才是账号差异化的唯一来源。"
-      />
+    <PageShell
+      title="素材库"
+      description="读到、想到、经历过的具体材料。写稿时按幕自动检索——不够用，AI 就会开始编。"
+    >
+      <MaterialLibrary initial={rows} gaps={materialGaps(rows)} />
     </PageShell>
   );
 }
