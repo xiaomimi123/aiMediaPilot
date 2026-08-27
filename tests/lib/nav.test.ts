@@ -1,9 +1,34 @@
 import { describe, it, expect } from 'vitest';
-import { NAV_ITEMS, SETTINGS_ITEM, activeNavHref } from '@/lib/nav';
+import { NAV_GROUPS, NAV_ITEMS, HOME_ITEM, SETTINGS_ITEM, activeNavHref } from '@/lib/nav';
+
+describe('NAV_GROUPS', () => {
+  it('三组: 工作区 / 生产 / 分析', () => {
+    expect(NAV_GROUPS.map((g) => g.label)).toEqual(['工作区', '生产', '分析']);
+  });
+
+  it('总览独立在最上面, 不属于任何一组', () => {
+    expect(HOME_ITEM.href).toBe('/');
+    expect(NAV_GROUPS.some((g) => g.items.some((i) => i.href === '/'))).toBe(false);
+  });
+
+  it('加上总览与设置一共 12 项 —— 与设计稿一致', () => {
+    expect(NAV_ITEMS.length + 2).toBe(12);
+  });
+
+  it('每一项都标了它依赖的数据通没通 —— 空的要如实说, 不是藏起来', () => {
+    for (const i of NAV_ITEMS) {
+      expect(typeof i.ready).toBe('boolean');
+    }
+    // 出片链路刚跑通一次、复盘链路一条都没有
+    expect(NAV_ITEMS.find((i) => i.href === '/data')!.ready).toBe(false);
+    expect(NAV_ITEMS.find((i) => i.href === '/scripts')!.ready).toBe(true);
+  });
+});
 
 describe('NAV_ITEMS', () => {
-  it('只有三项, 顺序是 选题 → 写稿 → 稿库', () => {
-    expect(NAV_ITEMS.map((i) => i.label)).toEqual(['选题', '写稿', '稿库']);
+  it('工作区四项, 顺序是 选题 → 写稿 → 稿库 → 素材库', () => {
+    const workbench = NAV_GROUPS.find((g) => g.label === '工作区')!;
+    expect(workbench.items.map((i) => i.label)).toEqual(['选题', '写稿', '稿库', '素材库']);
   });
 
   it('设置不在主导航里 —— 它是配置, 不是日常动作', () => {
@@ -26,8 +51,8 @@ describe('activeNavHref', () => {
     expect(activeNavHref('/write/abc-123')).toBe('/write');
   });
 
-  it('根路径不高亮任何一项 —— 它只是个跳转', () => {
-    expect(activeNavHref('/')).toBeNull();
+  it('根路径高亮「总览」—— 它现在是一个真页面, 不再是跳转', () => {
+    expect(activeNavHref('/')).toBe('/');
   });
 
   it('设置页也能被识别, 不会误判成主导航项', () => {
