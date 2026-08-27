@@ -65,3 +65,6 @@ export * from './persona-summary';
 export * from './voice-draft';
 export * from './experience-tag';
 export * from './voice-section';
+
+// 对标视频拆解 (v5 阶段 D3)
+export * from './teardown';

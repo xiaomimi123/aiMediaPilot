@@ -1,12 +1,38 @@
+import { prisma } from '@/lib/prisma';
+import { getOrCreateDefaultUser } from '@/lib/user';
 import { PageShell } from '@/components/layout/page-shell';
-import { NotBuiltYet } from '@/components/layout/not-built-yet';
+import { TeardownView } from '@/components/teardowns/teardown-view';
 
-export default function TeardownsPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function TeardownsPage() {
+  const user = await getOrCreateDefaultUser();
+  const teardowns = await prisma.teardown.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: 'desc' },
+    take: 30,
+    select: {
+      id: true, title: true, author: true, url: true,
+      status: true, result: true, errorMessage: true, createdAt: true,
+    },
+  });
+
   return (
-    <PageShell title="拆解" description="上传对标视频，拆出结构、钩子和文案节奏，可直接转成选题。">
-      <NotBuiltYet
-        what="拆解还没接进来"
-        why="你现在是手工做这件事的（Obsidian 里那两份「奥一」和「王飞雨」的拆解就是）。当前评分体系的维度正是从那两份里提炼的，所以这个板块不是锦上添花——它是评分标准的来源。接进来之后，拆解结果可以直接变成选题，也可以补进钩子库。"
+    <PageShell
+      title="拆解"
+      description="把别人的口播稿拆成结构、钩子和可照做的动作，然后收进自己的库。"
+    >
+      <TeardownView
+        initial={teardowns.map((t) => ({
+          id: t.id,
+          title: t.title,
+          author: t.author,
+          url: t.url,
+          status: t.status,
+          result: t.result as Record<string, unknown> | null,
+          errorMessage: t.errorMessage,
+          createdAt: t.createdAt.toISOString().slice(0, 10),
+        }))}
       />
     </PageShell>
   );

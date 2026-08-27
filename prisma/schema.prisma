@@ -51,6 +51,7 @@ model User {
   radarConfig                RadarConfig?
   materials                  Material[]
   hooks                      Hook[]
+  teardowns                  Teardown[]
 }
 
 // Sub-project G: 灵感视频库 — 用户精选爆款 + AI 总结共性
@@ -415,6 +416,33 @@ model Hook {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, pattern])
+  @@index([userId, createdAt])
+}
+
+/// 对标视频拆解(v5 阶段 D3)。
+///
+/// 输入是**口播转写稿**而不是视频文件: 用户实际的工作方式就是先有转写稿再手工拆
+/// (Obsidian 里那两份「奥一」「王飞雨」就是), 而当前评分体系的维度正是从那两份里
+/// 提炼的 —— 这个板块不是锦上添花, 它是评分标准的来源。
+/// 视频上传 → ASR 那条路要新起一条管线, 还没接。
+model Teardown {
+  id         String   @id @default(cuid())
+  userId     String
+  title      String
+  /// 作者/账号, 可空
+  author     String   @default("")
+  /// 原始链接, 可空
+  url        String   @default("")
+  /// 口播转写全文
+  transcript String   @db.Text
+  /// AI 拆出来的结构: { formula, segments[], hooks[], takeaways[] }
+  result     Json?
+  status     String   @default("pending") // pending|done|failed
+  errorMessage String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, createdAt])
 }
 

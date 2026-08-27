@@ -91,7 +91,7 @@
 
 - [x] D1 **素材库** `Material`：kind(书摘/数据/故事/金句/亲身经历)/content/source/tags；写稿右栏按幕检索
 - [x] D2 **钩子库** `Hook`：text/pattern/predictedRetention/usedCount；模式表现统计 + 结构提示
-- [ ] D3 **拆解** `Teardown`：上传对标视频 → 结构/钩子/节奏 → 转选题（复用 `ContentAnalysis` 管线）
+- [x] D3 **拆解** `Teardown`：上传对标视频 → 结构/钩子/节奏 → 转选题（复用 `ContentAnalysis` 管线）
 
 ### 阶段 E：回路的后两环（空态先行）
 
