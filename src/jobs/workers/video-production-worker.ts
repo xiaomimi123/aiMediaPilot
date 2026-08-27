@@ -25,7 +25,7 @@ import { LocalWhisperClient } from '@/lib/llm/local-whisper';
 import type { TranscriptSegment } from '@/lib/llm/whisper';
 import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
 import { buildFactsSection } from '@/lib/video-production/facts-guard';
-import { buildAssetSection, type ContentAsset } from '@/lib/video-production/asset-manifest';
+import { buildDirectorAssetSection, buildAssignedAssetSection, type ContentAsset } from '@/lib/video-production/asset-manifest';
 import { buildStyleSection, buildChapterNavSection, actAtMs } from '@/lib/video-production/style-guard';
 import { validateShotHtml } from '@/lib/video-production/shot-html-guard';
 import { probeShotHealth } from '@/lib/video-production/shot-renderer';
@@ -221,7 +221,9 @@ export async function handlePptNarration(
     // 二十一期方向 B: 内容挂的真实素材(截图/表格/长文)。参考视频密度最高的那几帧
     // 靠的就是这类整块真材料, 纯文字排版达不到那个量级。
     const contentAssets = await loadContentAssets(vp.userId, vp.contentId);
-    const assetSection = buildAssetSection(contentAssets);
+    // 导演先看到素材, 主动为它们排镜头并在 assetIds 里指派 —— 第一版只给 Builder,
+    // 导演不知情就排不出"展示这张表"的镜头, 实测 4 镜 0 用。
+    const directorAssetSection = buildDirectorAssetSection(contentAssets);
     // 二十一期: 模板的风格(亮/暗基调、切镜节奏)要在 Director 阶段就生效——调色板与
     // 分镜时长都是它决定的。所以模板查询提前到 Director 调用之前。
     const template = vp.templateId
@@ -237,7 +239,7 @@ export async function handlePptNarration(
     );
     const llm = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-reasoner' });
     const { result: direction } = await llm.callStructured({
-      systemPrompt: DIRECTOR.buildSystemPrompt(factsSection, styleSection),
+      systemPrompt: DIRECTOR.buildSystemPrompt(factsSection, styleSection, directorAssetSection),
       userMessage: DIRECTOR.buildUserMessage(vp.srt),
       responseSchema: DIRECTOR.responseSchema,
     });
@@ -271,7 +273,12 @@ export async function handlePptNarration(
       );
       const builtHtml = await buildShotHtmlWithRetry(
         builderLLM,
-        BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection + assetSection, navSection),
+        BUILDER.buildSystemPrompt(
+          direction.palette,
+          visualStyle,
+          factsSection + buildAssignedAssetSection(contentAssets, shot.assetIds),
+          navSection,
+        ),
         shot,
         BUILDER.buildUserMessage(shot),
         // 密度体检的临时渲染目录; 只有走模板的任务开这一关(内容详情页旧入口

@@ -5,16 +5,12 @@ import { randomUUID } from 'crypto';
 import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
+import { contentAssetDir } from '@/lib/video-production/asset-manifest';
 
 const KINDS = ['image', 'table', 'text'] as const;
 const IMAGE_MIME = /^image\/(png|jpeg|jpg|webp|gif)$/;
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_TEXT_CHARS = 20_000;
-
-/** 内容素材根目录 —— 与 VIDEO_PRODUCTION_ROOT / VIDEO_TEMPLATE_ROOT 同一范式。 */
-export function contentAssetDir(contentId: string): string {
-  return path.join(process.env.CONTENT_ASSET_ROOT || './content-assets', contentId);
-}
 
 /** 只接受简单字母数字扩展名, 防构造文件名拼出越权路径(同 upload-source 的 safeExt)。 */
 function safeExt(name: string | undefined, fallback: string): string {
