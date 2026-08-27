@@ -82,10 +82,10 @@
 
 ### 阶段 C：现有数据的页面（选题 / 稿库 / 模板 / 成片）
 
-- [ ] C1 选题页：热点雷达 + 灵感库两个 tab（`RadarItem` 102 条、`CockpitInspiration`）
-- [ ] C2 稿库改表格：标题/平台/硬/软/时长/更新
-- [ ] C3 模板页（`VideoTemplate` 4 个）
-- [ ] C4 成片页：队列状态 + 空态解释 + 启动 worker 指引
+- [x] C1 选题页：热点雷达 + 灵感库两个 tab（`RadarItem` 102 条、`CockpitInspiration`）
+- [x] C2 稿库改表格：标题/平台/硬/软/时长/更新
+- [x] C3 模板页（`VideoTemplate` 4 个）
+- [x] C4 成片页：队列状态 + 空态解释 + 启动 worker 指引
 
 ### 阶段 D：新数据模型
 
