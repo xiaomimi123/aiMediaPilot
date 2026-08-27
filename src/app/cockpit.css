@@ -2087,6 +2087,18 @@ html[data-style="bauhaus"] .review-kpi-grid > article:nth-child(4) {
 .template-history-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); padding: var(--space-xs) 0; border-bottom: 1px solid var(--line); font-size: var(--text-xs); }
 .template-history-list li:last-child { border-bottom: 0; }
 
+/* 首页「今天要做的」(二十一期) —— 复用 .card-minimal 作底, 只补列表排布 */
+.next-actions-panel { padding: var(--space-md); margin-bottom: var(--space-md); }
+.next-actions-heading { margin-bottom: var(--space-sm); }
+.next-actions-empty { margin: 0; color: var(--muted); font-size: var(--text-sm); }
+.next-actions-list { display: flex; flex-direction: column; gap: var(--space-xs); margin: 0; padding: 0; list-style: none; }
+.next-actions-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-sm); padding: var(--space-xs) 0; border-bottom: 1px solid var(--line); }
+.next-actions-list li:last-child { border-bottom: 0; }
+.next-actions-list a { font-size: var(--text-sm); text-decoration: none; }
+.next-actions-list a:hover { text-decoration: underline; }
+.next-actions-meta { display: flex; align-items: center; gap: var(--space-xs); }
+.next-actions-platform { color: var(--muted); font-size: var(--text-xs); }
+
 /* 成片库(二十一期) —— 复用 .panel 作卡片底, 只补列表与播放器的排布 */
 .production-list { display: flex; flex-direction: column; gap: var(--space-md); margin: 0; padding: 0; list-style: none; }
 .production-card { display: flex; flex-direction: column; gap: var(--space-xs); padding: var(--space-md); }

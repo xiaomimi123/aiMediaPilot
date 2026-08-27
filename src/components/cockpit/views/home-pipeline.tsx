@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type DragEvent } from "react";
+import { NextActionsPanel } from "../next-actions-panel";
 import {
   CONTENT_PLATFORMS,
   PLATFORM_LABELS,
@@ -75,10 +76,15 @@ export function HomePipelineView(props: {
   const [expanded, setExpanded] = useState(false);
 
   return <section className="page home-pipeline-page">
+    <NextActionsPanel contents={props.state.contents} />
+
     <div className="card-minimal home-momentum-summary">
       <div className="home-momentum-summary-row">
         <span data-testid="home-momentum-summary-text">
-          你有 {props.todayEntries.length} 条内容待推进，{props.overdueEntries.length} 条已逾期
+          {/* 措辞点明这里统计的是**排期事件**而非内容卡 —— 之前写「N 条内容待推进」,
+              与上方「今天要做的」直接打架: 那里列着 4 条待办, 这里却显示 0 条待推进,
+              因为没排期的内容卡根本不进这个统计。 */}
+          今日排期 {props.todayEntries.length} 项，逾期 {props.overdueEntries.length} 项
         </span>
         <button
           type="button"
