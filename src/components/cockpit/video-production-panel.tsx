@@ -16,12 +16,14 @@ export function VideoProductionPanel({ contentId, deliveryMode }: { contentId: s
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/v1/cockpit/video-productions/latest?contentId=${contentId}`)
+    // 带上当前交付方式: 内容早先按别的模式生成过时, 不过滤会把那条旧记录当成
+    // 「这条内容的生成进度」显示出来(与出镜视频上传是同一个根因)。
+    fetch(`/api/v1/cockpit/video-productions/latest?contentId=${contentId}&mode=${deliveryMode}`)
       .then((r) => r.json())
       .then((json) => { if (!cancelled && json.success) setVp(json.data); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [contentId]);
+  }, [contentId, deliveryMode]);
 
   useEffect(() => {
     if (!vp || ['done', 'failed'].includes(vp.status)) return;

@@ -1084,7 +1084,10 @@ export function ContentDetailView({ item, initialTab, stageEvents, stageColors, 
     setSourceVideoUploading(true);
     setSourceVideoError(null);
     try {
-      const latestRes = await fetch(`/api/v1/cockpit/video-productions/latest?contentId=${item.id}`);
+      // 二十二期修复: 必须带上当前交付方式。内容早先按别的模式生成过时, 不带 mode
+      // 的 latest 会返回那条旧记录, upload-source 收到非 talking-head-broll 的任务
+      // 直接 400, 用户看到的只是「上传失败」, 完全不知道发生了什么。
+      const latestRes = await fetch(`/api/v1/cockpit/video-productions/latest?contentId=${item.id}&mode=talking-head-broll`);
       const latestJson = await latestRes.json();
       let vpId: string | null = latestJson.success && latestJson.data ? latestJson.data.id : null;
       if (!vpId) {
@@ -1094,7 +1097,7 @@ export function ContentDetailView({ item, initialTab, stageEvents, stageColors, 
           body: JSON.stringify({ contentId: item.id }),
         });
         const createJson = await createRes.json();
-        if (!createJson.success) { setSourceVideoError(createJson.error ?? "创建生成任务失败"); return; }
+        if (!createJson.success) { setSourceVideoError(createJson.message ?? "创建生成任务失败"); return; }
         vpId = createJson.data.id;
       }
       const form = new FormData();
@@ -1104,7 +1107,7 @@ export function ContentDetailView({ item, initialTab, stageEvents, stageColors, 
       if (uploadJson.success) {
         setSourceVideoUploaded(true);
       } else {
-        setSourceVideoError(uploadJson.error ?? "上传失败");
+        setSourceVideoError(uploadJson.message ?? "上传失败");
       }
     } catch {
       setSourceVideoError("上传失败，请检查网络后重试");

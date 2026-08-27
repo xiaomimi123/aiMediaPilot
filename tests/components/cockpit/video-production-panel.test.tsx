@@ -62,3 +62,17 @@ describe("VideoProductionPanel — packaging 状态标签", () => {
     expect(screen.queryByText("packaging")).toBeNull();
   });
 });
+
+// 二十二期修复: 面板查 latest 也必须带上当前交付方式。内容早先按别的模式生成过时,
+// 不带 mode 的查询会把那条旧记录当成"这条内容的生成进度"显示出来 —— 与
+// handleUploadSourceVideo 是同一个根因(mode-agnostic 的 latest 查询)。
+describe("VideoProductionPanel — latest 查询按交付方式过滤", () => {
+  it("查询串里带上当前 deliveryMode", async () => {
+    // 显式标注参数类型 —— 否则推出的调用记录是空元组, 读 calls[0][0] 过不了 tsc(同本仓既有先例)
+    const fetchMock = vi.fn(async (_url: string) => ({ json: async () => ({ success: true, data: null }) } as Response));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<VideoProductionPanel contentId="c1" deliveryMode="talking-head-broll" />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(String(fetchMock.mock.calls[0][0])).toContain("mode=talking-head-broll");
+  });
+});

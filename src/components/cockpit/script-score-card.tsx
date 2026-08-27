@@ -70,7 +70,7 @@ export function ScriptScoreCard({
       const res = await fetch(`/api/v1/cockpit/contents/${contentId}/script-score`, { method: "POST" });
       const body = await res.json();
       if (!res.ok) {
-        const msg = body?.error ?? "评分失败";
+        const msg = body?.message ?? "评分失败";
         setError(msg);
         onNotify?.(msg);
         return;
