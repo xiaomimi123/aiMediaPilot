@@ -50,6 +50,7 @@ model User {
   radarRuns                  RadarRun[]
   radarConfig                RadarConfig?
   materials                  Material[]
+  hooks                      Hook[]
 }
 
 // Sub-project G: 灵感视频库 — 用户精选爆款 + AI 总结共性
@@ -392,6 +393,28 @@ model Material {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, kind])
+  @@index([userId, createdAt])
+}
+
+/// 钩子库(v5 阶段 D2) —— 前 3 秒的写法。
+///
+/// 注意这里**没有 predictedRetention 字段**: 发布 0 条时那个数编不出来。排序依据
+/// 是纯函数算的结构分。等中回路(发布 → 回采)通了再加 actualRetention。
+model Hook {
+  id        String   @id @default(cuid())
+  userId    String
+  text      String   @db.Text
+  /// number|question|counter|scene|contrast|other, 存下来是因为用户可以手工改判
+  pattern   String
+  /// 从哪来: manual(手录) | script(从自己的稿子里抽) | teardown(从拆解里抽)
+  origin    String   @default("manual")
+  /// 抽自哪份稿子, 用来回跳
+  scriptId  String?
+  usedCount Int      @default(0)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, pattern])
   @@index([userId, createdAt])
 }
 
