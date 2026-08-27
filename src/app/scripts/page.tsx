@@ -30,14 +30,15 @@ export default async function ScriptsPage() {
 
   const rows = drafts.map((d) => {
     const acts = readActsFromDraftOutput(d.output);
+    const durationSec = acts?.reduce((n, a) => n + a.targetSec, 0) ?? 0;
     return {
       id: d.id,
       topic: d.topic,
       platform: d.platform,
       createdAt: d.createdAt,
       // 认不出六幕结构的旧稿不打分, 而不是显示一个误导人的 0 分
-      hard: acts ? scoreHardDimensions(acts) : null,
-      durationSec: acts?.reduce((n, a) => n + a.targetSec, 0) ?? null,
+      hard: acts ? scoreHardDimensions(acts, durationSec) : null,
+      durationSec: acts ? durationSec : null,
     };
   });
 

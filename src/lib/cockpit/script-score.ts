@@ -1,3 +1,6 @@
+import { ACT_KEYS, ACT_LABELS } from '@/lib/script/six-act';
+import { buildActPlan } from '@/lib/script/act-plan';
+
 /**
  * 口播稿评分体系 —— 硬指标层(二十二期)。
  *
@@ -19,6 +22,10 @@ export interface ScorableAct {
   act: string;
   narration: string;
   visual?: string;
+  /** 时长偏差用。评分只读它, 不要求调用方给完整 ScriptAct。 */
+  targetSec?: number;
+  /** 幕结构完整用(关键词密度并入该项)。 */
+  beats?: { keyword: string }[];
 }
 
 export interface ScoreDimension {
@@ -36,12 +43,29 @@ export interface HardScoreResult {
   max: number;
 }
 
-const MAX_TRUST = 10;
-const MAX_COMPLIANCE = 5;
-const MAX_UNIVERSAL = 5;
-const MAX_CONCISE = 15;
+/**
+ * 硬指标各维度的权重(v5 合并版)。
+ *
+ * 两套评分合并: 「简洁度/信任声明/普适化结尾/平台合规」来自用户自己拆的两条真实
+ * 爆款(偏内容策略), 「时长偏差/幕结构完整」来自 v5 设计稿(偏结构健康度)。
+ * 设计稿里的「关键词密度」并入幕结构完整, 「清晰度」不单列 —— 设计稿自己在校准页
+ * 写了「清晰度是及格线不是加分项」, 既然如此就不该占独立权重。
+ *
+ * **存成可覆盖的配置而不是写死的常量**: 慢回路(校准页)会用真实表现重拟合权重,
+ * 那时候要能改。
+ */
+export const HARD_WEIGHTS = {
+  duration: 10,
+  concise: 8,
+  trust: 6,
+  compliance: 4,
+  structure: 4,
+  universal: 3,
+} as const;
 
-export const HARD_MAX = MAX_TRUST + MAX_COMPLIANCE + MAX_UNIVERSAL + MAX_CONCISE;
+export type HardWeights = Record<keyof typeof HARD_WEIGHTS, number>;
+
+export const HARD_MAX = Object.values(HARD_WEIGHTS).reduce((a, b) => a + b, 0);
 
 /** 「先说清楚我不卖课」这类防喷声明。奥一在第 13 秒就放了这句。 */
 const TRUST_PATTERNS = [
@@ -134,9 +158,9 @@ function countChars(text: string): number {
   return (text ?? '').replace(/[，。：；？！、—\s]/g, '').length;
 }
 
-function scoreTrust(acts: ScorableAct[]): ScoreDimension {
+function scoreTrust(acts: ScorableAct[], max: number): ScoreDimension {
   const hitIndex = acts.findIndex((a) => TRUST_PATTERNS.some((p) => p.test(a.narration ?? '')));
-  const base = { key: 'trust', label: '信任声明', max: MAX_TRUST };
+  const base = { key: 'trust', label: '信任声明', max };
 
   if (hitIndex < 0) {
     return {
@@ -148,14 +172,14 @@ function scoreTrust(acts: ScorableAct[]): ScoreDimension {
   if (hitIndex >= 2) {
     return {
       ...base,
-      score: 5,
+      score: max / 2,
       reason: `声明出现在第 ${hitIndex + 1} 幕, 太靠后。观众的防备在开头就起来了, 挪到前两幕。`,
     };
   }
-  return { ...base, score: MAX_TRUST, reason: `第 ${hitIndex + 1} 幕就把话说清楚了, 位置对。` };
+  return { ...base, score: max, reason: `第 ${hitIndex + 1} 幕就把话说清楚了, 位置对。` };
 }
 
-function scoreCompliance(acts: ScorableAct[]): ScoreDimension {
+function scoreCompliance(acts: ScorableAct[], max: number): ScoreDimension {
   const offenders: string[] = [];
 
   for (const a of acts) {
@@ -174,8 +198,8 @@ function scoreCompliance(acts: ScorableAct[]): ScoreDimension {
     return {
       key: 'compliance',
       label: '平台合规',
-      score: MAX_COMPLIANCE,
-      max: MAX_COMPLIANCE,
+      score: max,
+      max,
       reason: '画面里没有后台/收款/订单一类的展示, 合规。',
     };
   }
@@ -183,17 +207,17 @@ function scoreCompliance(acts: ScorableAct[]): ScoreDimension {
     key: 'compliance',
     label: '平台合规',
     score: 0,
-    max: MAX_COMPLIANCE,
+    max,
     reason: `画面说明里要展示收益类内容, 涉嫌诱导: ${offenders.join('、')}。数据可以口头说, 但不能上画面。`,
   };
 }
 
-function scoreUniversal(acts: ScorableAct[]): ScoreDimension {
+function scoreUniversal(acts: ScorableAct[], max: number): ScoreDimension {
   const last = acts[acts.length - 1];
   const hit = last ? UNIVERSAL_PATTERNS.some((p) => p.test(last.narration ?? '')) : false;
-  const base = { key: 'universal', label: '普适化结尾', max: MAX_UNIVERSAL };
+  const base = { key: 'universal', label: '普适化结尾', max };
 
-  if (hit) return { ...base, score: MAX_UNIVERSAL, reason: '结尾把受众从本赛道扩出去了。' };
+  if (hit) return { ...base, score: max, reason: '结尾把受众从本赛道扩出去了。' };
   return {
     ...base,
     score: 0,
@@ -201,7 +225,7 @@ function scoreUniversal(acts: ScorableAct[]): ScoreDimension {
   };
 }
 
-function scoreConcise(acts: ScorableAct[]): ScoreDimension {
+function scoreConcise(acts: ScorableAct[], max: number): ScoreDimension {
   const hits: string[] = [];
   let longCount = 0;
 
@@ -217,7 +241,7 @@ function scoreConcise(acts: ScorableAct[]): ScoreDimension {
   }
 
   const penalty = hits.length * FILLER_PENALTY + longCount * LONG_SENTENCE_PENALTY;
-  const score = Math.max(0, MAX_CONCISE - penalty);
+  const score = Math.max(0, max - penalty);
 
   const parts: string[] = [];
   if (hits.length > 0) {
@@ -232,25 +256,102 @@ function scoreConcise(acts: ScorableAct[]): ScoreDimension {
     key: 'concise',
     label: '简洁度',
     score,
-    max: MAX_CONCISE,
+    max,
     reason: parts.length > 0 ? parts.join('; ') : '没有垫话, 句子都在一口气之内。',
   };
 }
 
 /**
- * 硬指标评分。纯函数, 不调网络 —— 页面每次渲染都能重算, 不需要缓存。
+ * 时长偏差(v5 设计稿引入)。
+ *
+ * 每幕的实际秒数 vs `ACT_RATIOS × 全片时长`。这一项是**快回路**里最直接的一条:
+ * 写的时候就知道哪一幕撑爆了, 而不是录到一半发现念不完。
  */
-export function scoreHardDimensions(acts: ScorableAct[]): HardScoreResult {
+function scoreDuration(acts: ScorableAct[], durationSec: number, max: number): ScoreDimension {
+  const base = { key: 'duration', label: '时长偏差', max };
+  const plan = buildActPlan(
+    acts.map((a) => ({ act: a.act, targetSec: a.targetSec ?? 0 })),
+    durationSec,
+  );
+
+  if (durationSec <= 0) {
+    return { ...base, score: 0, reason: '这份稿子没有全片时长, 没法判断各幕占比。' };
+  }
+
+  const over = plan.rows.filter((r) => r.warn);
+  // 每有一幕超目标 10% 扣 2 分, 合计超时再按每 10 秒扣 1 分
+  const penalty = over.length * 2 + Math.floor(plan.overSec / 10);
+  const score = Math.max(0, max - penalty);
+
+  const parts: string[] = [];
+  if (over.length > 0) {
+    parts.push(
+      `${over.map((r) => `${r.label}(${r.actualSec}s/${r.targetSec.toFixed(1)}s)`).join('、')} 超出目标`,
+    );
+  }
+  if (plan.overSec > 0) parts.push(`合计超出全片 ${plan.overSec} 秒`);
+
+  return {
+    ...base,
+    score,
+    reason: parts.length > 0 ? parts.join('; ') : '各幕时长都贴着结构占比, 节奏是稳的。',
+  };
+}
+
+/**
+ * 幕结构完整(v5 设计稿引入, 吸收了设计稿里的「关键词密度」)。
+ *
+ * 六幕齐全 + 每幕有旁白/画面/关键词。缺哪一幕直接点名 —— 「结构不完整」这四个字
+ * 帮不了任何忙。
+ */
+function scoreStructure(acts: ScorableAct[], max: number): ScoreDimension {
+  const base = { key: 'structure', label: '幕结构完整', max };
+  const present = new Set(acts.map((a) => a.act));
+  const missing = ACT_KEYS.filter((k) => !present.has(k));
+
+  const noNarration = acts.filter((a) => !(a.narration ?? '').trim());
+  const noVisual = acts.filter((a) => !(a.visual ?? '').trim());
+  const noBeats = acts.filter((a) => (a.beats?.length ?? 0) === 0);
+
+  const penalty =
+    missing.length * 2 + noNarration.length + (noVisual.length > 0 ? 1 : 0) + (noBeats.length > 0 ? 1 : 0);
+  const score = Math.max(0, max - penalty);
+
+  const parts: string[] = [];
+  if (missing.length > 0) parts.push(`缺 ${missing.map((k) => ACT_LABELS[k]).join('、')}`);
+  if (noNarration.length > 0) parts.push(`${noNarration.length} 幕没有旁白`);
+  if (noVisual.length > 0) parts.push(`${noVisual.length} 幕没有画面说明`);
+  if (noBeats.length > 0) parts.push(`${noBeats.length} 幕没有关键词`);
+
+  return {
+    ...base,
+    score,
+    reason: parts.length > 0 ? parts.join('; ') : '六幕齐全, 每幕都有旁白、画面和关键词。',
+  };
+}
+
+/**
+ * 硬指标评分。纯函数, 不调网络 —— 页面每次渲染都能重算, 不需要缓存。
+ *
+ * `weights` 可覆盖: 慢回路(校准页)用真实表现重拟合之后要能改。
+ */
+export function scoreHardDimensions(
+  acts: ScorableAct[],
+  durationSec: number,
+  weights: HardWeights = HARD_WEIGHTS,
+): HardScoreResult {
   const dimensions = [
-    scoreConcise(acts),
-    scoreTrust(acts),
-    scoreUniversal(acts),
-    scoreCompliance(acts),
+    scoreDuration(acts, durationSec, weights.duration),
+    scoreConcise(acts, weights.concise),
+    scoreTrust(acts, weights.trust),
+    scoreCompliance(acts, weights.compliance),
+    scoreStructure(acts, weights.structure),
+    scoreUniversal(acts, weights.universal),
   ];
   return {
     dimensions,
     total: dimensions.reduce((s, d) => s + d.score, 0),
-    max: HARD_MAX,
+    max: dimensions.reduce((s, d) => s + d.max, 0),
   };
 }
 
@@ -353,8 +454,14 @@ export interface CombinedScore {
  *
  * 硬指标排前面: 免费、即时、改完立刻能验证; 软指标要花钱, 放后面。
  */
-export function combineScore(acts: ScorableAct[], softRaw: unknown): CombinedScore {
-  const hard = scoreHardDimensions(acts);
+export function combineScore(
+  acts: ScorableAct[],
+  softRaw: unknown,
+  /** 全片时长 —— 时长偏差维度要用。取不到时传各幕之和。 */
+  durationSec?: number,
+): CombinedScore {
+  const total = durationSec ?? acts.reduce((n, a) => n + (a.targetSec ?? 0), 0);
+  const hard = scoreHardDimensions(acts, total);
   const soft = readCachedSoft(softRaw, acts);
 
   if (!soft) {

@@ -88,7 +88,7 @@ export function ScriptWorkspace({
   const save = useAutoSave(scriptId, acts, dirty);
 
   const plan = useMemo(() => buildActPlan(acts, durationSec), [acts, durationSec]);
-  const hard = useMemo(() => scoreHardDimensions(acts), [acts]);
+  const hard = useMemo(() => scoreHardDimensions(acts, durationSec), [acts, durationSec]);
   const current = acts.find((a) => a.act === currentAct) ?? acts[0];
 
   const patchCurrent = useCallback(

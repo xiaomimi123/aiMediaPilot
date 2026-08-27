@@ -22,11 +22,12 @@ const ACTS = [
 ];
 
 const MODEL_OUTPUT = {
-  hookPower: { score: 15, reason: '开头有结果' },
-  failureNarrative: { score: 8, reason: '踩坑一笔带过' },
-  pivotClarity: { score: 10, reason: '转折干净' },
-  resultCredibility: { score: 10, reason: '有验证动作' },
-  punchline: { score: 8, reason: '收得住' },
+  hookPower: { score: 12, reason: '开头有结果' },
+  gain: { score: 10, reason: '有可照做的一步' },
+  surprise: { score: 9, reason: '推翻了预期' },
+  authenticity: { score: 8, reason: '踩坑一笔带过' },
+  pivotClarity: { score: 7, reason: '转折干净' },
+  punchline: { score: 6, reason: '收得住' },
   topFixes: ['把踩坑展开'],
 };
 
@@ -70,7 +71,7 @@ describe('POST script-score', () => {
 
     const written = prismaMock.cockpitContent.update.mock.calls[0][0].data.scriptScore;
     expect(written.fingerprint).toBe(scriptFingerprint(ACTS));
-    expect(written.dimensions).toHaveLength(5);
+    expect(written.dimensions).toHaveLength(6);
     expect(written.topFixes).toEqual(['把踩坑展开']);
     expect(typeof written.scoredAt).toBe('string');
   });
@@ -81,7 +82,7 @@ describe('POST script-score', () => {
     expect(body.data.score.max).toBe(100);
     expect(body.data.score.softScored).toBe(true);
     expect(body.data.score.softStale).toBe(false);
-    expect(body.data.score.dimensions).toHaveLength(9);
+    expect(body.data.score.dimensions).toHaveLength(12);
   });
 
   it('模型挂了不要把脏数据写进库', async () => {

@@ -12,7 +12,7 @@ const ACTS = [
 ];
 
 describe('SCRIPT_SOFT_SCORE', () => {
-  it('五个软维度加起来 65 分', () => {
+  it('六个软维度加起来 65 分', () => {
     const sum = SOFT_DIMENSION_META.reduce((s, d) => s + d.max, 0);
     expect(sum).toBe(SOFT_MAX);
     expect(SOFT_MAX).toBe(65);
@@ -50,10 +50,11 @@ describe('SCRIPT_SOFT_SCORE', () => {
   it('schema 拒绝超出满分的打分', () => {
     const bad = {
       hookPower: { score: 25, reason: '超了' },
-      failureNarrative: { score: 10, reason: 'ok' },
-      pivotClarity: { score: 8, reason: 'ok' },
-      resultCredibility: { score: 8, reason: 'ok' },
-      punchline: { score: 8, reason: 'ok' },
+      gain: { score: 10, reason: 'ok' },
+      surprise: { score: 10, reason: 'ok' },
+      authenticity: { score: 8, reason: 'ok' },
+      pivotClarity: { score: 6, reason: 'ok' },
+      punchline: { score: 6, reason: 'ok' },
       topFixes: ['补一句信任声明'],
     };
     expect(SCRIPT_SOFT_SCORE.responseSchema.safeParse(bad).success).toBe(false);
@@ -61,11 +62,12 @@ describe('SCRIPT_SOFT_SCORE', () => {
 
   it('schema 接受合法打分', () => {
     const good = {
-      hookPower: { score: 15, reason: '开头有结果也有悬念' },
-      failureNarrative: { score: 8, reason: '踩坑一笔带过' },
-      pivotClarity: { score: 10, reason: '转折干净' },
-      resultCredibility: { score: 10, reason: '有验证动作' },
-      punchline: { score: 8, reason: '收得住' },
+      hookPower: { score: 12, reason: '开头有结果也有悬念' },
+      gain: { score: 10, reason: '有可照做的一步' },
+      surprise: { score: 9, reason: '推翻了预期' },
+      authenticity: { score: 8, reason: '踩坑一笔带过' },
+      pivotClarity: { score: 7, reason: '转折干净' },
+      punchline: { score: 6, reason: '收得住' },
       topFixes: ['把踩坑展开成一个具体的坑'],
     };
     const parsed = SCRIPT_SOFT_SCORE.responseSchema.safeParse(good);
@@ -76,15 +78,16 @@ describe('SCRIPT_SOFT_SCORE', () => {
 describe('toSoftDimensions', () => {
   it('把模型返回摊平成和硬指标同形状的维度数组', () => {
     const dims = toSoftDimensions({
-      hookPower: { score: 15, reason: 'a' },
-      failureNarrative: { score: 8, reason: 'b' },
-      pivotClarity: { score: 10, reason: 'c' },
-      resultCredibility: { score: 10, reason: 'd' },
-      punchline: { score: 8, reason: 'e' },
+      hookPower: { score: 12, reason: 'a' },
+      gain: { score: 10, reason: 'b' },
+      surprise: { score: 9, reason: 'c' },
+      authenticity: { score: 8, reason: 'd' },
+      pivotClarity: { score: 7, reason: 'e' },
+      punchline: { score: 5, reason: 'f' },
       topFixes: [],
     });
-    expect(dims).toHaveLength(5);
-    expect(dims[0]).toMatchObject({ key: 'hookPower', max: 20, score: 15, reason: 'a' });
+    expect(dims).toHaveLength(6);
+    expect(dims[0]).toMatchObject({ key: 'hookPower', max: 15, score: 12, reason: 'a' });
     expect(dims.every((d) => typeof d.label === 'string' && d.label.length > 0)).toBe(true);
     expect(dims.reduce((s, d) => s + d.score, 0)).toBe(51);
   });

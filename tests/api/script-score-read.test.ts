@@ -20,11 +20,12 @@ const ACTS = [
 const SOFT = {
   fingerprint: scriptFingerprint(ACTS),
   dimensions: [
-    { key: 'hookPower', label: '钩子力度', score: 15, max: 20, reason: 'a' },
-    { key: 'failureNarrative', label: '失败叙事', score: 8, max: 15, reason: 'b' },
-    { key: 'pivotClarity', label: '关键转向', score: 10, max: 10, reason: 'c' },
-    { key: 'resultCredibility', label: '结果可信', score: 10, max: 10, reason: 'd' },
-    { key: 'punchline', label: '金句收束', score: 8, max: 10, reason: 'e' },
+    { key: 'hookPower', label: '钩子力度', score: 12, max: 15, reason: 'a' },
+    { key: 'gain', label: '获得感', score: 10, max: 12, reason: 'b' },
+    { key: 'surprise', label: '意外感', score: 9, max: 12, reason: 'c' },
+    { key: 'authenticity', label: '真实感', score: 8, max: 10, reason: 'd' },
+    { key: 'pivotClarity', label: '关键转向', score: 7, max: 8, reason: 'e' },
+    { key: 'punchline', label: '金句收束', score: 6, max: 8, reason: 'f' },
   ],
   topFixes: [],
   scoredAt: '2026-08-28T00:00:00.000Z',

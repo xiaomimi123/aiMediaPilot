@@ -63,18 +63,19 @@ describe('combineScore', () => {
     expect(r.softScored).toBe(false);
     expect(r.max).toBe(35);
     expect(r.total).toBe(r.dimensions.reduce((s, d) => s + d.score, 0));
-    expect(r.dimensions).toHaveLength(4);
+    expect(r.dimensions).toHaveLength(6);
   });
 
   it('跑过软指标就是满分 100 的完整评分', () => {
     const soft = {
       fingerprint: scriptFingerprint(ACTS),
       dimensions: [
-        { key: 'hookPower', label: '钩子力度', score: 15, max: 20, reason: 'a' },
-        { key: 'failureNarrative', label: '失败叙事', score: 8, max: 15, reason: 'b' },
-        { key: 'pivotClarity', label: '关键转向', score: 10, max: 10, reason: 'c' },
-        { key: 'resultCredibility', label: '结果可信', score: 10, max: 10, reason: 'd' },
-        { key: 'punchline', label: '金句收束', score: 8, max: 10, reason: 'e' },
+        { key: 'hookPower', label: '钩子力度', score: 12, max: 15, reason: 'a' },
+        { key: 'gain', label: '获得感', score: 10, max: 12, reason: 'b' },
+        { key: 'surprise', label: '意外感', score: 9, max: 12, reason: 'c' },
+        { key: 'authenticity', label: '真实感', score: 8, max: 10, reason: 'd' },
+        { key: 'pivotClarity', label: '关键转向', score: 7, max: 8, reason: 'e' },
+        { key: 'punchline', label: '金句收束', score: 6, max: 8, reason: 'f' },
       ],
       topFixes: [],
       scoredAt: '2026-08-28T00:00:00.000Z',
@@ -82,7 +83,7 @@ describe('combineScore', () => {
     const r = combineScore(ACTS, soft);
     expect(r.softScored).toBe(true);
     expect(r.max).toBe(100);
-    expect(r.dimensions).toHaveLength(9);
+    expect(r.dimensions).toHaveLength(12);
   });
 
   it('硬指标永远排在前面 —— 免费的先看, 要花钱的后看', () => {
@@ -93,7 +94,7 @@ describe('combineScore', () => {
       scoredAt: '2026-08-28T00:00:00.000Z',
     };
     const r = combineScore(ACTS, soft);
-    expect(r.dimensions[0].key).toBe('concise');
+    expect(r.dimensions[0].key).toBe('duration');
     expect(r.dimensions[r.dimensions.length - 1].key).toBe('hookPower');
   });
 });
