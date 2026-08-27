@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { PRODUCTION_STATUS_LABELS, DELIVERY_MODE_LABELS } from "@/components/cockpit/views/templates";
+import { canStartProduction } from "@/lib/cockpit/production-status";
 
 interface LibraryProduction {
   id: string;
@@ -40,6 +41,8 @@ export function ProductionsView() {
   const [playing, setPlaying] = useState<{ id: string; kind: "preview" | "master" } | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [starting, setStarting] = useState<string | null>(null);
+  const [startNote, setStartNote] = useState<{ id: string; text: string; bad: boolean } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,6 +77,34 @@ export function ProductionsView() {
       setDeleteError(e instanceof Error ? `删除失败：${e.message}` : "删除失败");
     } finally {
       setDeleting(null);
+    }
+  }, [load]);
+
+  /**
+   * 手动开始制作。真实使用里任务会静静躺着不动(worker 没起来时), 页面上原本
+   * 一个可点的东西都没有 —— 所以这里除了触发, 还要把「为什么不动」说出来。
+   */
+  const handleStart = useCallback(async (p: LibraryProduction) => {
+    setStartNote(null);
+    setStarting(p.id);
+    try {
+      const res = await fetch(`/api/v1/cockpit/video-productions/${p.id}/start`, { method: "POST" });
+      const body = await res.json();
+      if (!res.ok || !body?.success) {
+        setStartNote({ id: p.id, text: body?.message ?? "启动失败", bad: true });
+        return;
+      }
+      // worker 不在时照样入队了, 但必须明说, 否则用户只会看到"点了没反应"
+      setStartNote(
+        body.data.workerOnline === false
+          ? { id: p.id, text: body.data.hint, bad: true }
+          : { id: p.id, text: "已开始制作，状态会自动刷新。", bad: false },
+      );
+      await load();
+    } catch {
+      setStartNote({ id: p.id, text: "启动失败，请检查网络后重试", bad: true });
+    } finally {
+      setStarting(null);
     }
   }, [load]);
 
@@ -113,6 +144,14 @@ export function ProductionsView() {
             : null}
 
           <div className="production-card-actions">
+            {canStartProduction(p.status)
+              ? <button
+                  type="button"
+                  className="primary-button"
+                  disabled={starting === p.id}
+                  onClick={() => void handleStart(p)}
+                >{starting === p.id ? "启动中…" : p.status === "failed" ? "重新制作" : "开始制作"}</button>
+              : null}
             {canPreview
               ? <button type="button" className="secondary-button" onClick={() => setPlaying({ id: p.id, kind: "preview" })}>看预览</button>
               : null}
@@ -129,6 +168,10 @@ export function ProductionsView() {
               onClick={() => void handleDelete(p)}
             >{deleting === p.id ? "删除中…" : "删除"}</button>
           </div>
+
+          {startNote?.id === p.id
+            ? <p className={startNote.bad ? "validation-note" : "field-hint"}>{startNote.text}</p>
+            : null}
 
           {isPlaying
             ? <video className="production-player" src={fileUrl(p.id, playing.kind)} controls autoPlay />
