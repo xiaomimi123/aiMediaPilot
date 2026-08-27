@@ -52,14 +52,20 @@ services:
       - app-data:/app/data
     restart: unless-stopped
 
-  # 任务调度 Worker — Phase 2 起启用
+  # 任务调度 Worker
+  #
+  # 阶段 5.1 修复: 原来写的是 `command: node dist/jobs/worker.js`, 而项目里从来没有
+  # dist/ —— 真实入口是 src/jobs/workers/index.ts, 本地用 tsx 跑。这个 service 因此
+  # 从建起来那天就没成功启动过, 而 worker 不在时任务照常入队然后静静躺着, 这正是
+  # 「视频任务 9 次 / 成功出片 0 次」的直接原因。现在用专门的 worker stage(带 src
+  # 与 tsx), 不再复用只有 Next standalone 产物的 runner。
   worker:
     build:
       context: .
       dockerfile: Dockerfile
+      target: worker
     container_name: mediapilot-worker
     profiles: ["prod"]
-    command: node dist/jobs/worker.js
     environment:
       - DATABASE_URL=postgresql://mediapilot:${DB_PASSWORD:-mediapilot_dev_pwd}@postgres:5432/mediapilot
       - REDIS_URL=redis://redis:6379
