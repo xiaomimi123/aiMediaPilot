@@ -6,6 +6,8 @@ import {
   estimateActSpeed,
   COMFORTABLE_SPEED,
 } from "@/lib/cockpit/teleprompter";
+import { ScriptScoreView } from "./script-score-card";
+import type { CombinedScore } from "@/lib/cockpit/script-score";
 
 interface ActLike {
   act: string;
@@ -29,7 +31,16 @@ const BASE_PX_PER_SEC = 28;
  * - 每幕标出目标秒数与实际所需语速, 字数配不上时长时开录前就提示, 不用录到
  *   一半才发现念不完
  */
-export function TeleprompterView({ acts, title }: { acts: ActLike[]; title: string }) {
+export function TeleprompterView({
+  acts,
+  title,
+  score,
+}: {
+  acts: ActLike[];
+  title: string;
+  /** 服务端算好的评分。开拍前最后一道关 —— 这里只看不评分, 不放触发 AI 的按钮。 */
+  score?: CombinedScore | null;
+}) {
   const rows = buildTeleprompterScript(acts);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -96,6 +107,8 @@ export function TeleprompterView({ acts, title }: { acts: ActLike[]; title: stri
       <button type="button" className="text-button" onClick={() => { setPlaying(false); scrollRef.current?.scrollTo({ top: 0 }); }}>回到开头</button>
       <span className="teleprompter-hint">空格 开始/暂停 · ↑↓ 调速 · R 回到开头</span>
     </div>
+
+    {score ? <div className="teleprompter-score"><ScriptScoreView score={score} variant="compact" /></div> : null}
 
     <div className="teleprompter-scroll" ref={scrollRef}>
       {/* 顶部留白: 让第一句从屏幕中间开始, 视线不用往上抬 */}

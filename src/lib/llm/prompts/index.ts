@@ -31,6 +31,9 @@ export * from './topic-discovery';
 // 标题实时评估 (发前 checklist)
 export * from './title-critique';
 
+// 口播稿评分 — 软指标层 (硬指标在 lib/cockpit/script-score.ts, 纯函数不走模型)
+export * from './script-soft-score';
+
 // 热点雷达 — 阅读评分 (全网文章 → 选题价值评估)
 export * from './radar-read';
 

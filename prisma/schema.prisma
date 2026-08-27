@@ -709,6 +709,7 @@ model CockpitContent {
   editingActProgress   Json?
   metrics              Json // MetricsSnapshot
   review               Json // Review
+  scriptScore          Json? // 二十二期: 口播稿评分的**软指标缓存**(CachedSoftScore)。硬指标是纯函数每次现算, 不落库。
   scriptDraftId        String? // → ScriptDraft (AI 稿)
   analysisId           String? // → ContentAnalysis (L1/复盘链)
   createdAt            String

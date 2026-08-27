@@ -2138,3 +2138,57 @@ html[data-style="bauhaus"] .review-kpi-grid > article:nth-child(4) {
   .teleprompter-line { font-size: 30px; }
   .teleprompter-scroll { padding: 0 6vw; }
 }
+
+/* ===== 口播稿评分(二十二期) ===== */
+/* 三处复用同一套 tone: 详情页 full、提词器 compact、首页 badge。 */
+
+.score-good { --score-tone: #2E9E63; }
+.score-mid  { --score-tone: #C9902B; }
+.score-bad  { --score-tone: #C4553D; }
+
+.score-card {
+  border: 1px solid #E7E4DE;
+  border-left: 3px solid var(--score-tone);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin: 0 0 14px;
+  background: #FFFDFA;
+}
+.score-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.score-total { display: block; font-size: 30px; line-height: 1.1; color: var(--score-tone); }
+.score-total-max { font-size: 15px; color: #8A8780; font-weight: 400; margin-left: 2px; }
+
+.score-dims { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+.score-dim { padding: 8px 10px; border-radius: 9px; background: #F6F4F0; }
+.score-dim.full { opacity: 0.62; }
+.score-dim-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.score-dim-label { font-weight: 600; font-size: 13px; }
+.score-dim-num { font-variant-numeric: tabular-nums; font-size: 13px; color: #6B6B73; }
+.score-dim-reason { margin: 4px 0 0; font-size: 12.5px; line-height: 1.6; color: #55534E; }
+
+.score-missing { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.score-missing li {
+  display: inline-flex; gap: 6px; align-items: baseline;
+  padding: 3px 9px; border-radius: 999px; background: #F1EEE8; font-size: 12px;
+}
+
+.score-fixes { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #E2DED7; }
+.score-fixes strong { font-size: 12px; letter-spacing: 0.04em; color: #6B6B73; }
+.score-fixes ol { margin: 6px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.7; }
+
+.score-badge {
+  display: inline-flex; align-items: baseline; gap: 1px;
+  padding: 1px 7px; border-radius: 999px;
+  background: color-mix(in srgb, var(--score-tone) 12%, transparent);
+  color: var(--score-tone);
+  font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.score-badge-max { font-size: 10px; opacity: 0.7; font-weight: 400; }
+.score-badge-stale { margin-left: 3px; font-weight: 700; }
+
+/* 提词器是深色底, 评分条要跟着反色, 否则在录制现场刺眼 */
+.teleprompter-score { padding: 0 6vw 10px; }
+.teleprompter-score .score-card { background: #16161A; border-color: #2A2A31; }
+.teleprompter-score .score-dim-label,
+.teleprompter-score .score-missing li { color: #D9D7D2; background: #22222A; }
+.teleprompter-score .field-hint { color: #8A8780; }

@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { buildNextActions } from "@/lib/cockpit/next-actions";
 import { PLATFORM_LABELS } from "@/lib/cockpit/model";
+import { ScoreBadge } from "./script-score-card";
+import type { CombinedScore } from "@/lib/cockpit/script-score";
 
 interface ContentLike {
   id: string;
@@ -24,6 +27,18 @@ interface ContentLike {
 export function NextActionsPanel({ contents }: { contents: ContentLike[] }) {
   const rows = buildNextActions(contents);
 
+  // 评分徽章走一个批量接口, 不按行发请求 —— 一屏十几条会打出十几个往返。
+  // 拿不到就不显示徽章, 首页不因为评分挂掉。
+  const [scores, setScores] = useState<Record<string, CombinedScore>>({});
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/v1/cockpit/script-scores")
+      .then((r) => r.json())
+      .then((body) => { if (alive) setScores(body?.data?.scores ?? {}); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
   return <section className="card-minimal next-actions-panel">
     <div className="next-actions-heading">
       <span className="eyebrow">今天要做的</span>
@@ -34,6 +49,7 @@ export function NextActionsPanel({ contents }: { contents: ContentLike[] }) {
           {rows.map((r) => <li key={r.id}>
             <Link href={r.href}>{r.title}</Link>
             <span className="next-actions-meta">
+              {scores[r.id] ? <ScoreBadge score={scores[r.id]} /> : null}
               <span className="badge">{r.action}</span>
               <span className="next-actions-platform">{PLATFORM_LABELS[r.platform as keyof typeof PLATFORM_LABELS] ?? r.platform}</span>
             </span>
