@@ -1,7 +1,25 @@
 import { prisma } from '@/lib/prisma';
 import { readPredictedPlaysRange } from '../json-readers';
 import { computeRetroStats } from '@/lib/settings/baseline-stats';
-import type { CockpitExtras } from './extras-types';
+/**
+ * "extras" 是随 WorkspaceState 一起下发、但不属于可持久化 state 本身的衍生数据 ——
+ * 服务端算好直接推给前端, 前端不回写。前端重建(阶段 1)删掉 extras-types.ts 后,
+ * 类型内联到唯一的生产方。
+ */
+export type CockpitExtras = {
+  predictions: Record<
+    string,
+    { lower: number; upper: number; predicted: number; actualPlays: number | null }
+  >;
+  /** 全局最近一次自动同步时间(不区分账号); 状态条 + 手动同步用。 */
+  lastAutoSyncAt: string | null;
+  /** 设置视图「内容基准」卡: baseline 当前值 + retro median 提示。 */
+  settings: {
+    baselinePlays: string | null;
+    retroMedian: number | null;
+    retroCount: number;
+  };
+};
 
 /**
  * L1 预测对比: 遍历用户所有关联了 analysisId 的 CockpitContent, 从对应

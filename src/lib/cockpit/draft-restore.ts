@@ -1,4 +1,14 @@
-import type { DouyinSection } from "./script-mapping";
+/**
+ * 抖音旧版 sections 结构的一段。前端重建(阶段 1)删掉 script-mapping.ts 后, 这个
+ * 类型内联到唯一的消费方 —— 它描述的是历史草稿的形状, 只有恢复逻辑还需要认得它。
+ */
+export interface DouyinSection {
+  role: string;
+  startSec: number;
+  endSec: number;
+  text: string;
+}
+
 import { isSixActScript, type ScriptAct, type FourDims } from "@/lib/script/six-act";
 import type { LintIssue } from "@/lib/script/six-act-lint";
 
