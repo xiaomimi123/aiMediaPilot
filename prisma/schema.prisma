@@ -25,12 +25,7 @@ model User {
   lastAutoSyncAt DateTime?
 
   aiConfigs                  AIConfig[]
-  imageGenConfigs            ImageGenConfig[]
   volcTtsConfig              VolcTtsConfig?
-  accounts                   PlatformAccount[]
-  contents                   Content[]
-  schedules                  PublishTask[]
-  competitors                Competitor[]
   contentAnalyses            ContentAnalysis[]
   scriptDrafts               ScriptDraft[]
   styleSamples               StyleSample[]
@@ -160,22 +155,6 @@ model AIConfig {
   @@unique([userId, provider])
 }
 
-model ImageGenConfig {
-  id        String        @id @default(cuid())
-  userId    String
-  provider  ImageProvider
-  apiKey    String // 加密存储
-  modelId   String // 如 "dall-e-3", "flux-2-pro"
-  baseUrl   String? // 自定义 API 地址 (SiliconFlow/Replicate 等)
-  isDefault Boolean       @default(false)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-
-  user User @relation(fields: [userId], references: [id])
-
-  @@unique([userId, provider])
-}
-
 model VolcTtsConfig {
   id         String   @id @default(cuid())
   userId     String
@@ -187,377 +166,6 @@ model VolcTtsConfig {
   user User @relation(fields: [userId], references: [id])
 
   @@unique([userId])
-}
-
-enum ImageProvider {
-  OPENAI
-  REPLICATE
-  STABILITY
-  MIDJOURNEY
-  GOOGLE
-  TONGYI_WANX
-  ZHIPU_COGVIEW
-  JIMENG
-  SILICONFLOW
-  CUSTOM
-}
-
-// ==================== 平台账号 ====================
-
-model PlatformAccount {
-  id             String    @id @default(cuid())
-  userId         String
-  platform       Platform
-  platformUid    String
-  nickname       String
-  avatar         String?
-  bio            String?
-  profileUrl     String?
-  followerCount  Int       @default(0)
-  followingCount Int       @default(0)
-  noteCount      Int       @default(0)
-  likeCount      Int       @default(0)
-  isActive       Boolean   @default(true)
-  cookieData     Json? // 加密存储登录态
-  lastSyncAt     DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  user           User            @relation(fields: [userId], references: [id])
-  metrics        AccountMetric[]
-  notes          PlatformNote[]
-  syncTasks      SyncTask[]
-  publishTargets PublishTarget[]
-
-  proxy       Json?
-  syncCron    String?
-  loginStatus LoginStatus @default(VALID)
-
-  @@unique([platform, platformUid])
-  @@index([userId, platform])
-}
-
-enum Platform {
-  XIAOHONGSHU
-  DOUYIN
-  WECHAT_MP
-  BILIBILI
-  KUAISHOU
-  WEIBO
-}
-
-enum LoginStatus {
-  VALID
-  EXPIRED
-  NEVER_LOGGED
-}
-
-// ==================== 账号指标时序数据 ====================
-
-model AccountMetric {
-  id             String   @id @default(cuid())
-  accountId      String
-  date           DateTime @db.Date
-  followerCount  Int
-  followingCount Int
-  noteCount      Int
-  totalLikes     Int
-  totalComments  Int
-  totalShares    Int
-  totalViews     Int
-  followerDelta  Int      @default(0)
-  createdAt      DateTime @default(now())
-
-  account PlatformAccount @relation(fields: [accountId], references: [id])
-
-  @@unique([accountId, date])
-  @@index([accountId, date])
-}
-
-// ==================== 平台笔记/作品 ====================
-
-model PlatformNote {
-  id             String    @id @default(cuid())
-  accountId      String
-  platformNoteId String
-  title          String
-  content        String?   @db.Text
-  type           NoteType
-  coverUrl       String?
-  tags           String[]
-  publishedAt    DateTime?
-  likeCount      Int       @default(0)
-  commentCount   Int       @default(0)
-  shareCount     Int       @default(0)
-  viewCount      Int       @default(0)
-  collectCount   Int       @default(0)
-  isTop          Boolean   @default(false)
-  sourceUrl      String?
-  rawData        Json?
-  lastSyncAt     DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  account PlatformAccount @relation(fields: [accountId], references: [id])
-  metrics NoteMetric[]
-
-  @@unique([accountId, platformNoteId])
-  @@index([accountId, publishedAt])
-}
-
-enum NoteType {
-  IMAGE_TEXT
-  VIDEO
-  LIVE
-}
-
-// ==================== 单篇笔记指标时序 ====================
-
-model NoteMetric {
-  id           String   @id @default(cuid())
-  noteId       String
-  date         DateTime @db.Date
-  likeCount    Int
-  commentCount Int
-  shareCount   Int
-  viewCount    Int
-  collectCount Int
-  createdAt    DateTime @default(now())
-
-  note PlatformNote @relation(fields: [noteId], references: [id])
-
-  @@unique([noteId, date])
-  @@index([noteId, date])
-}
-
-// ==================== AI 创作内容 ====================
-
-/// @deprecated pivot 前的老通用发布模型。 2026-07 起没有 src/ 代码读写它。
-/// 替代者: `ScriptDraft` (脚本生成产物) + `ContentAnalysis` (视频预诊断)。
-/// 表和数据保留是为了不丢历史; 新代码不要再写这里。 未来清理时一起 DROP:
-/// Content / PublishTask / PublishTarget / Competitor / CompetitorNote。
-model Content {
-  id          String        @id @default(cuid())
-  userId      String
-  platform    Platform
-  type        ContentType
-  title       String?
-  body        String        @db.Text
-  tags        String[]
-  coverPrompt String?
-  coverUrl    String?
-  aiProvider  String?
-  aiModel     String?
-  prompt      String?       @db.Text
-  status      ContentStatus @default(DRAFT)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  user         User          @relation(fields: [userId], references: [id])
-  publishTasks PublishTask[]
-
-  @@index([userId, platform, status])
-}
-
-enum ContentType {
-  NOTE_COPY
-  VIDEO_SCRIPT
-  TITLE
-  TAGS
-  COVER_IMAGE
-  PUBLISH_PLAN
-}
-
-enum ContentStatus {
-  DRAFT
-  READY
-  PUBLISHED
-  ARCHIVED
-}
-
-// ==================== 发布任务 (⚠️ deprecated, 见 Content) ====================
-
-/// @deprecated 见 [Content] 注释。 pivot 后不再"一键发布", 用户手动去平台发。
-model PublishTask {
-  id          String        @id @default(cuid())
-  userId      String
-  contentId   String
-  title       String
-  mode        PublishMode   @default(SCHEDULED)
-  scheduledAt DateTime?
-  status      PublishStatus @default(DRAFT)
-  reviewNote  String?
-  reviewedAt  DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  user    User            @relation(fields: [userId], references: [id])
-  content Content         @relation(fields: [contentId], references: [id])
-  targets PublishTarget[]
-
-  @@index([userId, status])
-  @@index([status, scheduledAt])
-}
-
-/// @deprecated 见 [Content] 注释。
-model PublishTarget {
-  id             String              @id @default(cuid())
-  publishTaskId  String
-  accountId      String
-  platform       Platform
-  adaptedTitle   String?
-  adaptedContent String?             @db.Text
-  adaptedTags    String[]
-  mediaFiles     Json?
-  coverImage     String?
-  status         TargetPublishStatus @default(PENDING)
-  publishedUrl   String?
-  platformNoteId String?
-  error          String?
-  retryCount     Int                 @default(0)
-  startedAt      DateTime?
-  finishedAt     DateTime?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
-
-  publishTask PublishTask     @relation(fields: [publishTaskId], references: [id])
-  account     PlatformAccount @relation(fields: [accountId], references: [id])
-
-  @@index([publishTaskId])
-  @@index([status])
-}
-
-enum PublishMode {
-  IMMEDIATE
-  SCHEDULED
-}
-
-enum PublishStatus {
-  DRAFT
-  PENDING_REVIEW
-  APPROVED
-  PUBLISHING
-  COMPLETED
-  PARTIAL_FAILED
-  FAILED
-  CANCELLED
-}
-
-enum TargetPublishStatus {
-  PENDING
-  ADAPTING
-  READY
-  PUBLISHING
-  SUCCESS
-  FAILED
-  CANCELLED
-}
-
-// ==================== 竞品账号 (⚠️ deprecated) ====================
-
-/// @deprecated 见 [Content] 注释。 竞品分析目前走 InspirationVideo (用户手挑对标).
-model Competitor {
-  id             String    @id @default(cuid())
-  userId         String
-  platform       Platform
-  platformUid    String
-  nickname       String
-  avatar         String?
-  followerCount  Int       @default(0)
-  noteCount      Int       @default(0)
-  analysisResult Json?
-  lastAnalyzedAt DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  user  User             @relation(fields: [userId], references: [id])
-  notes CompetitorNote[]
-
-  @@unique([userId, platform, platformUid])
-}
-
-/// @deprecated 见 [Content] 注释。
-model CompetitorNote {
-  id             String    @id @default(cuid())
-  competitorId   String
-  platformNoteId String
-  title          String
-  type           NoteType
-  likeCount      Int       @default(0)
-  commentCount   Int       @default(0)
-  shareCount     Int       @default(0)
-  viewCount      Int       @default(0)
-  publishedAt    DateTime?
-  tags           String[]
-  createdAt      DateTime  @default(now())
-
-  competitor Competitor @relation(fields: [competitorId], references: [id])
-
-  @@unique([competitorId, platformNoteId])
-}
-
-// ==================== 采集任务 ====================
-
-model SyncTask {
-  id         String     @id @default(cuid())
-  accountId  String
-  type       SyncType
-  status     TaskStatus @default(PENDING)
-  result     Json?
-  error      String?
-  startedAt  DateTime?
-  finishedAt DateTime?
-  createdAt  DateTime   @default(now())
-
-  account PlatformAccount @relation(fields: [accountId], references: [id])
-
-  @@index([accountId, status])
-}
-
-enum SyncType {
-  PROFILE
-  NOTES
-  NOTE_DETAIL
-  METRICS
-  COMPETITOR
-}
-
-enum TaskStatus {
-  PENDING
-  RUNNING
-  SUCCESS
-  FAILED
-  CANCELLED
-}
-
-// ==================== 浏览器会话(短生命周期,登录用) ====================
-
-model BrowserSession {
-  id          String        @id @default(cuid())
-  userId      String
-  platform    Platform
-  accountId   String?
-  status      SessionStatus @default(STARTING)
-  cdpUrl      String
-  vncPath     String
-  containerId String?
-  proxyTest   Json?
-  qrCode      String?       @db.Text
-  expiresAt   DateTime
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  @@index([userId, status])
-  @@index([status, expiresAt])
-}
-
-enum SessionStatus {
-  STARTING
-  WAITING_LOGIN
-  LOGGED_IN
-  SCRAPING
-  EXPIRED
-  ERROR
 }
 
 // ==================== Phase 3 / Direction A: 内容预诊断 ====================
@@ -679,7 +287,6 @@ model ActualMetric {
   @@index([analysisId, snapshotAt])
 }
 
-// ============ Creator Cockpit (2026-08-04 整体移植, spec: docs/superpowers/specs/2026-08-04-cockpit-adoption-design.md) ============
 // 设计说明：日期字段沿用 cockpit 的 ISO 字符串而非 DateTime——纯函数用字符串比较日期（如 `plannedDate < today`），改类型会破坏零改动原则。
 // FollowerSnapshot 不建表：workspace GET 时从 AccountMetric 派生（爬虫已每日写入），PUT 忽略该字段。
 
@@ -918,7 +525,6 @@ model CockpitPrefs {
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// ============ 热点雷达 (2026-08-13 四期, spec: docs/superpowers/specs/2026-08-13-radar-deep-collection-design.md) ============
 // 设计说明：这里是服务端域数据（雷达抓取/运行结果），不进 cockpit workspace state，因此不沿用 cockpit 的 ISO 字符串日期约定——
 // 时间戳一律用 DateTime，id 由服务端 @default(cuid()) 生成（而非客户端传入）。
 
@@ -982,7 +588,6 @@ model RadarConfig {
   user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// ============ 风格档案 (五期「创作质量深化」Task 1, spec: docs/superpowers/specs/2026-08-13-script-quality-design.md §2) ============
 // StyleProfile 是 userId 单行配置，学 RadarConfig 先例：不建 User 反向关系。
 // StyleSample 是「定稿即样本」积累路线的沉淀记录，学 ScriptDraft 先例：建 User 关系。
 
@@ -1004,7 +609,6 @@ model StyleSample {
   @@index([userId, platform, createdAt])
 }
 
-// ============ 人设定位驱动选题 (八期, spec: docs/superpowers/specs/2026-08-14-persona-driven-topics-design.md §1) ============
 // PersonaProfile 是 userId 单行配置，学 StyleProfile/RadarConfig 先例：不建 User 反向关系。
 
 model PersonaProfile {

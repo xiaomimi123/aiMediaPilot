@@ -255,12 +255,6 @@ export interface GoalCycle {
   qualityTarget: number;
 }
 
-export interface FollowerSnapshot {
-  id: string;
-  date: string;
-  followers: number;
-}
-
 export interface InsightRule {
   id: string;
   text: string;
@@ -304,7 +298,6 @@ export interface WorkspaceState {
   stageColors: Record<ContentStage, string>;
   goal: GoalCycle;
   goalHistory: GoalCycle[];
-  followerSnapshots: FollowerSnapshot[];
   insightRules: InsightRule[];
   contentTypes: string[];
   setupComplete: boolean;

@@ -75,7 +75,6 @@ function workspace(item = content(), events: StageEvent[] = []): WorkspaceState 
     stageColors: { ...DEFAULT_STAGE_COLORS },
     goal,
     goalHistory: [],
-    followerSnapshots: [],
     insightRules: [],
     contentTypes: ["AI 产品实测"],
   };

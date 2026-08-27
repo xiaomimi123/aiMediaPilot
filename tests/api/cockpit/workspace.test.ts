@@ -16,7 +16,6 @@ const prismaMock = vi.hoisted(() => ({
   cockpitScheduleObject: { findMany: vi.fn(), deleteMany: vi.fn(), upsert: vi.fn() },
   cockpitGoalCycle: { findMany: vi.fn(), deleteMany: vi.fn(), upsert: vi.fn() },
   cockpitInsightRule: { findMany: vi.fn(), deleteMany: vi.fn(), upsert: vi.fn() },
-  accountMetric: { findMany: vi.fn() },
   contentAnalysis: { findMany: vi.fn() },
   user: { findUnique: vi.fn() },
   actualMetric: { findMany: vi.fn() },
@@ -66,7 +65,6 @@ function emptyState(overrides: Partial<WorkspaceState> = {}): WorkspaceState {
       qualityMetric: 'views', qualityThreshold: 0, qualityTarget: 0,
     },
     goalHistory: [],
-    followerSnapshots: [],
     insightRules: [],
     contentTypes: [],
     setupComplete: false,
@@ -88,7 +86,6 @@ beforeEach(() => {
   prismaMock.cockpitScheduleObject.findMany.mockResolvedValue([]);
   prismaMock.cockpitGoalCycle.findMany.mockResolvedValue([]);
   prismaMock.cockpitInsightRule.findMany.mockResolvedValue([]);
-  prismaMock.accountMetric.findMany.mockResolvedValue([]);
   // extras 默认: 无自动同步记录, 无 baseline, 无复盘
   prismaMock.contentAnalysis.findMany.mockResolvedValue([]);
   prismaMock.user.findUnique.mockResolvedValue(null);
@@ -107,7 +104,6 @@ describe('GET /api/v1/cockpit/workspace', () => {
     expect(json.success).toBe(true);
     expect(json.data.state.schemaVersion).toBe(16);
     expect(json.data.state.goal.id).toBe('goal-default');
-    expect(json.data.state.followerSnapshots).toEqual([]);
     expect(json.data.extras).toEqual({
       predictions: {},
       lastAutoSyncAt: null,
@@ -242,16 +238,6 @@ describe('GET /api/v1/cockpit/workspace', () => {
     });
   });
 
-  it('followerSnapshots 来自 accountMetric mock', async () => {
-    prismaMock.accountMetric.findMany.mockResolvedValue([
-      { id: 'am1', date: new Date('2026-08-01T00:00:00.000Z'), followerCount: 123 },
-    ]);
-    const res = await GET();
-    const json = await res.json();
-    expect(json.data.state.followerSnapshots).toEqual([
-      { id: 'am1', date: '2026-08-01', followers: 123 },
-    ]);
-  });
 
   it('异常 → 500', async () => {
     prismaMock.cockpitPrefs.findUnique.mockRejectedValueOnce(new Error('db down'));
@@ -350,7 +336,6 @@ describe('PUT /api/v1/cockpit/workspace', () => {
         outputTarget: 1, quotas: [], followerStart: 0, followerTarget: 0,
         qualityMetric: 'views', qualityThreshold: 0, qualityTarget: 0,
       }],
-      followerSnapshots: [{ id: 'fs1', date: '2026-08-01', followers: 1 }],
     });
 
     const res = await PUT(req({ state, rev: '2026-08-01T00:00:00.000Z' }));
@@ -392,9 +377,6 @@ describe('PUT /api/v1/cockpit/workspace', () => {
       where: { userId: 'user1', id: { notIn: ['goal-active', 'goal-archived'] } },
     });
     expect(prismaMock.cockpitGoalCycle.upsert).toHaveBeenCalledTimes(2);
-
-    // followerSnapshots 派生数据, 不落库
-    expect(prismaMock.accountMetric.findMany).not.toHaveBeenCalled();
 
     // prefs upsert 最终发生
     expect(prismaMock.cockpitPrefs.upsert).toHaveBeenCalledTimes(1);

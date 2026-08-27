@@ -18,7 +18,7 @@ function defaultGoal(): GoalCycle {
 
 export async function loadWorkspaceFromDb(userId: string) {
   const [prefs, contents, inspirations, stageEvents, reviewDays, liveSessions,
-    scheduleObjectTypes, scheduleObjects, goals, insightRules, accountMetrics] =
+    scheduleObjectTypes, scheduleObjects, goals, insightRules] =
     await Promise.all([
       prisma.cockpitPrefs.findUnique({ where: { userId } }),
       prisma.cockpitContent.findMany({ where: { userId } }),
@@ -30,10 +30,6 @@ export async function loadWorkspaceFromDb(userId: string) {
       prisma.cockpitScheduleObject.findMany({ where: { userId } }),
       prisma.cockpitGoalCycle.findMany({ where: { userId } }),
       prisma.cockpitInsightRule.findMany({ where: { userId } }),
-      prisma.accountMetric.findMany({
-        where: { account: { userId } }, orderBy: { date: 'desc' }, take: 400,
-        select: { id: true, date: true, followerCount: true },
-      }).then((rows) => rows.reverse()),
     ]);
   const active = goals.find((g) => g.status === 'active');
   const state: WorkspaceState = {
@@ -74,9 +70,6 @@ export async function loadWorkspaceFromDb(userId: string) {
     scheduleObjects: scheduleObjects.map(({ userId: _u, ...rest }) => rest),
     goal: active ? toGoal(active) : defaultGoal(),
     goalHistory: goals.filter((g) => g.status === 'archived').map(toGoal),
-    followerSnapshots: accountMetrics.map((m) => ({
-      id: m.id, date: m.date.toISOString().slice(0, 10), followers: m.followerCount,
-    })),
     insightRules: insightRules.map(({ userId: _u, ...rest }) => rest),
   };
   return { state, rev: prefs?.updatedAt.toISOString() ?? EPOCH };
@@ -331,8 +324,6 @@ export async function saveWorkspaceToDb(
         create: { id: rule.id, ...data },
       });
     }
-
-    // followerSnapshots: 派生数据, 从不写回
 
     // ---- prefs → CockpitPrefs ----
     const prefsData = {
