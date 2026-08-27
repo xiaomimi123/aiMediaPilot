@@ -2113,3 +2113,28 @@ html[data-style="bauhaus"] .review-kpi-grid > article:nth-child(4) {
   .template-grid { grid-template-columns: 1fr; }
   .template-assets-grid { grid-template-columns: 1fr; }
 }
+
+
+/* 提词器(二十一期) —— 手机架在电脑前录口播时看这一屏。
+   深底大字是刚需: 离屏幕一两米还要看得清; 不复用 cockpit 的亮色变量, 这是独立的
+   录制现场界面, 亮底会在镜头里反光到脸上。 */
+.teleprompter { position: fixed; inset: 0; display: flex; flex-direction: column; background: #0B0B0C; color: #F5F5F5; z-index: 50; }
+.teleprompter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 20px; background: #17171A; border-bottom: 1px solid #2A2A2E; font-size: 13px; }
+.teleprompter-title { font-weight: 600; }
+.teleprompter-total, .teleprompter-hint { color: #9A9AA2; }
+.teleprompter-hint { margin-left: auto; }
+.teleprompter-speed { min-width: 48px; text-align: center; font-variant-numeric: tabular-nums; }
+.teleprompter-bar .text-button { color: #C9C9D1; }
+.teleprompter-scroll { flex: 1; overflow-y: auto; padding: 0 8vw; scroll-behavior: auto; }
+/* 上下留白让第一句从屏幕中间开始, 视线不用往上抬 */
+.teleprompter-pad { height: 42vh; }
+.teleprompter-act { margin-bottom: 8vh; }
+.teleprompter-act-head { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; color: #7C7C86; font-size: 15px; }
+.teleprompter-warn { color: #E0A03A; }
+.teleprompter-line { margin: 0 0 24px; font-size: 44px; line-height: 1.55; font-weight: 500; letter-spacing: 0.01em; }
+.teleprompter-empty { display: flex; align-items: center; justify-content: center; min-height: 60vh; color: #6B6B73; }
+
+@media (max-width: 860px) {
+  .teleprompter-line { font-size: 30px; }
+  .teleprompter-scroll { padding: 0 6vw; }
+}
