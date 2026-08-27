@@ -9,6 +9,7 @@ import {
   combineScore,
   readActsFromDraftOutput,
   scriptFingerprint,
+  SOFT_MODEL_VERSION,
   type CachedSoftScore,
 } from '@/lib/cockpit/script-score';
 
@@ -60,6 +61,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     cached = {
       // 指纹按打分时这一份稿子算 —— 之后稿子一改, 前端就知道这个分作废了
       fingerprint: scriptFingerprint(acts),
+      modelVersion: SOFT_MODEL_VERSION,
       dimensions: toSoftDimensions(out.result),
       topFixes: out.result.topFixes,
       scoredAt: new Date().toISOString(),

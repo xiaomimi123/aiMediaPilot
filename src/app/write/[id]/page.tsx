@@ -62,6 +62,7 @@ export default async function WriteDetailPage(props: { params: Promise<{ id: str
           softScore={soft ? soft.dimensions.reduce((n, d) => n + d.score, 0) : null}
           softMax={SOFT_MAX}
           softDimensions={soft?.dimensions ?? []}
+          softStaleReason={soft?.staleReason ?? null}
         />
       </div>
     </main>

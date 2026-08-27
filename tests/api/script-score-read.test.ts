@@ -10,7 +10,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
 import { GET } from '@/app/api/v1/cockpit/contents/[id]/script-score/route';
 import { GET as LIST } from '@/app/api/v1/cockpit/script-scores/route';
-import { scriptFingerprint } from '@/lib/cockpit/script-score';
+import { scriptFingerprint, SOFT_MODEL_VERSION } from '@/lib/cockpit/script-score';
 
 const ACTS = [
   { act: 'hook', title: '钩子', narration: '先说清楚，我不卖课。', visual: '出镜正面', targetSec: 12 },
@@ -19,6 +19,7 @@ const ACTS = [
 
 const SOFT = {
   fingerprint: scriptFingerprint(ACTS),
+  modelVersion: SOFT_MODEL_VERSION,
   dimensions: [
     { key: 'hookPower', label: '钩子力度', score: 12, max: 15, reason: 'a' },
     { key: 'gain', label: '获得感', score: 10, max: 12, reason: 'b' },

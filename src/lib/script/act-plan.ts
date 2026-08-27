@@ -14,16 +14,41 @@ import { ACT_KEYS, ACT_LABELS, ACT_RATIOS, type ActKey } from './six-act';
 /** 超过目标这个倍数就标 warning。写成常量而不是散在代码里的 1.1。 */
 export const OVER_TOLERANCE = 1.1;
 
+/**
+ * 中文口播的舒适语速(字/秒)。取提词器里 COMFORTABLE_SPEED {4,6} 的中值。
+ * 「实际时长」由字数换算而来, 所以这个数直接决定左栏显示的秒数。
+ */
+export const SPEAKING_CHARS_PER_SEC = 5;
+
+/** 标点不出声, 不计入字数。 */
+function countSpokenChars(text: string): number {
+  return (text ?? '').replace(/[\s，。、；：！？,.;:!?—…""''「」《》()（）]/g, '').length;
+}
+
+/** 这段台词按舒适语速要念多少秒。 */
+export function estimateSpokenSec(narration: string): number {
+  return countSpokenChars(narration) / SPEAKING_CHARS_PER_SEC;
+}
+
+/** 只读用得上的三个字段。调用方通常直接给完整 ScriptAct, 多出来的字段忽略。 */
 interface ActLike {
   act: string;
-  targetSec: number;
+  narration?: string;
+  targetSec?: number;
 }
 
 export interface ActPlanRow {
   act: ActKey;
   label: string;
-  /** 稿子里这一幕自己写的秒数。 */
+  /**
+   * 这一幕**按字数估**要念多少秒。
+   *
+   * 不用稿子里写的 `targetSec`: 那是模型当初的安排, 你改了台词它不会变。按字数估
+   * 才会随打字实时变化 —— 这是「快回路」里最有用的一条反馈。
+   */
   actualSec: number;
+  /** 这一幕的字数(不含标点)。旁白框右上角直接显示。 */
+  chars: number;
   /** 结构上该占的秒数 = ratio × 全片时长。 */
   targetSec: number;
   /** 实际超过目标 10% 以上。 */
@@ -39,18 +64,20 @@ export interface ActPlan {
   overSec: number;
 }
 
-export function buildActPlan(acts: ActLike[], durationSec: number): ActPlan {
+export function buildActPlan(acts: readonly Readonly<ActLike>[], durationSec: number): ActPlan {
   const byKey = new Map(acts.map((a) => [a.act, a]));
 
   // 顺序固定按 ACT_KEYS 走, 不随输入顺序变 —— 左栏常驻不滚动, 顺序必须稳定
   const rows: ActPlanRow[] = ACT_KEYS.map((key) => {
     const found = byKey.get(key);
-    const actualSec = found ? Number(found.targetSec) || 0 : 0;
+    const chars = found ? countSpokenChars(found.narration ?? '') : 0;
+    const actualSec = chars / SPEAKING_CHARS_PER_SEC;
     const targetSec = ACT_RATIOS[key] * durationSec;
     return {
       act: key,
       label: ACT_LABELS[key],
       actualSec,
+      chars,
       targetSec,
       warn: targetSec > 0 && actualSec > targetSec * OVER_TOLERANCE,
       missing: !found,

@@ -269,8 +269,9 @@ function scoreConcise(acts: ScorableAct[], max: number): ScoreDimension {
  */
 function scoreDuration(acts: ScorableAct[], durationSec: number, max: number): ScoreDimension {
   const base = { key: 'duration', label: '时长偏差', max };
+  // 必须把台词传下去 —— 实际时长按字数估, 少传 narration 会让每幕都算成 0 秒
   const plan = buildActPlan(
-    acts.map((a) => ({ act: a.act, targetSec: a.targetSec ?? 0 })),
+    acts.map((a) => ({ act: a.act, narration: a.narration, targetSec: a.targetSec })),
     durationSec,
   );
 
@@ -386,10 +387,21 @@ export function readActsFromDraftOutput(output: unknown): ScorableActFull[] | nu
 
 /* ---------------- 软指标缓存 ---------------- */
 
+/**
+ * 软指标评分模型的版本。**改了维度、满分或权重就要 +1。**
+ *
+ * 只校验稿子指纹是不够的: 合并两套评分那次, 维度从 5 个换成 6 个、满分也变了,
+ * 而稿子一个字没动 —— 指纹照样对得上, 于是旧分数被当成新分数显示出来, 页眉的
+ * 总分变成"新硬指标 + 旧软指标"的拼接, 完全不可比。真机上看到了才发现。
+ */
+export const SOFT_MODEL_VERSION = 2;
+
 /** 软指标一次要花钱调模型, 所以落库缓存。这是缓存的形状。 */
 export interface CachedSoftScore {
   /** 打分时那份稿子的指纹。对不上 = 稿子改过 = 这个分数已经不作数。 */
   fingerprint: string;
+  /** 打分时用的评分模型版本。缺失 = 合并之前存的老数据。 */
+  modelVersion?: number;
   dimensions: ScoreDimension[];
   topFixes: string[];
   scoredAt: string;
@@ -397,6 +409,8 @@ export interface CachedSoftScore {
 
 export interface CachedSoftScoreView extends CachedSoftScore {
   stale: boolean;
+  /** 为什么过期: 稿子改了, 还是评分模型换了。两者的提示语不一样。 */
+  staleReason: 'script' | 'model' | null;
 }
 
 /**
@@ -432,7 +446,12 @@ function isCachedSoftScore(v: unknown): v is CachedSoftScore {
  */
 export function readCachedSoft(raw: unknown, acts: ScorableAct[]): CachedSoftScoreView | null {
   if (!isCachedSoftScore(raw)) return null;
-  return { ...raw, stale: raw.fingerprint !== scriptFingerprint(acts) };
+  // 模型版本先判: 版本不对时连维度都换了, 再比稿子指纹没有意义
+  if (raw.modelVersion !== SOFT_MODEL_VERSION) {
+    return { ...raw, stale: true, staleReason: 'model' };
+  }
+  const scriptChanged = raw.fingerprint !== scriptFingerprint(acts);
+  return { ...raw, stale: scriptChanged, staleReason: scriptChanged ? 'script' : null };
 }
 
 /* ---------------- 合并 ---------------- */
@@ -443,8 +462,10 @@ export interface CombinedScore {
   max: number;
   /** 软指标跑过没有。没跑过时 max 只有 35, 不要拿去和 100 分比。 */
   softScored: boolean;
-  /** 软指标是不是已经对不上当前稿子。 */
+  /** 软指标是不是已经不作数。 */
   softStale: boolean;
+  /** 不作数的原因: 稿子改了 / 评分模型换了。 */
+  softStaleReason: 'script' | 'model' | null;
   topFixes: string[];
   scoredAt: string | null;
 }
@@ -471,6 +492,7 @@ export function combineScore(
       max: hard.max,
       softScored: false,
       softStale: false,
+      softStaleReason: null,
       topFixes: [],
       scoredAt: null,
     };
@@ -483,6 +505,7 @@ export function combineScore(
     max: dimensions.reduce((s, d) => s + d.max, 0),
     softScored: true,
     softStale: soft.stale,
+    softStaleReason: soft.staleReason,
     topFixes: soft.topFixes,
     scoredAt: soft.scoredAt,
   };

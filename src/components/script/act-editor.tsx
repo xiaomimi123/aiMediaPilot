@@ -1,6 +1,7 @@
 'use client';
 
 import type { ScriptAct, ActFact } from '@/lib/script/six-act';
+import { estimateSpokenSec } from '@/lib/script/act-plan';
 import { cn } from '@/lib/utils';
 
 /**
@@ -40,17 +41,21 @@ function Field({
   value,
   rows,
   onChange,
+  meter,
 }: {
   label: string;
   hint?: string;
   value: string;
   rows: number;
   onChange: (v: string) => void;
+  /** 右上角的实时计数, 只有旁白需要。 */
+  meter?: React.ReactNode;
 }) {
   return (
     <label className="block">
       <span className="text-xs font-medium">{label}</span>
       {hint ? <span className="ml-2 text-xs text-muted-foreground">{hint}</span> : null}
+      {meter ? <span className="float-right">{meter}</span> : null}
       <textarea
         value={value}
         rows={rows}
@@ -63,11 +68,20 @@ function Field({
 
 export function ActEditor({
   act,
+  targetSec,
   onChange,
 }: {
   act: ScriptAct;
+  /** 这一幕结构上该占多少秒 —— 用来判断旁白写超了没有。 */
+  targetSec: number;
   onChange: (patch: Partial<ScriptAct>) => void;
 }) {
+  // 实时计数: 写多少字、按舒适语速要念多久。这是「快回路」里反馈最快的一条 ——
+  // 不用等评分、不用等录制, 打字的同时就知道这一幕撑不撑得下。
+  const chars = act.narration.replace(/[\s，。、；：！？,.;:!?—…""''「」《》()（）]/g, '').length;
+  const sec = estimateSpokenSec(act.narration);
+  const over = targetSec > 0 && sec > targetSec * 1.1;
+
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-4">
       <Field
@@ -76,6 +90,12 @@ export function ActEditor({
         value={act.narration}
         rows={6}
         onChange={(narration) => onChange({ narration })}
+        meter={
+          <span className={cn('text-xs tabular-nums', over ? 'text-destructive' : 'text-muted-foreground')}>
+            {chars} 字 · {sec.toFixed(1)}s
+            {targetSec > 0 ? <span className="text-muted-foreground"> / 目标 {targetSec.toFixed(1)}s</span> : null}
+          </span>
+        }
       />
       <Field
         label="画面"

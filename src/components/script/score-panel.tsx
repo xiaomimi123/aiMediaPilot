@@ -32,6 +32,8 @@ export function ScorePanel({
   soft,
   softMax,
   softDimensions,
+  softStaleReason = null,
+  todos = [],
 }: {
   hard: number;
   hardMax: number;
@@ -40,12 +42,16 @@ export function ScorePanel({
   soft: number | null;
   softMax: number;
   softDimensions: ScoreDimension[];
+  /** 软指标为什么不作数: 稿子改了 / 评分模型换了。两者提示语不同。 */
+  softStaleReason?: 'script' | 'model' | null;
+  /** 把扣分翻译成「去改哪一幕的什么」。只给分不给去处等于没评。 */
+  todos?: { text: string; act?: string }[];
 }) {
   return (
-    <aside className="flex w-[148px] shrink-0 flex-col gap-4 text-xs">
+    <div className="flex flex-col gap-4 text-xs">
       <section>
         <h2 className="font-medium">
-          硬指标{' '}
+          硬指标 <span className="font-normal text-muted-foreground">· 纯函数</span>{' '}
           <span className="tabular-nums text-muted-foreground">
             {hard}/{hardMax}
           </span>
@@ -70,14 +76,23 @@ export function ScorePanel({
 
       <section className="border-t border-border pt-3">
         <h2 className="font-medium">
-          软指标{' '}
+          软指标 <span className="font-normal text-muted-foreground">· DeepSeek</span>{' '}
           <span className="tabular-nums text-muted-foreground">
             {soft === null ? '未评分' : `${soft}/${softMax}`}
           </span>
         </h2>
+        {softStaleReason === 'model' ? (
+          <p className="mt-1 leading-relaxed text-destructive">
+            这份分数是旧评分模型算的（维度和满分都变过），和现在的硬指标不可比。重跑一次才作数。
+          </p>
+        ) : softStaleReason === 'script' ? (
+          <p className="mt-1 leading-relaxed text-destructive">
+            稿子在评分之后改过，下面是旧稿的分数，仅供参考。
+          </p>
+        ) : null}
         {soft === null ? (
           <p className="mt-1 leading-relaxed text-muted-foreground">
-            钩子力度、失败叙事、金句这些要判断的项还没跑。它要调一次模型，在稿库里发起。
+            钩子力度、意外感、真实感这些要判断的项还没跑。它要调一次模型，在稿库里发起。
           </p>
         ) : (
           <>
@@ -95,6 +110,20 @@ export function ScorePanel({
           </>
         )}
       </section>
-    </aside>
+      {todos.length > 0 ? (
+        <section className="border-t border-border pt-3">
+          <h2 className="font-medium">
+            待处理 <span className="tabular-nums text-muted-foreground">{todos.length}</span>
+          </h2>
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {todos.map((t, i) => (
+              <li key={i} className="leading-relaxed text-muted-foreground">
+                · {t.text}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+    </div>
   );
 }

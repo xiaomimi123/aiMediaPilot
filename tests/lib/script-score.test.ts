@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { scoreHardDimensions, HARD_MAX, HARD_WEIGHTS } from '@/lib/cockpit/script-score';
+import { SPEAKING_CHARS_PER_SEC } from '@/lib/script/act-plan';
+
+/** 按"念几秒"倒推台词字数 —— 实际时长由字数决定, 不是 targetSec。 */
+function say(sec: number): string {
+  return '字'.repeat(Math.round(sec * SPEAKING_CHARS_PER_SEC));
+}
 
 /** 造一个六幕稿骨架, 只覆盖测试关心的字段。 */
 function acts(overrides: Partial<Record<string, { narration?: string; visual?: string }>> = {}) {
@@ -138,25 +144,34 @@ describe('scoreHardDimensions', () => {
     it('每幕都贴着目标 → 满分', () => {
       // 六幕各 10 秒、全片 60 秒时结构占比并不均匀, 用真实占比造一份贴合的稿子
       const fitted = [
-        { act: 'hook', targetSec: 6 },
-        { act: 'concept_a', targetSec: 13.5 },
-        { act: 'concept_b', targetSec: 13.5 },
-        { act: 'trivia', targetSec: 9 },
-        { act: 'synthesis', targetSec: 13.5 },
-        { act: 'punchline', targetSec: 4.5 },
-      ].map((x) => ({ ...x, title: x.act, narration: '干净台词。', visual: '出镜正面', note: '', beats: [], facts: [] }));
+        { act: 'hook', sec: 6 },
+        { act: 'concept_a', sec: 13.5 },
+        { act: 'concept_b', sec: 13.5 },
+        { act: 'trivia', sec: 9 },
+        { act: 'synthesis', sec: 13.5 },
+        { act: 'punchline', sec: 4.5 },
+      ].map((x) => ({
+        act: x.act, title: x.act, narration: say(x.sec), visual: '出镜正面', note: '',
+        targetSec: x.sec, beats: [{ keyword: 'k' }], facts: [],
+      }));
       const r = scoreHardDimensions(fitted, 60);
       expect(dim(r, 'duration').score).toBe(HARD_WEIGHTS.duration);
     });
 
     it('某一幕严重超时 → 扣分并在理由里点名是哪一幕', () => {
-      const r = scoreHardDimensions(acts({}), 30); // 六幕各 10 秒但全片只有 30 秒
+      // 每幕都写了 10 秒的字, 但全片只有 30 秒 —— 各幕目标都被撑爆
+      const r = scoreHardDimensions(acts({ hook: { narration: say(10) }, concept_a: { narration: say(10) } }), 30);
       expect(dim(r, 'duration').score).toBeLessThan(HARD_WEIGHTS.duration);
       expect(dim(r, 'duration').reason).toMatch(/超/);
     });
 
     it('合计超时额外扣 —— 单幕都没超但加起来超了也要提示', () => {
-      const r = scoreHardDimensions(acts(), 50);
+      const long = Object.fromEntries(
+        ['hook', 'concept_a', 'concept_b', 'trivia', 'synthesis', 'punchline'].map((k) => [
+          k, { narration: say(12) },
+        ]),
+      );
+      const r = scoreHardDimensions(acts(long), 50);
       expect(dim(r, 'duration').reason).toContain('合计');
     });
 

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { scriptFingerprint, combineScore, readCachedSoft } from '@/lib/cockpit/script-score';
+import {
+  scriptFingerprint,
+  combineScore,
+  readCachedSoft,
+  SOFT_MODEL_VERSION,
+} from '@/lib/cockpit/script-score';
 
 const ACTS = [
   { act: 'hook', narration: '我靠给别人装一个开源项目赚到了第一笔钱。', visual: '出镜正面' },
@@ -27,9 +32,49 @@ describe('scriptFingerprint', () => {
   });
 });
 
+describe('readCachedSoft — 评分模型版本', () => {
+  it('缓存里没有版本号(改模型之前存的)一律当过期 —— 维度和满分都变了, 分数不可比', () => {
+    const legacy = {
+      fingerprint: scriptFingerprint(ACTS),
+      dimensions: [{ key: 'failureNarrative', label: '失败叙事', score: 10, max: 15, reason: 'x' }],
+      topFixes: [],
+      scoredAt: '2026-08-27T00:00:00.000Z',
+    };
+    const r = readCachedSoft(legacy, ACTS);
+    expect(r?.stale).toBe(true);
+    expect(r?.staleReason).toBe('model');
+  });
+
+  it('版本对得上、指纹也对得上才算新鲜', () => {
+    const fresh = {
+      fingerprint: scriptFingerprint(ACTS),
+      modelVersion: SOFT_MODEL_VERSION,
+      dimensions: [{ key: 'hookPower', label: '钩子力度', score: 12, max: 15, reason: 'a' }],
+      topFixes: [],
+      scoredAt: '2026-08-28T00:00:00.000Z',
+    };
+    expect(readCachedSoft(fresh, ACTS)?.stale).toBe(false);
+  });
+
+  it('版本对但稿子改过 → 仍然过期, 原因是稿子', () => {
+    const cached = {
+      fingerprint: scriptFingerprint(ACTS),
+      modelVersion: SOFT_MODEL_VERSION,
+      dimensions: [{ key: 'hookPower', label: '钩子力度', score: 12, max: 15, reason: 'a' }],
+      topFixes: [],
+      scoredAt: '2026-08-28T00:00:00.000Z',
+    };
+    const changed = [{ ...ACTS[0], narration: '改过了。' }, ACTS[1]];
+    const r = readCachedSoft(cached, changed);
+    expect(r?.stale).toBe(true);
+    expect(r?.staleReason).toBe('script');
+  });
+});
+
 describe('readCachedSoft', () => {
   const soft = {
     fingerprint: scriptFingerprint(ACTS),
+    modelVersion: SOFT_MODEL_VERSION,
     dimensions: [{ key: 'hookPower', label: '钩子力度', score: 15, max: 20, reason: 'a' }],
     topFixes: ['补一句扩圈'],
     scoredAt: '2026-08-28T00:00:00.000Z',
@@ -69,6 +114,7 @@ describe('combineScore', () => {
   it('跑过软指标就是满分 100 的完整评分', () => {
     const soft = {
       fingerprint: scriptFingerprint(ACTS),
+      modelVersion: SOFT_MODEL_VERSION,
       dimensions: [
         { key: 'hookPower', label: '钩子力度', score: 12, max: 15, reason: 'a' },
         { key: 'gain', label: '获得感', score: 10, max: 12, reason: 'b' },
@@ -89,6 +135,7 @@ describe('combineScore', () => {
   it('硬指标永远排在前面 —— 免费的先看, 要花钱的后看', () => {
     const soft = {
       fingerprint: scriptFingerprint(ACTS),
+      modelVersion: SOFT_MODEL_VERSION,
       dimensions: [{ key: 'hookPower', label: '钩子力度', score: 15, max: 20, reason: 'a' }],
       topFixes: [],
       scoredAt: '2026-08-28T00:00:00.000Z',

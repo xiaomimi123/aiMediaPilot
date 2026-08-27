@@ -55,11 +55,33 @@ afterEach(() => {
 });
 
 describe('ScriptWorkspace', () => {
-  it('六幕全部常驻左栏, 不藏进 tab', () => {
+  it('六幕全部常驻顶部时长分配条, 不藏进 tab', () => {
     renderWorkspace();
-    for (const label of ['开场钩子', '概念A', '概念B', '冷知识', '知识串联', '金句收尾']) {
+    expect(screen.getByText('时长分配')).toBeTruthy();
+    for (const label of ['概念A', '概念B', '冷知识', '知识串联', '金句收尾']) {
       expect(screen.getByText(label)).toBeTruthy();
     }
+    // 当前幕的名字会同时出现在时长条和编辑区标题上
+    expect(screen.getAllByText('开场钩子').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('旁白框实时显示字数与预计秒数 —— 打字时就知道这一幕撑不撑得下', () => {
+    renderWorkspace();
+    expect(screen.getByText(/\d+ 字 · \d+\.\d+s/)).toBeTruthy();
+  });
+
+  it('右栏三个 tab; 素材与变体如实说明还没做, 不假装有内容', () => {
+    renderWorkspace();
+    fireEvent.click(screen.getByRole('tab', { name: '素材' }));
+    expect(screen.getByText(/素材库还没建/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: '变体' }));
+    expect(screen.getByText(/变体还没做/)).toBeTruthy();
+  });
+
+  it('待处理把扣分翻译成去改哪一幕 —— 只给分不给去处等于没评', () => {
+    renderWorkspace();
+    expect(screen.getByText('待处理')).toBeTruthy();
+    expect(screen.getByText(/低置信事实待核：销量/)).toBeTruthy();
   });
 
   it('低可信度的事实核查直接摆出来, 并显示来源', () => {
@@ -117,12 +139,13 @@ describe('ScriptWorkspace', () => {
 
   it('硬指标随改动就地重算 —— 加入垫话后分数要掉', async () => {
     renderWorkspace();
-    const before = screen.getByText(/硬指标 \d+\/35/).textContent;
+    // 「硬指标」在页眉总分卡和右栏各出现一次, 这里只看右栏那个标题
+    const panelScore = () =>
+      screen.getAllByText(/^硬指标/).map((e) => e.closest('h2')).find(Boolean)!.textContent;
+    const before = panelScore();
     fireEvent.change(screen.getByDisplayValue('hook 台词'), {
       target: { value: '说实话其实这个东西居然还不错' },
     });
-    await waitFor(() => {
-      expect(screen.getByText(/硬指标 \d+\/35/).textContent).not.toBe(before);
-    });
+    await waitFor(() => expect(panelScore()).not.toBe(before));
   });
 });

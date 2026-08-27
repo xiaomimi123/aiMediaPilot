@@ -6,7 +6,8 @@ import type { ScriptAct } from '@/lib/script/six-act';
 import { buildActPlan } from '@/lib/script/act-plan';
 import { scoreHardDimensions, type ScoreDimension } from '@/lib/cockpit/script-score';
 import { buttonVariants } from '@/components/ui/button';
-import { ActNav } from './act-nav';
+import { Tabs } from '@/components/ui/tabs';
+import { ActStrip } from './act-strip';
 import { ActEditor } from './act-editor';
 import { ScorePanel } from './score-panel';
 
@@ -71,6 +72,7 @@ export function ScriptWorkspace({
   softScore,
   softMax,
   softDimensions,
+  softStaleReason = null,
 }: {
   scriptId: string;
   topic: string;
@@ -80,6 +82,7 @@ export function ScriptWorkspace({
   softScore: number | null;
   softMax: number;
   softDimensions: ScoreDimension[];
+  softStaleReason?: 'script' | 'model' | null;
 }) {
   const [acts, setActs] = useState(initialActs);
   const [dirty, setDirty] = useState(false);
@@ -87,9 +90,35 @@ export function ScriptWorkspace({
 
   const save = useAutoSave(scriptId, acts, dirty);
 
+  const [panel, setPanel] = useState<'score' | 'material' | 'variant'>('score');
+
   const plan = useMemo(() => buildActPlan(acts, durationSec), [acts, durationSec]);
   const hard = useMemo(() => scoreHardDimensions(acts, durationSec), [acts, durationSec]);
   const current = acts.find((a) => a.act === currentAct) ?? acts[0];
+  const currentRow = plan.rows.find((r) => r.act === currentAct);
+  // 评分模型换过之后旧软分不可比, 不计入总分
+  const countSoft = softScore !== null && softStaleReason !== 'model';
+
+  /**
+   * 待处理: 把扣分项翻译成「去改哪一幕的哪个东西」。
+   * 只给分不给去处, 用户还是不知道下一步做什么。
+   */
+  const todos = useMemo(() => {
+    const list: { text: string; act?: string }[] = [];
+    for (const r of plan.rows) {
+      if (r.warn) list.push({ text: `${r.label}超时 ${(r.actualSec - r.targetSec).toFixed(1)} 秒`, act: r.act });
+      if (r.missing) list.push({ text: `缺${r.label}`, act: r.act });
+    }
+    for (const a of acts) {
+      for (const f of a.facts ?? []) {
+        if (f.confidence === 'low') list.push({ text: `低置信事实待核：${f.claim}`, act: a.act });
+      }
+    }
+    for (const d of hard.dimensions) {
+      if (d.score === 0 && d.max > 0) list.push({ text: `${d.label} 0 分：${d.reason}` });
+    }
+    return list;
+  }, [plan, acts, hard]);
 
   const patchCurrent = useCallback(
     (patch: Partial<ScriptAct>) => {
@@ -105,29 +134,71 @@ export function ScriptWorkspace({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="mb-4 flex items-baseline justify-between gap-4 border-b border-border pb-3">
+      <header className="mb-4 flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="truncate text-lg font-semibold tracking-tight">{topic}</h1>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {platform} · 全片 {durationSec} 秒 · 实际 {plan.totalActualSec} 秒
+          <h1 className="truncate text-xl font-semibold tracking-tight">{topic}</h1>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="rounded bg-secondary px-1.5 py-0.5">{platform}</span>
+            <span className="rounded bg-secondary px-1.5 py-0.5">{durationSec} 秒</span>
+            <span className="tabular-nums">实际 {plan.totalActualSec.toFixed(1)} 秒</span>
+          </div>
+        </div>
+        <div className="shrink-0 rounded-lg border border-border px-4 py-2 text-center">
+          {/* 软指标作废时只报硬指标 —— 把旧模型的分加进总分会拼出一个不可比的数字 */}
+          <p className="text-xs text-muted-foreground">{countSoft ? '总分' : '硬指标'}</p>
+          <p className="text-2xl font-semibold tabular-nums">
+            {hard.total + (countSoft ? softScore! : 0)}
+            <span className="text-sm font-normal text-muted-foreground">
+              /{hard.max + (countSoft ? softMax : 0)}
+            </span>
           </p>
         </div>
-        <p className="shrink-0 text-sm tabular-nums">
-          硬指标 {hard.total}/{hard.max}
-        </p>
       </header>
 
-      <div className="flex min-h-0 flex-1 gap-6 overflow-y-auto">
-        <ActNav plan={plan} current={currentAct} onSelect={setCurrentAct} />
-        <ActEditor act={current} onChange={patchCurrent} />
-        <ScorePanel
-          hard={hard.total}
-          hardMax={hard.max}
-          hardDimensions={hard.dimensions}
-          soft={softScore}
-          softMax={softMax}
-          softDimensions={softDimensions}
-        />
+      <ActStrip plan={plan} current={currentAct} onSelect={setCurrentAct} />
+
+      <div className="mt-4 flex min-h-0 flex-1 gap-4 overflow-y-auto">
+        <section className="flex min-w-0 flex-1 flex-col rounded-lg border border-border p-4">
+          <div className="mb-3 flex items-baseline gap-2">
+            <h2 className="text-sm font-medium">{currentRow?.label ?? current.title}</h2>
+            {currentRow ? (
+              <span className="rounded bg-secondary px-1.5 py-0.5 text-xs tabular-nums">
+                目标 {currentRow.targetSec.toFixed(1)}s
+              </span>
+            ) : null}
+          </div>
+          <ActEditor act={current} targetSec={currentRow?.targetSec ?? 0} onChange={patchCurrent} />
+        </section>
+
+        <aside className="flex w-[220px] shrink-0 flex-col gap-3">
+          <Tabs
+            tabs={[
+              { value: 'score' as const, label: '评分' },
+              { value: 'material' as const, label: '素材' },
+              { value: 'variant' as const, label: '变体' },
+            ]}
+            value={panel}
+            onChange={setPanel}
+          />
+          {panel === 'score' ? (
+            <ScorePanel
+              hard={hard.total}
+              hardMax={hard.max}
+              hardDimensions={hard.dimensions}
+              soft={softScore}
+              softMax={softMax}
+              softDimensions={softDimensions}
+              softStaleReason={softStaleReason}
+              todos={todos}
+            />
+          ) : (
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {panel === 'material'
+                ? '素材库还没建。建好之后这里按当前幕自动检索你记过的书摘、数据和亲身经历——不够用的时候 AI 就会开始编。'
+                : '变体还没做。它会让同一幕生成几个不同写法并排比较，而不是覆盖掉你已经写好的。'}
+            </p>
+          )}
+        </aside>
       </div>
 
       <footer className="mt-4 flex items-center justify-between gap-4 border-t border-border pt-3">
