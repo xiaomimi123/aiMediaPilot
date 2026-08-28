@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { LayoutOverlay, LayoutControls, type LayoutState } from './layout-overlay';
+import { TimelineEditor, type EditorScene, type CaptionCue } from './timeline-editor';
+import type { SceneLayout } from '@/lib/video/scene-layout';
+import { parseSrtCues } from '@/lib/video/timeline';
 
 interface Beat { visibleState: string; development: string }
 interface Shot {
@@ -15,6 +18,16 @@ interface Shot {
   beats: Beat[];
 }
 interface Direction { concept: string; palette: string[]; shots: Shot[] }
+
+/**
+ * 每一幕的版面与已出的画面。按 shotId 存 —— 重新切分会换掉 shotId, 那时这些就
+ * 该失效, 用下标存会把旧版面错配到新场景上。
+ */
+type SceneState = Record<string, {
+  layout: SceneLayout;
+  /** Builder 的原始产物, 约 5KB —— 存这个而不是预览页(那份内联了 gsap, 79KB)。 */
+  html: string;
+}>;
 
 /**
  * 模板试做台。
@@ -97,28 +110,50 @@ export function TemplateStudio({
       const d = JSON.parse(raw);
       if (typeof d.text === 'string') setText(d.text);
       if (d.direction) setDirection(d.direction);
-      if (typeof d.html === 'string' && d.html) {
-        setHtml(d.html);
-        void rewrap(d.html, d.direction);
+      if (typeof d.srt === 'string') setSrt(d.srt);
+      if (typeof d.html === 'string') setHtml(d.html);
+      if (d.sceneState && typeof d.sceneState === 'object') {
+        setSceneState(d.sceneState);
+        setSelectedId(d.direction?.shots?.[0]?.shotId ?? null);
+        // 每幕的预览页按需重新包装(纯字符串拼接, 不花模型钱) —— 存 79KB × N 会爆
+        void rewrapAll(d.sceneState, d.direction);
       }
     } catch { /* 存坏了就当没有 */ } finally {
       setReady(true);
     }
+    // rewrapAll 故意不进依赖: 恢复只能跑一次, 进了依赖会因为函数每次渲染都是新的
+    // 而反复重跑, 每次都发 N 个包装请求
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templateId]);
 
   /** 只重新包装, 不重跑模型。恢复草稿和手改 HTML 都走这条。 */
-  async function rewrap(rawHtml: string, dir: Direction | null) {
-    const s = dir?.shots?.[0];
-    if (!s) return;
+  async function rewrapOne(shotOf: Shot, palette: string[], rawHtml: string): Promise<string | null> {
     try {
       const res = await fetch(`/api/v1/video-templates/${templateId}/studio/build`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ shot: s, palette: dir.palette, html: rawHtml }),
+        body: JSON.stringify({ shot: shotOf, palette, html: rawHtml }),
       });
       const body = await res.json();
-      if (res.ok && body?.success) setPreview(body.data.preview);
-    } catch { /* 恢复失败不打扰, 点一下「出画面」就有了 */ }
+      return res.ok && body?.success ? (body.data.preview as string) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** 恢复草稿后把每一幕的预览页重新包一次。逐个跑, 不并发 —— 这只是字符串拼接。 */
+  async function rewrapAll(st: SceneState, dir: Direction | null) {
+    if (!dir) return;
+    for (const shotOf of dir.shots) {
+      const raw = st[shotOf.shotId]?.html;
+      if (!raw) continue;
+      const wrapped = await rewrapOne(shotOf, dir.palette, raw);
+      if (wrapped) {
+        setPreviews((p) => ({ ...p, [shotOf.shotId]: wrapped }));
+        // 第一幕顺便填进「4 · 预览」那一块, 保持原来的行为
+        if (shotOf.shotId === dir.shots[0]?.shotId) setPreview(wrapped);
+      }
+    }
   }
 
   /**
@@ -137,6 +172,11 @@ export function TemplateStudio({
    * 出片时真正被消费的是模板里的值。存在草稿里会让「试做台上调好了」和「真出片
    * 用的」变成两回事, 那正是这一页要消灭的东西。
    */
+  const [sceneState, setSceneState] = useState<SceneState>({});
+  /** shotId → 包装好的预览页。纯派生, 不进草稿 —— 一份 79KB, 存了就爆。 */
+  const [previews, setPreviews] = useState<Record<string, string>>({});
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [srt, setSrt] = useState('');
   const [layout, setLayout] = useState<LayoutState>(initialLayout);
   const [savedLayout, setSavedLayout] = useState<LayoutState>(initialLayout);
   const layoutDirty = JSON.stringify(layout) !== JSON.stringify(savedLayout);
@@ -166,9 +206,12 @@ export function TemplateStudio({
   useEffect(() => {
     if (!ready) return;
     try {
-      localStorage.setItem(STORE_KEY(templateId), JSON.stringify({ text, direction, html }));
+      localStorage.setItem(
+        STORE_KEY(templateId),
+        JSON.stringify({ text, direction, html, srt, sceneState }),
+      );
     } catch { /* 满了就算了, 不打扰 */ }
-  }, [ready, templateId, text, direction, html]);
+  }, [ready, templateId, text, direction, html, srt, sceneState]);
 
   const shot = direction?.shots[current] ?? null;
 
@@ -185,9 +228,20 @@ export function TemplateStudio({
       if (!res.ok || !body?.success) { setError(body?.message ?? '切分失败'); return; }
       setDirection(body.data.direction);
       setCurrent(0);
-      // 换了分镜, 旧画面对不上了
+      setSrt(body.data.srt ?? '');
+      // 换了分镜, 旧画面和旧版面都对不上了 —— shotId 变了, 留着会错配
       setHtml('');
       setPreview('');
+      setSceneState(
+        Object.fromEntries(
+          (body.data.direction.shots as Shot[]).map((s: Shot) => [
+            s.shotId,
+            // 默认内容全屏 = 原来的挖空行为, 不擅自替用户改版面
+            { layout: 'content-full' as SceneLayout, html: '' },
+          ]),
+        ),
+      );
+      setSelectedId(body.data.direction.shots[0]?.shotId ?? null);
     } catch {
       setError('切分失败，请检查网络');
     } finally { setBusy(''); }
@@ -212,6 +266,13 @@ export function TemplateStudio({
       if (!res.ok || !body?.success) { setError(body?.message ?? '出画面失败'); return; }
       setHtml(body.data.html);
       setPreview(body.data.preview);
+      if (shot) {
+        setSceneState((st) => ({
+          ...st,
+          [shot.shotId]: { layout: st[shot.shotId]?.layout ?? 'content-full', html: body.data.html },
+        }));
+        setPreviews((p) => ({ ...p, [shot.shotId]: body.data.preview }));
+      }
       if (!body.data.gsapInlined) {
         setWarn('这份 HTML 没有按契约引用 gsap.min.js —— 预览能看，但真渲染时会失败。');
       }
@@ -414,91 +475,68 @@ export function TemplateStudio({
         </section>
       ) : null}
 
-      {/* 4 预览 */}
-      {preview ? (
+      {/* 4 编辑台 —— 时间线。它本身就是预览, 不再单独给一块 */}
+      {direction ? (
         <section className="mb-6">
-          <h2 className="text-base font-semibold">4 · 预览</h2>
+          <h2 className="text-base font-semibold">4 · 编辑台</h2>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            1920×1080 等比缩放，循环播放。这就是渲染时逐帧截的那张画面。
+            拖时间线，停在哪一刻就看哪一刻。点场景块选中它，下面切这一幕的版面——
+            <span className="text-foreground">版面是逐场景的</span>，讲道理时人物全屏、
+            摆证据时内容占大半、演示时录屏铺满你缩成圆窗。画面上的框和出片时 ffmpeg 叠的是同一套坐标。
           </p>
-          {warn ? <p className="mt-1 text-xs text-destructive">{warn}</p> : null}
-          {/*
-            aspect-video 保持 16:9 —— 拉伸的预览判断不了构图。
-            `@container` 让叠加层里的 cqw 字号跟着这个盒子的宽度走。
-          */}
-          <div
-            ref={stageRef}
-            // containerType 直接写内联: Tailwind 的 @container 要装插件, 而这里只需
-            // 要一个容器上下文, 好让叠加层的 cqw 字号跟着这个盒子的宽度走
-            style={{ containerType: 'inline-size' }}
-            className="relative mt-2 aspect-video w-full overflow-hidden rounded-md border border-border bg-black"
-          >
-            <iframe
-              ref={iframeRef}
-              srcDoc={preview}
-              title="镜头预览"
-              sandbox="allow-scripts"
-              // 固定 1920×1080 再整体缩放: 页面本身就是按这个尺寸写死的,
-              // 直接把 iframe 拉小只会截掉右边和下边, 不会缩小内容
-              style={{
-                width: 1920,
-                height: 1080,
-                transform: `scale(${scale})`,
-                transformOrigin: 'top left',
-                border: 0,
-              }}
-              className="absolute left-0 top-0"
-            />
-
-            {/* 版面叠加: 用和 ffmpeg 相同的坐标算法, 见 layout-overlay.tsx */}
-            <LayoutOverlay
+          <div className="mt-3">
+            <TimelineEditor
+              scenes={direction.shots.map((s): EditorScene => ({
+                id: s.shotId,
+                startMs: s.startMs,
+                endMs: s.endMs,
+                label: s.claim.slice(0, 12) || s.shotId,
+                claim: s.claim,
+                layout: sceneState[s.shotId]?.layout ?? 'content-full',
+                previewHtml: previews[s.shotId] ?? '',
+              }))}
+              captions={parseSrtCues(srt)}
               frame={frame}
-              state={layout}
-              sampleText={shot?.claim?.slice(0, 18) || '这里是一行示例字幕'}
+              onSelect={(id) => {
+                setSelectedId(id);
+                const i = direction.shots.findIndex((s) => s.shotId === id);
+                if (i >= 0) setCurrent(i);
+              }}
+              onLayoutChange={(id, l) =>
+                setSceneState((st) => ({
+                  ...st,
+                  [id]: { layout: l, html: st[id]?.html ?? '' },
+                }))
+              }
+              captionStyle={{
+                on: layout.captionOn,
+                fontSize: layout.fontSize,
+                marginV: layout.marginV,
+                primaryColor: layout.primaryColor,
+                outlineColor: layout.outlineColor,
+                outlineWidth: layout.outlineWidth,
+              }}
             />
-          </div>
-
-          <div className="mt-2 flex gap-3 text-xs">
-            <button
-              type="button"
-              onClick={() => iframeRef.current?.contentWindow?.postMessage({ type: 'preview-play' }, '*')}
-              className="text-muted-foreground underline underline-offset-4 hover:text-foreground"
-            >
-              播放
-            </button>
-            <button
-              type="button"
-              onClick={() => iframeRef.current?.contentWindow?.postMessage({ type: 'preview-pause' }, '*')}
-              className="text-muted-foreground underline underline-offset-4 hover:text-foreground"
-            >
-              暂停
-            </button>
-            <button
-              type="button"
-              onClick={() => iframeRef.current?.contentWindow?.postMessage({ type: 'preview-seek', t: 0 }, '*')}
-              className="text-muted-foreground underline underline-offset-4 hover:text-foreground"
-            >
-              回到开头
-            </button>
           </div>
         </section>
       ) : null}
 
-      {/* 5 版面 */}
-      {preview ? (
+      {/* 5 字幕样式 */}
+      {direction ? (
         <section className="mb-6">
-          <h2 className="text-base font-semibold">5 · 版面</h2>
+          <h2 className="text-base font-semibold">5 · 字幕样式</h2>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            字幕和口播小窗按<span className="text-foreground">真实成片坐标</span>画在上面的预览里——
-            用的是 ffmpeg 烧字幕和叠小窗时的同一套算法。
-            这几项是<span className="text-foreground">模板配置</span>，改完存回模板，出片时直接生效。
+            改这里，上面编辑台里的字幕会跟着变——用的是 ffmpeg 烧字幕时的同一套坐标算法。
+            字号是<span className="text-foreground">画面像素</span>，不是抽象档位。
+            这几项是<span className="text-foreground">模板配置</span>，存回模板后出片直接生效。
           </p>
           <div className="mt-3">
             <LayoutControls
               state={layout}
               onChange={(patch) => setLayout({ ...layout, ...patch })}
               frame={frame}
-              showPip={deliveryMode === 'talking-head-broll'}
+              // 口播位置改成逐场景选(编辑台里的版面模式), 不再是模板级的四角小窗
+              showPip={false}
             />
           </div>
           <div className="mt-3 flex items-center gap-3">
