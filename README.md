@@ -73,6 +73,27 @@ npm run worker:dev  # 只起 worker
 **不要在 dev 运行时跑 `npm run build`** —— 构建产物会覆盖 dev 的 chunk, 页面白屏报
 `Cannot find module './vendor-chunks/next.js'`。清 `.next` 重启即可。
 
+### 每晚回采抖音数据
+
+```bash
+sh scripts/install-collect-cron.sh            # 装定时任务(每晚 20:00)
+sh scripts/install-collect-cron.sh uninstall  # 卸载
+npm run collect:douyin                        # 手动跑一次
+```
+
+日志在 `logs/collect-douyin.log`。依赖 **ego lite**(共享已登录的浏览器状态),
+**全程只读** —— 只 GET 作品列表接口, 没有任何写操作。
+
+**用 launchd 而不是应用内队列**: 队列要 worker 在跑, 而 worker 需要手动启动 ——
+这个项目已经因为它静默不跑吃过大亏。脚本直接写库, 连 web server 都不用开。
+
+抓 0 条时**判定为异常并拒绝写库**: 那基本是登录态失效, 而不是账号真的没作品;
+照常写库只会把 fetchedAt 白白刷新, 让人以为回采还在正常跑。
+
+两个只有分开管道才暴露的坑(都写在脚本注释里): 异步 `execFile` 不支持 `input`
+选项(会一直等 stdin 到超时); ego 的 `cliLog` 写的是 **stderr 不是 stdout**,
+手跑时两个流混在终端上完全看不出来。
+
 ### 健康检查
 
 `GET /api/v1/health` 返回 Redis 连接状态、各队列积压、worker 在线数与最小空闲秒数。

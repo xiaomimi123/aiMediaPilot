@@ -28,3 +28,4 @@ video-productions/
 /content-assets/ 那种不锚定写法 —— 源码里同样存在
 # src/app/api/v1/video-templates/、tests/api/video-templates/ 目录, 不锚定会把它们也吃掉。
 /video-templates/
+logs/

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
-import { shouldCountByDefault } from '@/lib/works/model';
+import { importWorks } from '@/lib/works/import';
 
 const WorkSchema = z.object({
   externalId: z.string().min(1).max(64),
@@ -35,12 +35,7 @@ export async function GET() {
   return ok({ works });
 }
 
-/**
- * 导入回采到的作品。
- *
- * **按 externalId upsert 而不是新增**: 播放量会随时间涨, 重复回采要更新同一条而不是
- * 堆出多份快照。已有记录的 `counted` 不覆盖 —— 那是用户的判断, 回采不该把它冲掉。
- */
+/** 导入回采到的作品。入库规则见 lib/works/import.ts。 */
 export async function POST(req: Request) {
   let raw: unknown;
   try {
@@ -52,42 +47,6 @@ export async function POST(req: Request) {
   if (!parsed.success) return fail(`作品数据不合法: ${parsed.error.issues[0]?.message ?? ''}`, 400);
 
   const user = await getOrCreateDefaultUser();
-  const { platform, works } = parsed.data;
-
-  let created = 0;
-  let updated = 0;
-
-  for (const w of works) {
-    const publishedAt = new Date(w.createTime * 1000);
-    const metrics = {
-      title: w.title, caption: w.caption, hashtags: w.hashtags, isPrivate: w.isPrivate,
-      url: w.url, publishedAt, durationSec: w.durationSec,
-      play: w.play, digg: w.digg, comment: w.comment, collect: w.collect, share: w.share,
-      fetchedAt: new Date(),
-    };
-    const existing = await prisma.publishedWork.findUnique({
-      where: { userId_platform_externalId: { userId: user.id, platform, externalId: w.externalId } },
-      select: { id: true },
-    });
-    if (existing) {
-      await prisma.publishedWork.update({ where: { id: existing.id }, data: metrics });
-      updated += 1;
-    } else {
-      await prisma.publishedWork.create({
-        data: {
-          ...metrics,
-          userId: user.id,
-          platform,
-          externalId: w.externalId,
-          // 隐藏作品不进分析: 它们 0 播放不是内容问题, 混进来会把中位数拽到 0
-          counted:
-            !w.isPrivate &&
-            shouldCountByDefault({ title: `${w.title} ${w.caption}`, play: w.play, publishedAt }),
-        },
-      });
-      created += 1;
-    }
-  }
-
-  return ok({ created, updated, total: created + updated });
+  const result = await importWorks(prisma, user.id, parsed.data.platform, parsed.data.works);
+  return ok(result);
 }
