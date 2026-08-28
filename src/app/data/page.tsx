@@ -6,6 +6,7 @@ import { buildBaseline, BASELINE_YEAR_FROM } from '@/lib/works/model';
 import { buildHypotheses, adviseNextVideo } from '@/lib/works/insight';
 import { WorkList } from '@/components/data/work-list';
 import { WorkInsight } from '@/components/data/work-insight';
+import { isUnwritten, readActsFromDraftOutput } from '@/lib/cockpit/script-score';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +27,7 @@ export default async function DataPage() {
       orderBy: { publishedAt: 'desc' },
       select: {
         id: true, title: true, caption: true, hashtags: true, url: true, publishedAt: true,
-        play: true, digg: true, comment: true, collect: true, counted: true,
+        play: true, digg: true, comment: true, collect: true, counted: true, scriptDraftId: true,
         durationSec: true, isPrivate: true, fetchedAt: true,
       },
     }),
@@ -36,6 +37,18 @@ export default async function DataPage() {
   ]);
 
   const baseline = buildBaseline(works.map((w) => ({ play: w.play, counted: w.counted })));
+
+  // 可认领的稿子。打不出分的也列出来但标注 —— 藏起来会让人以为"这份稿子不见了"
+  const drafts = await prisma.scriptDraft.findMany({
+    where: { userId: user.id, archivedAt: null },
+    orderBy: { createdAt: 'desc' },
+    take: 60,
+    select: { id: true, topic: true, output: true },
+  });
+  const draftOptions = drafts.map((d) => {
+    const acts = readActsFromDraftOutput(d.output);
+    return { id: d.id, topic: d.topic, scorable: acts !== null && !isUnwritten(acts) };
+  });
   const fetchedAt = works[0]?.fetchedAt ?? null;
   const hiddenCount = works.filter((w) => w.isPrivate).length;
 
@@ -132,8 +145,10 @@ export default async function DataPage() {
           comment: w.comment,
           collect: w.collect,
           counted: w.counted,
+          scriptDraftId: w.scriptDraftId,
         }))}
         yearFrom={BASELINE_YEAR_FROM}
+        drafts={draftOptions}
       />
 
       <Link href="/calibration" className="mt-4 inline-block text-xs underline underline-offset-4">

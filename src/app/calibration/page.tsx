@@ -2,6 +2,9 @@ import { prisma } from '@/lib/prisma';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { PageShell } from '@/components/layout/page-shell';
 import { buildLoopStatus, CALIBRATION_MIN_SAMPLES } from '@/lib/cockpit/feedback-loop';
+import { assessCalibration } from '@/lib/works/calibration';
+import { isUnwritten, readActsFromDraftOutput, scoreHardDimensions } from '@/lib/cockpit/script-score';
+import Link from 'next/link';
 import { HARD_WEIGHTS } from '@/lib/cockpit/script-score';
 import { SOFT_DIMENSION_META } from '@/lib/llm/prompts/script-soft-score';
 import { LoopStatus } from '@/components/overview/loop-status';
@@ -22,26 +25,107 @@ const HARD_LABELS: Record<string, string> = {
  */
 export default async function CalibrationPage() {
   const user = await getOrCreateDefaultUser();
-  const [scriptCount, publishedCount] = await Promise.all([
+  const [scriptCount, publishedCount, linkedWorks, claimable] = await Promise.all([
     prisma.scriptDraft.count({ where: { userId: user.id, archivedAt: null } }),
     prisma.cockpitContent.count({ where: { userId: user.id, publicationStatus: 'published' } }),
+    // 已认领配对: 回采作品 ← 用哪份稿子发的。平台不返回这层关系, 只能由人认领。
+    prisma.publishedWork.findMany({
+      where: { userId: user.id, scriptDraftId: { not: null } },
+      select: { id: true, title: true, play: true, publishedAt: true, scriptDraftId: true },
+      orderBy: { publishedAt: 'desc' },
+    }),
+    prisma.publishedWork.count({
+      where: { userId: user.id, scriptDraftId: null, play: { gt: 0 } },
+    }),
   ]);
 
-  // 回采数据当前没有任何来源, 如实按 0 算
-  const measuredCount = 0;
-  const layers = buildLoopStatus({ scriptCount, publishedCount, measuredCount });
+  // 逐条取预测分。稿子打不出分(非六幕/还没写)的配对不算数 —— 没有预测分就没有
+  // 可对照的东西, 计进去只会让「样本够了」变成谎话。
+  const drafts = linkedWorks.length
+    ? await prisma.scriptDraft.findMany({
+        where: { id: { in: linkedWorks.map((w) => w.scriptDraftId as string) } },
+        select: { id: true, topic: true, output: true },
+      })
+    : [];
+  const draftById = new Map(drafts.map((d) => [d.id, d]));
+
+  const pairs = linkedWorks.map((w) => {
+    const d = draftById.get(w.scriptDraftId as string);
+    const acts = d ? readActsFromDraftOutput(d.output) : null;
+    const scorable = acts !== null && !isUnwritten(acts);
+    const hard = scorable
+      ? scoreHardDimensions(acts, acts.reduce((n, a) => n + a.targetSec, 0))
+      : null;
+    return {
+      workId: w.id,
+      title: w.title,
+      play: w.play,
+      publishedAt: w.publishedAt.toISOString().slice(0, 10),
+      topic: d?.topic ?? '(稿子已删除)',
+      predictedHard: hard ? hard.total : null,
+      hardMax: hard ? hard.max : 0,
+    };
+  });
+
+  const readiness = assessCalibration(pairs, claimable, CALIBRATION_MIN_SAMPLES);
+  const layers = buildLoopStatus({ scriptCount, publishedCount, measuredCount: readiness.paired });
 
   return (
     <PageShell title="校准" description="把预测分和实际表现放进同一张图，让评分模型逐渐变准。">
-      <section className="mb-6 rounded-lg border border-destructive/40 bg-destructive/5 p-4">
-        <p className="text-sm font-medium text-destructive">
-          校准尚未开始运行，样本 0 条
+      {/*
+        样本数曾经是硬编码的 0。那个 0 当时是对的(确实一条都没有), 但它意味着
+        **哪怕你真发了一条系统写的稿子, 校准也永远不会自己接上** —— 因为回采回来的
+        作品和库里的稿子之间原本没有任何对应关系。现在读真数。
+      */}
+      <section
+        className={
+          readiness.ready
+            ? 'mb-6 rounded-md border border-border bg-card p-4'
+            : 'mb-6 rounded-md border-l-2 border-destructive/70 bg-destructive/[0.06] px-4 py-3'
+        }
+      >
+        <p className={readiness.ready ? 'text-sm font-medium' : 'text-sm font-medium text-destructive'}>
+          {readiness.ready
+            ? `样本够了：${readiness.paired} 条配对`
+            : `校准还跑不起来，配对样本 ${readiness.paired} 条`}
         </p>
         <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-          重拟合权重需要至少 {CALIBRATION_MIN_SAMPLES} 条「已发布 + 已回采」的内容。
-          当前发布 {publishedCount} 条。这是三层回路里的慢回路，它在等中回路，而中回路在等出片链路。
+          校准要的是「预测分 vs 实际表现」的配对，至少 {CALIBRATION_MIN_SAMPLES} 条。
+          {readiness.missing > 0 ? ` 还差 ${readiness.missing} 条。` : ' '}
+          平台不会告诉系统哪条作品是用哪份稿子发的，只能你自己认领。
         </p>
+        {readiness.claimable > 0 ? (
+          <p className="mt-2 text-sm">
+            <Link href="/data" className="underline underline-offset-4">
+              去数据页认领
+            </Link>
+            <span className="text-muted-foreground">
+              {' '}—— 有 {readiness.claimable} 条有播放量的作品还没关联稿子。
+            </span>
+          </p>
+        ) : null}
       </section>
+
+      {pairs.length > 0 ? (
+        <section className="mb-6 rounded-md border border-border bg-card p-4">
+          <h2 className="text-sm font-medium">已认领的配对</h2>
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {pairs.map((p) => (
+              <li key={p.workId} className="flex flex-wrap items-baseline gap-x-3 text-xs">
+                <span className="min-w-0 flex-1 truncate">{p.title || '(无标题)'}</span>
+                <span className="tabular-nums text-muted-foreground">{p.play.toLocaleString()} 播</span>
+                <span className="tabular-nums">
+                  {p.predictedHard === null ? (
+                    <span className="text-destructive">稿子打不出分</span>
+                  ) : (
+                    `预测硬指标 ${p.predictedHard}/${p.hardMax}`
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <LoopStatus layers={layers} />
 

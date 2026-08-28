@@ -923,6 +923,19 @@ top3, 注入两处——①研究层 `curatedParts` **最前**(亲身经历 > �
 
 API: `POST/GET /api/v1/topics`、`PATCH /api/v1/topics/[id]`、`POST/GET /api/v1/scripts/[id]/distributions`、`DELETE /api/v1/distributions/[id]`。 (旧工作台看板专用的 `GET /api/v1/workbench` 聚合接口已随看板一起删除。)
 
+### 数据与校准 (`/data`, `/calibration`)
+
+回采走独立脚本 + launchd (`scripts/collect-douyin.ts`, 每晚 20:00), 不走队列 —— 队列要 worker 在跑, 而这个项目已经因为 worker 静默不跑吃过大亏; 这个脚本直接写库, 连 web server 都不需要开着。全程只读, 只 GET 用户自己创作者后台的作品列表。
+
+**校准曾经永远接不上, 原因不是「还没发够」。** `/calibration` 里的样本数是硬编码的 `0`, 注释写着「回采数据当前没有任何来源」—— 那句话在写下时是对的, 但它意味着**哪怕你真发了一条系统写的稿子, 校准也不会自己接上**。
+
+真正的缺口在数据层: `PublishedWork` 没有指向 `ScriptDraft` 的字段。**平台不会告诉系统哪条作品是用哪份稿子发的**, 而校准要的正是这个配对(「预测分 vs 实际表现」)。所以:
+
+- `PublishedWork.scriptDraftId` 由**人来认领** —— `/data` 的作品列表上逐条选。0 播放的隐藏作品不给关联入口, 免得白填。
+- `PATCH /api/v1/works/[id]` 同时接受 `counted` 和 `scriptDraftId`, 两者都可选但至少给一个 —— 空补丁静默返回 200 会让调用方以为改成功了。关联的稿子会校验归属。
+- `assessCalibration()` (`src/lib/works/calibration.ts`) 只把**打得出分**的配对算作有效样本: 关联了一份还没写的骨架稿不算数, 否则「样本够了」是句谎话。
+- 校准页现在报真数, 并给出可执行的下一步(「有 N 条有播放量的作品还没关联稿子」), 而不只是说「还不能工作」。
+
 ### 拆解 (`/teardowns`)
 
 拆同赛道创作者的结构、钩子和「他怎么把自己立起来的」。两条入口:

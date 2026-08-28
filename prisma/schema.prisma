@@ -480,6 +480,11 @@ model PublishedWork {
 
   /// 是否属于当前赛道(AI 类), 计入分析。默认由关键词判, 用户可逐条改判。
   counted   Boolean  @default(false)
+  /// 二十三期: 这条作品是用哪份稿子发的 → ScriptDraft。
+  /// 校准要的是「预测分 vs 实际表现」的配对, 而回采回来的作品和库里的稿子之间
+  /// 原本没有任何对应关系 —— 缺了这个字段, 校准永远接不上, 哪怕你真发了一条
+  /// 系统写的稿子。平台不返回这层关系, 只能由人来认领。
+  scriptDraftId String?
   /// 最近一次回采时间 —— 数字会随时间涨, 要知道这份快照多旧
   fetchedAt DateTime @default(now())
   createdAt DateTime @default(now())
