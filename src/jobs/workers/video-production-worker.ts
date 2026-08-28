@@ -56,7 +56,14 @@ import type { DeliveryMode } from '@/lib/cockpit/model';
 import { runPackaging } from '@/lib/video-production/packaging';
 import { buildPackagingOptions } from '@/lib/video-production/packaging-input';
 
-type JobData = { videoProductionId: string; mode: 'preview' | 'master' };
+/**
+ * `recompose`(二十三期): 只重新合成, 不重新生成。
+ *
+ * 改版面时**绝不能重跑整个预览**: 导演会重新切镜, shotId 全变 —— 刚存的逐场景
+ * 版面立刻变成孤儿, 而且白烧几分钟的 LLM 和逐帧截图。改版面只影响合成那一步,
+ * 分镜和 B-roll 片段原样复用, 几秒钟就完。
+ */
+type JobData = { videoProductionId: string; mode: 'preview' | 'master' | 'recompose' };
 
 /** setStatus 的类型：内层各 delivery-mode handler 共用同一个闭包实例，不重复实现落库逻辑。 */
 type SetStatusFn = (status: string, extra?: Record<string, unknown>) => Promise<unknown>;
@@ -896,6 +903,12 @@ async function handleProduce(job: Job<JobData>) {
     // 外层按交付模式(vp.mode，与本函数的 preview/master 渲染档是两个不同概念)分岔，
     // 各交付模式的具体流程封装成独立函数——ppt-narration、talking-head-broll 与
     // illustration-tts(十九期新增)互不干扰，照此形状新增分支不需要改动这两个函数。
+    if (mode === 'recompose') {
+      // 只重新合成 —— 分镜和 B-roll 原样复用, 见 handleRecompose 的说明
+      await handleRecompose(vp, setStatus);
+      return;
+    }
+
     if (vp.mode === 'talking-head-broll') {
       await handleTalkingHeadBroll(vp, mode, setStatus, outputFileName, readyStatus, outputField);
     } else if (vp.mode === 'ppt-narration') {
@@ -985,6 +998,62 @@ export function startVideoProductionWorker() {
     console.log('[video-production] completed', job.id);
   });
   return worker;
+}
+
+/**
+ * 只重新合成(二十三期)。
+ *
+ * 复用 `direction.json` 和已经渲好的 `shots/N/clip.mp4`, 按当前 `sceneLayouts`
+ * 重跑一次合成。**不碰导演、不碰 Builder、不碰 ASR** —— 它们的产物和版面无关,
+ * 而重跑它们会让 shotId 变掉、把刚存的版面变成孤儿。
+ */
+async function handleRecompose(
+  vp: {
+    id: string; productionRoot: string; sourceVideoPath: string | null;
+    sceneLayouts: unknown; templateId: string | null;
+  },
+  setStatus: SetStatusFn,
+): Promise<void> {
+  if (!vp.sourceVideoPath) throw new Error('没有出镜视频');
+  const sourceVideoPath = vp.sourceVideoPath;
+
+  let direction: { shots: { shotId: string; startMs: number; endMs: number }[] };
+  try {
+    direction = JSON.parse(await fs.readFile(path.join(vp.productionRoot, 'direction.json'), 'utf-8'));
+  } catch {
+    throw new Error('没有分镜, 先跑一次预览');
+  }
+
+  await setStatus('assembling');
+  const layoutMap = new Map(
+    ((vp.sceneLayouts as { shotId?: string; layout?: string }[] | null) ?? []).map(
+      (x) => [String(x.shotId ?? ''), String(x.layout ?? '')],
+    ),
+  );
+
+  const { width, height } = await probeVideoDimensions(sourceVideoPath);
+  const { durationSec } = await probeVideo(sourceVideoPath);
+  const compositedPath = path.join(vp.productionRoot, 'composited.mp4');
+
+  await execFileAsyncCompose(
+    buildSceneComposeArgs({
+      sourceVideoPath,
+      outputPath: compositedPath,
+      frame: { width, height },
+      sourceDurationMs: Math.round(durationSec * 1000),
+      segments: direction.shots.map((shot, i) => ({
+        startMs: shot.startMs,
+        endMs: shot.endMs,
+        // 片段路径按既有的目录约定重建 —— 它们已经渲好了, 不重渲
+        clipPath: path.join(shotDir(vp.productionRoot, i), 'clip.mp4'),
+        layout: (layoutMap.get(shot.shotId) ?? 'content-full') as SceneLayout,
+      })),
+    }),
+  );
+
+  const outputPath = path.join(vp.productionRoot, 'preview.mp4');
+  await fs.copyFile(compositedPath, outputPath);
+  await setStatus('preview_ready', { previewPath: outputPath });
 }
 
 /**

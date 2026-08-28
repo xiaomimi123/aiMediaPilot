@@ -8,6 +8,8 @@ import {
   PRODUCTION_STAGES, isInFlight, stageHint, stageIndex, waitingOn,
 } from '@/lib/cockpit/production-stage';
 import { cn } from '@/lib/utils';
+import { FilmLayoutEditor } from './film-layout-editor';
+import type { SceneLayout } from '@/lib/video/scene-layout';
 
 interface Film {
   id: string;
@@ -23,6 +25,11 @@ interface Film {
   scriptDraftId: string | null;
   /** 已登记的发布链接。 */
   publishedUrl: string | null;
+  /** 分镜(来自 direction.json)。预览跑完才有 —— 空数组时不显示版面编辑。 */
+  scenes: { shotId: string; startMs: number; endMs: number; claim: string }[];
+  captions: { startMs: number; endMs: number; text: string }[];
+  savedLayouts: Record<string, SceneLayout>;
+  frame: { width: number; height: number };
 }
 
 /**
@@ -39,6 +46,13 @@ export function FilmDetail({ initial }: { initial: Film }) {
   const [film, setFilm] = useState(initial);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  /**
+   * 版面改过但还没按新版面重渲。
+   *
+   * 这时候直接确认导出的话, 正式渲染会用新版面, 而你看过的预览是旧版面的 ——
+   * 等于没预览。所以按钮旁边要明说, 并把「重做预览」摆在前面。
+   */
+  const [layoutStale, setLayoutStale] = useState(false);
   const [publishUrl, setPublishUrl] = useState('');
   const [publishNote, setPublishNote] = useState('');
 
@@ -202,11 +216,35 @@ export function FilmDetail({ initial }: { initial: Film }) {
         </section>
       ) : null}
 
+      {film.scenes.length > 0 ? (
+        <FilmLayoutEditor
+          productionId={film.id}
+          scenes={film.scenes}
+          captions={film.captions}
+          frame={film.frame}
+          initialLayouts={film.savedLayouts}
+          editable={waitingOn(film.status) === 'you'}
+          onNeedsRerender={setLayoutStale}
+        />
+      ) : null}
+
       <div className="flex flex-wrap items-center gap-2">
+        {layoutStale && film.status === 'preview_ready' ? (
+          <Button variant="outline" disabled={busy !== ''} onClick={() => void post('/recompose', 'recompose')}>
+            {busy === 'recompose' ? '合成中…' : '按新版面重新合成'}
+          </Button>
+        ) : null}
+
         {film.status === 'preview_ready' ? (
           <Button disabled={busy !== ''} onClick={() => void post('/approve', 'approve')}>
             {busy === 'approve' ? '提交中…' : '确认导出'}
           </Button>
+        ) : null}
+
+        {layoutStale && film.status === 'preview_ready' ? (
+          <span className="text-xs text-destructive">
+            版面改过但还没重渲——现在导出的话，成片会是新版面，而你看过的预览是旧的。
+          </span>
         ) : null}
 
         {canStartProduction(film.status) ? (

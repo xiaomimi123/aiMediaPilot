@@ -44,6 +44,7 @@ export function TimelineEditor({
   onLayoutChange,
   onSelect,
   captionStyle,
+  contentLabel,
 }: {
   scenes: EditorScene[];
   captions: CaptionCue[];
@@ -59,6 +60,14 @@ export function TimelineEditor({
     outlineColor: string;
     outlineWidth: number;
   };
+  /**
+   * 内容区没有实时预览时显示的说明。
+   *
+   * 试做台里内容区放的是 Builder 刚出的 HTML(实时可放); 而真实出片任务的画面
+   * 已经渲成 mp4 了, 浏览器里没有那份 HTML —— 这时候画的是**版面框**, 说明文字
+   * 得跟着换, 不能还写「这一幕还没出画面」让人以为出错了。
+   */
+  contentLabel?: string;
 }) {
   const total = totalMs(scenes);
   const [playhead, setPlayhead] = useState(0);
@@ -211,7 +220,7 @@ export function TimelineEditor({
               height: pct(rects.content.height, 'y'),
             }}
           >
-            这一幕还没出画面
+            {contentLabel ?? '这一幕还没出画面'}
           </div>
         ) : null}
 
