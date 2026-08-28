@@ -19,9 +19,17 @@ describe('NAV_GROUPS', () => {
     for (const i of NAV_ITEMS) {
       expect(typeof i.ready).toBe('boolean');
     }
-    // 出片链路刚跑通一次、复盘链路一条都没有
-    expect(NAV_ITEMS.find((i) => i.href === '/data')!.ready).toBe(false);
+    // 回采链路通了(每晚 20:00 的 launchd 任务在跑, 101 条作品), 所以 /data 是 true。
+    // 这条断言原本钉的是 false, 注释写着「复盘链路一条都没有」—— 链路通了就得改,
+    // 否则这个标记会变成一个骗人的红点。
+    expect(NAV_ITEMS.find((i) => i.href === '/data')!.ready).toBe(true);
     expect(NAV_ITEMS.find((i) => i.href === '/scripts')!.ready).toBe(true);
+
+    // 仍然是 false 的三项, 各自卡在不同的地方 —— 都不是代码没写完:
+    // 校准等配对样本、钩子库等发布后的真实留存、素材库等你自己录。
+    for (const href of ['/calibration', '/hooks', '/materials']) {
+      expect(NAV_ITEMS.find((i) => i.href === href)!.ready).toBe(false);
+    }
   });
 });
 

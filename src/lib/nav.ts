@@ -58,7 +58,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { href: '/teardowns', label: '拆解', hint: '传视频自动转写, 拆结构、钩子与人设', ready: true },
       { href: '/hooks', label: '钩子库', hint: '前 3 秒的写法, 按实际留存排序', ready: false },
       { href: '/calibration', label: '校准', hint: '预测分 vs 实际表现, 让评分变准', ready: false },
-      { href: '/data', label: '数据', hint: '发布后回采曝光、互动与涨粉', ready: false },
+      { href: '/data', label: '数据', hint: '每晚 20:00 回采曝光、互动与涨粉', ready: true },
     ],
   },
 ];
