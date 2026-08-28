@@ -20,7 +20,6 @@ import type { VideoTemplateConfig } from '@/lib/video-template/model';
 const DELIVERY_LABELS: Record<VideoTemplateConfig['deliveryMode'], string> = {
   'ppt-narration': '图文口播',
   'talking-head-broll': '真人出镜 + B-roll',
-  'talking-head-overlay': '真人出镜 + 文字叠加',
   'illustration-tts': '插画配音',
 };
 
@@ -230,6 +229,55 @@ export function TemplateEditor({
             options={[{ v: 'on' as const, label: '常驻' }, { v: 'off' as const, label: '不显示' }]}
           />
         </Row>
+      </Section>
+
+      {/*
+        文字叠加和真人形象是**层**, 不是交付方式 —— 所以这一段对每种模式都显示。
+        第一版把它做成了第四种交付方式, 那是层级错误: 它只是口播视频的一种形式,
+        而真人形象将来要能加到任何模式上。
+      */}
+      <Section
+        title="真人形象与文字叠加"
+        hint="这两项和上面的交付方式正交：图文口播、真人出镜、插画配音都能开。"
+      >
+        <Row
+          label="文字叠加"
+          hint="出片后自动从口播里提关键词，按「关键词 ↓ 关键词」叠在画面上。会多花一次 LLM。"
+        >
+          <Choice
+            value={cfg.textOverlayEnabled ? 'on' : 'off'}
+            onChange={(v) => set('textOverlayEnabled', v === 'on')}
+            options={[{ v: 'on' as const, label: '开' }, { v: 'off' as const, label: '关' }]}
+          />
+        </Row>
+        {cfg.textOverlayEnabled ? (
+          <Row
+            label="人在画面哪侧"
+            hint="文字安全区靠它算：横屏人在右→字在左半边；竖屏→字在上方（人脸占中间，左右都贴脸）。不做人像识别——猜错的代价是字糊在脸上。"
+          >
+            <Choice
+              value={cfg.personSide}
+              onChange={(v) => set('personSide', v)}
+              options={[
+                { v: 'left' as const, label: '人在左' },
+                { v: 'center' as const, label: '人在中间' },
+                { v: 'right' as const, label: '人在右' },
+              ]}
+            />
+          </Row>
+        ) : null}
+        {cfg.deliveryMode === 'talking-head-broll' ? (
+          <Row
+            label="B-roll"
+            hint="关掉 = 全片就是你的出镜画面，视觉全靠文字叠加。也省掉最贵的那一圈：每镜一次 LLM + 一次逐帧截图。"
+          >
+            <Choice
+              value={cfg.brollEnabled ? 'on' : 'off'}
+              onChange={(v) => set('brollEnabled', v === 'on')}
+              options={[{ v: 'on' as const, label: '生成' }, { v: 'off' as const, label: '不生成' }]}
+            />
+          </Row>
+        ) : null}
       </Section>
 
       <Section

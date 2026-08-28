@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { PIP_POSITIONS, PIP_SCALE_MIN, PIP_SCALE_MAX, type PipPosition } from '@/lib/video/pip-layout';
+import { PERSON_SIDES, type PersonSide } from '@/lib/video/text-zone';
 import type { DeliveryMode } from '@/lib/cockpit/model';
 
 /**
@@ -82,6 +83,15 @@ export interface VideoTemplateConfig {
   pipScale: number;
   /** 小窗离画面边缘的像素距离。 */
   pipMargin: number;
+  /**
+   * 文字叠加层。和交付模式正交 —— 任何模式都能开。
+   * 参考片的风格 = brollEnabled:false + textOverlayEnabled:true。
+   */
+  textOverlayEnabled: boolean;
+  /** 拍摄时人在画面哪一侧。文字安全区靠它算, 不做人像识别。 */
+  personSide: PersonSide;
+  /** 关掉 = 只有真人 + 文字, 不生成 B-roll。 */
+  brollEnabled: boolean;
   captionStyle: CaptionStyle | null;  // null = 不烧字幕
   bgmPath: string | null;
   bgmVolume: number;                  // 0~1
@@ -104,7 +114,7 @@ export const VideoTemplateConfigSchema: z.ZodType<VideoTemplateConfig> = z.objec
   name: z.string().min(1).max(40),
   description: z.string().max(200),
   // 'manual' 不是模板的合法值 —— 模板一定驱动某条 AI 生成管线
-  deliveryMode: z.enum(['ppt-narration', 'talking-head-broll', 'talking-head-overlay', 'illustration-tts']),
+  deliveryMode: z.enum(['ppt-narration', 'talking-head-broll', 'illustration-tts']),
   visualStyle: z.enum(['card', 'illustration']),
   palette: z.array(z.string().regex(HEX_COLOR)).nullable(),
   voicePreset: z.object({ voiceType: z.string().optional(), resourceId: z.string().optional() }).nullable(),
@@ -141,6 +151,17 @@ export const VideoTemplateConfigSchema: z.ZodType<VideoTemplateConfig> = z.objec
   pipPosition: z.enum(PIP_POSITIONS),
   pipScale: z.number().min(PIP_SCALE_MIN).max(PIP_SCALE_MAX),
   pipMargin: z.number().int().min(0).max(400),
+  /**
+   * 文字叠加层。**和交付模式正交** —— 图文口播、知识长视频、插画配音都能开。
+   *
+   * 第一版把它做成了第四种交付模式, 那是层级错误: 它只是口播视频的一种形式,
+   * 而真人形象将来要能加到任何模式上。
+   */
+  textOverlayEnabled: z.boolean(),
+  /** 拍摄时人在画面哪一侧 —— 文字安全区靠它算。 */
+  personSide: z.enum(PERSON_SIDES),
+  /** 关掉 = 全片只有真人 + 文字, 不跑 B-roll 生成(参考片就是这个形态)。 */
+  brollEnabled: z.boolean(),
 });
 
 export function defaultCaptionStyle(): CaptionStyle {
@@ -170,9 +191,10 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
      *   不烧 BGM / 不加片头片尾 —— 参考片都没有
      * description 的三行会被当成右上角常驻声明烧进画面。
      */
-    name: '真人出镜 + 文字叠加',
+    name: '真人口播 · 文字叠加',
     description: '纯知识经验分享\n不售卖任何项目\n不招募任何人员',
-    deliveryMode: 'talking-head-overlay',
+    // 不是新的交付模式 —— 就是口播, 只是关掉 B-roll、开着文字叠加
+    deliveryMode: 'talking-head-broll',
     visualStyle: 'card',
     palette: null,
     voicePreset: null,
@@ -198,6 +220,9 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     pipPosition: 'br',
     pipScale: 0.25,
     pipMargin: 40,
+    textOverlayEnabled: true,
+    personSide: 'right',
+    brollEnabled: false,
   },
   {
     name: '图文口播',
@@ -221,6 +246,9 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     pipPosition: 'br',
     pipScale: 0.25,
     pipMargin: 40,
+    textOverlayEnabled: false,
+    personSide: 'right',
+    brollEnabled: true,
   },
   {
     name: '真人出镜 + B-roll',
@@ -244,6 +272,9 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     pipPosition: 'br',
     pipScale: 0.25,
     pipMargin: 40,
+    textOverlayEnabled: false,
+    personSide: 'right',
+    brollEnabled: true,
   },
   {
     name: '插画配音',
@@ -267,6 +298,9 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     pipPosition: 'br',
     pipScale: 0.25,
     pipMargin: 40,
+    textOverlayEnabled: false,
+    personSide: 'right',
+    brollEnabled: true,
   },
   {
     // 二十一期: 按同行参考视频拆解结论复刻
@@ -307,5 +341,8 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     pipPosition: 'br',
     pipScale: 0.25,
     pipMargin: 40,
+    textOverlayEnabled: false,
+    personSide: 'right',
+    brollEnabled: true,
   },
 ];

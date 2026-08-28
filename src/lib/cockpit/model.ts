@@ -116,17 +116,14 @@ export interface Review {
 /**
  * 交付模式。
  *
- * `talking-head-overlay`(二十三期)和 `talking-head-broll` 的区别是**有没有整条
- * 渲染管线**: broll 要 Director 切镜 + Builder 出 HTML + Chromium 逐帧截图 +
- * 挖空合成, 三分多钟; overlay 全片一镜到底, 只往真人画面上叠一层字, 几秒钟。
- * 拆参考片得到的结论是后者更贴近真实的口播视频, 见
- * `docs/superpowers/specs/2026-08-29-talking-head-overlay-style.md`。
+ * 二十三期把「文字叠加」和「真人形象」从这里**拆了出去** —— 它们是能加到任何
+ * 模式上的层(模板的 textOverlayEnabled / talkingHeadLayout / brollEnabled),
+ * 不是并列的第四种模式。第一版做成了第四种, 那是层级错误。
  */
 export type DeliveryMode =
   | 'manual'
   | 'ppt-narration'
   | 'talking-head-broll'
-  | 'talking-head-overlay'
   | 'illustration-tts';
 
 export interface ContentItem {

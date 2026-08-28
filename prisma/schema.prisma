@@ -531,6 +531,15 @@ model VideoTemplate {
   builderModel    String  @default("deepseek-chat") // Builder 用哪个模型: 排版吃能力
   /// 二十三期 真人出镜的合成方式: cutaway(顺序挖空, 老行为) | pip(画中画, 人一直在)
   talkingHeadLayout String @default("cutaway")
+  /// 二十三期 文字叠加层。**和交付模式正交** —— 图文口播、知识长视频、插画配音
+  /// 都能开, 不是某一种模式专属。第一版错做成了第四种交付模式, 用户指出那是
+  /// 层级错误: 它只是口播视频的一种形式, 而真人形象将来要能加到任何模式上。
+  textOverlayEnabled Boolean @default(false)
+  /// 拍摄时人在画面哪一侧 —— 文字安全区靠它算。不做人像识别(要 matting),
+  /// 猜错的代价是字直接糊在脸上, 所以由人设定。left|center|right
+  personSide        String  @default("right")
+  /// 内容源关掉 = 全片只有真人 + 文字(参考片就是这个形态), 不跑 B-roll 生成
+  brollEnabled      Boolean @default(true)
   pipPosition       String @default("br") // tl|tr|bl|br
   pipScale          Float  @default(0.25) // 小窗宽度占画面宽度
   pipMargin         Int    @default(40)   // 离边缘像素

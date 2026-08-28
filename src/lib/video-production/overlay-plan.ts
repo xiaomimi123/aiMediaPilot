@@ -1,4 +1,6 @@
 import { hexToAssColor, formatAssTimestamp } from './ass-captions';
+import { textSafeZone, slotsInZone, type PersonSide } from '@/lib/video/text-zone';
+import type { SceneLayout } from '@/lib/video/scene-layout';
 
 /**
  * 口播文字叠加(二十三期)。
@@ -51,22 +53,27 @@ export const REFERENCE_OVERLAY_STYLE: OverlayStyle = {
 /**
  * 槽位 → 画面坐标 + ASS 对齐锚点。
  *
- * **左半边是安全区**: 这个风格要求录制时人在右半边(规格里明写), 所以左侧永远
- * 干净。左列锚点用 `an4`(左中对齐), 文字从左边距开始往右排, 长短不一时左边缘
- * 对齐 —— 竖向堆叠成图解时, 左对齐才像一列, 居中会歪歪扭扭。
+ * **第一版把左半边写死成安全区**, 理由是参考片的人站在右边 —— 那是把一条片子的
+ * 拍摄习惯当成了系统前提。现在安全区由 `textSafeZone` 从画幅 + 版面 + 人在哪侧
+ * 算出来: 横屏人在右 → 左半边; 横屏人在左 → 右半边; 竖屏 → 上方一条带
+ * (人脸占中间, 左右都贴脸)。
+ *
+ * 安全区放不下五行时槽位会自动减少 —— 这时排在后面的槽位回退到最后一个可用行,
+ * 而不是溢出画面。
  */
 export function slotPosition(
   slot: OverlaySlot,
   frame: { width: number; height: number },
+  layout: SceneLayout = 'person-full',
+  personSide: PersonSide = 'right',
 ): { x: number; y: number; an: number } {
-  const leftX = Math.round(frame.width * 0.09);
+  const zone = textSafeZone(frame, layout, personSide);
 
   if (slot.startsWith('left-')) {
     const row = Number(slot.split('-')[1]);
-    // 五格铺在画面纵向 15%~85% 之间, 上下各留边
-    const top = 0.15;
-    const step = (0.85 - top) / 4;
-    return { x: leftX, y: Math.round(frame.height * (top + step * (row - 1))), an: 4 };
+    const points = slotsInZone(zone, 5);
+    // 行数不够时落到最后一行, 不溢出画面
+    return points[Math.min(row - 1, points.length - 1)];
   }
   if (slot === 'top-center') {
     return { x: Math.round(frame.width / 2), y: Math.round(frame.height * 0.12), an: 8 };
@@ -93,6 +100,8 @@ export function buildOverlayEvents(
   items: OverlayItem[],
   style: OverlayStyle,
   frame: { width: number; height: number },
+  layout: SceneLayout = 'person-full',
+  personSide: PersonSide = 'right',
 ): string[] {
   const out: string[] = [];
 
@@ -102,7 +111,7 @@ export function buildOverlayEvents(
     if (it.kind !== 'arrow' && !it.text.trim()) continue;
     if (it.endMs <= it.startMs) continue;
 
-    const pos = slotPosition(it.slot, frame);
+    const pos = slotPosition(it.slot, frame, layout, personSide);
     const isKeyword = it.kind === 'keyword';
     const size = Math.round(
       frame.height * (isKeyword ? style.keywordRatio : style.noteRatio),
@@ -168,7 +177,14 @@ export function buildOverlayAss(
   items: OverlayItem[],
   style: OverlayStyle,
   frame: { width: number; height: number },
-  opts?: { disclaimer?: string[]; durationMs?: number },
+  opts?: {
+    disclaimer?: string[];
+    durationMs?: number;
+    /** 这一段用的版面 —— 决定安全区在哪。 */
+    layout?: SceneLayout;
+    /** 拍摄时人在画面哪一侧。 */
+    personSide?: PersonSide;
+  },
 ): string {
   const header = `[Script Info]
 ScriptType: v4.00+
@@ -184,7 +200,9 @@ Style: Overlay,${style.fontFamily},${Math.round(frame.height * style.noteRatio)}
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`;
 
-  const events = buildOverlayEvents(items, style, frame);
+  const events = buildOverlayEvents(
+    items, style, frame, opts?.layout ?? 'person-full', opts?.personSide ?? 'right',
+  );
   const disclaimer =
     opts?.disclaimer && opts.durationMs
       ? buildDisclaimerEvent(opts.disclaimer, opts.durationMs, frame)

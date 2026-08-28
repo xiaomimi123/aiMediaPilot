@@ -57,6 +57,9 @@ export default async function TemplateDetailPage(props: { params: Promise<{ id: 
     pipPosition: (t.pipPosition ?? 'br') as VideoTemplateConfig['pipPosition'],
     pipScale: t.pipScale ?? 0.25,
     pipMargin: t.pipMargin ?? 40,
+    textOverlayEnabled: t.textOverlayEnabled ?? false,
+    personSide: (t.personSide ?? 'right') as VideoTemplateConfig['personSide'],
+    brollEnabled: t.brollEnabled ?? true,
   };
 
   return (

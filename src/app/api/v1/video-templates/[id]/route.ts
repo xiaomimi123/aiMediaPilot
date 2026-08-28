@@ -70,6 +70,9 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       pipPosition: cfg.pipPosition,
       pipScale: cfg.pipScale,
       pipMargin: cfg.pipMargin,
+      textOverlayEnabled: cfg.textOverlayEnabled,
+      personSide: cfg.personSide,
+      brollEnabled: cfg.brollEnabled,
       updatedAt: new Date().toISOString(),
     },
   });

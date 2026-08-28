@@ -23,6 +23,7 @@ import {
   type CutawaySegment,
 } from '@/lib/video/ffmpeg';
 import type { PipPosition } from '@/lib/video/pip-layout';
+import type { PersonSide } from '@/lib/video/text-zone';
 import { OVERLAY_PLAN, sanitizeOverlayItems } from '@/lib/llm/prompts/overlay-plan';
 import {
   buildOverlayAss, REFERENCE_OVERLAY_STYLE, type OverlayItem,
@@ -50,6 +51,11 @@ type JobData = { videoProductionId: string; mode: 'preview' | 'master' };
 
 /** setStatus 的类型：内层各 delivery-mode handler 共用同一个闭包实例，不重复实现落库逻辑。 */
 type SetStatusFn = (status: string, extra?: Record<string, unknown>) => Promise<unknown>;
+
+/** 取模板。templateId 为空(内容详情页旧入口)时返回 null, 调用方按默认值走。 */
+async function templateOf(templateId: string | null) {
+  return templateId ? prisma.videoTemplate.findUnique({ where: { id: templateId } }) : null;
+}
 
 function shotDir(productionRoot: string, shotIndex: number): string {
   // shot.shotId 是 LLM 产出的字符串，未做格式约束，不能直接拼进文件路径
@@ -439,7 +445,15 @@ export async function handleTalkingHeadBroll(
     const builderLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-chat' });
     const cutawaySegments: CutawaySegment[] = [];
     let shotIndex = 0;
-    for (const shot of direction.shots) {
+    /*
+     * 模板可以整个关掉 B-roll(二十三期)。关掉之后画面就是原始出镜视频, 视觉全靠
+     * 文字叠加层 —— 拆参考片的结论是真实口播视频本来就是这样。
+     *
+     * 关掉时**跳过整个 Builder + 渲染循环**, 不是生成了再丢: 那一圈是这条管线里
+     * 最贵的部分(每镜一次 LLM + 一次无头浏览器逐帧截图)。
+     */
+    const brollOn = (await templateOf(vp.templateId))?.brollEnabled ?? true;
+    for (const shot of brollOn ? direction.shots : []) {
       const builtHtml = await buildShotHtmlWithRetry(
         builderLLM,
         BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection),
@@ -512,7 +526,9 @@ export async function handleTalkingHeadBroll(
     await setStatus('building');
     const cutawaySegments: CutawaySegment[] = [];
     let shotIndex = 0;
-    for (const shot of direction.shots) {
+    // 同预览分支: 模板关掉 B-roll 时整个循环跳过, 画面就是原始出镜视频
+    const brollOnMaster = (await templateOf(vp.templateId))?.brollEnabled ?? true;
+    for (const shot of brollOnMaster ? direction.shots : []) {
       const shotWorkDir = shotDir(vp.productionRoot, shotIndex);
       const sourceHtmlPath = path.join(shotWorkDir, 'source.html');
       let html: string;
@@ -807,9 +823,7 @@ async function handleProduce(job: Job<JobData>) {
     // 外层按交付模式(vp.mode，与本函数的 preview/master 渲染档是两个不同概念)分岔，
     // 各交付模式的具体流程封装成独立函数——ppt-narration、talking-head-broll 与
     // illustration-tts(十九期新增)互不干扰，照此形状新增分支不需要改动这两个函数。
-    if (vp.mode === 'talking-head-overlay') {
-      await handleTalkingHeadOverlay(vp, mode, setStatus, outputFileName, readyStatus, outputField);
-    } else if (vp.mode === 'talking-head-broll') {
+    if (vp.mode === 'talking-head-broll') {
       await handleTalkingHeadBroll(vp, mode, setStatus, outputFileName, readyStatus, outputField);
     } else if (vp.mode === 'ppt-narration') {
       await handlePptNarration(vp, mode, setStatus, outputFileName, readyStatus, outputField);
@@ -817,6 +831,42 @@ async function handleProduce(job: Job<JobData>) {
       await handleIllustrationTts(vp, mode, setStatus, outputFileName, readyStatus, outputField);
     } else {
       throw new Error(`暂不支持的交付模式: ${vp.mode}`);
+    }
+
+    /*
+     * 二十三期: 文字叠加层 —— **和交付模式正交**, 三种模式跑完都能加。
+     *
+     * 放在包装段之前: 包装段要烧字幕、混 BGM、接片头片尾, 而叠加是画面内容的
+     * 一部分, 必须先进画面再被包装。顺序反了的话片头片尾上也会盖上关键词。
+     *
+     * 失败不影响已经产出的画面 —— 叠加是加分项, 不该让一条渲染好的片子作废。
+     */
+    {
+      const t = vp.templateId
+        ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
+        : null;
+      if (t?.textOverlayEnabled) {
+        const refreshed = await prisma.videoProduction.findUnique({ where: { id: videoProductionId } });
+        const basePath = refreshed?.[outputField];
+        if (basePath) {
+          try {
+            const withText = path.join(vp.productionRoot, `overlay-${outputFileName}`);
+            const r = await applyTextOverlay({
+              userId: vp.userId,
+              videoPath: basePath,
+              outputPath: withText,
+              productionRoot: vp.productionRoot,
+              template: t,
+              setStatus,
+            });
+            if (r) {
+              await setStatus(readyStatus, { [outputField]: withText, alignedActs: r.items });
+            }
+          } catch (e) {
+            console.error('[text-overlay]', e);
+          }
+        }
+      }
     }
 
     // 二十期: 成片包装段 —— 三交付模式共用, 只在 master 渲染完成后执行(预览审内容, 不包装)。
@@ -865,52 +915,49 @@ export function startVideoProductionWorker() {
 }
 
 /**
- * `talking-head-overlay` 交付模式(二十三期)。
+ * 文字叠加层(二十三期)。
  *
- * 参考片拆解见 `docs/superpowers/specs/2026-08-29-talking-head-overlay-style.md`。
- * 和 `talking-head-broll` 的关键差异 —— **少了整条渲染管线**:
+ * **和交付模式正交** —— 图文口播、真人出镜、插画配音跑完之后都能加这一层。
+ * 第一版把它做成了第四种交付模式, 那是层级错误: 它只是口播视频的一种形式,
+ * 而真人形象将来要能加到任何模式上。
  *
- * | | talking-head-broll | talking-head-overlay |
- * |---|---|---|
- * | 分镜 | Director 切镜 | 不切, 全片一镜到底 |
- * | 画面 | Builder 出 HTML → Chromium 逐帧截图 | 无 |
- * | 合成 | ffmpeg 挖空替换 | 一次字幕烧录 |
- * | 耗时 | 三分多钟 | 几秒 |
+ * 参考片拆解见 `docs/superpowers/specs/2026-08-29-talking-head-overlay-style.md`:
+ * 真实的口播视频不切镜, 所有视觉都是叠在真人画面上的文字。所以这一层不需要
+ * Builder、不需要 Chromium —— 编译成一个 `.ass` 一次烧完。
  *
- * 所以这个分支没有 preview/master 之分的必要 —— 两档产出完全一样(都是原视频 +
- * 一层字)。但仍然照既有形状写两档, 因为「确认导出」那一步的状态机是共用的,
- * 特殊化它会让成片页的「等你」判断多一个例外。
+ * **文字落位由安全区算, 不写死。** 安全区来自画幅 + 版面 + 人在哪一侧:
+ * 横屏人在右 → 左半边; 竖屏 → 上方一条带(人脸占中间, 左右都贴脸)。
  */
-async function handleTalkingHeadOverlay(
-  vp: { id: string; userId: string; productionRoot: string; sourceVideoPath: string | null; templateId: string | null },
-  mode: 'preview' | 'master',
-  setStatus: SetStatusFn,
-  outputFileName: string,
-  readyStatus: string,
-  outputField: 'previewPath' | 'masterPath',
-): Promise<void> {
-  if (!vp.sourceVideoPath) throw new Error('尚未上传出镜视频');
-  const sourceVideoPath = vp.sourceVideoPath;
+async function applyTextOverlay(input: {
+  userId: string;
+  videoPath: string;
+  outputPath: string;
+  productionRoot: string;
+  template: { personSide: string | null; description: string | null } | null;
+  setStatus: SetStatusFn;
+}): Promise<{ items: OverlayItem[] } | null> {
+  const { userId, videoPath, outputPath, productionRoot, template, setStatus } = input;
 
-  // 转写。复用真人出镜那条已经在跑的本地 Whisper。
-  await setStatus('directing');
-  const audioPath = path.join(vp.productionRoot, 'source-audio.wav');
-  await extractAudio({ videoPath: sourceVideoPath, audioPath });
+  await setStatus('building');
+  const audioPath = path.join(productionRoot, 'overlay-audio.wav');
+  await extractAudio({ videoPath, audioPath });
   const transcription = await new LocalWhisperClient().transcribe(audioPath);
+  await fs.unlink(audioPath).catch(() => {});
 
-  const segments = transcription.segments.map((s) => ({
-    startMs: Math.round(s.startSec * 1000),
-    endMs: Math.round(s.endSec * 1000),
-    text: s.text.trim(),
-  })).filter((s) => s.text.length > 0);
-  if (segments.length === 0) throw new Error('转写结果是空的 —— 检查视频里有没有人声');
+  const segments = transcription.segments
+    .map((s) => ({
+      startMs: Math.round(s.startSec * 1000),
+      endMs: Math.round(s.endSec * 1000),
+      text: s.text.trim(),
+    }))
+    .filter((s) => s.text.length > 0);
+  // 没有人声就没有可叠的东西 —— 直接跳过整层, 而不是叠一堆编出来的词
+  if (segments.length === 0) return null;
 
   const durationMs = Math.round(transcription.durationSec * 1000);
-
-  // 叠加计划
-  await setStatus('building');
-  const deepseekKey = await resolveDeepSeekApiKey(vp.userId);
+  const deepseekKey = await resolveDeepSeekApiKey(userId);
   if (!deepseekKey) throw new Error('未配置 DeepSeek key');
+
   const llm = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-reasoner' });
   const { result } = await llm.callStructured({
     systemPrompt: OVERLAY_PLAN.buildSystemPrompt(),
@@ -923,13 +970,10 @@ async function handleTalkingHeadOverlay(
     durationMs,
     segments.map((s) => s.text),
   ) as OverlayItem[];
+  if (items.length === 0) return null;
 
-  // 画面尺寸必须探真的: 传错时 libass 会静默把整层拉伸, 字号和位置一起歪
-  const frame = await probeVideoDimensions(sourceVideoPath);
-
-  const template = vp.templateId
-    ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
-    : null;
+  // 尺寸必须探真的: 传错时 libass 会静默把整层拉伸, 字号和位置一起歪
+  const frame = await probeVideoDimensions(videoPath);
   const disclaimer = String(template?.description ?? '')
     .split('\n')
     .map((l) => l.trim())
@@ -938,13 +982,10 @@ async function handleTalkingHeadOverlay(
   const ass = buildOverlayAss(items, REFERENCE_OVERLAY_STYLE, frame, {
     disclaimer: disclaimer.length > 0 ? disclaimer : undefined,
     durationMs,
+    personSide: (template?.personSide ?? 'right') as PersonSide,
   });
-  await fs.writeFile(path.join(vp.productionRoot, 'overlay.ass'), ass, 'utf-8');
+  await fs.writeFile(path.join(productionRoot, 'overlay.ass'), ass, 'utf-8');
 
-  // 一次烧录就完事 —— 没有分镜渲染, 没有挖空合成
-  await setStatus('assembling');
-  const outputPath = path.join(vp.productionRoot, outputFileName);
-  await burnCaptions({ videoPath: sourceVideoPath, srt: ass, outputPath, format: 'ass' });
-
-  await setStatus(readyStatus, { [outputField]: outputPath, alignedActs: items });
+  await burnCaptions({ videoPath, srt: ass, outputPath, format: 'ass' });
+  return { items };
 }
