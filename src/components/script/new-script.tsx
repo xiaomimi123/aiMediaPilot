@@ -185,14 +185,15 @@ export function NewScript({ inspirations }: { inspirations: { id: string; text: 
               onChange={(e) => setMyText(e.target.value)}
               rows={10}
               maxLength={8000}
-              placeholder="把你写好的口播稿贴进来。至少 50 字。"
+              placeholder="把你写好的口播稿贴进来。至少 50 字。&#10;带着【0-4秒】这种时间标记也行，它们不会进台词。"
               className="mt-1.5 w-full resize-y rounded-md border border-input bg-card p-3.5 text-sm leading-relaxed placeholder:text-muted-foreground/60 focus:border-foreground/40 focus:outline-none"
             />
           </label>
           <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
             {myText.trim().length} 字 ·
-            切完会<span className="text-foreground">逐字核对</span>，AI 动了你一个字就整个拒绝导入——
-            悄悄存一份被改过的稿子，比报错严重得多。
+            <span className="text-foreground">【0-4秒】这类时间标记、段落标签、行首序号会被自动剥掉</span>，
+            不进台词，但会当成你划的段落线用来切幕。剩下的正文逐字核对，
+            AI 动了你一个字就整个拒绝导入——悄悄存一份被改过的稿子，比报错严重得多。
           </p>
         </section>
       ) : null}

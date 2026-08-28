@@ -5,7 +5,12 @@ import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { getDeepSeekTextLLM } from '@/lib/llm/clients';
 import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
-import { SCRIPT_IMPORT, type ScriptImportResponse, checkImportFidelity } from '@/lib/llm/prompts/script-import';
+import {
+  SCRIPT_IMPORT,
+  type ScriptImportResponse,
+  checkImportFidelity,
+  stripScaffold,
+} from '@/lib/llm/prompts/script-import';
 import { allocateActSeconds } from '@/lib/script/six-act';
 
 /**
@@ -45,6 +50,20 @@ export async function POST(req: Request) {
 
   const { topic, text, durationSec } = parsed.data;
 
+  /*
+   * 核对要按**去掉结构标记后的正文**来。
+   *
+   * 真实使用时导入失败了, 报「丢了「【」×6「0」×6「秒」×6」—— 稿子里带着 `【0-4秒】`
+   * 这样的时间标记。模型不把它们当台词是对的, 错的是拿带标记的原文当基准: 于是
+   * 每次都判「你被改了字」, 而提示还叫他「把稿子拆短一点」, 拆多短都没用。
+   *
+   * 标记本身不丢 —— 它们照旧交给模型当切分线索(他自己划的段落线)。
+   */
+  const spoken = stripScaffold(text);
+  if (spoken.replace(/\s/g, '').length < 30) {
+    return fail('去掉时间标记和段落标签之后，剩下的台词太少了（不足 30 字）。', 400);
+  }
+
   try {
     /*
      * **最多试两次。**
@@ -66,7 +85,7 @@ export async function POST(req: Request) {
         userMessage: SCRIPT_IMPORT.buildUserMessage({ text }),
         responseSchema: SCRIPT_IMPORT.responseSchema,
       });
-      lastFidelity = checkImportFidelity(text, out.result.acts);
+      lastFidelity = checkImportFidelity(spoken, out.result.acts);
       if (lastFidelity.faithful) {
         acts0 = out.result;
         break;
@@ -75,9 +94,17 @@ export async function POST(req: Request) {
     }
 
     if (!acts0) {
+      /*
+       * 提示要说得出**下一步该做什么**。
+       *
+       * 上一版写的是「把稿子拆短一点再导」—— 那次真实失败的原因是稿子里带
+       * 【0-4秒】时间标记, 拆多短都没用, 等于把人往错的方向推。现在标记会被
+       * 自动剥掉, 所以剩下的失败多半是别的少见符号或者模型真的手滑了。
+       */
       return fail(
         `切分时模型动了你的字，已拒绝导入（${lastFidelity.detail}）。` +
-        `重试两次都不行——把稿子拆短一点再导通常能过。`,
+        `时间标记和段落标签已经自动剥掉了，所以问题多半出在上面那几个字上——` +
+        `看看它们是不是某种少见的符号或者排版字符，删掉再试。`,
         422,
       );
     }
