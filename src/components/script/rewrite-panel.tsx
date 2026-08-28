@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import type { RewriteComparison } from '@/lib/script/rewrite-diff';
 import { ACT_LABELS, type ActKey } from '@/lib/script/six-act';
 import { cn } from '@/lib/utils';
@@ -16,12 +18,62 @@ import { cn } from '@/lib/utils';
  * 不给「改写度越高越好」的结论: 有些幕本来就写得对, 改它是浪费。这里只把事实
  * 摆出来 —— 哪几幕还完全是 AI 的, 你自己判断该不该动。
  */
+
+/**
+ * 「出一份对照版」的入口。
+ *
+ * 放在改写面板**最上方**: 「怎么写才好」比「我改了多少」更靠前 —— 后者是回头看,
+ * 前者是接下来要做的事。
+ */
+function CompareLauncher({
+  scriptId,
+  hasCompare,
+  onDone,
+}: {
+  scriptId: string;
+  hasCompare: boolean;
+  onDone: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function run() {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/v1/scripts/${scriptId}/compare`, { method: 'POST' });
+      const body = await res.json();
+      if (!res.ok || !body?.success) { setError(body?.message ?? '出对照版失败'); return; }
+      await onDone();
+    } catch {
+      setError('出对照版失败，请检查网络');
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <section className="rounded-md border border-border bg-card p-2.5">
+      <p className="font-medium">对照写法</p>
+      <p className="mt-1 leading-relaxed text-muted-foreground">
+        同样的素材换一种写法，<span className="text-foreground">并说清楚每一幕动了什么手法</span>。
+        写在每一幕的旁白下面，不会替换你的字。
+      </p>
+      <Button size="sm" variant="outline" className="mt-2" disabled={busy} onClick={() => void run()}>
+        {busy ? '写对照中…' : hasCompare ? '按现在的正文重出' : '出一份对照'}
+      </Button>
+      {error ? <p className="mt-1.5 text-destructive">{error}</p> : null}
+    </section>
+  );
+}
+
 export function RewritePanel({
   comparison,
   hardTotal,
   baselineHardTotal,
   hardMax,
   imported = false,
+  scriptId,
+  hasCompare = false,
+  onCompare,
 }: {
   comparison: RewriteComparison | null;
   hardTotal: number;
@@ -30,7 +82,14 @@ export function RewritePanel({
   hardMax: number;
   /** 用户自己写好导入的稿子 —— 没有 AI 原版是设计如此。 */
   imported?: boolean;
+  scriptId: string;
+  hasCompare?: boolean;
+  onCompare: () => Promise<void>;
 }) {
+  const compareEntry = (
+    <CompareLauncher scriptId={scriptId} hasCompare={hasCompare} onDone={onCompare} />
+  );
+
   if (!comparison) {
     /*
      * 两种「没有对比」是不同的事, 说法必须分开。
@@ -39,16 +98,22 @@ export function RewritePanel({
      * 等于告诉他一件不会发生的事 —— 他会一直等一个永远不出现的对比。
      */
     return imported ? (
-      <p className="text-xs leading-relaxed text-muted-foreground">
+      <div className="flex flex-col gap-3">
+        {compareEntry}
+        <p className="text-xs leading-relaxed text-muted-foreground">
         这份稿子是你自己写的，<span className="text-foreground">改写度按定义就是 100%</span>——
         没有 AI 原版可比，也不需要有。左边的硬指标才是对它有用的那栏：
-        它指出哪里啰嗦、哪一幕超时、缺什么声明，但不替你写句子。
-      </p>
+          它指出哪里啰嗦、哪一幕超时、缺什么声明，但不替你写句子。
+        </p>
+      </div>
     ) : (
-      <p className="text-xs leading-relaxed text-muted-foreground">
+      <div className="flex flex-col gap-3">
+        {compareEntry}
+        <p className="text-xs leading-relaxed text-muted-foreground">
         这份稿子没有 AI 原版记录（在快照功能之前建的）。下一份新稿子会自动留底，
-        之后这里能看到「你改了多少、改完分数怎么变」。
-      </p>
+          之后这里能看到「你改了多少、改完分数怎么变」。
+        </p>
+      </div>
     );
   }
 
@@ -57,6 +122,7 @@ export function RewritePanel({
 
   return (
     <div className="flex flex-col gap-3 text-xs">
+      {compareEntry}
       <section>
         <h2 className="font-medium">
           用你自己的话重写了{' '}

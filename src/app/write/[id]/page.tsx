@@ -50,6 +50,18 @@ export default async function WriteDetailPage(props: { params: Promise<{ id: str
       };
     } | null)?.titleSuggestions ?? null;
 
+  const compareVersions =
+    (draft.output as {
+      compareVersions?: {
+        acts: {
+          act: string; rewritten: string; whatChanged: string;
+          keep: boolean; inventedNumbers: string[];
+        }[];
+        overallNote: string;
+        forNarration: Record<string, string>;
+      };
+    } | null)?.compareVersions ?? null;
+
   const isImported =
     (draft.output as { source?: string } | null)?.source === 'imported';
 
@@ -85,6 +97,7 @@ export default async function WriteDetailPage(props: { params: Promise<{ id: str
           aiBaselineActs={aiBaselineActs}
           imported={isImported}
           titleSuggestions={titleSuggestions}
+          compareVersions={compareVersions}
         />
       </div>
     </main>

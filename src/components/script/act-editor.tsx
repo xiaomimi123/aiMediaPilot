@@ -5,6 +5,7 @@ import { estimateSpokenSec } from '@/lib/script/act-plan';
 import { cn } from '@/lib/utils';
 import { useEffect, useMemo, useRef } from 'react';
 import { diagnoseSentences } from '@/lib/script/sentence-diagnosis';
+import { CompareBlock, type CompareAct } from './compare-block';
 
 /**
  * 中栏: 当前幕编辑(阶段 4)。
@@ -95,6 +96,9 @@ function Field({
 }
 
 export function ActEditor({
+  compare = null,
+  compareOriginal = '',
+  compareStale = false,
   act,
   targetSec,
   onChange,
@@ -103,6 +107,12 @@ export function ActEditor({
   /** 这一幕结构上该占多少秒 —— 用来判断旁白写超了没有。 */
   targetSec: number;
   onChange: (patch: Partial<ScriptAct>) => void;
+  /** 这一幕的对照写法, 没出过就是 null。 */
+  compare?: CompareAct | null;
+  /** 出对照那一刻的正文。 */
+  compareOriginal?: string;
+  /** 出对照之后正文又改过了。 */
+  compareStale?: boolean;
 }) {
   // 实时计数: 写多少字、按舒适语速要念多久。这是「快回路」里反馈最快的一条 ——
   // 不用等评分、不用等录制, 打字的同时就知道这一幕撑不撑得下。
@@ -153,6 +163,13 @@ export function ActEditor({
           </span>
         }
       />
+      <CompareBlock
+        compare={compare}
+        narration={act.narration}
+        original={compareOriginal}
+        stale={compareStale}
+      />
+
       {flagged.length > 0 ? (
         <ul className="-mt-2 flex flex-col gap-1.5">
           {flagged.map((f) => (

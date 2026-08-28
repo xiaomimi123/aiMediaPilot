@@ -10,6 +10,7 @@ import { Tabs } from '@/components/ui/tabs';
 import { MaterialPanel } from './material-panel';
 import { RewritePanel } from './rewrite-panel';
 import { TitlePanel, type TitleSuggestion } from './title-panel';
+import type { CompareAct } from './compare-block';
 import { compareToBaseline } from '@/lib/script/rewrite-diff';
 import { ActStrip } from './act-strip';
 import { ActEditor } from './act-editor';
@@ -80,6 +81,7 @@ export function ScriptWorkspace({
   aiBaselineActs = null,
   imported = false,
   titleSuggestions = null,
+  compareVersions = null,
 }: {
   scriptId: string;
   topic: string;
@@ -96,12 +98,19 @@ export function ScriptWorkspace({
   imported?: boolean;
   /** 上次出过的标题, 打开就能看到 —— 不必为了看一眼再花一次模型调用。 */
   titleSuggestions?: { titles: TitleSuggestion[]; tags: string[] } | null;
+  /** 对照写法。`forNarration` 是出对照时的正文快照, 用来判断对照过没过期。 */
+  compareVersions?: {
+    acts: CompareAct[];
+    overallNote: string;
+    forNarration: Record<string, string>;
+  } | null;
 }) {
   const [acts, setActs] = useState(initialActs);
   const [dirty, setDirty] = useState(false);
   const [currentAct, setCurrentAct] = useState(initialActs[0]?.act ?? 'hook');
 
   const save = useAutoSave(scriptId, acts, dirty);
+
 
   const [panel, setPanel] = useState<'score' | 'rewrite' | 'title' | 'material'>('score');
 
@@ -111,6 +120,24 @@ export function ScriptWorkspace({
   const unwritten = useMemo(() => isUnwritten(acts), [acts]);
   const current = acts.find((a) => a.act === currentAct) ?? acts[0];
   const currentRow = plan.rows.find((r) => r.act === currentAct);
+
+  /*
+   * 对照版存在 output 里, 出完要刷新服务端组件才能拿到 —— 但 router.refresh()
+   * 不会重置 `acts` 这个 state, 所以正在写的内容不会被吞掉。
+   */
+  const [compare, setCompare] = useState(compareVersions);
+  const currentCompare = compare?.acts.find((c) => c.act === currentAct) ?? null;
+  // 出完对照又改了正文: 对照的是旧版本, 要说清楚, 否则他会以为在对着现在这段看
+  const compareStale =
+    !!currentCompare &&
+    (compare?.forNarration?.[currentAct] ?? '') !== (current?.narration ?? '');
+
+  async function reloadCompare() {
+    const res = await fetch(`/api/v1/scripts/${scriptId}`);
+    const body = await res.json();
+    const next = body?.data?.output?.compareVersions;
+    if (next) setCompare(next);
+  }
 
   // 「我的版 vs AI 版」: 改写度 + AI 原版的硬指标, 都是纯函数, 随打字实时重算
   const comparison = useMemo(
@@ -203,7 +230,14 @@ export function ScriptWorkspace({
               </span>
             ) : null}
           </div>
-          <ActEditor act={current} targetSec={currentRow?.targetSec ?? 0} onChange={patchCurrent} />
+          <ActEditor
+            act={current}
+            targetSec={currentRow?.targetSec ?? 0}
+            onChange={patchCurrent}
+            compare={currentCompare}
+            compareOriginal={compare?.forNarration?.[currentAct] ?? ''}
+            compareStale={compareStale}
+          />
         </section>
 
         <aside className="flex w-[220px] shrink-0 flex-col gap-3">
@@ -224,6 +258,9 @@ export function ScriptWorkspace({
               baselineHardTotal={baselineHard}
               hardMax={hard.max}
               imported={imported}
+              scriptId={scriptId}
+              hasCompare={!!compare}
+              onCompare={reloadCompare}
             />
           ) : panel === 'title' ? (
             <TitlePanel scriptId={scriptId} initial={titleSuggestions} />
