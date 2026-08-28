@@ -9,6 +9,8 @@ import { HealthBanner } from '@/components/layout/health-banner';
 import { PipelineFunnel } from '@/components/overview/pipeline-funnel';
 import { TodoList } from '@/components/overview/todo-list';
 import { ScoreTrend } from '@/components/overview/score-trend';
+import { LoopStatus } from '@/components/overview/loop-status';
+import { buildLoopStatus } from '@/lib/cockpit/feedback-loop';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,6 +87,13 @@ export default async function OverviewPage() {
     radarBacklog: radarCount,
   });
 
+  // 回采数据当前没有任何来源, 如实按 0 算
+  const loopLayers = buildLoopStatus({
+    scriptCount: scored.length,
+    publishedCount,
+    measuredCount: 0,
+  });
+
   const stats = [
     {
       label: '稿子总数',
@@ -114,6 +123,10 @@ export default async function OverviewPage() {
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
         <PipelineFunnel stages={pipeline} />
         <TodoList todos={todos} />
+      </div>
+
+      <div className="mb-6">
+        <LoopStatus layers={loopLayers} />
       </div>
 
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
