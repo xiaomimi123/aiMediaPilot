@@ -22,13 +22,25 @@ export default async function FilmDetailPage(props: { params: Promise<{ id: stri
   if (!vp || vp.userId !== user.id) notFound();
 
   const [content, template] = await Promise.all([
-    prisma.cockpitContent.findUnique({ where: { id: vp.contentId }, select: { title: true } }),
+    prisma.cockpitContent.findUnique({
+      where: { id: vp.contentId },
+      select: { title: true, scriptDraftId: true },
+    }),
     vp.templateId
       ? prisma.videoTemplate.findUnique({ where: { id: vp.templateId }, select: { name: true } })
       : Promise.resolve(null),
   ]);
 
   const title = content?.title ?? '(内容已删除)';
+
+  // 发布登记记在稿子上(Distribution.scriptDraftId), 所以这里要顺着内容找到稿子
+  const published = content?.scriptDraftId
+    ? await prisma.distribution.findFirst({
+        where: { scriptDraftId: content.scriptDraftId, platform: 'douyin' },
+        orderBy: { publishedAt: 'desc' },
+        select: { url: true },
+      })
+    : null;
 
   return (
     <PageShell
@@ -54,6 +66,8 @@ export default async function FilmDetailPage(props: { params: Promise<{ id: stri
           hasPreview: Boolean(vp.previewPath),
           hasMaster: Boolean(vp.masterPath),
           templateName: template?.name ?? null,
+          scriptDraftId: content?.scriptDraftId ?? null,
+          publishedUrl: published?.url ?? null,
         }}
       />
     </PageShell>

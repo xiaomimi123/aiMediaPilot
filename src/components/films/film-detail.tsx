@@ -19,6 +19,10 @@ interface Film {
   hasPreview: boolean;
   hasMaster: boolean;
   templateName: string | null;
+  /** 这条片子是用哪份稿子出的 —— 没有稿子就登记不了发布(登记挂在稿子上)。 */
+  scriptDraftId: string | null;
+  /** 已登记的发布链接。 */
+  publishedUrl: string | null;
 }
 
 /**
@@ -35,6 +39,8 @@ export function FilmDetail({ initial }: { initial: Film }) {
   const [film, setFilm] = useState(initial);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [publishUrl, setPublishUrl] = useState('');
+  const [publishNote, setPublishNote] = useState('');
 
   // 在跑的时候才轮询。停在「等你」的状态上轮询是纯粹的浪费 —— 它不会自己动。
   useEffect(() => {
@@ -76,6 +82,48 @@ export function FilmDetail({ initial }: { initial: Film }) {
       router.refresh();
     } catch {
       setError('操作失败，请检查网络');
+    } finally {
+      setBusy('');
+    }
+  }
+
+  /**
+   * 发布登记。放在这一页, 是因为这里就是你刚把片子下载下来的那一刻 —— 发完抖音
+   * 顺手把链接贴回来, 是整条回路最省事的接法。
+   *
+   * 贴链接不只是记一笔: 链接里带作品 id, 回采回来的作品也带同一个 id, 两边一对
+   * 就自动关联上了, 省掉去数据页逐条认领。刚发的片子通常还没被回采到(每晚 20:00
+   * 一轮), 那时候如实说「等今晚」, 不假装成功。
+   */
+  async function registerPublish() {
+    if (!film.scriptDraftId) return;
+    setBusy('publish');
+    setError('');
+    setPublishNote('');
+    try {
+      const res = await fetch(`/api/v1/scripts/${film.scriptDraftId}/distributions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ platform: 'douyin', url: publishUrl.trim(), note: null }),
+      });
+      const body = await res.json();
+      if (!res.ok || !body?.success) {
+        setError(body?.message ?? '登记失败');
+        return;
+      }
+      setFilm((f) => ({ ...f, publishedUrl: publishUrl.trim() }));
+      setPublishUrl('');
+      setPublishNote(
+        body.data.link === 'linked'
+          ? '已登记，并自动关联到回采作品——去校准页能看到这条配对了。'
+          : body.data.link === 'already-linked'
+            ? '已登记。那条作品之前已经认领过别的稿子，没有覆盖。'
+            : body.data.link === 'not-collected-yet'
+              ? '已登记。这条还没被回采到，今晚 20:00 那轮会自动关联上。'
+              : '已登记。这个链接里没有作品 id（短链要跳转才知道是哪条），到数据页手动认领一下。',
+      );
+    } catch {
+      setError('登记失败，请检查网络');
     } finally {
       setBusy('');
     }
@@ -184,6 +232,53 @@ export function FilmDetail({ initial }: { initial: Film }) {
           {film.createdAt}
         </span>
       </div>
+
+      {/* 出片之后的最后一环: 发完抖音把链接贴回来, 回路才闭得上 */}
+      {film.status === 'done' ? (
+        <section className="mt-6 rounded-md border border-border bg-card p-4">
+          <h2 className="text-base font-semibold">发布登记</h2>
+          {film.publishedUrl ? (
+            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+              已登记：
+              <a
+                href={film.publishedUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="ml-1 break-all underline underline-offset-4"
+              >
+                {film.publishedUrl}
+              </a>
+            </p>
+          ) : !film.scriptDraftId ? (
+            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+              这条片子没有关联的稿子，登记挂不上——发布登记是记在稿子上的。
+            </p>
+          ) : (
+            <>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                发到抖音之后，把作品链接贴回来。链接里带作品 id，回采时会自动和这份稿子对上——
+                <span className="text-foreground">校准要的就是这个配对</span>。
+                短链（v.douyin.com/…）抽不出 id，用完整链接。
+              </p>
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={publishUrl}
+                  onChange={(e) => setPublishUrl(e.target.value)}
+                  placeholder="https://www.douyin.com/video/…"
+                  className="min-w-0 flex-1 rounded-md border border-input bg-card px-3 py-2 text-sm placeholder:text-muted-foreground/50 focus:border-foreground/40 focus:outline-none"
+                />
+                <Button
+                  disabled={busy !== '' || !/^https?:\/\//.test(publishUrl.trim())}
+                  onClick={() => void registerPublish()}
+                >
+                  {busy === 'publish' ? '登记中…' : '登记'}
+                </Button>
+              </div>
+            </>
+          )}
+          {publishNote ? <p className="mt-2 text-xs text-muted-foreground">{publishNote}</p> : null}
+        </section>
+      ) : null}
 
       {error ? <p className="mt-3 text-xs text-destructive">{error}</p> : null}
     </>

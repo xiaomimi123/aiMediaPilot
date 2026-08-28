@@ -4,6 +4,7 @@ import { homedir } from 'os';
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { importWorks, type IncomingWork } from '../src/lib/works/import';
+import { extractAwemeId, linkWorkByAwemeId } from '../src/lib/works/match';
 
 /**
  * 每晚定时回采抖音作品数据。
@@ -146,9 +147,38 @@ async function main(): Promise<void> {
     const r = await importWorks(prisma, user.id, PLATFORM, works);
     const publicCount = works.filter((w) => !w.isPrivate).length;
     log(`回采完成: 共 ${r.total} 条(新增 ${r.created} / 更新 ${r.updated}), 其中公开 ${publicCount} 条`);
+
+    /*
+     * 回采之后补一次「登记过的发布 → 回采作品」的关联。
+     *
+     * 常见时序是**先发布登记, 后回采**: 你发完片子马上贴链接, 而那条作品要等
+     * 今晚这一轮才进库。登记那一刻匹配不上, 只能在这里补。
+     */
+    const linked = await backfillLinks(prisma, user.id);
+    if (linked > 0) log(`补上 ${linked} 条「作品 ← 稿子」的关联`);
   } finally {
     await prisma.$disconnect();
   }
+}
+
+/**
+ * 把登记过的发布链接和回采作品对上。
+ *
+ * 只处理还没关联的作品 —— 人手动认领过的判断不该被自动匹配覆盖。
+ */
+async function backfillLinks(prisma: PrismaClient, userId: string): Promise<number> {
+  const dists = await prisma.distribution.findMany({
+    where: { platform: PLATFORM },
+    select: { url: true, scriptDraftId: true },
+  });
+  let linked = 0;
+  for (const d of dists) {
+    const awemeId = extractAwemeId(d.url);
+    if (!awemeId) continue;
+    const r = await linkWorkByAwemeId(prisma, userId, awemeId, d.scriptDraftId);
+    if (r === 'linked') linked++;
+  }
+  return linked;
 }
 
 main().catch((e) => {
