@@ -52,6 +52,7 @@ model User {
   materials                  Material[]
   hooks                      Hook[]
   teardowns                  Teardown[]
+  publishedWorks             PublishedWork[]
 }
 
 // Sub-project G: 灵感视频库 — 用户精选爆款 + AI 总结共性
@@ -444,6 +445,40 @@ model Teardown {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+/// 已发布作品(v5) —— 从抖音创作者后台回采的真实数据。
+///
+/// **不是校准样本**: 这些作品不是用本系统写的, 没有预测分可以配对。它们是**基线**:
+/// 「这个账号在当前赛道通常什么表现」, 以后新发的片子跟它比。
+/// counted 由 shouldCountByDefault 给默认值, 用户可逐条改判 —— 哪些算数直接决定
+/// 基线, 不该由一个关键词表替用户拍板。
+model PublishedWork {
+  id          String   @id @default(cuid())
+  userId      String
+  platform    String   @default("douyin")
+  /// 平台侧的作品 id, 去重与增量更新用
+  externalId  String
+  title       String   @db.Text
+  url         String   @default("")
+  publishedAt DateTime
+  durationSec Int      @default(0)
+
+  play    Int @default(0)
+  digg    Int @default(0)
+  comment Int @default(0)
+  collect Int @default(0)
+  share   Int @default(0)
+
+  /// 是否计入基线
+  counted   Boolean  @default(false)
+  /// 最近一次回采时间 —— 数字会随时间涨, 要知道这份快照多旧
+  fetchedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, platform, externalId])
+  @@index([userId, publishedAt])
 }
 
 model VideoTemplate {
