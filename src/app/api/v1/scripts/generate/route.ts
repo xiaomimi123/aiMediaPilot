@@ -6,6 +6,7 @@ import { SCRIPT_GENERATE_GONGZHONGHAO } from '@/lib/llm/prompts';
 import { SCRIPT_WRITE_DOUYIN } from '@/lib/llm/prompts/script-write-douyin';
 import { SCRIPT_WRITE_XHS } from '@/lib/llm/prompts/script-write-xhs';
 import { allocateActSeconds } from '@/lib/script/six-act';
+import { SCRIPT_SKELETON, skeletonToActs } from '@/lib/llm/prompts/script-skeleton';
 import { lintSixActScript } from '@/lib/script/six-act-lint';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
@@ -105,6 +106,8 @@ export async function POST(req: Request) {
     durationSec?: unknown;
     cockpitContentId?: unknown;
     intent?: unknown;
+    /** 'skeleton' = 只给骨架不写台词; 'full'(默认) = 写完整初稿 */
+    mode?: unknown;
   };
   try {
     body = await req.json();
@@ -142,6 +145,8 @@ export async function POST(req: Request) {
     typeof body.cockpitContentId === 'string' ? body.cockpitContentId.trim() : '';
   // 十期: 内容意图 — 宽进严出, 非法值/未指定一律降为 '' (validateIntent 语义), 不单独报 400。
   const intent = validateIntent(body.intent);
+  // 默认 full 保持向后兼容 —— 已有的调用方(模板出片、旧入口)一个字都不用改
+  const mode: 'skeleton' | 'full' = body.mode === 'skeleton' ? 'skeleton' : 'full';
 
   const user = await getOrCreateDefaultUser();
   const apiKey = await resolveDeepSeekApiKey(user.id);
@@ -172,6 +177,62 @@ export async function POST(req: Request) {
       // 十三期: 各幕目标秒数按 ACT_RATIOS 分配, 传进写稿 userMessage 供 targetSec 参照。
       const actSeconds = allocateActSeconds(durationSec);
       const llm = getDeepSeekTextLLM(apiKey);
+
+      // 骨架模式: 只搭结构不写台词, 台词留给使用者自己写。
+      // 走独立分支而不是在写稿 prompt 里加开关 —— 两者的输出形状不同(骨架没有
+      // hooks/titles/cover), 混在一起会让两边都变复杂。
+      if (mode === 'skeleton') {
+        const sk = await llm.callStructured({
+          systemPrompt: SCRIPT_SKELETON.buildSystemPrompt(niche, personaSection, voiceSection),
+          userMessage: SCRIPT_SKELETON.buildUserMessage({
+            topic,
+            durationSec,
+            actSeconds,
+            brief: research,
+            // 素材库 + 当场填的材料 —— 只有这些是使用者本人真有的。研究材料是
+            // 第三方信息, 混为一谈会让骨架去编他的人生(真机上出过一次)。
+            materials: [
+              ...matchedExperiences.map((e) => ({ kind: e.kind, content: e.content })),
+              ...(materials ? [{ kind: '本次补充', content: materials }] : []),
+            ],
+          }),
+          responseSchema: SCRIPT_SKELETON.responseSchema,
+        });
+        const skeletonActs = skeletonToActs(sk.result, actSeconds);
+        const draft = await prisma.scriptDraft.create({
+          data: {
+            userId: user.id,
+            topic,
+            niche,
+            platform: 'douyin',
+            output: {
+              research,
+              script: { acts: skeletonActs },
+              durationSec,
+              mode: 'skeleton',
+              thesis: sk.result.thesis,
+              questions: sk.result.questions,
+              // 骨架本身就是"AI 原版": 台词全空, 所以之后写的每一个字都是使用者的
+              aiBaseline: { acts: skeletonActs, snapshotAt: new Date().toISOString() },
+            } as unknown as Prisma.InputJsonValue,
+          },
+          select: { id: true },
+        });
+        await bumpExperienceUsage(matchedExperiences.map((e) => e.id));
+        if (cockpitContentId) await linkCockpitContent(user.id, cockpitContentId, draft.id);
+        return ok({
+          platform,
+          mode: 'skeleton',
+          scriptDraftId: draft.id,
+          research,
+          researchDegraded: research === null,
+          acts: skeletonActs,
+          thesis: sk.result.thesis,
+          questions: sk.result.questions,
+          durationSec,
+        });
+      }
+
       const out = await llm.callStructured({
         systemPrompt: SCRIPT_WRITE_DOUYIN.buildSystemPrompt(niche, style, personaSection, voiceSection),
         userMessage: SCRIPT_WRITE_DOUYIN.buildUserMessage({ topic, durationSec, brief: research, actSeconds }),

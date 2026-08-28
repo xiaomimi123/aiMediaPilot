@@ -150,6 +150,50 @@ export function allocateActSeconds(durationSec: number): Record<ActKey, number> 
 }
 
 /**
+ * **结构**判别 —— 只问「这是不是六幕稿」, 不问「写没写」。
+ *
+ * 和 `isSixActScript` 的分工:
+ * - `isSixActScript` 把关 **AI 交上来的成稿**: 台词至少 10 字、关键词至少 3 个、
+ *   four_dims 齐全。那些是内容质量要求, 该严。
+ * - `isSixActDraft` 判别 **库里这份稿子能不能进工作区**。台词空着、关键词没有、
+ *   four_dims 缺失, 都不改变它是一份六幕稿的事实。
+ *
+ * 为什么要拆开: 保存接口的 narration 没有下限(自动保存不能因为你删空一幕就 400,
+ * 那会静默丢改动), 但打开页面走的是形状判别。两边口径不一致的后果是——你在工作区
+ * 把台词删空准备重写, 保存成功, 一刷新稿子就打不开了, 数据还在但你够不着。
+ * 骨架模式(台词天生就是空的)让这条路成了常规路径, 才把它暴露出来。
+ *
+ * 结构本身仍然严格: 必须恰好六幕、必须按 ACT_KEYS 顺序。
+ */
+const SixActDraftSchema = z.object({
+  acts: z
+    .array(
+      z.object({
+        act: z.enum(ACT_KEYS),
+        title: z.string(),
+        narration: z.string(),
+        visual: z.string(),
+        note: z.string(),
+        targetSec: z.number(),
+        beats: z.array(z.object({ keyword: z.string() })),
+        facts: z.array(z.unknown()),
+      }),
+    )
+    .length(6)
+    .superRefine((acts, ctx) => {
+      ACT_KEYS.forEach((expected, index) => {
+        if (acts[index]?.act !== expected) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: `acts[${index}] 应为 "${expected}"`, path: [index, 'act'] });
+        }
+      });
+    }),
+});
+
+export function isSixActDraft(value: unknown): value is { acts: ScriptAct[] } {
+  return SixActDraftSchema.safeParse(value).success;
+}
+
+/**
  * 唯一的形状判别入口 —— 六处消费点都用它分岔, 避免各写各的判别逻辑。
  */
 export function isSixActScript(script: unknown): script is { acts: ScriptAct[]; four_dims: FourDims } {

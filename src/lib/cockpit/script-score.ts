@@ -510,3 +510,16 @@ export function combineScore(
     scoredAt: soft.scoredAt,
   };
 }
+
+/**
+ * 这份稿子还一个字都没写。
+ *
+ * 骨架模式生成的稿子六幕台词天生是空的, 而硬指标里有几项在空稿子上会给满分 ——
+ * 时长偏差(没超时)、简洁度(没废话)。结果是你还没动笔, 系统先给你 22/35。
+ * 那是在教错的东西: 评分要么反映你写的内容, 要么就别出现。
+ *
+ * 备注(骨架的 guide)不算正文 —— 那是系统给你的指令, 不是你的话。
+ */
+export function isUnwritten(acts: { narration: string }[]): boolean {
+  return acts.every((a) => (a.narration ?? '').replace(/[\s，。、；：！？,.;:!?]/g, '') === '');
+}

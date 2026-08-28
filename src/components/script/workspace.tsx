@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ScriptAct } from '@/lib/script/six-act';
 import { buildActPlan } from '@/lib/script/act-plan';
-import { scoreHardDimensions, type ScoreDimension } from '@/lib/cockpit/script-score';
+import { scoreHardDimensions, type ScoreDimension, isUnwritten } from '@/lib/cockpit/script-score';
 import { buttonVariants } from '@/components/ui/button';
 import { Tabs } from '@/components/ui/tabs';
 import { MaterialPanel } from './material-panel';
@@ -100,6 +100,8 @@ export function ScriptWorkspace({
 
   const plan = useMemo(() => buildActPlan(acts, durationSec), [acts, durationSec]);
   const hard = useMemo(() => scoreHardDimensions(acts, durationSec), [acts, durationSec]);
+  // 骨架稿一打开六幕全空 —— 这时候的分数没有意义, 见页头的说明
+  const unwritten = useMemo(() => isUnwritten(acts), [acts]);
   const current = acts.find((a) => a.act === currentAct) ?? acts[0];
   const currentRow = plan.rows.find((r) => r.act === currentAct);
 
@@ -159,16 +161,27 @@ export function ScriptWorkspace({
             <span className="tabular-nums">实际 {plan.totalActualSec.toFixed(1)} 秒</span>
           </div>
         </div>
-        <div className="shrink-0 rounded-lg border border-border px-4 py-2 text-center">
-          {/* 软指标作废时只报硬指标 —— 把旧模型的分加进总分会拼出一个不可比的数字 */}
-          <p className="text-xs text-muted-foreground">{countSoft ? '总分' : '硬指标'}</p>
-          <p className="text-2xl font-semibold tabular-nums">
-            {hard.total + (countSoft ? softScore! : 0)}
-            <span className="text-sm font-normal text-muted-foreground">
-              /{hard.max + (countSoft ? softMax : 0)}
-            </span>
-          </p>
-        </div>
+        {/*
+          还没写一个字就先给个分, 是在教错的东西 —— 空稿子在时长偏差、简洁度这
+          几项上天生满分。骨架模式的稿子一打开就是这个状态。
+        */}
+        {unwritten ? (
+          <div className="shrink-0 rounded-lg border border-dashed border-border px-4 py-2 text-center">
+            <p className="text-xs text-muted-foreground">还没开始写</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">写下第一句就开始算分</p>
+          </div>
+        ) : (
+          <div className="shrink-0 rounded-lg border border-border px-4 py-2 text-center">
+            {/* 软指标作废时只报硬指标 —— 把旧模型的分加进总分会拼出一个不可比的数字 */}
+            <p className="text-xs text-muted-foreground">{countSoft ? '总分' : '硬指标'}</p>
+            <p className="text-2xl font-semibold tabular-nums">
+              {hard.total + (countSoft ? softScore! : 0)}
+              <span className="text-sm font-normal text-muted-foreground">
+                /{hard.max + (countSoft ? softMax : 0)}
+              </span>
+            </p>
+          </div>
+        )}
       </header>
 
       <ActStrip plan={plan} current={currentAct} onSelect={setCurrentAct} />
@@ -218,6 +231,7 @@ export function ScriptWorkspace({
               softDimensions={softDimensions}
               softStaleReason={softStaleReason}
               todos={todos}
+              unwritten={unwritten}
             />
           ) : null}
         </aside>

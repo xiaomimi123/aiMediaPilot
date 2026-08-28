@@ -34,6 +34,7 @@ export function ScorePanel({
   softDimensions,
   softStaleReason = null,
   todos = [],
+  unwritten = false,
 }: {
   hard: number;
   hardMax: number;
@@ -46,7 +47,22 @@ export function ScorePanel({
   softStaleReason?: 'script' | 'model' | null;
   /** 把扣分翻译成「去改哪一幕的什么」。只给分不给去处等于没评。 */
   todos?: { text: string; act?: string }[];
+  /** 还一个字没写 —— 展示在等什么, 而不是一个空稿子刷出来的分数。 */
+  unwritten?: boolean;
 }) {
+  if (unwritten) {
+    return (
+      <div className="flex flex-col gap-2 text-xs text-muted-foreground">
+        <p className="font-medium text-foreground">还没开始写</p>
+        <p className="leading-relaxed">
+          左边每一幕的备注写着这一幕该干什么、需要什么材料。台词是空的——那是留给你的。
+        </p>
+        <p className="leading-relaxed">
+          写下第一句，硬指标立刻开始算；软指标要调一次模型，在稿库里发起。
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-4 text-xs">
       <section>

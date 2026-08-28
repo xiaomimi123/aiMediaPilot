@@ -210,3 +210,41 @@ describe('ScriptWorkspace', () => {
     await waitFor(() => expect(panelScore()).not.toBe(before));
   });
 });
+
+describe('骨架稿(台词全空)', () => {
+  const BLANK = ACTS.map((a) => ({ ...a, narration: '' }));
+
+  function renderBlank() {
+    return render(
+      <ScriptWorkspace
+        scriptId="d2"
+        topic="骨架稿"
+        platform="douyin"
+        durationSec={60}
+        initialActs={BLANK}
+        softScore={null}
+        softMax={65}
+        softDimensions={[]}
+      />,
+    );
+  }
+
+  it('**不给分数** —— 空稿子在时长、简洁度上天生满分, 那个数字会教错东西', () => {
+    renderBlank();
+    expect(screen.getAllByText('还没开始写').length).toBeGreaterThan(0);
+    expect(screen.queryByText('总分')).toBeNull();
+  });
+
+  it('说清楚台词是留给你的, 备注写着这一幕该干什么', () => {
+    renderBlank();
+    expect(screen.getByText(/台词是空的——那是留给你的/)).toBeTruthy();
+  });
+
+  it('写下第一句就开始算分 —— 不等你写完', async () => {
+    renderBlank();
+    // 六幕台词都是空串, 靠 hook 幕的画面框定位到当前幕, 再取它上面的旁白框
+    const boxes = document.querySelectorAll('textarea');
+    fireEvent.change(boxes[0], { target: { value: '你有没有过这种时候' } });
+    await waitFor(() => expect(screen.queryByText('还没开始写')).toBeNull());
+  });
+});

@@ -923,6 +923,23 @@ top3, 注入两处——①研究层 `curatedParts` **最前**(亲身经历 > �
 
 API: `POST/GET /api/v1/topics`、`PATCH /api/v1/topics/[id]`、`POST/GET /api/v1/scripts/[id]/distributions`、`DELETE /api/v1/distributions/[id]`。 (旧工作台看板专用的 `GET /api/v1/workbench` 聚合接口已随看板一起删除。)
 
+### 写稿: 系统给起点 → 你自己写 → 系统做评估
+
+工具的分工是明确的: **中间那段必须是你**。用 AI 写久了写作能力会跟着 AI 走, 稿子最后和所有人长得一样, 而可模仿的内容都会被算法抹平。所以系统负责起点和评估, 不负责替你写。
+
+**起点有两种粒度** (`/write` 新建稿子时选, `POST /api/v1/scripts/generate` 的 `mode` 参数, 默认 `full` 保持向后兼容):
+
+- `skeleton`(**默认推荐**) — 六幕各给一句「这一幕该干什么」+ 时长预算 + 需要什么材料 + 关键词, **台词全空**。prompt (`src/lib/llm/prompts/script-skeleton.ts`) 里最重的一条是「不要写任何可以直接念出口的句子」, 并给出反例 —— 只说「不要写台词」模型照样会写。另外明令禁止把联网研究材料当成使用者的经历: 真机上出现过骨架把一段第三方创业故事写成「你 14 岁卖掉了第一家公司」, 只有素材库里列出的材料才是本人真有的。
+- `full` — 台词写满, 你在上面改。没思路时让 AI 开个头, 但容易改几个词就交差。
+
+**评估**: 硬指标 (纯函数, 35 分, `script-score.ts`) 随打字实时重算; 软指标 (DeepSeek, 65 分) 要花钱调模型, 只在稿库里手动发起, 且带 `SOFT_MODEL_VERSION` 防止用旧模型的分拼出不可比的总分。
+
+**「我的版 vs AI 版」** (`src/lib/script/rewrite-diff.ts`): 第一次保存时把 AI 原版快照进 `output.aiBaseline`(**之后永不覆盖**), 之后按 LCS 逐幕算改写度, 点名「一个字没改」的幕 —— 那些是会原样留在成片里的 AI 表达。它量的不是稿子好不好, 而是**这稿子还有多少是 AI 的**, 所以刻意不给「越高越好」的结论。
+
+**还没写就不给分**: 空稿子在时长偏差、简洁度这些指标上天生满分, 骨架稿一打开会刷出个 22/35 —— 那是在教错的东西。`isUnwritten()` 命中时页头和右栏都换成「还没开始写」, 说明在等什么。
+
+配套的形状判别拆成两个 (`six-act.ts`): `isSixActScript` 把关 AI 交上来的成稿 (台词 ≥10 字、关键词 ≥3、four_dims 齐全), `isSixActDraft` 只判结构 (恰好六幕、按 `ACT_KEYS` 顺序), 台词空着、four_dims 缺失都不影响它进工作区。两者混用曾导致: 在工作区把台词删空准备重写 → 自动保存成功 → 刷新后稿子打不开, 数据还在但够不着。
+
 ### 关键交互流
 
 1. **灵感抓取**: `/agent/discover` 页每条主题卡「存入灵感池」按钮 (`POST /api/v1/cockpit/inspirations`), 直接写入 Cockpit 灵感墙 (`CockpitInspiration`); Cockpit 灵感库选题视图 (三期改名, 原「灵感池」) 右上角「抓灵感 →」跳回该页。 二期起这是灵感进入系统的唯一活跃路径——`TopicIdea`(选题池) 表与配套的 `PoolButton`/`ideaId` 预填链路是 `/agent` 首页 (已随壳页一起删除) 的产物, 现无任何 UI 入口可达, 属遗留能力 (`PoolButton` 组件、`ScriptForm` 对 `ideaId` query param 的兼容读取、`script-result.tsx` 里 `ideaId` 存在时的 `ADOPTED` 回写均原样保留代码, 只是没有链接会带上 `ideaId` 了); `POST/GET /api/v1/topics` 等 API 仍在但无写入方。

@@ -104,11 +104,15 @@ export function ActEditor({
         rows={3}
         onChange={(visual) => onChange({ visual })}
       />
+      {/*
+        骨架模式下备注装的是「这一幕该干什么 + 需要什么材料」—— 那是你照着写的
+        东西, 压成两行会被裁掉。按内容给行数, 上限 6 行不至于把旁白挤下去。
+      */}
       <Field
         label="备注"
         hint="给自己的拍摄提示，不进成片"
         value={act.note}
-        rows={2}
+        rows={Math.min(6, Math.max(2, Math.ceil(act.note.length / 34)))}
         onChange={(note) => onChange({ note })}
       />
 

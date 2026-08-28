@@ -9,7 +9,7 @@ export interface DouyinSection {
   text: string;
 }
 
-import { isSixActScript, type ScriptAct, type FourDims } from "@/lib/script/six-act";
+import { isSixActDraft, isSixActScript, type ScriptAct, type FourDims } from "@/lib/script/six-act";
 import type { LintIssue } from "@/lib/script/six-act-lint";
 
 /**
@@ -270,9 +270,12 @@ export function parseDraftOutput(output: unknown): ParsedDraftOutput | null {
   // 落进下面的 sections/xhs 判别 (两种形态字段互斥, 顺序对真实数据无影响,
   // 但六幕稿优先判别与其它消费点——script-mapping.ts/douyin-view-mode.ts——的
   // 判别顺序保持一致)。
+  // 判**结构**而不是判成稿(isSixActScript): 台词空着的骨架稿、four_dims 缺失的
+  // 稿子, 都得能进工作区。真正需要 four_dims 的消费方(出片路由)各自单独校验它。
   const sixActCandidate = { acts: isPlainObject(scriptField) ? scriptField.acts : undefined, four_dims: output.four_dims };
-  if (isSixActScript(sixActCandidate)) {
-    const result: ParsedDraftOutput = { acts: sixActCandidate.acts, four_dims: sixActCandidate.four_dims };
+  if (isSixActDraft(sixActCandidate)) {
+    const result: ParsedDraftOutput = { acts: sixActCandidate.acts };
+    if (isSixActScript(sixActCandidate)) result.four_dims = sixActCandidate.four_dims;
 
     const research = parseResearch(output.research);
     if (research) result.research = research;
