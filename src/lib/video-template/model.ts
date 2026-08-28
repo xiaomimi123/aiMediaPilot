@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PIP_POSITIONS, PIP_SCALE_MIN, PIP_SCALE_MAX, type PipPosition } from '@/lib/video/pip-layout';
 import type { DeliveryMode } from '@/lib/cockpit/model';
 
 /**
@@ -67,6 +68,20 @@ export interface VideoTemplateConfig {
    * 默认沿用 deepseek-chat 保持老模板行为不变。
    */
   builderModel: 'deepseek-chat' | 'deepseek-reasoner';
+  /**
+   * 真人出镜的合成方式(二十三期)。
+   * - `cutaway` 顺序挖空(老行为): B-roll 那几段把人像整个替换掉, 期间只听得到声音
+   * - `pip` 画中画: B-roll 铺满画面, 人像缩成小窗放在角落, 人一直在
+   *
+   * 两种都留着 —— 要观众盯住画面信息时挖空更干净; 讲经历、要人味的时候人不该消失。
+   * 只有 talking-head-broll 模式消费这几项。
+   */
+  talkingHeadLayout: 'cutaway' | 'pip';
+  pipPosition: PipPosition;
+  /** 小窗宽度占画面宽度的比例。 */
+  pipScale: number;
+  /** 小窗离画面边缘的像素距离。 */
+  pipMargin: number;
   captionStyle: CaptionStyle | null;  // null = 不烧字幕
   bgmPath: string | null;
   bgmVolume: number;                  // 0~1
@@ -117,6 +132,15 @@ export const VideoTemplateConfigSchema: z.ZodType<VideoTemplateConfig> = z.objec
   showChapterNav: z.boolean(),
   researchEnabled: z.boolean(),
   builderModel: z.enum(['deepseek-chat', 'deepseek-reasoner']),
+  /**
+   * 真人出镜的合成方式。
+   * - cutaway: 顺序挖空(老行为) —— B-roll 段把人像整个替换掉
+   * - pip: 画中画 —— B-roll 铺满, 人像缩成小窗, 人一直在画面里
+   */
+  talkingHeadLayout: z.enum(['cutaway', 'pip']),
+  pipPosition: z.enum(PIP_POSITIONS),
+  pipScale: z.number().min(PIP_SCALE_MIN).max(PIP_SCALE_MAX),
+  pipMargin: z.number().int().min(0).max(400),
 });
 
 export function defaultCaptionStyle(): CaptionStyle {
@@ -154,6 +178,10 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     showChapterNav: false,
     researchEnabled: false,
     builderModel: 'deepseek-chat',
+    talkingHeadLayout: 'cutaway',
+    pipPosition: 'br',
+    pipScale: 0.25,
+    pipMargin: 40,
   },
   {
     name: '真人出镜 + B-roll',
@@ -173,6 +201,10 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     showChapterNav: false,
     researchEnabled: false,
     builderModel: 'deepseek-chat',
+    talkingHeadLayout: 'cutaway',
+    pipPosition: 'br',
+    pipScale: 0.25,
+    pipMargin: 40,
   },
   {
     name: '插画配音',
@@ -192,6 +224,10 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     showChapterNav: false,
     researchEnabled: false,
     builderModel: 'deepseek-chat',
+    talkingHeadLayout: 'cutaway',
+    pipPosition: 'br',
+    pipScale: 0.25,
+    pipMargin: 40,
   },
   {
     // 二十一期: 按同行参考视频拆解结论复刻
@@ -228,5 +264,9 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     researchEnabled: true,
     // 排版对 deepseek-chat 是硬骨头(实测密度只到 5%~8%), 这个预设吃排版, 上强模型
     builderModel: 'deepseek-reasoner',
+    talkingHeadLayout: 'cutaway',
+    pipPosition: 'br',
+    pipScale: 0.25,
+    pipMargin: 40,
   },
 ];

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { LayoutOverlay, LayoutControls, type LayoutState } from './layout-overlay';
 
 interface Beat { visibleState: string; development: string }
 interface Shot {
@@ -37,12 +38,16 @@ export function TemplateStudio({
   builderModel,
   visualStyle,
   visualTone,
+  deliveryMode,
+  initialLayout,
 }: {
   templateId: string;
   templateName: string;
   builderModel: string;
   visualStyle: string;
   visualTone: string;
+  deliveryMode: string;
+  initialLayout: LayoutState;
 }) {
   const [text, setText] = useState('');
   const [direction, setDirection] = useState<Direction | null>(null);
@@ -124,6 +129,40 @@ export function TemplateStudio({
    * 症状是「刷新一次草稿就没了」, 但看代码两个 effect 都是对的。
    */
   const [ready, setReady] = useState(false);
+
+  /**
+   * 版面(字幕 + 口播小窗)。
+   *
+   * **不进 localStorage 草稿, 而是直接存回模板** —— 这几项是模板配置的一部分,
+   * 出片时真正被消费的是模板里的值。存在草稿里会让「试做台上调好了」和「真出片
+   * 用的」变成两回事, 那正是这一页要消灭的东西。
+   */
+  const [layout, setLayout] = useState<LayoutState>(initialLayout);
+  const [savedLayout, setSavedLayout] = useState<LayoutState>(initialLayout);
+  const layoutDirty = JSON.stringify(layout) !== JSON.stringify(savedLayout);
+
+  // 成片画面尺寸。真人出镜跟你拍的竖屏走, 其余模式是 Builder 固定的 1920×1080。
+  const frame =
+    deliveryMode === 'talking-head-broll'
+      ? { width: 1080, height: 1920 }
+      : { width: 1920, height: 1080 };
+
+  async function saveLayout() {
+    setBusy('layout');
+    setError('');
+    try {
+      const res = await fetch(`/api/v1/video-templates/${templateId}/layout`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(layout),
+      });
+      const body = await res.json();
+      if (!res.ok || !body?.success) { setError(body?.message ?? '保存失败'); return; }
+      setSavedLayout(layout);
+    } catch {
+      setError('保存失败，请检查网络');
+    } finally { setBusy(''); }
+  }
   useEffect(() => {
     if (!ready) return;
     try {
@@ -383,9 +422,15 @@ export function TemplateStudio({
             1920×1080 等比缩放，循环播放。这就是渲染时逐帧截的那张画面。
           </p>
           {warn ? <p className="mt-1 text-xs text-destructive">{warn}</p> : null}
-          {/* aspect-video 保持 16:9 —— 拉伸的预览判断不了构图 */}
+          {/*
+            aspect-video 保持 16:9 —— 拉伸的预览判断不了构图。
+            `@container` 让叠加层里的 cqw 字号跟着这个盒子的宽度走。
+          */}
           <div
             ref={stageRef}
+            // containerType 直接写内联: Tailwind 的 @container 要装插件, 而这里只需
+            // 要一个容器上下文, 好让叠加层的 cqw 字号跟着这个盒子的宽度走
+            style={{ containerType: 'inline-size' }}
             className="relative mt-2 aspect-video w-full overflow-hidden rounded-md border border-border bg-black"
           >
             <iframe
@@ -404,7 +449,15 @@ export function TemplateStudio({
               }}
               className="absolute left-0 top-0"
             />
+
+            {/* 版面叠加: 用和 ffmpeg 相同的坐标算法, 见 layout-overlay.tsx */}
+            <LayoutOverlay
+              frame={frame}
+              state={layout}
+              sampleText={shot?.claim?.slice(0, 18) || '这里是一行示例字幕'}
+            />
           </div>
+
           <div className="mt-2 flex gap-3 text-xs">
             <button
               type="button"
@@ -427,6 +480,34 @@ export function TemplateStudio({
             >
               回到开头
             </button>
+          </div>
+        </section>
+      ) : null}
+
+      {/* 5 版面 */}
+      {preview ? (
+        <section className="mb-6">
+          <h2 className="text-base font-semibold">5 · 版面</h2>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            字幕和口播小窗按<span className="text-foreground">真实成片坐标</span>画在上面的预览里——
+            用的是 ffmpeg 烧字幕和叠小窗时的同一套算法。
+            这几项是<span className="text-foreground">模板配置</span>，改完存回模板，出片时直接生效。
+          </p>
+          <div className="mt-3">
+            <LayoutControls
+              state={layout}
+              onChange={(patch) => setLayout({ ...layout, ...patch })}
+              frame={frame}
+              showPip={deliveryMode === 'talking-head-broll'}
+            />
+          </div>
+          <div className="mt-3 flex items-center gap-3">
+            <Button size="sm" disabled={!layoutDirty || busy !== ''} onClick={() => void saveLayout()}>
+              {busy === 'layout' ? '保存中…' : '存回模板'}
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {layoutDirty ? '有未保存的版面改动' : '已存回模板'}
+            </span>
           </div>
         </section>
       ) : null}

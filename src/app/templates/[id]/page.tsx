@@ -53,6 +53,10 @@ export default async function TemplateDetailPage(props: { params: Promise<{ id: 
     showChapterNav: t.showChapterNav ?? false,
     researchEnabled: t.researchEnabled ?? false,
     builderModel: (t.builderModel ?? 'deepseek-chat') as VideoTemplateConfig['builderModel'],
+    talkingHeadLayout: (t.talkingHeadLayout ?? 'cutaway') as VideoTemplateConfig['talkingHeadLayout'],
+    pipPosition: (t.pipPosition ?? 'br') as VideoTemplateConfig['pipPosition'],
+    pipScale: t.pipScale ?? 0.25,
+    pipMargin: t.pipMargin ?? 40,
   };
 
   return (

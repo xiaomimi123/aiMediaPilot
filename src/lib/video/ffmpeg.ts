@@ -1,4 +1,5 @@
 import { execFile } from 'child_process';
+import { computePipRect, type PipLayout } from '@/lib/video/pip-layout';
 import { randomUUID } from 'crypto';
 import { promisify } from 'util';
 import path from 'path';
@@ -215,6 +216,8 @@ export interface CompositeCutawayOpts {
   sourceVideoPath: string; // 原始出镜视频(含音轨)
   segments: CutawaySegment[]; // 顺序任意，内部会按 startMs 防御性排序，互不重叠
   outputPath: string;
+  /** 口播画中画。不给 = 顺序挖空(老行为)。详见 CompositeCutawayArgsOpts.pip。 */
+  pip?: PipLayout;
 }
 
 /**
@@ -236,6 +239,14 @@ export interface CompositeCutawayArgsOpts extends CompositeCutawayOpts {
    * 会因空片段报错退出)。不提供时保持原行为(始终生成尾段)。
    */
   sourceDurationMs?: number;
+  /**
+   * 口播画中画。给了就走画中画: B-roll 铺满画面, 源视频缩成小窗叠在角落 ——
+   * 人一直在画面里。不给就是原来的顺序挖空: B-roll 段把人像整个替换掉。
+   *
+   * 两种都留着, 因为服务不同的内容 —— 要观众盯住画面信息时挖空更干净;
+   * 讲经历、要人味的时候, 人不该消失。
+   */
+  pip?: PipLayout;
 }
 
 /**
@@ -289,8 +300,23 @@ export function buildCompositeCutawayArgs(opts: CompositeCutawayArgsOpts): strin
     const label = `b${pieceIdx}`;
     const { sourceWidth: W, sourceHeight: H } = opts;
     filterParts.push(
-      `[${seg.inputIndex}:v]trim=start=0:end=${durSec},setpts=PTS-STARTPTS,scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1[${label}]`,
+      `[${seg.inputIndex}:v]trim=start=0:end=${durSec},setpts=PTS-STARTPTS,scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1[${label}${opts.pip ? 'bg' : ''}]`,
     );
+
+    if (opts.pip) {
+      /*
+       * 画中画: 把源视频**这一段**缩成小窗叠到 B-roll 上。
+       *
+       * 取的是源视频里同一时间段(trim=start=seg.startMs), 不是从 0 开始 ——
+       * 否则小窗里放的是片头, 和正在说的话对不上, 口型全错。
+       */
+      const r = computePipRect({ width: W, height: H }, { width: W, height: H }, opts.pip);
+      filterParts.push(
+        `[0:v]trim=start=${seg.startMs / 1000}:end=${seg.endMs / 1000},setpts=PTS-STARTPTS,scale=${r.width}:${r.height},setsar=1[${label}pip]`,
+      );
+      filterParts.push(`[${label}bg][${label}pip]overlay=${r.x}:${r.y}[${label}]`);
+    }
+
     concatLabels.push(`[${label}]`);
     pieceIdx++;
     cursorMs = seg.endMs;

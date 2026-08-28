@@ -66,6 +66,10 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       showChapterNav: cfg.showChapterNav,
       researchEnabled: cfg.researchEnabled,
       builderModel: cfg.builderModel,
+      talkingHeadLayout: cfg.talkingHeadLayout,
+      pipPosition: cfg.pipPosition,
+      pipScale: cfg.pipScale,
+      pipMargin: cfg.pipMargin,
       updatedAt: new Date().toISOString(),
     },
   });

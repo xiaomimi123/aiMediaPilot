@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { burnCaptions, mixBgm, attachIntroOutro } from '@/lib/video/ffmpeg';
+import { burnCaptions, mixBgm, attachIntroOutro, probeVideoDimensions } from '@/lib/video/ffmpeg';
 import { buildAssCaptions, type CaptionEvent } from '@/lib/video-production/ass-captions';
 import type { CaptionStyle } from '@/lib/video-template/model';
 
@@ -39,6 +39,17 @@ export async function runPackaging(input: {
 
   const steps: Array<{ name: string; label: string; run: (inPath: string, outPath: string) => Promise<void> }> = [];
 
+  // 字幕要按真实画面尺寸定字号 —— 探一次, 探不到就不写 PlayRes(退回老行为,
+  // 字会偏大, 但至少不会因为探测失败整条流程崩掉)
+  let frame: { width: number; height: number } | undefined;
+  if (options.captionStyle && options.captionEvents.length > 0) {
+    try {
+      frame = await probeVideoDimensions(masterPath);
+    } catch {
+      frame = undefined;
+    }
+  }
+
   if (options.captionStyle && options.captionEvents.length > 0) {
     const style = options.captionStyle;
     const events = options.captionEvents;
@@ -48,7 +59,9 @@ export async function runPackaging(input: {
       run: (inPath, outPath) =>
         burnCaptions({
           videoPath: inPath,
-          srt: buildAssCaptions(events, style),
+          // 探真实尺寸传给 ASS: 没有 PlayRes 时 libass 按 384×288 解释字号, 竖屏
+          // 成片上等于把字放大 6.67 倍(真机第一条片子就是这么糊掉的)
+          srt: buildAssCaptions(events, style, frame),
           outputPath: outPath,
           format: 'ass',
         }),

@@ -529,6 +529,11 @@ model VideoTemplate {
   showChapterNav  Boolean @default(false) // 顶部常驻六章进度条
   researchEnabled Boolean @default(false) // 写稿前跑 Tavily 素材研究
   builderModel    String  @default("deepseek-chat") // Builder 用哪个模型: 排版吃能力
+  /// 二十三期 真人出镜的合成方式: cutaway(顺序挖空, 老行为) | pip(画中画, 人一直在)
+  talkingHeadLayout String @default("cutaway")
+  pipPosition       String @default("br") // tl|tr|bl|br
+  pipScale          Float  @default(0.25) // 小窗宽度占画面宽度
+  pipMargin         Int    @default(40)   // 离边缘像素
   createdAt       String
   updatedAt       String
   user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)

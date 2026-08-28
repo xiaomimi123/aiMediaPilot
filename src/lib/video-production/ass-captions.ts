@@ -39,10 +39,25 @@ export function formatAssTimestamp(ms: number): string {
  * 支持的能力, 不引新依赖(spec §3.2)。
  * Alignment=2 是底部居中。
  */
-export function buildAssCaptions(events: CaptionEvent[], style: CaptionStyle): string {
+export function buildAssCaptions(
+  events: CaptionEvent[],
+  style: CaptionStyle,
+  /**
+   * 成片的真实画面尺寸。**不给就不写 PlayRes**, 保持老行为。
+   *
+   * 为什么必须给: ASS 的字号是相对 `PlayResX/PlayResY` 这个虚拟画布的, 而不是
+   * 视频像素。头里没有 PlayRes 时 libass 按规范默认 **384×288**, 再拉伸到真实
+   * 画面 —— 1080×1920 的竖屏上等于把字号放大 1920/288 ≈ **6.67 倍**。
+   *
+   * 这不是理论: 真机出的第一条成片里, 字号 56 出来是每个字约 250px 高、左右都
+   * 溢出画面的巨字。写上 PlayRes 之后, 56 就是画面上的 56 像素。
+   */
+  frame?: { width: number; height: number },
+): string {
+  const playRes = frame ? `PlayResX: ${frame.width}\nPlayResY: ${frame.height}\n` : '';
   const header = `[Script Info]
 ScriptType: v4.00+
-WrapStyle: 0
+${playRes}WrapStyle: 0
 ScaledBorderAndShadow: yes
 
 [V4+ Styles]

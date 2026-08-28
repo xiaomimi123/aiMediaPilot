@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { PageShell } from '@/components/layout/page-shell';
 import { TemplateStudio } from '@/components/templates/studio';
+import { defaultCaptionStyle } from '@/lib/video-template/model';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +20,12 @@ export default async function TemplateStudioPage(props: { params: Promise<{ id: 
 
   const t = await prisma.videoTemplate.findUnique({ where: { id } });
   if (!t || t.userId !== user.id) notFound();
+
+  const caption = (t.captionStyle as {
+    fontSize: number; marginV: number; primaryColor: string;
+    outlineColor: string; outlineWidth: number;
+  } | null) ?? null;
+  const fallback = defaultCaptionStyle();
 
   return (
     <PageShell
@@ -39,6 +46,21 @@ export default async function TemplateStudioPage(props: { params: Promise<{ id: 
         builderModel={t.builderModel ?? 'deepseek-chat'}
         visualStyle={t.visualStyle ?? 'card'}
         visualTone={t.visualTone ?? 'dark'}
+        deliveryMode={t.deliveryMode}
+        initialLayout={{
+          // captionStyle 为 null 的语义是「不烧字幕」, 不是「没配过」——
+          // 控件关掉即可, 字号等值仍给默认, 好让人打开时有个起点
+          captionOn: caption !== null,
+          fontSize: caption?.fontSize ?? fallback.fontSize,
+          marginV: caption?.marginV ?? fallback.marginV,
+          primaryColor: caption?.primaryColor ?? fallback.primaryColor,
+          outlineColor: caption?.outlineColor ?? fallback.outlineColor,
+          outlineWidth: caption?.outlineWidth ?? fallback.outlineWidth,
+          pipOn: (t.talkingHeadLayout ?? 'cutaway') === 'pip',
+          pipPosition: (t.pipPosition ?? 'br') as 'tl' | 'tr' | 'bl' | 'br',
+          pipScale: t.pipScale ?? 0.25,
+          pipMargin: t.pipMargin ?? 40,
+        }}
       />
     </PageShell>
   );

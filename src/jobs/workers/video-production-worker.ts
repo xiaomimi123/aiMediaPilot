@@ -21,6 +21,7 @@ import {
   muxAudioTrack,
   type CutawaySegment,
 } from '@/lib/video/ffmpeg';
+import type { PipPosition } from '@/lib/video/pip-layout';
 import { LocalWhisperClient } from '@/lib/llm/local-whisper';
 import type { TranscriptSegment } from '@/lib/llm/whisper';
 import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
@@ -457,7 +458,19 @@ export async function handleTalkingHeadBroll(
 
     await setStatus('assembling');
     const compositedPath = path.join(vp.productionRoot, 'composited.mp4');
-    await compositeCutawayVideo({ sourceVideoPath, segments: cutawaySegments, outputPath: compositedPath });
+    // 画中画由模板配置驱动。cutaway(默认)时不传 pip, 走原来的顺序挖空。
+    const layoutTemplate = vp.templateId
+      ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
+      : null;
+    const pip =
+      layoutTemplate?.talkingHeadLayout === 'pip'
+        ? {
+            position: (layoutTemplate.pipPosition ?? 'br') as PipPosition,
+            scale: layoutTemplate.pipScale ?? 0.25,
+            margin: layoutTemplate.pipMargin ?? 40,
+          }
+        : undefined;
+    await compositeCutawayVideo({ sourceVideoPath, segments: cutawaySegments, outputPath: compositedPath, pip });
     const outputPath = path.join(vp.productionRoot, outputFileName);
     const captionTemplate = vp.templateId
       ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
@@ -520,7 +533,19 @@ export async function handleTalkingHeadBroll(
     await setStatus('assembling');
     // 用独立文件名，与预览档的 composited.mp4 分开，避免 approve→master 渲染中途覆盖预览产物。
     const compositedPath = path.join(vp.productionRoot, 'composited-master.mp4');
-    await compositeCutawayVideo({ sourceVideoPath, segments: cutawaySegments, outputPath: compositedPath });
+    // 画中画由模板配置驱动。cutaway(默认)时不传 pip, 走原来的顺序挖空。
+    const layoutTemplate = vp.templateId
+      ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
+      : null;
+    const pip =
+      layoutTemplate?.talkingHeadLayout === 'pip'
+        ? {
+            position: (layoutTemplate.pipPosition ?? 'br') as PipPosition,
+            scale: layoutTemplate.pipScale ?? 0.25,
+            margin: layoutTemplate.pipMargin ?? 40,
+          }
+        : undefined;
+    await compositeCutawayVideo({ sourceVideoPath, segments: cutawaySegments, outputPath: compositedPath, pip });
     const outputPath = path.join(vp.productionRoot, outputFileName);
     const captionTemplate = vp.templateId
       ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
