@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { PageShell } from '@/components/layout/page-shell';
+import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 
 export const dynamic = 'force-dynamic';
@@ -27,12 +28,19 @@ export default async function TemplatesPage() {
         <ul className="grid gap-3 sm:grid-cols-2">
           {templates.map((t) => (
             <li key={t.id}>
-              <Card className="p-4">
-                <p className="font-medium">{t.name}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t.deliveryMode} · {new Date(t.createdAt).toISOString().slice(0, 10)}
-                </p>
-              </Card>
+              {/* 卡片本身就是入口 —— 之前这里是个死的 div, 模板只能靠改库来配 */}
+              <Link href={`/templates/${t.id}`} className="block">
+                <Card className="p-4 transition-colors hover:border-foreground/30">
+                  <p className="font-serif-cn text-base font-semibold">{t.name}</p>
+                  {t.description ? (
+                    <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{t.description}</p>
+                  ) : null}
+                  <p className="mt-1.5 text-xs text-muted-foreground/70">
+                    {t.deliveryMode} · {new Date(t.createdAt).toISOString().slice(0, 10)}
+                    {t.isPreset ? ' · 内置预设' : ''}
+                  </p>
+                </Card>
+              </Link>
             </li>
           ))}
         </ul>

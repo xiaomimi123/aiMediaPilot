@@ -162,7 +162,7 @@ model AIConfig {
 model VolcTtsConfig {
   id         String   @id @default(cuid())
   userId     String
-  apiKey     String   // 加密存储 (src/lib/crypto.ts encrypt()) — 替代原来错误假设的 appId+accessToken
+  apiKey     String // 加密存储 (src/lib/crypto.ts encrypt()) — 替代原来错误假设的 appId+accessToken
   resourceId String   @default("seed-tts-2.0")
   voiceType  String   @default("zh_female_vv_uranus_bigtts")
   createdAt  DateTime @default(now())
@@ -334,11 +334,11 @@ model CockpitContent {
 }
 
 model VideoProduction {
-  id              String   @id
+  id              String  @id
   userId          String
   contentId       String
-  status          String   @default("queued") // queued|directing|building|assembling|preview_ready|approved|rendering|packaging|done|failed
-  mode            String   @default("ppt-narration") // ppt-narration|talking-head-broll|illustration-tts（交付方式，注意与 worker JobData.mode 的 preview/master 是两个不同概念）
+  status          String  @default("queued") // queued|directing|building|assembling|preview_ready|approved|rendering|packaging|done|failed
+  mode            String  @default("ppt-narration") // ppt-narration|talking-head-broll|illustration-tts（交付方式，注意与 worker JobData.mode 的 preview/master 是两个不同概念）
   srt             String
   productionRoot  String
   sourceVideoPath String? // talking-head-broll: 用户上传的出镜视频本地路径
@@ -351,7 +351,7 @@ model VideoProduction {
   errorMessage    String?
   createdAt       String
   updatedAt       String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, contentId])
 }
@@ -359,7 +359,7 @@ model VideoProduction {
 /// 内容专属的真实素材(二十一期方向 B) —— 截图/表格/长文。
 /// 挂在内容而非模板上: 每条片子的素材都不一样, 挂模板会变成每条视频塞同一批图。
 model ContentAsset {
-  id          String @id
+  id          String  @id
   userId      String
   contentId   String
   kind        String // image|table|text
@@ -368,7 +368,7 @@ model ContentAsset {
   filePath    String? // 服务端绝对路径
   text        String? // 表格/长文的原始内容
   createdAt   String
-  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, contentId])
 }
@@ -427,22 +427,22 @@ model Hook {
 /// 提炼的 —— 这个板块不是锦上添花, 它是评分标准的来源。
 /// 视频上传 → ASR 那条路要新起一条管线, 还没接。
 model Teardown {
-  id         String   @id @default(cuid())
-  userId     String
-  title      String
+  id           String   @id @default(cuid())
+  userId       String
+  title        String
   /// 作者/账号, 可空
-  author     String   @default("")
+  author       String   @default("")
   /// 原始链接, 可空
-  url        String   @default("")
+  url          String   @default("")
   /// 口播转写全文
-  transcript String   @db.Text
+  transcript   String   @db.Text
   /// AI 拆出来的结构: { formula, segments[], hooks[], takeaways[] }
-  result     Json?
-  status     String   @default("pending") // pending|done|failed
+  result       Json?
+  status       String   @default("pending") // pending|done|failed
   errorMessage String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
 }
@@ -461,7 +461,7 @@ model PublishedWork {
   externalId  String
   title       String   @db.Text
   /// 完整文案(抖音 desc)。分析文案特征要用全文, 截断了就没法判有没有点痛点。
-  caption     String   @db.Text @default("")
+  caption     String   @default("") @db.Text
   /// 话题标签
   hashtags    Json     @default("[]")
   url         String   @default("")
@@ -488,29 +488,29 @@ model PublishedWork {
 }
 
 model VideoTemplate {
-  id           String  @id
-  userId       String
-  name         String
-  description  String  @default("")
-  deliveryMode String  // ppt-narration|talking-head-broll|illustration-tts
-  visualStyle  String  @default("card") // card|illustration
-  palette      Json?
-  voicePreset  Json?   // { voiceType?, resourceId? } — 仅 illustration-tts 消费
-  scriptPrompt Json?   // { tone?, targetDurationSec?, hookHint?, extraGuidance? }
-  captionStyle Json?   // null = 不烧字幕
-  bgmPath      String?
-  bgmVolume    Float   @default(0.15)
-  introPath    String?
-  outroPath    String?
-  isPreset     Boolean @default(false)
-  visualTone     String  @default("dark")  // light|dark — 二十一期: 参考视频是米白亮底
-  shotPaceSec    Float?                    // 目标切镜节奏(秒), null = 不约束(老行为)
-  showChapterNav Boolean @default(false)   // 顶部常驻六章进度条
-  researchEnabled Boolean @default(false)  // 写稿前跑 Tavily 素材研究
-  builderModel   String  @default("deepseek-chat") // Builder 用哪个模型: 排版吃能力
-  createdAt    String
-  updatedAt    String
-  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String  @id
+  userId          String
+  name            String
+  description     String  @default("")
+  deliveryMode    String // ppt-narration|talking-head-broll|illustration-tts
+  visualStyle     String  @default("card") // card|illustration
+  palette         Json?
+  voicePreset     Json? // { voiceType?, resourceId? } — 仅 illustration-tts 消费
+  scriptPrompt    Json? // { tone?, targetDurationSec?, hookHint?, extraGuidance? }
+  captionStyle    Json? // null = 不烧字幕
+  bgmPath         String?
+  bgmVolume       Float   @default(0.15)
+  introPath       String?
+  outroPath       String?
+  isPreset        Boolean @default(false)
+  visualTone      String  @default("dark") // light|dark — 二十一期: 参考视频是米白亮底
+  shotPaceSec     Float? // 目标切镜节奏(秒), null = 不约束(老行为)
+  showChapterNav  Boolean @default(false) // 顶部常驻六章进度条
+  researchEnabled Boolean @default(false) // 写稿前跑 Tavily 素材研究
+  builderModel    String  @default("deepseek-chat") // Builder 用哪个模型: 排版吃能力
+  createdAt       String
+  updatedAt       String
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
