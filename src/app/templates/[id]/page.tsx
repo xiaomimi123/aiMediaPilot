@@ -60,12 +60,21 @@ export default async function TemplateDetailPage(props: { params: Promise<{ id: 
       title={t.name}
       description="改完点保存。这套配置决定用它出片时的画面结构、字幕和音频。"
       actions={
-        <Link
-          href="/templates"
-          className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
-        >
-          回模板列表
-        </Link>
+        <div className="flex items-center gap-3">
+          {/* 试做台是这一页的出口: 配置改完总要看效果, 而完整出片要三分多钟 */}
+          <Link
+            href={`/templates/${id}/studio`}
+            className="rounded-md border border-foreground px-3 py-1.5 text-xs font-medium hover:bg-secondary"
+          >
+            试做效果 →
+          </Link>
+          <Link
+            href="/templates"
+            className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+          >
+            回模板列表
+          </Link>
+        </div>
       }
     >
       <TemplateEditor
