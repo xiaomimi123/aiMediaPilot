@@ -49,7 +49,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     label: '生产',
     items: [
       { href: '/templates', label: '模板', hint: '决定成片的画面结构、字幕与转场', ready: true },
-      { href: '/films', label: '成片', hint: '出片队列与成片, 就地播放', ready: false },
+      { href: '/films', label: '成片', hint: '出片队列与成片, 就地播放与确认导出', ready: true },
     ],
   },
   {

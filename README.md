@@ -923,6 +923,22 @@ top3, 注入两处——①研究层 `curatedParts` **最前**(亲身经历 > �
 
 API: `POST/GET /api/v1/topics`、`PATCH /api/v1/topics/[id]`、`POST/GET /api/v1/scripts/[id]/distributions`、`DELETE /api/v1/distributions/[id]`。 (旧工作台看板专用的 `GET /api/v1/workbench` 聚合接口已随看板一起删除。)
 
+### 成片 (`/films`, `/films/[id]`)
+
+**这条链路曾经断在最后一步。** 9 条出片任务全部停在 `preview_ready` 半个多月, 界面上「成功出片 0 次」—— 因为唯一能「确认导出」的界面 (`video-production-panel.tsx`) 在 v5 重建里连同旧的内容详情页一起被删了, 而 `approve` 接口和 worker 的 `master → packaging → done` 分支都还在。全站没有一处调用 approve, 所以每条片子跑到预览就永远停住。
+
+现在 `/films/[id]` 接上了这一步: 预览播放 → 确认导出 → 进度 → 下载成片。
+
+核心是 `src/lib/cockpit/production-stage.ts` 里的一个区分: **「等你」和「在跑」是两回事**。
+
+- `waitingOn(status)` → `'you' | 'machine' | 'nobody'`。`preview_ready` 和 `failed` 都是**等你**, 中间各步是在跑。
+- 列表行上就打「等你」徽标 —— 之前它和「在跑」长得一模一样, 这正是没人发现停了半个多月的原因。
+- 详情页把「下一步等谁」放在最上面, 进度条只是辅助。
+- 只在 `isInFlight` 时轮询: 停在「等你」的状态上轮询是纯粹的浪费, 它不会自己动。
+- `failed` 不落在任何阶段上 (`stageIndex` 返回 -1), 也不画进度条 —— 把失败画成「进行到某一步」是在美化它。
+
+真机 E2E 已跑通一条完整的: 确认导出 → building → assembling → packaging → done, 3 分半, 产出 1080×1920 / h264+aac / 2 分 35 秒的 `packaged.mp4`。这是项目第一次真正出片成功, 侧栏「成片」的 `ready` 因此改为 `true`。
+
 ### 设置 (`/settings` + 5 个子页)
 
 `/settings` 在 v5 重建里一直是一句「阶段 3 只搭骨架」, 而后端的六套接口早就建齐了 (`persona/*`、`voice/*`、`experiences`、`radar/config` + `radar/keywords`、`ai/config` + `test`、`tts/volc-config`)。结果是这些档案只能靠直接改数据库来配 —— 而它们恰恰决定写稿的质量。现在补齐:

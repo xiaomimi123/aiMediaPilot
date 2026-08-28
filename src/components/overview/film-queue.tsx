@@ -1,6 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { waitingOn } from '@/lib/cockpit/production-stage';
 import { canStartProduction } from '@/lib/cockpit/production-status';
 import { Button } from '@/components/ui/button';
 
@@ -70,15 +72,23 @@ export function FilmQueue({ rows }: { rows: Row[] }) {
         <ul className="flex flex-col divide-y divide-border rounded-md border border-border bg-card">
           {rows.map((r) => (
             <li key={r.id} className="flex items-center justify-between gap-4 p-3">
-              <div className="min-w-0">
+              {/* 整行是入口 —— 详情页才有预览播放和「确认导出」 */}
+              <Link href={`/films/${r.id}`} className="min-w-0 flex-1">
                 <p className="truncate text-sm">{r.title}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {r.mode} · {r.createdAt} · {LABEL[r.status] ?? r.status}
+                  {/* 「等你」必须在列表上就看得见: 9 条任务停在预览就绪半个多月,
+                      就是因为列表上它和「在跑」长得一模一样 */}
+                  {waitingOn(r.status) === 'you' && r.status !== 'queued' && r.status !== 'source_uploaded' ? (
+                    <span className="ml-2 rounded bg-secondary px-1.5 py-0.5 font-medium text-foreground">
+                      等你
+                    </span>
+                  ) : null}
                 </p>
                 {r.errorMessage ? (
                   <p className="mt-0.5 truncate text-xs text-destructive">{r.errorMessage}</p>
                 ) : null}
-              </div>
+              </Link>
               {canStartProduction(r.status) ? (
                 <Button
                   size="sm"
