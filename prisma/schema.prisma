@@ -460,9 +460,15 @@ model PublishedWork {
   /// 平台侧的作品 id, 去重与增量更新用
   externalId  String
   title       String   @db.Text
+  /// 完整文案(抖音 desc)。分析文案特征要用全文, 截断了就没法判有没有点痛点。
+  caption     String   @db.Text @default("")
+  /// 话题标签
+  hashtags    Json     @default("[]")
   url         String   @default("")
   publishedAt DateTime
   durationSec Int      @default(0)
+  /// 隐藏/仅自己可见 —— 101 条里 93 条是隐藏的, 它们 0 播放不是内容问题
+  isPrivate   Boolean  @default(false)
 
   play    Int @default(0)
   digg    Int @default(0)
@@ -470,7 +476,7 @@ model PublishedWork {
   collect Int @default(0)
   share   Int @default(0)
 
-  /// 是否计入基线
+  /// 是否属于当前赛道(AI 类), 计入分析。默认由关键词判, 用户可逐条改判。
   counted   Boolean  @default(false)
   /// 最近一次回采时间 —— 数字会随时间涨, 要知道这份快照多旧
   fetchedAt DateTime @default(now())

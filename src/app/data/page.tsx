@@ -3,7 +3,9 @@ import { prisma } from '@/lib/prisma';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { PageShell } from '@/components/layout/page-shell';
 import { buildBaseline, BASELINE_YEAR_FROM } from '@/lib/works/model';
+import { buildHypotheses, adviseNextVideo } from '@/lib/works/insight';
 import { WorkList } from '@/components/data/work-list';
+import { WorkInsight } from '@/components/data/work-insight';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,8 +25,9 @@ export default async function DataPage() {
       where: { userId: user.id },
       orderBy: { publishedAt: 'desc' },
       select: {
-        id: true, title: true, url: true, publishedAt: true, play: true,
-        digg: true, comment: true, collect: true, counted: true, fetchedAt: true,
+        id: true, title: true, caption: true, hashtags: true, url: true, publishedAt: true,
+        play: true, digg: true, comment: true, collect: true, counted: true,
+        durationSec: true, isPrivate: true, fetchedAt: true,
       },
     }),
     prisma.scriptDraft.count({ where: { userId: user.id, archivedAt: null } }),
@@ -34,6 +37,23 @@ export default async function DataPage() {
 
   const baseline = buildBaseline(works.map((w) => ({ play: w.play, counted: w.counted })));
   const fetchedAt = works[0]?.fetchedAt ?? null;
+  const hiddenCount = works.filter((w) => w.isPrivate).length;
+
+  // 只拿计入分析的(AI 类公开作品)去做文案 × 流量分析
+  const analysed = works
+    .filter((w) => w.counted)
+    .map((w) => ({
+      id: w.id,
+      caption: w.caption,
+      hashtags: Array.isArray(w.hashtags) ? (w.hashtags as string[]) : [],
+      play: w.play,
+      digg: w.digg,
+      collect: w.collect,
+      durationSec: w.durationSec,
+      publishedAt: w.publishedAt,
+    }));
+  const hypotheses = buildHypotheses(analysed);
+  const advice = adviseNextVideo(analysed);
 
   const chain = [
     { label: '写稿', count: scripts, note: '本系统里的六幕稿' },
@@ -71,9 +91,18 @@ export default async function DataPage() {
         <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
           校准要的是「预测分 vs 实际表现」的<span className="font-medium">配对</span>，
           而这 {works.length} 条作品没有一条是用本系统写的——它们没有预测分。
-          它们只能当基线：新发的片子跟这个中位数比。真正的校准要等本系统写的稿子发出去并回采。
+          它们能做的是另一件事：分析文案特征和流量的关系，给下一条视频提假设。
+          真正的校准要等本系统写的稿子发出去并回采。
         </p>
+        {hiddenCount > 0 ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {works.length} 条里有 {hiddenCount} 条是隐藏/仅自己可见的，已排除出分析——
+            它们 0 播放不是内容问题。
+          </p>
+        ) : null}
       </section>
+
+      <WorkInsight works={analysed} hypotheses={hypotheses} advice={advice} />
 
       <div className="mb-6 grid grid-cols-4 gap-3">
         {chain.map((c, i) => {

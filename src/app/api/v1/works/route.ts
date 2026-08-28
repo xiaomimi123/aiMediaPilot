@@ -7,6 +7,9 @@ import { shouldCountByDefault } from '@/lib/works/model';
 const WorkSchema = z.object({
   externalId: z.string().min(1).max(64),
   title: z.string().max(300).default(''),
+  caption: z.string().max(4000).default(''),
+  hashtags: z.array(z.string().max(60)).max(30).default([]),
+  isPrivate: z.boolean().default(false),
   url: z.string().max(500).default(''),
   /** 秒级 unix 时间戳(抖音接口的 create_time) */
   createTime: z.number().int().positive(),
@@ -57,7 +60,8 @@ export async function POST(req: Request) {
   for (const w of works) {
     const publishedAt = new Date(w.createTime * 1000);
     const metrics = {
-      title: w.title, url: w.url, publishedAt, durationSec: w.durationSec,
+      title: w.title, caption: w.caption, hashtags: w.hashtags, isPrivate: w.isPrivate,
+      url: w.url, publishedAt, durationSec: w.durationSec,
       play: w.play, digg: w.digg, comment: w.comment, collect: w.collect, share: w.share,
       fetchedAt: new Date(),
     };
@@ -75,7 +79,10 @@ export async function POST(req: Request) {
           userId: user.id,
           platform,
           externalId: w.externalId,
-          counted: shouldCountByDefault({ title: w.title, play: w.play, publishedAt }),
+          // 隐藏作品不进分析: 它们 0 播放不是内容问题, 混进来会把中位数拽到 0
+          counted:
+            !w.isPrivate &&
+            shouldCountByDefault({ title: `${w.title} ${w.caption}`, play: w.play, publishedAt }),
         },
       });
       created += 1;
