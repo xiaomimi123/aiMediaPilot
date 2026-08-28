@@ -10,6 +10,16 @@ import {
 } from '@/jobs/queue';
 
 /**
+ * **必须动态。** 健康检查被静态预渲染就等于把构建时的快照当成实时状态 —— 页面上
+ * 会永远显示构建那一刻 worker 在不在, 而不是现在在不在。
+ *
+ * 还有个更直接的后果: 构建时会去连 Redis, Redis 没起的话 ioredis 一直重试,
+ * 整个 next build 卡死在这一页(实测就是这么挂的)。
+ */
+export const dynamic = 'force-dynamic';
+
+
+/**
  * 运行时健康检查(前端重建 · 阶段 5.1)。
  *
  * 动因: 后台 worker 需要手动 `npm run worker:dev` 启动, 不启动时任务照常入队然后
