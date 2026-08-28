@@ -8,6 +8,8 @@ import { scoreHardDimensions, type ScoreDimension } from '@/lib/cockpit/script-s
 import { buttonVariants } from '@/components/ui/button';
 import { Tabs } from '@/components/ui/tabs';
 import { MaterialPanel } from './material-panel';
+import { RewritePanel } from './rewrite-panel';
+import { compareToBaseline } from '@/lib/script/rewrite-diff';
 import { ActStrip } from './act-strip';
 import { ActEditor } from './act-editor';
 import { ScorePanel } from './score-panel';
@@ -74,6 +76,7 @@ export function ScriptWorkspace({
   softMax,
   softDimensions,
   softStaleReason = null,
+  aiBaselineActs = null,
 }: {
   scriptId: string;
   topic: string;
@@ -84,6 +87,8 @@ export function ScriptWorkspace({
   softMax: number;
   softDimensions: ScoreDimension[];
   softStaleReason?: 'script' | 'model' | null;
+  /** AI 原版的六幕, 用来算「这稿子还剩多少是 AI 的」。旧稿没有就是 null。 */
+  aiBaselineActs?: ScriptAct[] | null;
 }) {
   const [acts, setActs] = useState(initialActs);
   const [dirty, setDirty] = useState(false);
@@ -91,12 +96,22 @@ export function ScriptWorkspace({
 
   const save = useAutoSave(scriptId, acts, dirty);
 
-  const [panel, setPanel] = useState<'score' | 'material' | 'variant'>('score');
+  const [panel, setPanel] = useState<'score' | 'rewrite' | 'material'>('score');
 
   const plan = useMemo(() => buildActPlan(acts, durationSec), [acts, durationSec]);
   const hard = useMemo(() => scoreHardDimensions(acts, durationSec), [acts, durationSec]);
   const current = acts.find((a) => a.act === currentAct) ?? acts[0];
   const currentRow = plan.rows.find((r) => r.act === currentAct);
+
+  // 「我的版 vs AI 版」: 改写度 + AI 原版的硬指标, 都是纯函数, 随打字实时重算
+  const comparison = useMemo(
+    () => compareToBaseline(acts, aiBaselineActs),
+    [acts, aiBaselineActs],
+  );
+  const baselineHard = useMemo(
+    () => (aiBaselineActs ? scoreHardDimensions(aiBaselineActs, durationSec).total : null),
+    [aiBaselineActs, durationSec],
+  );
   // 评分模型换过之后旧软分不可比, 不计入总分
   const countSoft = softScore !== null && softStaleReason !== 'model';
 
@@ -175,13 +190,20 @@ export function ScriptWorkspace({
           <Tabs
             tabs={[
               { value: 'score' as const, label: '评分' },
+              { value: 'rewrite' as const, label: '改写' },
               { value: 'material' as const, label: '素材' },
-              { value: 'variant' as const, label: '变体' },
             ]}
             value={panel}
             onChange={setPanel}
           />
-          {panel === 'material' ? (
+          {panel === 'rewrite' ? (
+            <RewritePanel
+              comparison={comparison}
+              hardTotal={hard.total}
+              baselineHardTotal={baselineHard}
+              hardMax={hard.max}
+            />
+          ) : panel === 'material' ? (
             <MaterialPanel
               narration={current.narration}
               beats={current.beats.map((b) => b.keyword)}
@@ -197,11 +219,7 @@ export function ScriptWorkspace({
               softStaleReason={softStaleReason}
               todos={todos}
             />
-          ) : (
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              变体还没做。它会让同一幕生成几个不同写法并排比较，而不是覆盖掉你已经写好的。
-            </p>
-          )}
+          ) : null}
         </aside>
       </div>
 

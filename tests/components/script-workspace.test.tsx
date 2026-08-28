@@ -90,10 +90,53 @@ describe('ScriptWorkspace', () => {
     expect(screen.queryByText('量子力学入门')).toBeNull();
   });
 
-  it('变体如实说明还没做', () => {
+  it('没有 AI 原版记录时明说, 不假装能比较', () => {
     renderWorkspace();
-    fireEvent.click(screen.getByRole('tab', { name: '变体' }));
-    expect(screen.getByText(/变体还没做/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: '改写' }));
+    expect(screen.getByText(/没有 AI 原版记录/)).toBeTruthy();
+  });
+
+  it('有原版时报改写度, 并**点名一个字没改的幕**', () => {
+    const baseline = ACTS.map((a) => ({ ...a }));
+    render(
+      <ScriptWorkspace
+        scriptId="d2"
+        topic="测试稿"
+        platform="douyin"
+        durationSec={60}
+        initialActs={ACTS.map((a) =>
+          a.act === 'hook' ? { ...a, narration: '完全换一种说法来开这个头' } : { ...a },
+        )}
+        softScore={null}
+        softMax={65}
+        softDimensions={[]}
+        aiBaselineActs={baseline}
+      />,
+    );
+    fireEvent.click(screen.getAllByRole('tab', { name: '改写' })[0]);
+    // 只改了 hook, 其余五幕一个字没动
+    expect(screen.getAllByText('一个字没改').length).toBe(5);
+  });
+
+  it('改写度随打字实时变 —— 它是纯函数, 不等保存', async () => {
+    const baseline = ACTS.map((a) => ({ ...a }));
+    render(
+      <ScriptWorkspace
+        scriptId="d3" topic="t" platform="douyin" durationSec={60}
+        initialActs={ACTS.map((a) => ({ ...a }))}
+        softScore={null} softMax={65} softDimensions={[]}
+        aiBaselineActs={baseline}
+      />,
+    );
+    fireEvent.click(screen.getAllByRole('tab', { name: '改写' })[0]);
+    expect(screen.getAllByText('一个字没改').length).toBe(6);
+
+    fireEvent.click(screen.getAllByRole('tab', { name: '评分' })[0]);
+    fireEvent.change(screen.getByDisplayValue('hook 台词'), {
+      target: { value: '换成完全不一样的一句开场白' },
+    });
+    fireEvent.click(screen.getAllByRole('tab', { name: '改写' })[0]);
+    await waitFor(() => expect(screen.getAllByText('一个字没改').length).toBe(5));
   });
 
   it('待处理把扣分翻译成去改哪一幕 —— 只给分不给去处等于没评', () => {

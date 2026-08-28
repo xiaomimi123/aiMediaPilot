@@ -40,6 +40,12 @@ export default async function WriteDetailPage(props: { params: Promise<{ id: str
     );
   }
 
+  // AI 原版快照(第一次保存时留的底)。没有就是快照功能之前建的旧稿。
+  const rawBaseline = (draft.output as { aiBaseline?: { acts?: unknown } } | null)?.aiBaseline;
+  const aiBaselineActs = Array.isArray(rawBaseline?.acts)
+    ? (rawBaseline.acts as typeof acts)
+    : null;
+
   const durationSec: number =
     parsed?.durationSec ?? acts.reduce((n: number, a) => n + a.targetSec, 0);
 
@@ -63,6 +69,7 @@ export default async function WriteDetailPage(props: { params: Promise<{ id: str
           softMax={SOFT_MAX}
           softDimensions={soft?.dimensions ?? []}
           softStaleReason={soft?.staleReason ?? null}
+          aiBaselineActs={aiBaselineActs}
         />
       </div>
     </main>

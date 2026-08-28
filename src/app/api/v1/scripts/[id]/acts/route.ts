@@ -64,8 +64,24 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
     return fail('这份稿子不是六幕结构, 工作区改不了', 400);
   }
 
+  /**
+   * 第一次保存时把 AI 原版快照下来, **之后永不覆盖**。
+   *
+   * 这是「我的版 vs AI 版」对比的基准。工具的分工是「系统给起点 → 你自己写 →
+   * 系统做评估」, 没有基准就评估不了「这稿子还剩多少是 AI 的」—— 而可模仿的
+   * 部分正是会被算法抹平的部分。
+   *
+   * 快照时机选在第一次保存而不是生成时: 生成路由有好几条(douyin/xhs/模板出片),
+   * 都改一遍容易漏; 而任何一份稿子被编辑之前必然先经过这里一次。
+   */
+  const hasBaseline = Boolean((output as { aiBaseline?: unknown }).aiBaseline);
+  const aiBaseline = hasBaseline
+    ? (output as { aiBaseline: unknown }).aiBaseline
+    : { acts: output.script.acts, snapshotAt: new Date().toISOString() };
+
   const next = {
     ...output,
+    aiBaseline,
     script: { ...output.script, acts: parsed.data.acts },
   };
 
