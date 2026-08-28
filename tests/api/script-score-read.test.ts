@@ -12,8 +12,13 @@ import { GET } from '@/app/api/v1/cockpit/contents/[id]/script-score/route';
 import { GET as LIST } from '@/app/api/v1/cockpit/script-scores/route';
 import { scriptFingerprint, SOFT_MODEL_VERSION } from '@/lib/cockpit/script-score';
 
+/**
+ * 讲了变现的稿子 —— 「信任声明」那一维只在这种稿子上才参与打分, 所以满分是 35。
+ * 不讲钱的稿子那一维整条不适用, 满分 29(见 script-score.test.ts)。
+ */
 const ACTS = [
   { act: 'hook', title: '钩子', narration: '先说清楚，我不卖课。', visual: '出镜正面', targetSec: 12 },
+  { act: 'synthesis', title: '串联', narration: '那一个月我赚了两万。', visual: '出镜正面', targetSec: 10 },
   { act: 'punchline', title: '收尾', narration: '你做电商也是一样的。', visual: '出镜正面', targetSec: 8 },
 ];
 

@@ -29,28 +29,52 @@ function dim(result: ReturnType<typeof scoreHardDimensions>, key: string) {
 }
 
 describe('scoreHardDimensions', () => {
-  it('总分等于各维度之和, 满分 35', () => {
+  it('总分等于各维度之和', () => {
     const r = scoreHardDimensions(acts(), 60);
     expect(r.total).toBe(r.dimensions.reduce((s, d) => s + d.score, 0));
+  });
+
+  it('讲变现的稿子满分 35 —— 信任声明这一维参与打分', () => {
+    const r = scoreHardDimensions(acts({ synthesis: { narration: '结果卖了六千多单。' } }), 60);
     expect(r.max).toBe(HARD_MAX);
     expect(r.max).toBe(35);
   });
 
+  it('不讲钱的稿子满分 29 —— 信任声明整条不适用, 不是白扣 6 分', () => {
+    // 用户的原话: 「每个好的口播并不都需要出现信任声明这种话术」。
+    // 无差别扣 6 分的那一维根本没在区分好坏。
+    expect(scoreHardDimensions(acts(), 60).max).toBe(29);
+  });
+
   describe('信任声明', () => {
+    /** 这一维只在讲变现的稿子上成立, 所以每个用例都得先有钱的痕迹。 */
+    const withMoney = (o: Parameters<typeof acts>[0] = {}) =>
+      acts({ synthesis: { narration: '结果卖了六千多单。' }, ...o });
+
     it('前两幕出现「不卖课」给满分', () => {
-      const r = scoreHardDimensions(acts({ hook: { narration: '先说清楚，我不卖课不收徒。' } }), 60);
+      const r = scoreHardDimensions(withMoney({ hook: { narration: '先说清楚，我不卖课不收徒。' } }), 60);
+      expect(dim(r, 'trust').score).toBe(HARD_WEIGHTS.trust);
+    });
+
+    it('「没卖课」和「不卖课」一样认 —— 真机上这条漏判过', () => {
+      const r = scoreHardDimensions(withMoney({ hook: { narration: '我没卖课，也没收徒。' } }), 60);
       expect(dim(r, 'trust').score).toBe(HARD_WEIGHTS.trust);
     });
 
     it('声明放到末幕只给一半 —— 防喷要趁早', () => {
-      const r = scoreHardDimensions(acts({ punchline: { narration: '顺带一提我不带货。' } }), 60);
+      const r = scoreHardDimensions(withMoney({ punchline: { narration: '顺带一提我不带货。' } }), 60);
       expect(dim(r, 'trust').score).toBe(HARD_WEIGHTS.trust / 2);
     });
 
-    it('完全没有声明给 0 分', () => {
-      const r = scoreHardDimensions(acts(), 60);
+    it('讲了钱又完全没有声明, 给 0 分', () => {
+      const r = scoreHardDimensions(withMoney(), 60);
       expect(dim(r, 'trust').score).toBe(0);
       expect(dim(r, 'trust').reason).toContain('没有');
+    });
+
+    it('不讲钱就整条不出现', () => {
+      const r = scoreHardDimensions(acts(), 60);
+      expect(r.dimensions.find((d) => d.key === 'trust')).toBeUndefined();
     });
   });
 

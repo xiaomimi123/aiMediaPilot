@@ -69,14 +69,43 @@ export const HARD_MAX = Object.values(HARD_WEIGHTS).reduce((a, b) => a + b, 0);
 
 /** 「先说清楚我不卖课」这类防喷声明。奥一在第 13 秒就放了这句。 */
 const TRUST_PATTERNS = [
-  /不卖课/,
-  /不带货/,
-  /不收徒/,
-  /不收费/,
-  /不收钱/,
-  /不恰饭/,
-  /不引流/,
+  // 「不」和「没」都要认。真机上用户金句写的是「我**没**卖课，也**没**收徒」,
+  // 只认「不卖课」把它判成了 0 分 —— 他用了这个手法, 系统却说他没用。
+  /[不没]卖课/,
+  /[不没]带货/,
+  /[不没]收徒/,
+  /[不没]收费/,
+  /[不没]收钱/,
+  /[不没]恰饭/,
+  /[不没]引流/,
+  /[不没]有卖课/,
 ];
+
+/**
+ * 这支片子讲不讲变现。
+ *
+ * 决定「信任声明」这一维**要不要参与打分**。用户的原话: 「每个好的口播并不都需要
+ * 出现信任声明这种话术」—— 他是对的。这条规则原本的理由是「讲赚钱又不提前打预防针,
+ * 评论区防不住」, 那个理由只在讲赚钱时成立; 套到所有稿子上, 它就变成了一项无差别
+ * 扣分, 每份稿子都稳定丢 6 分, 那 6 分根本没在区分好坏。
+ *
+ * 判据放在**旁白**上而不是画面: 画面那一维由 `scoreCompliance` 管, 用户的约束是
+ * 「可以提数据, 不可以展示数据」, 两件事不能混。
+ */
+const MONEY_PATTERNS = [
+  /赚(到|了|钱|过)/,
+  /月入|年入|日入/,
+  /收入|变现|营收|利润|佣金/,
+  /卖(了|出|到|爆)/,
+  /\d+\s*(万|千|块|元|单|美金|刀)/,
+  /[一二三四五六七八九十百千万]+\s*(万|千|块|元|单)/,
+  /付费|定价|涨价|客单价/,
+  /接单|接活|报价/,
+];
+
+function talksAboutMoney(acts: ScorableAct[]): boolean {
+  return acts.some((a) => MONEY_PATTERNS.some((p) => p.test(a.narration ?? '')));
+}
 
 /**
  * 会被平台判成「展示收益诱导」的画面元素。
@@ -158,7 +187,17 @@ function countChars(text: string): number {
   return (text ?? '').replace(/[，。：；？！、—\s]/g, '').length;
 }
 
-function scoreTrust(acts: ScorableAct[], max: number): ScoreDimension {
+/**
+ * 信任声明。
+ *
+ * **返回 null 表示这一维对这支片子不适用**, 调用方会把它整条摘掉 —— 满分随之从 35
+ * 降到 29, 而不是让它白扣 6 分。全站取的都是结果里的 `max` 而不是常量, 所以比例、
+ * 平均分、校准页的预测值都会跟着走对。
+ */
+function scoreTrust(acts: ScorableAct[], max: number): ScoreDimension | null {
+  // 不讲钱就不需要打预防针 —— 见 talksAboutMoney 的说明
+  if (!talksAboutMoney(acts)) return null;
+
   const hitIndex = acts.findIndex((a) => TRUST_PATTERNS.some((p) => p.test(a.narration ?? '')));
   const base = { key: 'trust', label: '信任声明', max };
 
@@ -341,6 +380,7 @@ export function scoreHardDimensions(
   durationSec: number,
   weights: HardWeights = HARD_WEIGHTS,
 ): HardScoreResult {
+  // 不适用的维度整条摘掉(现在只有信任声明会这样), 满分跟着变
   const dimensions = [
     scoreDuration(acts, durationSec, weights.duration),
     scoreConcise(acts, weights.concise),
@@ -348,7 +388,7 @@ export function scoreHardDimensions(
     scoreCompliance(acts, weights.compliance),
     scoreStructure(acts, weights.structure),
     scoreUniversal(acts, weights.universal),
-  ];
+  ].filter((d): d is ScoreDimension => d !== null);
   return {
     dimensions,
     total: dimensions.reduce((s, d) => s + d.score, 0),
@@ -501,6 +541,17 @@ export function combineScore(
     };
   }
 
+  /*
+   * 总分和满分都是**各维度的原始和**, 不做折算。
+   *
+   * 这意味着不讲变现的稿子满分是 94 而不是 100(信任声明那一维不适用)。曾经想过把
+   * 硬指标折算回固定的 35 分好让所有稿子都是 100, 但那会让面板上「各维度加起来
+   * ≠ 总分」—— 界面开始对不上, 是这个项目一再要避免的事。
+   *
+   * 而且不折算也不影响使用: 全站消费这个分的地方要么用比例(稿库的颜色分档
+   * `total / max`), 要么把分母一起显示出来(「18/29」「校准页的预测硬指标」),
+   * 没有一处把 35 或 100 写死。
+   */
   const dimensions = [...hard.dimensions, ...soft.dimensions];
   return {
     dimensions,
