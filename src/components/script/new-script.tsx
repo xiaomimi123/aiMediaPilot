@@ -38,8 +38,9 @@ export function NewScript({ inspirations }: { inspirations: { id: string; text: 
   const [error, setError] = useState('');
 
   async function generate() {
-    if (topic.trim().length < 3) return;
-    if (mode === 'import' && myText.trim().length < 50) return;
+    if (mode === 'import') {
+      if (myText.trim().length < 50) return;
+    } else if (topic.trim().length < 3) return;
     setBusy(true);
     setError('');
     try {
@@ -50,7 +51,8 @@ export function NewScript({ inspirations }: { inspirations: { id: string; text: 
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(
           mode === 'import'
-            ? { topic: topic.trim(), text: myText.trim(), durationSec }
+            // 留空就不传 —— 后端会用模型从稿子里起的名字
+            ? { topic: topic.trim() || undefined, text: myText.trim(), durationSec }
             : { topic: topic.trim(), niche: 'ai-knowledge', platform: 'douyin', durationSec, mode },
         ),
       });
@@ -71,17 +73,27 @@ export function NewScript({ inspirations }: { inspirations: { id: string; text: 
     <>
       <section className="mb-5">
         <label className="block">
-          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">选题</span>
+          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            选题{mode === 'import' ? '（可留空）' : ''}
+          </span>
           <textarea
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
             rows={2}
-            placeholder="想讲什么？一句话说清楚就行"
+            placeholder={
+              mode === 'import'
+                ? '留空就行——我按你稿子的内容起一个名字'
+                : '想讲什么？一句话说清楚就行'
+            }
             className="mt-1.5 w-full resize-y rounded-md border border-input bg-card p-3.5 text-sm leading-relaxed placeholder:text-muted-foreground/60 focus:border-foreground/40 focus:outline-none"
           />
         </label>
 
-        {inspirations.length > 0 ? (
+        {/*
+          导入模式整块不显示: 稿子都写好了, 再问他「从灵感库挑一个」是多余的一步,
+          而 else 分支还会说「灵感库是空的」—— 那是假话, 库里有 9 条。
+        */}
+        {mode === 'import' ? null : inspirations.length > 0 ? (
           <div className="mt-2">
             <p className="text-xs text-muted-foreground">或者从灵感库挑一个：</p>
             <ul className="mt-1.5 flex flex-wrap gap-1.5">
@@ -207,7 +219,10 @@ export function NewScript({ inspirations }: { inspirations: { id: string; text: 
       </section>
 
       <Button
-        disabled={busy || topic.trim().length < 3 || (mode === 'import' && myText.trim().length < 50)}
+        disabled={
+          busy ||
+          (mode === 'import' ? myText.trim().length < 50 : topic.trim().length < 3)
+        }
         onClick={() => void generate()}
       >
         {busy

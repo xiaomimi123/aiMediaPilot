@@ -22,7 +22,13 @@ import { allocateActSeconds } from '@/lib/script/six-act';
  * 会以为那还是他写的东西, 而「改写度」会拿它当基线, 整条评估链就都建在假的上面。
  */
 const BodySchema = z.object({
-  topic: z.string().trim().min(1).max(120),
+  /**
+   * 可以留空。
+   *
+   * 稿子已经在手里了, 逼他先想一个主题才能导入是把顺序搞反了 —— 真机上他就卡在
+   * 这里: 文案贴好了, 不知道该填什么, 下一步走不了。留空时用模型从稿子里起的名字。
+   */
+  topic: z.string().trim().max(120).optional(),
   text: z.string().trim().min(50).max(8000),
   durationSec: z.number().int().min(15).max(600).default(60),
 });
@@ -31,7 +37,7 @@ export async function POST(req: Request) {
   let raw: unknown;
   try { raw = await req.json(); } catch { return fail('请求体不是合法 JSON', 400); }
   const parsed = BodySchema.safeParse(raw);
-  if (!parsed.success) return fail('标题必填; 稿子至少 50 字、最多 8000 字', 400);
+  if (!parsed.success) return fail('稿子至少 50 字、最多 8000 字', 400);
 
   const user = await getOrCreateDefaultUser();
   const apiKey = await resolveDeepSeekApiKey(user.id);
@@ -51,7 +57,7 @@ export async function POST(req: Request) {
      * 丢两个「了」和把一句话换掉, 数字可能一样, 但一个无所谓一个不能忍。
      */
     const llm = getDeepSeekTextLLM(apiKey);
-    let acts0: ScriptImportResponse['acts'] | null = null;
+    let acts0: ScriptImportResponse | null = null;
     let lastFidelity = { faithful: false, detail: '', addedChars: 0, missingChars: 0 };
 
     for (let attempt = 1; attempt <= 2; attempt++) {
@@ -62,7 +68,7 @@ export async function POST(req: Request) {
       });
       lastFidelity = checkImportFidelity(text, out.result.acts);
       if (lastFidelity.faithful) {
-        acts0 = out.result.acts;
+        acts0 = out.result;
         break;
       }
       console.warn(`[scripts/import] 第 ${attempt} 次切分动了字: ${lastFidelity.detail}`);
@@ -77,7 +83,7 @@ export async function POST(req: Request) {
     }
 
     const seconds = allocateActSeconds(durationSec);
-    const acts = acts0.map((a) => ({
+    const acts = acts0.acts.map((a) => ({
       act: a.act,
       title: a.title,
       narration: a.narration,
@@ -91,7 +97,8 @@ export async function POST(req: Request) {
     const draft = await prisma.scriptDraft.create({
       data: {
         userId: user.id,
-        topic,
+        // 用户填了就用他的; 没填就用模型从稿子里起的那个
+        topic: topic || acts0.topic,
         niche: 'ai-knowledge',
         platform: 'douyin',
         output: {
@@ -110,7 +117,7 @@ export async function POST(req: Request) {
       select: { id: true },
     });
 
-    return ok({ scriptDraftId: draft.id, acts, durationSec });
+    return ok({ scriptDraftId: draft.id, acts, durationSec, topic: topic || acts0.topic });
   } catch (e) {
     console.error('[scripts/import]', e);
     return fail(`导入失败: ${e instanceof Error ? e.message.slice(0, 200) : '未知错误'}`, 500);

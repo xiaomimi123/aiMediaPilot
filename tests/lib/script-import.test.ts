@@ -41,13 +41,15 @@ describe('SCRIPT_IMPORT prompt', () => {
 
   it('schema 要求正好六幕', () => {
     const acts = ACT_KEYS.map((act) => ({ act, title: 't', narration: 'x' }));
-    expect(SCRIPT_IMPORT.responseSchema.safeParse({ acts }).success).toBe(true);
-    expect(SCRIPT_IMPORT.responseSchema.safeParse({ acts: acts.slice(0, 5) }).success).toBe(false);
+    expect(SCRIPT_IMPORT.responseSchema.safeParse({ acts, topic: '开源U盘' }).success).toBe(true);
+    expect(SCRIPT_IMPORT.responseSchema.safeParse({ acts: acts.slice(0, 5), topic: '开源U盘' }).success).toBe(false);
+    // topic 是模型新写的名字, 不能少
+    expect(SCRIPT_IMPORT.responseSchema.safeParse({ acts }).success).toBe(false);
   });
 
   it('schema 允许某一幕台词为空 —— 原文没有那一幕就该空着', () => {
     const acts = ACT_KEYS.map((act, i) => ({ act, title: 't', narration: i === 3 ? '' : 'x' }));
-    expect(SCRIPT_IMPORT.responseSchema.safeParse({ acts }).success).toBe(true);
+    expect(SCRIPT_IMPORT.responseSchema.safeParse({ acts, topic: '开源U盘' }).success).toBe(true);
   });
 });
 
@@ -85,5 +87,20 @@ describe('checkImportFidelity', () => {
 
   it('空输入不抛', () => {
     expect(checkImportFidelity('', acts()).faithful).toBe(true);
+  });
+});
+
+describe('导入时的主题', () => {
+  it('稿子已经在手里, 主题必须由模型从稿子里起 —— 不该反过来逼用户先想一个', () => {
+    const p = SCRIPT_IMPORT.buildSystemPrompt();
+    expect(p).toContain('topic');
+  });
+
+  it('主题是新写的名字, 不算改字 —— 逐字核对只看 narration', () => {
+    const original = '我卡了两天。后来做了个U盘。';
+    const acts = ACT_KEYS.map((act, i) => ({
+      act, title: '幕', narration: i === 0 ? '我卡了两天。' : i === 1 ? '后来做了个U盘。' : '',
+    }));
+    expect(checkImportFidelity(original, acts).faithful).toBe(true);
   });
 });

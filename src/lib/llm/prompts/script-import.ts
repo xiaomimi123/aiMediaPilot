@@ -25,6 +25,17 @@ const ActSchema = z.object({
 
 export const ScriptImportResponseSchema = z.object({
   acts: z.array(ActSchema).length(ACT_KEYS.length),
+  /**
+   * 给这份稿子起的名字(稿库里的条目名)。
+   *
+   * **不是让用户先想一个再贴稿子。** 稿子已经在他手里了, 反过来逼他先填主题才能
+   * 导入是把顺序搞反了 —— 真机上他就卡在这一步, 文案贴好了但不知道该填什么,
+   * 于是下一步走不了。名字从稿子里来是唯一说得通的方向。
+   *
+   * 起名是**包装**, 和标题同一类, 不违反「一个字都不改」: 改的是他的表达, 起名
+   * 是给这份表达贴个标签, 正文一个字没动。
+   */
+  topic: z.string().min(2).max(30),
 });
 
 export type ScriptImportResponse = z.infer<typeof ScriptImportResponseSchema>;
@@ -49,6 +60,8 @@ AI 润色过的句子, AI 也会写给别人。你改一个字, 这份稿子就�
 **你可以做的**:
 - 决定哪几句属于哪一幕
 - 给每一幕起一个小标题(这是你新写的, 不是改他的话)
+- 给整份稿子起一个名字(topic, ≤ 15 字), 用来在稿库里认出它 —— 说清楚这稿子讲的
+  是哪件事就行, 不用像标题那样抓眼球
 - 某一幕在原文里确实没有内容时, narration 留空字符串
 
 **你不可以做的**:
