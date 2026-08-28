@@ -47,3 +47,23 @@ describe('isSixActScript 保持严格 —— 它把关的是 AI 交上来的成�
     expect(isSixActScript({ acts: written, four_dims: dims })).toBe(true);
   });
 });
+
+describe('beats 下限 —— 少一个关键词不该毁掉整次生成', () => {
+  const withBeats = (n: number) =>
+    ACT_KEYS.map((k) => ({
+      ...act(k, '这是一段已经写好的台词'),
+      beats: Array.from({ length: n }, (_, i) => ({ keyword: `k${i}` })),
+    }));
+
+  it('**某一幕只有 1 个关键词, 整份稿子仍然合法**', () => {
+    expect(isSixActScript({ acts: withBeats(1), four_dims: dims })).toBe(true);
+  });
+
+  it('一个关键词都没有才拒 —— 那说明模型根本没按结构输出', () => {
+    expect(isSixActScript({ acts: withBeats(0), four_dims: dims })).toBe(false);
+  });
+
+  it('上限仍然是 5 —— 关键词太多等于没有重点', () => {
+    expect(isSixActScript({ acts: withBeats(6), four_dims: dims })).toBe(false);
+  });
+});

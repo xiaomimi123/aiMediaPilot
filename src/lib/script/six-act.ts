@@ -99,7 +99,16 @@ export const ScriptActSchema = z.object({
     .max(400)
     .transform((s) => s.slice(0, 120)),
   targetSec: z.number().int().min(1),
-  beats: z.array(ActBeatSchema).min(3).max(5),
+  /**
+   * 下限从 3 放到 1。
+   *
+   * 真机上模型给第 6 幕只写了 2 个关键词, 重试 3 次都一样, 结果整次生成 500 ——
+   * **烧了 54 秒, 用户什么都没拿到**。「每幕至少 3 个关键词」是风格偏好, 不是
+   * 正确性要求; 为它把一份写得好好的六幕稿整份丢掉不成比例。
+   *
+   * 上限保留 5: 关键词太多等于没有重点。0 个仍然拒 —— 那说明模型根本没按结构输出。
+   */
+  beats: z.array(ActBeatSchema).min(1).max(5),
   facts: z.array(ActFactSchema).min(0).max(8),
 });
 

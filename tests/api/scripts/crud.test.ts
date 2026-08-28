@@ -15,7 +15,12 @@ const prismaMock = vi.hoisted(() => ({
   cockpitContent: {
     findUnique: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
   },
+  publishedWork: { updateMany: vi.fn() },
+  topicIdea: { updateMany: vi.fn() },
+  // 删除走事务(解引用 + 删除必须同生共死), mock 里直接把回调喂给自己
+  $transaction: vi.fn(),
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
@@ -55,6 +60,10 @@ beforeEach(() => {
   prismaMock.scriptDraft.findMany.mockResolvedValue([]);
   prismaMock.scriptDraft.findUnique.mockResolvedValue(null);
   prismaMock.scriptDraft.delete.mockResolvedValue({});
+  prismaMock.publishedWork.updateMany.mockResolvedValue({ count: 0 });
+  prismaMock.cockpitContent.updateMany.mockResolvedValue({ count: 0 });
+  prismaMock.topicIdea.updateMany.mockResolvedValue({ count: 0 });
+  prismaMock.$transaction.mockImplementation((fn: (tx: unknown) => unknown) => fn(prismaMock));
   prismaMock.scriptDraft.update.mockResolvedValue({});
   prismaMock.cockpitContent.findUnique.mockResolvedValue(null);
   prismaMock.cockpitContent.update.mockResolvedValue({});
@@ -167,6 +176,17 @@ describe('Scripts CRUD', () => {
     const res1 = await itemDELETE(new Request('http://t', { method: 'DELETE' }), { params: Promise.resolve({ id: 'draft1' }) });
     expect(res1.status).toBe(200);
     expect(prismaMock.scriptDraft.delete).toHaveBeenCalledWith({ where: { id: 'draft1' } });
+
+    // **删之前先解引用**: 这三张表的 scriptDraftId 没有外键约束, 直接删会留下指向
+    // 不存在记录的 id —— 数据库不报错, 但校准会数出一条「稿子已删除」的假配对。
+    for (const m of [prismaMock.publishedWork, prismaMock.cockpitContent, prismaMock.topicIdea]) {
+      expect(m.updateMany).toHaveBeenCalledWith({
+        where: { scriptDraftId: 'draft1' },
+        data: { scriptDraftId: null },
+      });
+    }
+    // 解引用和删除必须同生共死, 否则会留下一堆断了链接的记录
+    expect(prismaMock.$transaction).toHaveBeenCalled();
 
     prismaMock.scriptDraft.findUnique.mockResolvedValueOnce({ id: 'draft1', userId: 'other' });
     const res2 = await itemDELETE(new Request('http://t', { method: 'DELETE' }), { params: Promise.resolve({ id: 'draft1' }) });

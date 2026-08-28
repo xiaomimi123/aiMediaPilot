@@ -99,11 +99,17 @@ describe('SixActScriptSchema 其它字段约束', () => {
     expect(result.success).toBe(false);
   });
 
-  it('beats 2 个拒', () => {
+  it('beats 2 个**收** —— 原来要求至少 3 个, 真机上模型给 2 个导致整次生成 500', () => {
     const script = makeValidScript();
     script.acts[0] = makeAct('hook', { beats: [{ keyword: 'a' }, { keyword: 'b' }] });
     const result = SixActScriptSchema.safeParse(script);
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+  });
+
+  it('beats 0 个仍然拒 —— 那说明模型根本没按结构输出', () => {
+    const script = makeValidScript();
+    script.acts[0] = makeAct('hook', { beats: [] });
+    expect(SixActScriptSchema.safeParse(script).success).toBe(false);
   });
 
   it('beats 6 个拒', () => {

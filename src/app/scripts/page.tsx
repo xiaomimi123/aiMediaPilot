@@ -9,6 +9,7 @@ import {
   scoreHardDimensions,
 } from '@/lib/cockpit/script-score';
 import { cn } from '@/lib/utils';
+import { ScriptRowActions } from '@/components/script/script-row-actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,10 +25,11 @@ export const dynamic = 'force-dynamic';
 export default async function ScriptsPage() {
   const user = await getOrCreateDefaultUser();
   const drafts = await prisma.scriptDraft.findMany({
-    where: { userId: user.id, archivedAt: null },
+    // 归档的照样列出来(标记出来即可) —— 归档完就再也找不到, 那不是归档是隐藏
+    where: { userId: user.id },
     orderBy: { createdAt: 'desc' },
-    take: 50,
-    select: { id: true, topic: true, platform: true, createdAt: true, output: true },
+    take: 80,
+    select: { id: true, topic: true, platform: true, createdAt: true, output: true, archivedAt: true },
   });
 
   const contents = await prisma.cockpitContent.findMany({
@@ -36,16 +38,37 @@ export default async function ScriptsPage() {
   });
   const softOf = new Map(contents.map((c) => [c.scriptDraftId, c.scriptScore]));
 
+  // 逐份统计「删了会牵动什么」。一次性按 draftId 分组查, 不在循环里打 N 次库。
+  const ids = drafts.map((d) => d.id);
+  const [dists, linkedWorks, linkedContents, linkedIdeas] = await Promise.all([
+    prisma.distribution.groupBy({ by: ['scriptDraftId'], where: { scriptDraftId: { in: ids } }, _count: true }),
+    prisma.publishedWork.groupBy({ by: ['scriptDraftId'], where: { scriptDraftId: { in: ids } }, _count: true }),
+    prisma.cockpitContent.groupBy({ by: ['scriptDraftId'], where: { scriptDraftId: { in: ids } }, _count: true }),
+    prisma.topicIdea.groupBy({ by: ['scriptDraftId'], where: { scriptDraftId: { in: ids } }, _count: true }),
+  ]);
+  const countOf = (
+    g: { scriptDraftId: string | null; _count: number }[],
+    id: string,
+  ): number => g.find((x) => x.scriptDraftId === id)?._count ?? 0;
+  const impactOf = (id: string) => ({
+    distributions: countOf(dists, id),
+    linkedWorks: countOf(linkedWorks, id),
+    contents: countOf(linkedContents, id),
+    topicIdeas: countOf(linkedIdeas, id),
+  });
+
   const rows = drafts.map((d) => {
     const acts = readActsFromDraftOutput(d.output);
     if (!acts) {
       return { id: d.id, topic: d.topic, platform: d.platform, sixAct: false as const,
-               unwritten: false as const, createdAt: d.createdAt };
+               unwritten: false as const, createdAt: d.createdAt,
+               archived: d.archivedAt !== null, impact: impactOf(d.id) };
     }
     // 骨架稿(台词全空)是六幕, 但分数没有意义 —— 空稿子在时长、简洁度上天生满分
     if (isUnwritten(acts)) {
       return { id: d.id, topic: d.topic, platform: d.platform, sixAct: true as const,
-               unwritten: true as const, createdAt: d.createdAt };
+               unwritten: true as const, createdAt: d.createdAt,
+               archived: d.archivedAt !== null, impact: impactOf(d.id) };
     }
     const durationSec = acts.reduce((n, a) => n + a.targetSec, 0);
     const soft = readCachedSoft(softOf.get(d.id), acts);
@@ -54,7 +77,10 @@ export default async function ScriptsPage() {
       topic: d.topic,
       platform: d.platform,
       sixAct: true as const,
+      unwritten: false as const,
       createdAt: d.createdAt,
+      archived: d.archivedAt !== null,
+      impact: impactOf(d.id),
       hard: scoreHardDimensions(acts, durationSec),
       durationSec,
       soft:
@@ -96,14 +122,26 @@ export default async function ScriptsPage() {
                 <th className="px-3 py-2 text-right font-normal">软</th>
                 <th className="px-3 py-2 text-right font-normal">时长</th>
                 <th className="px-3 py-2 text-right font-normal">更新</th>
+                <th className="px-3 py-2 text-right font-normal">操作</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.id} className="border-b border-border last:border-0 hover:bg-accent">
+                <tr
+                  key={r.id}
+                  className={cn(
+                    'border-b border-border last:border-0 hover:bg-accent',
+                    r.archived ? 'opacity-55' : '',
+                  )}
+                >
                   <td className="px-3 py-2">
                     <Link href={`/write/${r.id}`} className="block truncate">
                       {r.topic}
+                      {r.archived ? (
+                        <span className="ml-2 rounded bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground">
+                          已归档
+                        </span>
+                      ) : null}
                     </Link>
                   </td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{r.platform}</td>
@@ -141,6 +179,14 @@ export default async function ScriptsPage() {
                   </td>
                   <td className="px-3 py-2 text-right text-xs text-muted-foreground">
                     {r.createdAt.toISOString().slice(5, 10)}
+                  </td>
+                  <td className="px-3 py-2 text-right align-top">
+                    <ScriptRowActions
+                      id={r.id}
+                      topic={r.topic}
+                      archived={r.archived}
+                      impact={r.impact}
+                    />
                   </td>
                 </tr>
               ))}
