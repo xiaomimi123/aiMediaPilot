@@ -15,7 +15,7 @@ const STATE_LABEL: Record<LoopLayer['state'], string> = {
  */
 export function LoopStatus({ layers }: { layers: LoopLayer[] }) {
   return (
-    <section className="rounded-lg border border-border p-4">
+    <section className="rounded-md border border-border bg-card p-4">
       <h2 className="text-sm font-medium">三层反馈回路</h2>
       <p className="mt-1 text-xs text-muted-foreground">
         {layers.filter((l) => l.state === 'running').length} / {layers.length} 运行中。

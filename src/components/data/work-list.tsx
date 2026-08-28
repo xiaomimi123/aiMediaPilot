@@ -64,7 +64,7 @@ export function WorkList({ initial, yearFrom }: { initial: Row[]; yearFrom: numb
         这个开关直接决定基线中位数——判错了自己改，不要让一个关键词表替你拍板。
       </p>
 
-      <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+      <ul className="flex flex-col divide-y divide-border rounded-md border border-border bg-card">
         {shown.map((r) => (
           <li key={r.id} className="flex items-center justify-between gap-4 p-3">
             <div className="min-w-0">

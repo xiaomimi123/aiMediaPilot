@@ -22,7 +22,7 @@ export function ActStrip({
   onSelect: (act: ActKey) => void;
 }) {
   return (
-    <section className="rounded-lg border border-border">
+    <section className="rounded-md border border-border bg-card">
       <header className="flex items-baseline justify-between gap-4 px-4 py-2.5">
         <h2 className="text-sm font-medium">时长分配</h2>
         <p className="text-xs tabular-nums text-muted-foreground">

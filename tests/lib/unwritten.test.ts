@@ -22,3 +22,29 @@ describe('isUnwritten —— 还没写的稿子不该被打分', () => {
     expect(isUnwritten(mk(() => ''))).toBe(true);
   });
 });
+
+import { readActsFromDraftOutput } from '@/lib/cockpit/script-score';
+
+describe('readActsFromDraftOutput —— 骨架稿也要读得出来', () => {
+  const output = (narration: string) => ({
+    script: {
+      acts: ACT_KEYS.map((act) => ({ act, title: 't', narration, visual: '', targetSec: 10 })),
+    },
+  });
+
+  it('**台词全空的骨架稿读得出六幕** —— 读不出就会被稿库标成「非六幕」', () => {
+    expect(readActsFromDraftOutput(output(''))).toHaveLength(6);
+  });
+
+  it('写好的稿子照常读出来', () => {
+    expect(readActsFromDraftOutput(output('写好的台词'))).toHaveLength(6);
+  });
+
+  it('act 字段缺失才算读不出 —— 那才是真的结构不对', () => {
+    expect(readActsFromDraftOutput({ script: { acts: [{ narration: 'x' }] } })).toBeNull();
+  });
+
+  it('根本没有 acts 的旧稿仍然返回 null', () => {
+    expect(readActsFromDraftOutput({ script: { sections: [] } })).toBeNull();
+  });
+});

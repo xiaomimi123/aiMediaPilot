@@ -3,6 +3,7 @@
 import type { ScriptAct, ActFact } from '@/lib/script/six-act';
 import { estimateSpokenSec } from '@/lib/script/act-plan';
 import { cn } from '@/lib/utils';
+import { useEffect, useRef } from 'react';
 
 /**
  * 中栏: 当前幕编辑(阶段 4)。
@@ -42,6 +43,8 @@ function Field({
   rows,
   onChange,
   meter,
+  marginal = false,
+  autoGrow = false,
 }: {
   label: string;
   hint?: string;
@@ -50,17 +53,41 @@ function Field({
   onChange: (v: string) => void;
   /** 右上角的实时计数, 只有旁白需要。 */
   meter?: React.ReactNode;
+  /** 页边批注样式 —— 用来把「指令」和「正文」在视觉上分开。 */
+  marginal?: boolean;
+  /** 按内容自动撑高。骨架的指令长度不可预测, 猜行数一定会裁掉一半。 */
+  autoGrow?: boolean;
 }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (!autoGrow || !ref.current) return;
+    const el = ref.current;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [autoGrow, value]);
+
   return (
     <label className="block">
-      <span className="text-xs font-medium">{label}</span>
-      {hint ? <span className="ml-2 text-xs text-muted-foreground">{hint}</span> : null}
+      <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </span>
+      {hint ? <span className="ml-2 text-xs text-muted-foreground/70">{hint}</span> : null}
       {meter ? <span className="float-right">{meter}</span> : null}
       <textarea
+        ref={ref}
+        // 无障碍名只取 label —— 包裹式 <label> 的可访问名会把 hint 和实时计数
+        // 一起算进去, 计数每打一个字就变, 名字跟着变。
+        aria-label={label}
         value={value}
         rows={rows}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full resize-y rounded-md border border-input bg-background p-3 text-sm leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn(
+          'mt-1.5 w-full rounded-md p-3.5 text-sm leading-[1.85] focus-visible:outline-none',
+          autoGrow ? 'resize-none overflow-hidden' : 'resize-y',
+          marginal
+            ? 'border-l-2 border-foreground/25 bg-secondary/45 text-muted-foreground focus:border-foreground/60 focus:text-foreground'
+            : 'border border-input bg-card focus:border-foreground/40',
+        )}
       />
     </label>
   );
@@ -84,11 +111,25 @@ export function ActEditor({
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-4">
+      {/*
+        备注排在旁白**之上**。骨架模式下它装的是「这一幕该干什么 + 需要什么材料」,
+        也就是你照着写的东西 —— 排在旁白下面就意味着写的时候看不见它, 那等于没有。
+        样式做成页边批注(左侧一条墨规 + 米色底), 一眼能看出它不是正文。
+      */}
+      <Field
+        label="备注"
+        hint="骨架的指令 / 给自己的拍摄提示，不进成片"
+        value={act.note}
+        rows={2}
+        onChange={(note) => onChange({ note })}
+        marginal
+        autoGrow
+      />
       <Field
         label="旁白"
         hint="录的时候念的就是这段"
         value={act.narration}
-        rows={6}
+        rows={5}
         onChange={(narration) => onChange({ narration })}
         meter={
           <span className={cn('text-xs tabular-nums', over ? 'text-destructive' : 'text-muted-foreground')}>
@@ -101,19 +142,8 @@ export function ActEditor({
         label="画面"
         hint="这一幕拍什么 / 放什么"
         value={act.visual}
-        rows={3}
+        rows={2}
         onChange={(visual) => onChange({ visual })}
-      />
-      {/*
-        骨架模式下备注装的是「这一幕该干什么 + 需要什么材料」—— 那是你照着写的
-        东西, 压成两行会被裁掉。按内容给行数, 上限 6 行不至于把旁白挤下去。
-      */}
-      <Field
-        label="备注"
-        hint="给自己的拍摄提示，不进成片"
-        value={act.note}
-        rows={Math.min(6, Math.max(2, Math.ceil(act.note.length / 34)))}
-        onChange={(note) => onChange({ note })}
       />
 
       {act.beats.length > 0 ? (

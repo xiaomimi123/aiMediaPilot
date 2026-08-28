@@ -30,10 +30,14 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
       title={item.hint}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'flex items-center justify-between gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
+        // 选中态是「页边留的记号」: 左侧一条墨线 + 米色底。整块高亮在纸感里太吵,
+        // 而且一屏里同时只会有一个选中项, 不需要那么大声。
+        'relative flex items-center justify-between gap-2 rounded-r-md py-1.5 pl-4 pr-3 text-sm transition-colors',
+        'before:absolute before:left-0 before:top-1/2 before:h-0 before:w-[2px] before:-translate-y-1/2',
+        'before:bg-primary before:transition-all',
         active
-          ? 'bg-secondary font-medium text-secondary-foreground'
-          : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+          ? 'bg-secondary/70 font-medium text-foreground before:h-[calc(100%-10px)]'
+          : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
       )}
     >
       <span>{item.label}</span>
@@ -47,7 +51,7 @@ function WorkerCard({ health }: { health: Health | null }) {
   if (!health || health.ready) return null;
   const waiting = health.queues['video-production']?.waiting ?? 0;
   return (
-    <div className="m-2 rounded-md border border-destructive/40 bg-destructive/5 p-2.5">
+    <div className="m-2 rounded-md border-l-2 border-destructive/70 bg-destructive/[0.06] px-3 py-2.5">
       <p className="text-xs font-medium text-destructive">
         {health.redis === 'down' ? 'Redis 连不上' : '出片 worker 未运行'}
       </p>
@@ -74,10 +78,14 @@ export function Sidebar() {
   }, []);
 
   return (
-    <aside className="flex w-48 shrink-0 flex-col overflow-y-auto border-r border-border bg-background">
-      <div className="px-4 py-4">
-        <Link href="/" className="text-sm font-semibold tracking-tight">
-          {APP_NAME}
+    <aside className="flex w-52 shrink-0 flex-col overflow-y-auto border-r border-border bg-secondary/25">
+      <div className="px-4 pb-4 pt-5">
+        <Link href="/" className="block">
+          <span className="font-serif-cn text-lg font-semibold tracking-tight text-foreground">
+            {APP_NAME}
+          </span>
+          {/* 报头下的那条规线 */}
+          <span className="mt-2 block h-px w-full bg-foreground/15" />
         </Link>
       </div>
 
@@ -85,7 +93,10 @@ export function Sidebar() {
         <NavLink item={HOME_ITEM} active={active === HOME_ITEM.href} />
         {NAV_GROUPS.map((group) => (
           <div key={group.label}>
-            <p className="px-3 pb-1 text-xs text-muted-foreground/70">{group.label}</p>
+            {/* 栏目名: 拉开字距、压小, 让它退到导航项后面去 */}
+            <p className="px-4 pb-1.5 text-[0.65rem] font-medium uppercase tracking-[0.18em] text-muted-foreground/60">
+              {group.label}
+            </p>
             <div className="flex flex-col gap-0.5">
               {group.items.map((item) => (
                 <NavLink key={item.href} item={item} active={active === item.href} />

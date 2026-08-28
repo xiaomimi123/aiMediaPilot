@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 /** 今日待办。空的时候如实说空, 不硬凑几条让页面看起来忙。 */
 export function TodoList({ todos }: { todos: TodoItem[] }) {
   return (
-    <section className="rounded-lg border border-border p-4">
+    <section className="rounded-md border border-border bg-card p-4">
       <div className="flex items-baseline justify-between">
         <h2 className="text-sm font-medium">今日待办</h2>
         <span className="text-xs text-muted-foreground">{todos.length} 项</span>

@@ -22,7 +22,7 @@ export function WorkInsight({
 }) {
   return (
     <>
-      <section className="mb-6 rounded-lg border border-border p-4">
+      <section className="mb-6 rounded-md border border-border bg-card p-4">
         <h2 className="text-sm font-medium">下一条怎么做</h2>
         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{advice.caveat}</p>
 
@@ -48,7 +48,7 @@ export function WorkInsight({
         )}
       </section>
 
-      <section className="mb-6 rounded-lg border border-border p-4">
+      <section className="mb-6 rounded-md border border-border bg-card p-4">
         <h2 className="text-sm font-medium">
           文案特征 × 播放{' '}
           <span className="text-xs font-normal text-muted-foreground">按差距排序</span>
@@ -86,7 +86,7 @@ export function WorkInsight({
         </p>
       </section>
 
-      <section className="mb-6 rounded-lg border border-border p-4">
+      <section className="mb-6 rounded-md border border-border bg-card p-4">
         <h2 className="text-sm font-medium">逐条看</h2>
         <ul className="mt-3 flex flex-col gap-3">
           {[...works].sort((a, b) => b.play - a.play).map((w) => {

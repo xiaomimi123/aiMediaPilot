@@ -242,9 +242,7 @@ describe('骨架稿(台词全空)', () => {
 
   it('写下第一句就开始算分 —— 不等你写完', async () => {
     renderBlank();
-    // 六幕台词都是空串, 靠 hook 幕的画面框定位到当前幕, 再取它上面的旁白框
-    const boxes = document.querySelectorAll('textarea');
-    fireEvent.change(boxes[0], { target: { value: '你有没有过这种时候' } });
+    fireEvent.change(screen.getByLabelText('旁白'), { target: { value: '你有没有过这种时候' } });
     await waitFor(() => expect(screen.queryByText('还没开始写')).toBeNull());
   });
 });

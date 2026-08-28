@@ -57,7 +57,7 @@ export function TopicTabs({
 
       {tab === 'radar' ? (
         <>
-          <p className="mb-3 rounded-lg border border-border bg-secondary/40 p-3 text-xs leading-relaxed text-muted-foreground">
+          <p className="mb-3 rounded-md border border-border bg-secondary/40 p-3 text-xs leading-relaxed text-muted-foreground">
             <span className="font-medium text-foreground">这一栏抓的是行业新闻，不一定适合你。</span>{' '}
             你唯一的爆款靠的是「我做了个东西、解决了什么痛点」，那类内容里有你；
             而新闻点评里没有你，要跟所有资讯号抢同一条新闻。
@@ -68,7 +68,7 @@ export function TopicTabs({
           {radar.length === 0 ? (
             <p className="text-sm text-muted-foreground">雷达还没抓到东西。</p>
           ) : (
-            <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+            <ul className="flex flex-col divide-y divide-border rounded-md border border-border bg-card">
               {radar.map((r) => {
                 const open = expanded === r.id;
                 return (
@@ -117,7 +117,7 @@ export function TopicTabs({
           灵感库是空的。去「拆解」拆一条同赛道创作者的片子，衍生的选题会自动写进这里。
         </p>
       ) : (
-        <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+        <ul className="flex flex-col divide-y divide-border rounded-md border border-border bg-card">
           {inspirations.map((i) => (
             <li key={i.id} className="flex items-start justify-between gap-4 p-3">
               <p className="min-w-0 text-sm leading-relaxed">{i.text}</p>

@@ -65,19 +65,19 @@ export default async function DataPage() {
   return (
     <PageShell title="数据" description="账号历史表现的基线，以及校准链路断在哪一环。">
       <section className="mb-6 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border border-border p-4">
+        <div className="rounded-md border border-border bg-card p-4">
           <p className="text-xs text-muted-foreground">基线播放（中位数）</p>
           <p className="mt-1 text-2xl font-semibold tabular-nums">
             {baseline.median === null ? '样本不足' : baseline.median.toLocaleString()}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">按计入的 {baseline.count} 条算</p>
         </div>
-        <div className="rounded-lg border border-border p-4">
+        <div className="rounded-md border border-border bg-card p-4">
           <p className="text-xs text-muted-foreground">最高播放</p>
           <p className="mt-1 text-2xl font-semibold tabular-nums">{baseline.max.toLocaleString()}</p>
           <p className="mt-1 text-xs text-muted-foreground">上限，不是常态</p>
         </div>
-        <div className="rounded-lg border border-border p-4">
+        <div className="rounded-md border border-border bg-card p-4">
           <p className="text-xs text-muted-foreground">回采作品</p>
           <p className="mt-1 text-2xl font-semibold tabular-nums">{works.length}</p>
           <p className="mt-1 text-xs text-muted-foreground">

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { PageShell } from '@/components/layout/page-shell';
 import {
+  isUnwritten,
   readActsFromDraftOutput,
   readCachedSoft,
   scoreHardDimensions,
@@ -39,7 +40,12 @@ export default async function ScriptsPage() {
     const acts = readActsFromDraftOutput(d.output);
     if (!acts) {
       return { id: d.id, topic: d.topic, platform: d.platform, sixAct: false as const,
-               createdAt: d.createdAt };
+               unwritten: false as const, createdAt: d.createdAt };
+    }
+    // 骨架稿(台词全空)是六幕, 但分数没有意义 —— 空稿子在时长、简洁度上天生满分
+    if (isUnwritten(acts)) {
+      return { id: d.id, topic: d.topic, platform: d.platform, sixAct: true as const,
+               unwritten: true as const, createdAt: d.createdAt };
     }
     const durationSec = acts.reduce((n, a) => n + a.targetSec, 0);
     const soft = readCachedSoft(softOf.get(d.id), acts);
@@ -60,20 +66,27 @@ export default async function ScriptsPage() {
     };
   });
 
-  const scorable = rows.filter((r) => r.sixAct);
+  const sixAct = rows.filter((r) => r.sixAct);
+  // 平均分只算**写过的**。空骨架进平均分会把它拉下去, 而那个下降不代表任何事情。
+  const scorable = sixAct.filter((r) => !r.unwritten);
   const avg = scorable.length
     ? Math.round(scorable.reduce((n, r) => n + (r.hard?.total ?? 0), 0) / scorable.length)
     : 0;
+  const unwrittenCount = sixAct.length - scorable.length;
 
   return (
     <PageShell
       title="稿库"
-      description={`${rows.length} 份稿子，其中 ${scorable.length} 份是六幕结构。平均硬指标 ${avg}/35。`}
+      description={
+        `${rows.length} 份稿子，其中 ${sixAct.length} 份是六幕结构` +
+        (unwrittenCount > 0 ? `（${unwrittenCount} 份还没写）` : '') +
+        `。已写的平均硬指标 ${avg}/35。`
+      }
     >
       {rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">还没有稿子。去「选题」挑一个开条。</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
+        <div className="overflow-x-auto rounded-md border border-border bg-card">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted-foreground">
@@ -95,29 +108,36 @@ export default async function ScriptsPage() {
                   </td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{r.platform}</td>
                   <td className="px-3 py-2 text-right text-xs tabular-nums">
-                    {r.sixAct ? (
+                    {!r.sixAct ? (
+                      <span className="text-muted-foreground">非六幕</span>
+                    ) : r.unwritten ? (
+                      // 骨架稿: 是六幕, 但还没写。给分数会是个假数字。
+                      <span className="text-muted-foreground/70">未写</span>
+                    ) : (
                       <span
                         className={cn(
-                          'rounded px-1.5 py-0.5',
+                          'rounded px-2 py-0.5',
+                          // 红色在这套视觉里只表示「这里有问题」。及格线以上不该染红,
+                          // 否则一屏全是红点, 真正低分的那条反而看不出来。
                           r.hard.total / r.hard.max >= 0.8
-                            ? 'bg-secondary'
-                            : 'bg-destructive/10 text-destructive',
+                            ? 'bg-primary text-primary-foreground'
+                            : r.hard.total / r.hard.max >= 0.5
+                              ? 'bg-secondary'
+                              : 'bg-destructive/10 text-destructive',
                         )}
                       >
                         {r.hard.total}
                       </span>
-                    ) : (
-                      <span className="text-muted-foreground">非六幕</span>
                     )}
                   </td>
                   <td className="px-3 py-2 text-right text-xs tabular-nums text-muted-foreground">
-                    {!r.sixAct ? '—' :
+                    {!r.sixAct || r.unwritten ? '—' :
                       r.soft === null ? '未跑' :
                       r.soft === 'outdated' ? '待重跑' :
                       r.soft.stale ? `${r.soft.total}*` : r.soft.total}
                   </td>
                   <td className="px-3 py-2 text-right text-xs tabular-nums text-muted-foreground">
-                    {r.sixAct ? `${r.durationSec}s` : '—'}
+                    {r.sixAct && !r.unwritten ? `${r.durationSec}s` : '—'}
                   </td>
                   <td className="px-3 py-2 text-right text-xs text-muted-foreground">
                     {r.createdAt.toISOString().slice(5, 10)}

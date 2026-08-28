@@ -9,7 +9,7 @@ export function PipelineFunnel({ stages }: { stages: PipelineStage[] }) {
   const max = Math.max(1, ...stages.map((s) => s.count));
 
   return (
-    <section className="rounded-lg border border-border p-4">
+    <section className="rounded-md border border-border bg-card p-4">
       <h2 className="text-sm font-medium">内容管线</h2>
       <ul className="mt-3 flex flex-col gap-2.5">
         {stages.map((s) => (

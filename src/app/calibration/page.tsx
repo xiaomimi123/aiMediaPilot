@@ -45,7 +45,7 @@ export default async function CalibrationPage() {
 
       <LoopStatus layers={layers} />
 
-      <section className="mt-6 rounded-lg border border-border p-4">
+      <section className="mt-6 rounded-md border border-border bg-card p-4">
         <h2 className="text-sm font-medium">当前权重是怎么来的</h2>
         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
           下面这套权重是<span className="font-medium text-foreground">按经验定的</span>，

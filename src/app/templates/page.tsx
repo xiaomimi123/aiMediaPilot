@@ -15,7 +15,7 @@ export default async function TemplatesPage() {
   return (
     <PageShell title="模板" description="决定成片的画面结构、字幕样式和转场，出片时套用。">
       {doneFilms === 0 && templates.length > 0 ? (
-        <p className="mb-4 rounded-lg border border-border bg-secondary/50 p-3 text-xs leading-relaxed text-muted-foreground">
+        <p className="mb-4 rounded-md border border-border bg-secondary/50 p-3 text-xs leading-relaxed text-muted-foreground">
           {templates.length} 个模板都还没产出过成片。模板本身没问题，卡在出片链路。
           启动 worker 之后建议先用一个模板跑通一条，再改其他的。
         </p>

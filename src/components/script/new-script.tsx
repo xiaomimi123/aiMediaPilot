@@ -55,13 +55,13 @@ export function NewScript({ inspirations }: { inspirations: { id: string; text: 
     <>
       <section className="mb-5">
         <label className="block">
-          <span className="text-xs font-medium">选题</span>
+          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">选题</span>
           <textarea
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
             rows={2}
             placeholder="想讲什么？一句话说清楚就行"
-            className="mt-1 w-full resize-y rounded-md border border-input bg-background p-3 text-sm"
+            className="mt-1.5 w-full resize-y rounded-md border border-input bg-card p-3.5 text-sm leading-relaxed placeholder:text-muted-foreground/60 focus:border-foreground/40 focus:outline-none"
           />
         </label>
 
@@ -74,7 +74,7 @@ export function NewScript({ inspirations }: { inspirations: { id: string; text: 
                   <button
                     type="button"
                     onClick={() => setTopic(i.text)}
-                    className="rounded-full bg-secondary px-2.5 py-1 text-xs hover:bg-accent"
+                    className="rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
                   >
                     {i.text.length > 28 ? `${i.text.slice(0, 28)}…` : i.text}
                   </button>
@@ -90,17 +90,20 @@ export function NewScript({ inspirations }: { inspirations: { id: string; text: 
       </section>
 
       <section className="mb-5">
-        <p className="text-xs font-medium">起点给到什么程度</p>
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">起点给到什么程度</p>
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
           <button
             type="button"
             onClick={() => setMode('skeleton')}
             className={cn(
-              'rounded-lg border p-3 text-left transition-colors',
-              mode === 'skeleton' ? 'border-primary bg-secondary' : 'border-border hover:bg-accent',
+              'rounded-md border p-4 text-left transition-colors',
+              // 选中 = 墨黑边 + 米色底。纸上做记号就是这样做的。
+              mode === 'skeleton'
+                ? 'border-foreground/70 bg-secondary/70'
+                : 'border-border bg-card hover:border-foreground/25',
             )}
           >
-            <p className="text-sm font-medium">只给骨架</p>
+            <p className="font-serif-cn text-base font-semibold">只给骨架</p>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               六幕各给一句「这一幕该干什么」+ 时长 + 需要什么材料，
               <span className="font-medium text-foreground">台词全空着等你写</span>。
@@ -111,11 +114,13 @@ export function NewScript({ inspirations }: { inspirations: { id: string; text: 
             type="button"
             onClick={() => setMode('full')}
             className={cn(
-              'rounded-lg border p-3 text-left transition-colors',
-              mode === 'full' ? 'border-primary bg-secondary' : 'border-border hover:bg-accent',
+              'rounded-md border p-4 text-left transition-colors',
+              mode === 'full'
+                ? 'border-foreground/70 bg-secondary/70'
+                : 'border-border bg-card hover:border-foreground/25',
             )}
           >
-            <p className="text-sm font-medium">写完整初稿</p>
+            <p className="font-serif-cn text-base font-semibold">写完整初稿</p>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               台词写满，你在上面改。没思路时让 AI 开个头，比对着空白页干坐着强——
               但容易改几个词就交差。
@@ -125,7 +130,7 @@ export function NewScript({ inspirations }: { inspirations: { id: string; text: 
       </section>
 
       <section className="mb-5">
-        <p className="text-xs font-medium">全片时长</p>
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">全片时长</p>
         <div className="mt-2 flex gap-1.5">
           {DURATIONS.map((d) => (
             <button
@@ -133,8 +138,10 @@ export function NewScript({ inspirations }: { inspirations: { id: string; text: 
               type="button"
               onClick={() => setDurationSec(d)}
               className={cn(
-                'rounded-full px-3 py-1 text-xs transition-colors',
-                durationSec === d ? 'bg-primary text-primary-foreground' : 'bg-secondary hover:bg-accent',
+                'rounded-md border px-3.5 py-1.5 text-xs tabular-nums transition-colors',
+                durationSec === d
+                  ? 'border-foreground bg-primary text-primary-foreground'
+                  : 'border-border bg-card text-muted-foreground hover:border-foreground/30 hover:text-foreground',
               )}
             >
               {d} 秒

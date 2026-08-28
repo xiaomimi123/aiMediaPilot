@@ -8,7 +8,7 @@ export function ScoreTrend({
 }) {
   if (rows.length === 0) {
     return (
-      <section className="rounded-lg border border-border p-4">
+      <section className="rounded-md border border-border bg-card p-4">
         <h2 className="text-sm font-medium">评分走势</h2>
         <p className="mt-2 text-xs text-muted-foreground">还没有能打分的六幕稿。</p>
       </section>
@@ -17,7 +17,7 @@ export function ScoreTrend({
 
   const max = rows[0].hardMax;
   return (
-    <section className="rounded-lg border border-border p-4">
+    <section className="rounded-md border border-border bg-card p-4">
       <div className="flex items-baseline justify-between">
         <h2 className="text-sm font-medium">评分走势</h2>
         <span className="text-xs text-muted-foreground">最近 {rows.length} 份 · 硬指标</span>

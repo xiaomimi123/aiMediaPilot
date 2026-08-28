@@ -171,7 +171,7 @@ export function ScriptWorkspace({
             <p className="mt-0.5 text-xs text-muted-foreground">写下第一句就开始算分</p>
           </div>
         ) : (
-          <div className="shrink-0 rounded-lg border border-border px-4 py-2 text-center">
+          <div className="shrink-0 rounded-md border border-border bg-card px-4 py-2 text-center">
             {/* 软指标作废时只报硬指标 —— 把旧模型的分加进总分会拼出一个不可比的数字 */}
             <p className="text-xs text-muted-foreground">{countSoft ? '总分' : '硬指标'}</p>
             <p className="text-2xl font-semibold tabular-nums">
@@ -187,7 +187,7 @@ export function ScriptWorkspace({
       <ActStrip plan={plan} current={currentAct} onSelect={setCurrentAct} />
 
       <div className="mt-4 flex min-h-0 flex-1 gap-4 overflow-y-auto">
-        <section className="flex min-w-0 flex-1 flex-col rounded-lg border border-border p-4">
+        <section className="flex min-w-0 flex-1 flex-col rounded-md border border-border bg-card p-4">
           <div className="mb-3 flex items-baseline gap-2">
             <h2 className="text-sm font-medium">{currentRow?.label ?? current.title}</h2>
             {currentRow ? (

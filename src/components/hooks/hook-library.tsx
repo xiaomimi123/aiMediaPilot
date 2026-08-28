@@ -60,7 +60,7 @@ export function HookLibrary({ initial, hints }: { initial: Row[]; hints: HookHin
 
   return (
     <>
-      <p className="mb-4 rounded-lg border border-border bg-secondary/50 p-3 text-xs leading-relaxed text-muted-foreground">
+      <p className="mb-4 rounded-md border border-border bg-secondary/50 p-3 text-xs leading-relaxed text-muted-foreground">
         <span className="font-medium text-foreground">下面按「结构分」排序，不是按留存率。</span>{' '}
         结构分只算能量的东西：字数、是否第二人称开头、有没有书名、有没有数字或提问。
         <span className="font-medium text-foreground">它预测不了完播</span>——
@@ -84,7 +84,7 @@ export function HookLibrary({ initial, hints }: { initial: Row[]; hints: HookHin
       {note ? <p className="mb-3 text-xs text-muted-foreground">{note}</p> : null}
 
       {hints.length > 0 ? (
-        <div className="mb-5 rounded-lg border border-border p-4">
+        <div className="mb-5 rounded-md border border-border bg-card p-4">
           <h2 className="text-sm font-medium">
             结构统计{' '}
             <span className="text-xs font-normal text-muted-foreground">
@@ -114,7 +114,7 @@ export function HookLibrary({ initial, hints }: { initial: Row[]; hints: HookHin
           钩子库是空的。点「从我的稿子里抽」把已经写过的开场收进来。
         </p>
       ) : (
-        <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+        <ul className="flex flex-col divide-y divide-border rounded-md border border-border bg-card">
           {scored.map((r) => (
             <li key={r.id} className="flex items-start justify-between gap-4 p-3">
               <div className="min-w-0">

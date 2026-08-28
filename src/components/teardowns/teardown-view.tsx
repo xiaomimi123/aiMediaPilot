@@ -62,7 +62,7 @@ export function TeardownView({ initial }: { initial: Row[] }) {
 
   return (
     <>
-      <div className="mb-5 rounded-lg border border-border p-4">
+      <div className="mb-5 rounded-md border border-border bg-card p-4">
         <div className="flex gap-2">
           <input
             value={title} onChange={(e) => setTitle(e.target.value)}
@@ -103,7 +103,7 @@ export function TeardownView({ initial }: { initial: Row[] }) {
           {rows.map((r) => {
             const res = (r.result ?? {}) as Result;
             return (
-              <li key={r.id} className="rounded-lg border border-border p-4">
+              <li key={r.id} className="rounded-md border border-border bg-card p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <p className="font-medium">{r.title}</p>

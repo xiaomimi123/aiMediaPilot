@@ -67,7 +67,7 @@ export function FilmQueue({ rows }: { rows: Row[] }) {
       {rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">还没有出片任务。</p>
       ) : (
-        <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+        <ul className="flex flex-col divide-y divide-border rounded-md border border-border bg-card">
           {rows.map((r) => (
             <li key={r.id} className="flex items-center justify-between gap-4 p-3">
               <div className="min-w-0">

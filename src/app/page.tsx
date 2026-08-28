@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { PageShell } from '@/components/layout/page-shell';
 import { buildPipeline, buildTodos } from '@/lib/cockpit/overview';
-import { readActsFromDraftOutput, scoreHardDimensions } from '@/lib/cockpit/script-score';
+import { isUnwritten, readActsFromDraftOutput, scoreHardDimensions } from '@/lib/cockpit/script-score';
 import { buildActPlan } from '@/lib/script/act-plan';
 import { HealthBanner } from '@/components/layout/health-banner';
 import { PipelineFunnel } from '@/components/overview/pipeline-funnel';
@@ -45,6 +45,9 @@ export default async function OverviewPage() {
   const scored = drafts.map((d) => {
     const acts = readActsFromDraftOutput(d.output);
     if (!acts) return null;
+    // 还没写的骨架稿不参与统计 —— 它在时长偏差、简洁度上天生满分, 进了平均分
+    // 就是个假数字; 而「有超时的幕」这类判断对空稿子也不成立。
+    if (isUnwritten(acts)) return null;
     const durationSec = acts.reduce((n, a) => n + a.targetSec, 0);
     return {
       id: d.id,
@@ -112,10 +115,15 @@ export default async function OverviewPage() {
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {stats.map((s) => (
-          <div key={s.label} className="rounded-lg border border-border p-4">
-            <p className="text-xs text-muted-foreground">{s.label}</p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums">{s.value}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{s.hint}</p>
+          <div key={s.label} className="rounded-md border border-border bg-card p-4">
+            <p className="text-[0.7rem] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              {s.label}
+            </p>
+            {/* 数字走衬线 —— 头版的统计数字就是衬线的, 它比标签重要得多 */}
+            <p className="font-serif-cn mt-1.5 text-[2rem] font-semibold leading-none tabular-nums">
+              {s.value}
+            </p>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{s.hint}</p>
           </div>
         ))}
       </div>
@@ -139,7 +147,7 @@ export default async function OverviewPage() {
           }))}
         />
 
-        <section className="rounded-lg border border-border p-4">
+        <section className="rounded-md border border-border bg-card p-5">
           <h2 className="text-sm font-medium">账号表现</h2>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
             播放、涨粉、互动这些指标来自发布后的回采。当前发布 {publishedCount} 条，

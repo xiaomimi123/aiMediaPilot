@@ -56,13 +56,13 @@ export function MaterialLibrary({ initial, gaps }: { initial: Row[]; gaps: Mater
   return (
     <>
       {worst && worst.count === 0 ? (
-        <p className="mb-4 rounded-lg border border-border bg-secondary/50 p-3 text-xs leading-relaxed">
+        <p className="mb-4 rounded-md border border-border bg-secondary/50 p-3 text-xs leading-relaxed">
           <span className="font-medium">{worst.label}一条都没有，是当前最短的一块。</span>{' '}
           <span className="text-muted-foreground">{worst.why}</span>
         </p>
       ) : null}
 
-      <div className="mb-5 rounded-lg border border-border p-4">
+      <div className="mb-5 rounded-md border border-border bg-card p-4">
         <div className="flex flex-wrap gap-1.5">
           {MATERIAL_KINDS.map((k) => (
             <button
@@ -127,7 +127,7 @@ export function MaterialLibrary({ initial, gaps }: { initial: Row[]; gaps: Mater
       {shown.length === 0 ? (
         <p className="text-sm text-muted-foreground">这一类还没有素材。</p>
       ) : (
-        <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+        <ul className="flex flex-col divide-y divide-border rounded-md border border-border bg-card">
           {shown.map((r) => (
             <li key={r.id} className="flex items-start justify-between gap-4 p-3">
               <div className="min-w-0">

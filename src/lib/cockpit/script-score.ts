@@ -382,7 +382,10 @@ export function readActsFromDraftOutput(output: unknown): ScorableActFull[] | nu
       targetSec: Number(o.targetSec ?? 0),
     };
   });
-  return rows.every((r) => r.act && r.narration) ? rows : null;
+  // 只要 act 字段齐 —— 判的是**结构**, 不是写没写。要求 narration 非空会让骨架稿
+  // (台词天生空着)在稿库里显示成「非六幕」, 而它明明是六幕。写没写用 isUnwritten
+  // 单独判, 那是两件事。
+  return rows.every((r) => r.act) ? rows : null;
 }
 
 /* ---------------- 软指标缓存 ---------------- */
@@ -420,7 +423,7 @@ export interface CachedSoftScoreView extends CachedSoftScore {
  * 含 visual 是因为合规维度是按画面判的, 画面改了合规结论可能就变了。
  */
 export function scriptFingerprint(acts: ScorableAct[]): string {
-  const payload = acts.map((a) => `${a.act} ${a.narration ?? ''} ${a.visual ?? ''}`).join('');
+  const payload = acts.map((a) => `${a.act}\u0000${a.narration ?? ''}\u0000${a.visual ?? ''}`).join('\u0001');
   // djb2 —— 这里只要"变了能发现", 不需要抗碰撞, 不值得引依赖。
   let h = 5381;
   for (let i = 0; i < payload.length; i++) {
