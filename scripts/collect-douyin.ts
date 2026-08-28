@@ -112,6 +112,54 @@ cliLog('@@RESULT@@' + (typeof cap === 'string' ? cap : JSON.stringify(cap)))
 `;
 
 /**
+ * 抓账号首页的两组数据: 逐日指标 + 热搜榜。
+ *
+ * 走首页而不是数据中心 —— 这两条接口只在 `creator-micro/home` 上发。同样必须让
+ * 页面自己请求(要签名参数), 我们在 XHR/fetch 上打补丁接住。
+ *
+ * **先去别的页再进首页**: `addScriptToEvaluateOnNewDocument` 只对新文档生效,
+ * 如果当前已经停在首页, 再 goto 一次同一个 URL 不会重新加载文档, 补丁就白打了。
+ */
+const HOME_SCRIPT = `
+await useOrCreateTaskSpace(${JSON.stringify(TASK_SPACE)})
+await openOrReuseTab('https://creator.douyin.com/creator-micro/content/manage', { wait: true, timeout: 30 })
+
+await cdp('Page.addScriptToEvaluateOnNewDocument', {
+  source: \`
+    window.__home = {};
+    const grab = (u, t) => {
+      try {
+        if (u.includes('overview/all')) window.__home.daily = JSON.parse(t);
+        else if (u.includes('overview/billboard')) window.__home.billboard = JSON.parse(t);
+      } catch (e) {}
+    };
+    const oo = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function (m, u, ...r) {
+      this.__u = String(u);
+      if (this.__u.includes('overview/all') || this.__u.includes('overview/billboard')) {
+        this.addEventListener('load', () => grab(this.__u, this.responseText));
+      }
+      return oo.call(this, m, u, ...r);
+    };
+    const of = window.fetch;
+    window.fetch = async function (...a) {
+      const u = String(a[0]?.url ?? a[0]);
+      const res = await of.apply(this, a);
+      if (u.includes('overview/all') || u.includes('overview/billboard')) { try { grab(u, await res.clone().text()) } catch (e) {} }
+      return res;
+    };
+  \`,
+})
+
+await gotoAndWait('https://creator.douyin.com/creator-micro/content/manage', { timeout: 25 })
+await wait(3)
+await gotoAndWait('https://creator.douyin.com/creator-micro/home', { timeout: 25 })
+await wait(12)
+const home = await js('JSON.stringify(window.__home || {})')
+cliLog('@@RESULT@@' + (typeof home === 'string' ? home : JSON.stringify(home)))
+`;
+
+/**
  * 把脚本喂给 `ego-browser nodejs` 并收集输出。
  *
  * 两个坑, 都踩过:
@@ -211,6 +259,14 @@ async function main(): Promise<void> {
     } catch (e) {
       log(`投稿分析抓取失败(不影响作品列表): ${e instanceof Error ? e.message : String(e)}`);
     }
+
+    // 逐日指标 + 热搜榜 —— 同样各自独立失败
+    try {
+      const r = await collectHome(prisma, user.id);
+      log(`账号趋势: ${r.metrics} 个指标 × ${r.days} 天; 热搜榜 ${r.topics} 条`);
+    } catch (e) {
+      log(`首页数据抓取失败(不影响前面的): ${e instanceof Error ? e.message : String(e)}`);
+    }
   } finally {
     await prisma.$disconnect();
   }
@@ -287,6 +343,94 @@ async function collectAnalytics(prisma: PrismaClient, userId: string): Promise<n
     n += r.count;
   }
   return n;
+}
+
+/**
+ * 抓逐日指标与热搜榜并落库。
+ *
+ * 逐日指标按 (指标, 日期) upsert —— 接口只回 7 天, 但每晚跑一次就能自己攒长历史。
+ * 热搜按 billboardId upsert 并维护 firstSeenAt/peakHotValue: 「热了多久、峰值多高」
+ * 比「此刻多热」有用得多。
+ */
+async function collectHome(
+  prisma: PrismaClient,
+  userId: string,
+): Promise<{ metrics: number; days: number; topics: number }> {
+  const raw = await runEgo(HOME_SCRIPT);
+  const marker = raw.lastIndexOf('@@RESULT@@');
+  if (marker < 0) throw new Error('没拿到首页数据');
+  const home = JSON.parse(raw.slice(marker + '@@RESULT@@'.length).split('\n')[0]);
+
+  let metrics = 0;
+  let days = 0;
+  for (const [metric, v] of Object.entries((home.daily?.data ?? {}) as Record<string, unknown>)) {
+    const row = v as {
+      option_list?: { count?: string; date?: string }[];
+      current_count?: string;
+      last_period_incr?: string;
+    };
+    const series = row.option_list ?? [];
+    if (series.length === 0) continue;
+    metrics++;
+
+    // 当前值/环比和日序列对不上(fans 当前 2765、日序列 395), 平台没说明各自定义
+    // —— 单独存, 不换算也不挑一个。
+    const currentCount = Number(row.current_count ?? 0);
+    const lastPeriodIncr = Number(row.last_period_incr ?? 0);
+    await prisma.douyinMetricSummary.upsert({
+      where: { userId_metric: { userId, metric } },
+      update: { currentCount, lastPeriodIncr, fetchedAt: new Date() },
+      create: { userId, metric, currentCount, lastPeriodIncr },
+    });
+    for (const p of series) {
+      const date = String(p.date ?? '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+      const count = Number(p.count ?? 0);
+      await prisma.douyinDailyMetric.upsert({
+        where: { userId_metric_date: { userId, metric, date } },
+        update: { count, fetchedAt: new Date() },
+        create: { userId, metric, date, count },
+      });
+      days++;
+    }
+  }
+
+  let topics = 0;
+  const elements = (home.billboard?.billboard_data?.element_list ?? []) as Record<string, unknown>[];
+  for (const el of elements) {
+    const base = (el.base_data ?? {}) as Record<string, unknown>;
+    const billboardId = String(base.billboard_id ?? '');
+    const title = String(base.title ?? '').trim();
+    if (!billboardId || !title) continue;
+    const hotValue = Number((el.statistics_data as { hot_value?: string })?.hot_value ?? 0);
+    const related: string[] = ((el.related_item_list ?? []) as { sec_item_id?: string }[])
+      .map((r) => r.sec_item_id)
+      .filter((x): x is string => typeof x === 'string' && x.length > 0);
+
+    const existing = await prisma.douyinHotTopic.findUnique({
+      where: { userId_billboardId: { userId, billboardId } },
+      select: { peakHotValue: true },
+    });
+    await prisma.douyinHotTopic.upsert({
+      where: { userId_billboardId: { userId, billboardId } },
+      update: {
+        title,
+        hotValue,
+        peakHotValue: Math.max(hotValue, existing?.peakHotValue ?? 0),
+        relatedItemIds: related,
+        lastSeenAt: new Date(),
+      },
+      create: {
+        userId, billboardId, title,
+        board: String(base.author ?? ''),
+        hotValue, peakHotValue: hotValue,
+        relatedItemIds: related,
+      },
+    });
+    topics++;
+  }
+
+  return { metrics, days, topics };
 }
 
 /**

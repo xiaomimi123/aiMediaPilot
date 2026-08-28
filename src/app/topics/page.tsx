@@ -35,6 +35,14 @@ export default async function TopicsPage() {
     }),
   ]);
 
+  // 抖音热搜。按当前热度排 —— 这个信号是平台自己给的, 区分度够, 不像雷达那个
+  // 「103 条里 57 条都是 100 分」的热度分。
+  const hot = await prisma.douyinHotTopic.findMany({
+    where: { userId: user.id },
+    orderBy: { hotValue: 'desc' },
+    take: 30,
+  });
+
   return (
     <PageShell
       title="选题"
@@ -58,6 +66,14 @@ export default async function TopicsPage() {
           text: i.text,
           createdAt: i.createdAt.slice(0, 10),
           used: Array.isArray(i.convertedContentIds) ? i.convertedContentIds.length : 0,
+        }))}
+        hot={hot.map((h) => ({
+          id: h.id,
+          title: h.title,
+          hotValue: h.hotValue,
+          peakHotValue: h.peakHotValue,
+          firstSeenAt: h.firstSeenAt.toISOString().slice(0, 10),
+          adopted: h.adoptedAt !== null,
         }))}
       />
     </PageShell>

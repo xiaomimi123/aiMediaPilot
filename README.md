@@ -923,6 +923,25 @@ top3, 注入两处——①研究层 `curatedParts` **最前**(亲身经历 > �
 
 API: `POST/GET /api/v1/topics`、`PATCH /api/v1/topics/[id]`、`POST/GET /api/v1/scripts/[id]/distributions`、`DELETE /api/v1/distributions/[id]`。 (旧工作台看板专用的 `GET /api/v1/workbench` 聚合接口已随看板一起删除。)
 
+### 抖音账号趋势与热搜 (二十三期)
+
+除了投稿分析, 创作者中心**首页**还有两条接口, 都只在 `creator-micro/home` 上发:
+
+```
+/aweme/janus/creator/data/overview/all/        11 个指标 × 逐日序列
+/aweme/v1/creator/data/overview/billboard       站内热搜榜
+```
+
+**逐日趋势** (`DouyinDailyMetric`): fans / new_fans / cancel_fans / play / digg / comment / share / profile / account_search / post_search / music_create, 每项一条 7 天序列。**按 (指标, 日期) upsert 而不是存快照** —— 接口只回 7 天, 但每晚回采一次, 库里就能自己攒出任意长的历史: 平台不给的东西, 靠时间攒出来。
+
+「当前值 / 环比」另存 `DouyinMetricSummary`, 因为**它和日序列对不上**: 粉丝当前值 2,765, 日序列却是 395 一线。平台没有说明这两个数各自的定义 —— 不猜、不换算, 两个都摆出来。同理, 指标的中文名只做字段名直译, **不给它们编解释**。
+
+**热搜榜** (`DouyinHotTopic`): 抖音自己推给创作者的站内热点, 比雷达抓外网准得多 —— 它已经是平台判定正在热的话题, 而且本来就是中文口语化的(「30岁了一事无成的人该做什么工作」「如何零基础学习python」), **直接就是选题, 不需要 AI 再改写一遍**(雷达那条路已经证明改写出来的角度是模型的、不是你的)。按 billboardId upsert 并维护 `firstSeenAt`/`peakHotValue`: 「热了多久、峰值多高」比「此刻多热」有用 —— 刚上榜和快过气的当前热度可能一样。
+
+选题页因此从两个 tab 变成三个: 灵感库 / **抖音热搜** / 热点雷达。热搜可一键存进灵感库, 存的是原样的热搜词。
+
+折线图同样手写 SVG: **基线是 0 而不是最小值**(粉丝 395→396 用最小值当底会画成陡坡), 数值全相等时画居中平线而不是贴底(贴底看起来像「归零了」)。
+
 ### 抖音「投稿分析」接入 (二十三期)
 
 作品列表接口只给播放/点赞/评论/收藏/分享。**完播率、跳出率、封面点击率、条均播放时长**在另一组接口里:

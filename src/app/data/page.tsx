@@ -8,6 +8,7 @@ import { WorkList } from '@/components/data/work-list';
 import { WorkInsight } from '@/components/data/work-insight';
 import { OverviewCards } from '@/components/data/overview-cards';
 import { PlayBars, CompletionScatter } from '@/components/data/play-charts';
+import { TrendCharts } from '@/components/data/trend-charts';
 import { isUnwritten, readActsFromDraftOutput } from '@/lib/cockpit/script-score';
 
 export const dynamic = 'force-dynamic';
@@ -44,6 +45,28 @@ export default async function DataPage() {
     where: { userId: user.id },
     orderBy: { fetchedAt: 'desc' },
   });
+
+  // 账号逐日趋势。序列按日期升序, 图才是从左到右往后走的。
+  const [summaries, daily] = await Promise.all([
+    prisma.douyinMetricSummary.findMany({ where: { userId: user.id } }),
+    prisma.douyinDailyMetric.findMany({
+      where: { userId: user.id },
+      orderBy: { date: 'asc' },
+      select: { metric: true, date: true, count: true },
+    }),
+  ]);
+  const seriesOf = new Map<string, { date: string; value: number }[]>();
+  for (const d of daily) {
+    const arr = seriesOf.get(d.metric) ?? [];
+    arr.push({ date: d.date, value: d.count });
+    seriesOf.set(d.metric, arr);
+  }
+  const trends = summaries.map((s) => ({
+    metric: s.metric,
+    currentCount: s.currentCount,
+    lastPeriodIncr: s.lastPeriodIncr,
+    series: seriesOf.get(s.metric) ?? [],
+  }));
 
   const baseline = buildBaseline(works.map((w) => ({ play: w.play, counted: w.counted })));
 
@@ -110,6 +133,8 @@ export default async function DataPage() {
             : null
         }
       />
+
+      <TrendCharts trends={trends} />
 
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
         <section className="rounded-md border border-border bg-card p-4">

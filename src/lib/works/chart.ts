@@ -80,3 +80,44 @@ export function humanCount(n: number): string {
   if (n >= 10000) return `${(n / 10000).toFixed(1)}万`;
   return n.toLocaleString();
 }
+
+export interface LinePoint {
+  date: string;
+  value: number;
+  /** SVG 坐标, viewBox 100×40。 */
+  x: number;
+  y: number;
+}
+
+/**
+ * 折线。
+ *
+ * **基线是 0 而不是最小值**, 和柱状同一个理由: 粉丝数 395→396 用最小值当底会画成
+ * 一条陡峭的上升曲线, 那是在骗人。唯一的例外是数值全相等时 —— 那时画一条居中的
+ * 平线, 而不是贴着底边(贴底看起来像「归零了」)。
+ */
+export function buildLine(points: { date: string; value: number }[]): LinePoint[] {
+  if (points.length === 0) return [];
+  const max = points.reduce((m, p) => Math.max(m, p.value), 0);
+  const flat = points.every((p) => p.value === points[0].value);
+  const stepX = points.length > 1 ? 100 / (points.length - 1) : 0;
+  return points.map((p, i) => ({
+    date: p.date,
+    value: p.value,
+    x: points.length > 1 ? i * stepX : 50,
+    y: flat ? 20 : 38 - (max > 0 ? p.value / max : 0) * 36,
+  }));
+}
+
+/** 折线的 SVG path。空数组给空串, 调用方据此决定画不画。 */
+export function linePath(pts: LinePoint[]): string {
+  if (pts.length === 0) return '';
+  return pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
+}
+
+/** 环比的展示形式。0 不显示箭头 —— 「没变」和「涨了 0」是一回事, 但箭头会暗示有变化。 */
+export function deltaLabel(n: number): { text: string; tone: 'up' | 'down' | 'flat' } {
+  if (n > 0) return { text: `+${n.toLocaleString()}`, tone: 'up' };
+  if (n < 0) return { text: n.toLocaleString(), tone: 'down' };
+  return { text: '持平', tone: 'flat' };
+}

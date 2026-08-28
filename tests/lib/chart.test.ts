@@ -76,3 +76,49 @@ describe('pct / humanCount', () => {
     expect(humanCount(4985)).toBe('4,985');
   });
 });
+
+import { buildLine, linePath, deltaLabel } from '@/lib/works/chart';
+
+describe('buildLine', () => {
+  it('**基线是 0** —— 395→396 用最小值当底会画成陡坡, 那是骗人', () => {
+    const pts = buildLine([{ date: 'a', value: 395 }, { date: 'b', value: 396 }]);
+    // 两点几乎等高: y 差远小于画布高度
+    expect(Math.abs(pts[0].y - pts[1].y)).toBeLessThan(1);
+  });
+
+  it('数值全相等时画居中平线, 不贴底 —— 贴底看起来像「归零了」', () => {
+    const pts = buildLine([{ date: 'a', value: 5 }, { date: 'b', value: 5 }]);
+    expect(pts.every((p) => p.y === 20)).toBe(true);
+  });
+
+  it('全 0 也不除零', () => {
+    const pts = buildLine([{ date: 'a', value: 0 }, { date: 'b', value: 0 }]);
+    expect(pts.every((p) => Number.isFinite(p.y))).toBe(true);
+  });
+
+  it('x 均匀铺满 0~100', () => {
+    const pts = buildLine([1, 2, 3].map((v, i) => ({ date: String(i), value: v })));
+    expect(pts[0].x).toBe(0);
+    expect(pts[2].x).toBe(100);
+  });
+
+  it('单点放正中, 不贴左边', () => {
+    expect(buildLine([{ date: 'a', value: 9 }])[0].x).toBe(50);
+  });
+
+  it('空输入返回空, path 也是空串 —— 调用方据此决定画不画', () => {
+    expect(buildLine([])).toEqual([]);
+    expect(linePath([])).toBe('');
+  });
+});
+
+describe('deltaLabel', () => {
+  it('0 显示「持平」而不是 +0 —— 箭头会暗示有变化', () => {
+    expect(deltaLabel(0)).toEqual({ text: '持平', tone: 'flat' });
+  });
+
+  it('正负各自带符号', () => {
+    expect(deltaLabel(62).text).toBe('+62');
+    expect(deltaLabel(-8).text).toBe('-8');
+  });
+});

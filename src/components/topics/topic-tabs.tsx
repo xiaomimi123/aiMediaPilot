@@ -17,6 +17,15 @@ interface RadarRow {
   collectedAt: string;
 }
 interface InspirationRow { id: string; text: string; createdAt: string; used: number }
+interface HotRow {
+  id: string;
+  title: string;
+  hotValue: number;
+  peakHotValue: number;
+  /** 第一次在榜上看到它是什么时候 —— 「热了多久」比「此刻多热」有用 */
+  firstSeenAt: string;
+  adopted: boolean;
+}
 
 /**
  * 选题两个 tab。
@@ -30,32 +39,94 @@ interface InspirationRow { id: string; text: string; createdAt: string; used: nu
  * 而是**一个区分不了东西的信号不该拿来做排序**。
  */
 export function TopicTabs({
-  radar, radarTotal, adoptedCount, inspirations,
+  radar, radarTotal, adoptedCount, inspirations, hot,
 }: {
   radar: RadarRow[];
   radarTotal: number;
   adoptedCount: number;
   inspirations: InspirationRow[];
+  hot: HotRow[];
 }) {
   // 默认停在灵感库而不是雷达: 这个账号是做人设的, 选题主要来自拆同赛道创作者
   // (拆解结果会写进灵感库), 而不是评论行业新闻。雷达留着但不占主位。
-  const [tab, setTab] = useState<'inspiration' | 'radar'>('inspiration');
+  const [tab, setTab] = useState<'inspiration' | 'hot' | 'radar'>('inspiration');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [hotRows, setHotRows] = useState(hot);
+  const [busy, setBusy] = useState<string | null>(null);
   const backlog = radarTotal - adoptedCount;
+
+  async function adoptHot(id: string) {
+    setBusy(id);
+    try {
+      const res = await fetch(`/api/v1/hot-topics/${id}/adopt`, { method: 'POST' });
+      if (res.ok) setHotRows((rs) => rs.map((r) => (r.id === id ? { ...r, adopted: true } : r)));
+    } finally {
+      setBusy(null);
+    }
+  }
 
   return (
     <>
       <Tabs
-        className="mb-4 max-w-xs"
+        className="mb-4 max-w-md"
         tabs={[
           { value: 'inspiration' as const, label: `灵感库 ${inspirations.length}` },
+          { value: 'hot' as const, label: `抖音热搜 ${hotRows.length}` },
           { value: 'radar' as const, label: `热点雷达 ${radarTotal}` },
         ]}
         value={tab}
         onChange={setTab}
       />
 
-      {tab === 'radar' ? (
+      {tab === 'hot' ? (
+        <>
+          {/*
+            这一栏和雷达的区别: 雷达抓的是外网行业新闻, 热搜是**抖音自己推给创作者
+            的站内热点** —— 它已经是平台判定为正在热的话题, 而且是中文口语化的
+            (「30岁了一事无成的人该做什么工作」), 直接就是选题, 不需要 AI 再改写一遍。
+          */}
+          <p className="mb-3 rounded-md border border-border bg-secondary/40 p-3 text-xs leading-relaxed text-muted-foreground">
+            <span className="font-medium text-foreground">抖音自己推给创作者的站内热搜。</span>{' '}
+            它已经是平台判定正在热的话题，而且本来就是中文口语化的，不用再让 AI 改写成「选题角度」——
+            怎么切是你写稿时的判断。存进灵感库的是<span className="font-medium text-foreground">原样的热搜词</span>。
+          </p>
+
+          {hotRows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              还没抓到热搜。跑一次 <code className="rounded bg-secondary px-1 py-0.5">npm run collect:douyin</code>。
+            </p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-border rounded-md border border-border bg-card">
+              {hotRows.map((h) => (
+                <li key={h.id} className="flex items-center justify-between gap-4 p-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm">{h.title}</p>
+                    <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                      热度 {h.hotValue.toLocaleString()}
+                      {h.peakHotValue > h.hotValue ? `（峰值 ${h.peakHotValue.toLocaleString()}）` : ''}
+                      {' · '}
+                      {h.firstSeenAt} 起在榜
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={h.adopted || busy === h.id}
+                    onClick={() => void adoptHot(h.id)}
+                    className={cn(
+                      'shrink-0 rounded-md border px-3 py-1.5 text-xs transition-colors',
+                      h.adopted
+                        ? 'border-border text-muted-foreground/60'
+                        : 'border-border bg-card hover:border-foreground/30',
+                    )}
+                  >
+                    {h.adopted ? '已存入' : busy === h.id ? '存入中…' : '存进灵感库'}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      ) : tab === 'radar' ? (
         <>
           <p className="mb-3 rounded-md border border-border bg-secondary/40 p-3 text-xs leading-relaxed text-muted-foreground">
             <span className="font-medium text-foreground">这一栏抓的是行业新闻，不一定适合你。</span>{' '}
