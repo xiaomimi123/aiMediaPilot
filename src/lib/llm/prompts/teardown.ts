@@ -37,6 +37,27 @@ export const TeardownResponseSchema = z.object({
   takeaways: z.array(z.string().min(4).max(200)).min(1).max(5),
   /** 从这条片子能衍生出的选题, 可直接进灵感库 */
   topicIdeas: z.array(z.string().min(4).max(120)).min(0).max(5),
+  /**
+   * 人设手法 —— 这个人**怎么把自己立起来**的。
+   *
+   * 对做人设的账号来说这比结构更要紧: 同一套结构谁都能抄, 但「他是个什么人、
+   * 凭什么信他」是这条片子真正的资产。
+   */
+  personaMoves: z
+    .array(
+      z.object({
+        /** 手法名, 例如「示弱开场」「主动划清界限」「暴露具体损失」 */
+        move: z.string().min(2).max(30),
+        /** 原话或具体做法 */
+        evidence: z.string().min(2).max(200),
+        /** 它在观众心里建立了什么 */
+        effect: z.string().min(2).max(120),
+      }),
+    )
+    .min(0)
+    .max(5),
+  /** 一句话概括这个人给观众的印象 */
+  personaSummary: z.string().min(4).max(120),
 });
 
 export type TeardownResponse = z.infer<typeof TeardownResponseSchema>;
@@ -53,9 +74,19 @@ function buildSystemPrompt(niche: string): string {
 - takeaways 要具体到能照做的一步, 不要写「值得学习」这种话
 - hooks 抄原句, 不要改写 —— 它要进钩子库, 改了就不是人家的写法了
 
+**人设手法是这次拆解的重点**(读者做的是人设账号, 不是资讯号):
+- personaMoves 找「他怎么让你信他 / 记住他 / 觉得他是自己人」的具体动作。例如:
+  示弱开场(先承认自己菜)、主动划清界限(不卖课不带货)、暴露具体损失(花了几百块
+  算力)、身份反差(纯小白却做成了)、把观众放在同一边(我们这种普通人)
+- evidence 必须是原话或具体做法, 不要写「他很真诚」这种没法照做的评价
+- effect 写它在观众心里建立了什么, 一句话
+- personaSummary 用一句话说清「看完这条, 观众觉得他是个什么人」
+
 纪律:
 - **不要猜播放量、点赞、完播率这些数字。** 你看不到它们, 猜出来会被当成事实使用。
 - 转写稿里有明显的听写错字时按上下文理解, 不要因为错字判错结构。
+- 人设手法找不出来就给空数组, **不要为了凑数把普通表达说成手法** —— 那会让人去
+  模仿一个根本不存在的技巧。
 - 段落数按这条片子的真实结构来, 不要凑够某个数。
 
 ${JSON_STRICTNESS}`;

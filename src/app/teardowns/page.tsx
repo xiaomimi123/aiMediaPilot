@@ -20,7 +20,7 @@ export default async function TeardownsPage() {
   return (
     <PageShell
       title="拆解"
-      description="把别人的口播稿拆成结构、钩子和可照做的动作，然后收进自己的库。"
+      description="拆同赛道创作者：结构、钩子，以及他怎么把自己立起来的。"
     >
       <TeardownView
         initial={teardowns.map((t) => ({

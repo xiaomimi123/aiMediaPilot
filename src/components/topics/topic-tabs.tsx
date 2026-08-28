@@ -37,7 +37,9 @@ export function TopicTabs({
   adoptedCount: number;
   inspirations: InspirationRow[];
 }) {
-  const [tab, setTab] = useState<'radar' | 'inspiration'>('radar');
+  // 默认停在灵感库而不是雷达: 这个账号是做人设的, 选题主要来自拆同赛道创作者
+  // (拆解结果会写进灵感库), 而不是评论行业新闻。雷达留着但不占主位。
+  const [tab, setTab] = useState<'inspiration' | 'radar'>('inspiration');
   const [expanded, setExpanded] = useState<string | null>(null);
   const backlog = radarTotal - adoptedCount;
 
@@ -46,8 +48,8 @@ export function TopicTabs({
       <Tabs
         className="mb-4 max-w-xs"
         tabs={[
-          { value: 'radar' as const, label: `热点雷达 ${radarTotal}` },
           { value: 'inspiration' as const, label: `灵感库 ${inspirations.length}` },
+          { value: 'radar' as const, label: `热点雷达 ${radarTotal}` },
         ]}
         value={tab}
         onChange={setTab}
@@ -55,13 +57,13 @@ export function TopicTabs({
 
       {tab === 'radar' ? (
         <>
-          {backlog > 50 ? (
-            <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
-              待处理 {backlog} 条。采集速度超过消化速度——减关键词或提高门槛，比硬着头皮翻完更有用。
-              下面显示的是 AI 为每条新闻拟的<span className="font-medium text-foreground">中文选题角度</span>，
-              点开能看到原文出处。
-            </p>
-          ) : null}
+          <p className="mb-3 rounded-lg border border-border bg-secondary/40 p-3 text-xs leading-relaxed text-muted-foreground">
+            <span className="font-medium text-foreground">这一栏抓的是行业新闻，不一定适合你。</span>{' '}
+            你唯一的爆款靠的是「我做了个东西、解决了什么痛点」，那类内容里有你；
+            而新闻点评里没有你，要跟所有资讯号抢同一条新闻。
+            做人设的账号，选题更该来自<span className="font-medium text-foreground">拆同赛道创作者</span>。
+            待处理 {backlog} 条，翻不完是正常的。
+          </p>
 
           {radar.length === 0 ? (
             <p className="text-sm text-muted-foreground">雷达还没抓到东西。</p>
@@ -111,7 +113,9 @@ export function TopicTabs({
           )}
         </>
       ) : inspirations.length === 0 ? (
-        <p className="text-sm text-muted-foreground">灵感库是空的。看到什么想法随手记一条。</p>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          灵感库是空的。去「拆解」拆一条同赛道创作者的片子，衍生的选题会自动写进这里。
+        </p>
       ) : (
         <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
           {inspirations.map((i) => (

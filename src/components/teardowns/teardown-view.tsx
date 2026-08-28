@@ -4,12 +4,15 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 
 interface Segment { summary: string; role: string; technique: string }
+interface PersonaMove { move: string; evidence: string; effect: string }
 interface Result {
   formula?: string;
   segments?: Segment[];
   hooks?: string[];
   takeaways?: string[];
   topicIdeas?: string[];
+  personaMoves?: PersonaMove[];
+  personaSummary?: string;
 }
 interface Row {
   id: string; title: string; author: string; url: string;
@@ -125,6 +128,25 @@ export function TeardownView({ initial }: { initial: Row[] }) {
                   <p className="mt-3 rounded bg-secondary px-3 py-2 text-xs leading-relaxed">
                     <span className="font-medium">结构公式：</span>{res.formula}
                   </p>
+                ) : null}
+
+                {res.personaSummary ? (
+                  <div className="mt-3 rounded-md border border-border bg-secondary/40 p-3">
+                    <p className="text-xs font-medium">人设：{res.personaSummary}</p>
+                    {res.personaMoves?.length ? (
+                      <ul className="mt-2 flex flex-col gap-2">
+                        {res.personaMoves.map((m, i) => (
+                          <li key={i} className="text-xs leading-relaxed">
+                            <span className="mr-2 rounded bg-background px-1.5 py-0.5 font-medium">
+                              {m.move}
+                            </span>
+                            <span className="text-muted-foreground">{m.effect}</span>
+                            <p className="mt-0.5 text-muted-foreground">「{m.evidence}」</p>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
                 ) : null}
 
                 {res.segments?.length ? (
