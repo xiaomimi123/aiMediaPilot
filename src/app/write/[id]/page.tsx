@@ -40,6 +40,19 @@ export default async function WriteDetailPage(props: { params: Promise<{ id: str
     );
   }
 
+  // 导入的稿子从头到尾是用户写的, 本来就没有 AI 原版 —— 和「旧稿没留底」是两回事,
+  // 空状态的说法必须分开, 否则界面会告诉他一件假事(「下一份新稿会自动留底」)。
+  const titleSuggestions =
+    (draft.output as {
+      titleSuggestions?: {
+        titles: { text: string; hookType: string; grounded: boolean; inventedNumbers: string[] }[];
+        tags: string[];
+      };
+    } | null)?.titleSuggestions ?? null;
+
+  const isImported =
+    (draft.output as { source?: string } | null)?.source === 'imported';
+
   // AI 原版快照(第一次保存时留的底)。没有就是快照功能之前建的旧稿。
   const rawBaseline = (draft.output as { aiBaseline?: { acts?: unknown } } | null)?.aiBaseline;
   const aiBaselineActs = Array.isArray(rawBaseline?.acts)
@@ -70,6 +83,8 @@ export default async function WriteDetailPage(props: { params: Promise<{ id: str
           softDimensions={soft?.dimensions ?? []}
           softStaleReason={soft?.staleReason ?? null}
           aiBaselineActs={aiBaselineActs}
+          imported={isImported}
+          titleSuggestions={titleSuggestions}
         />
       </div>
     </main>

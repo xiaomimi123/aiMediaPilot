@@ -5,7 +5,17 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-type Mode = 'skeleton' | 'full';
+/**
+ * 三种起点。
+ *
+ * `import` 是二十三期加的: 在这之前你手上有稿子却进不来 —— 评分、改写度、出片
+ * 全用不上, 因为系统只认自己生成的六幕结构。
+ *
+ * 它和另外两种的关系值得写清楚: 骨架和初稿是**系统给起点**, 导入是**你已经有
+ * 起点了**。导入时 AI 只做切分, 一个字都不改 —— 让 AI「完善」你的稿子, 出来的
+ * 就是 AI 的表达了, 那正是这套工具一直在避免的事。
+ */
+type Mode = 'skeleton' | 'full' | 'import';
 const DURATIONS = [30, 45, 60, 90] as const;
 
 /**
@@ -22,21 +32,27 @@ export function NewScript({ inspirations }: { inspirations: { id: string; text: 
   const router = useRouter();
   const [topic, setTopic] = useState('');
   const [mode, setMode] = useState<Mode>('skeleton');
+  const [myText, setMyText] = useState('');
   const [durationSec, setDurationSec] = useState<number>(60);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   async function generate() {
     if (topic.trim().length < 3) return;
+    if (mode === 'import' && myText.trim().length < 50) return;
     setBusy(true);
     setError('');
     try {
-      const res = await fetch('/api/v1/scripts/generate', {
+      const res = await fetch(
+        mode === 'import' ? '/api/v1/scripts/import' : '/api/v1/scripts/generate',
+        {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          topic: topic.trim(), niche: 'ai-knowledge', platform: 'douyin', durationSec, mode,
-        }),
+        body: JSON.stringify(
+          mode === 'import'
+            ? { topic: topic.trim(), text: myText.trim(), durationSec }
+            : { topic: topic.trim(), niche: 'ai-knowledge', platform: 'douyin', durationSec, mode },
+        ),
       });
       const body = await res.json();
       if (!res.ok || !body?.success) {
@@ -91,7 +107,7 @@ export function NewScript({ inspirations }: { inspirations: { id: string; text: 
 
       <section className="mb-5">
         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">起点给到什么程度</p>
-        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        <div className="mt-2 grid gap-2 sm:grid-cols-3">
           <button
             type="button"
             onClick={() => setMode('skeleton')}
@@ -112,6 +128,23 @@ export function NewScript({ inspirations }: { inspirations: { id: string; text: 
           </button>
           <button
             type="button"
+            onClick={() => setMode('import')}
+            className={cn(
+              'rounded-md border p-4 text-left transition-colors',
+              mode === 'import'
+                ? 'border-foreground/70 bg-secondary/70'
+                : 'border-border bg-card hover:border-foreground/25',
+            )}
+          >
+            <p className="font-serif-cn text-base font-semibold">我自己写好了</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              贴进来，AI 只把它切进六幕，
+              <span className="font-medium text-foreground">一个字都不改</span>。
+              切完就能打分、看时长、出片。
+            </p>
+          </button>
+          <button
+            type="button"
             onClick={() => setMode('full')}
             className={cn(
               'rounded-md border p-4 text-left transition-colors',
@@ -128,6 +161,29 @@ export function NewScript({ inspirations }: { inspirations: { id: string; text: 
           </button>
         </div>
       </section>
+
+      {mode === 'import' ? (
+        <section className="mb-5">
+          <label className="block">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              你的稿子
+            </span>
+            <textarea
+              value={myText}
+              onChange={(e) => setMyText(e.target.value)}
+              rows={10}
+              maxLength={8000}
+              placeholder="把你写好的口播稿贴进来。至少 50 字。"
+              className="mt-1.5 w-full resize-y rounded-md border border-input bg-card p-3.5 text-sm leading-relaxed placeholder:text-muted-foreground/60 focus:border-foreground/40 focus:outline-none"
+            />
+          </label>
+          <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+            {myText.trim().length} 字 ·
+            切完会<span className="text-foreground">逐字核对</span>，AI 动了你一个字就整个拒绝导入——
+            悄悄存一份被改过的稿子，比报错严重得多。
+          </p>
+        </section>
+      ) : null}
 
       <section className="mb-5">
         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">全片时长</p>
@@ -150,8 +206,13 @@ export function NewScript({ inspirations }: { inspirations: { id: string; text: 
         </div>
       </section>
 
-      <Button disabled={busy || topic.trim().length < 3} onClick={() => void generate()}>
-        {busy ? '生成中…' : mode === 'skeleton' ? '搭骨架' : '写初稿'}
+      <Button
+        disabled={busy || topic.trim().length < 3 || (mode === 'import' && myText.trim().length < 50)}
+        onClick={() => void generate()}
+      >
+        {busy
+          ? mode === 'import' ? '切分中…' : '生成中…'
+          : mode === 'import' ? '切进六幕' : mode === 'skeleton' ? '搭骨架' : '写初稿'}
       </Button>
       {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
     </>

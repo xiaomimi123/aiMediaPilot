@@ -9,6 +9,7 @@ import { buttonVariants } from '@/components/ui/button';
 import { Tabs } from '@/components/ui/tabs';
 import { MaterialPanel } from './material-panel';
 import { RewritePanel } from './rewrite-panel';
+import { TitlePanel, type TitleSuggestion } from './title-panel';
 import { compareToBaseline } from '@/lib/script/rewrite-diff';
 import { ActStrip } from './act-strip';
 import { ActEditor } from './act-editor';
@@ -77,6 +78,8 @@ export function ScriptWorkspace({
   softDimensions,
   softStaleReason = null,
   aiBaselineActs = null,
+  imported = false,
+  titleSuggestions = null,
 }: {
   scriptId: string;
   topic: string;
@@ -89,6 +92,10 @@ export function ScriptWorkspace({
   softStaleReason?: 'script' | 'model' | null;
   /** AI 原版的六幕, 用来算「这稿子还剩多少是 AI 的」。旧稿没有就是 null。 */
   aiBaselineActs?: ScriptAct[] | null;
+  /** 这份稿子是用户自己写好导入的 —— 没有 AI 原版是设计如此, 不是缺数据。 */
+  imported?: boolean;
+  /** 上次出过的标题, 打开就能看到 —— 不必为了看一眼再花一次模型调用。 */
+  titleSuggestions?: { titles: TitleSuggestion[]; tags: string[] } | null;
 }) {
   const [acts, setActs] = useState(initialActs);
   const [dirty, setDirty] = useState(false);
@@ -96,7 +103,7 @@ export function ScriptWorkspace({
 
   const save = useAutoSave(scriptId, acts, dirty);
 
-  const [panel, setPanel] = useState<'score' | 'rewrite' | 'material'>('score');
+  const [panel, setPanel] = useState<'score' | 'rewrite' | 'title' | 'material'>('score');
 
   const plan = useMemo(() => buildActPlan(acts, durationSec), [acts, durationSec]);
   const hard = useMemo(() => scoreHardDimensions(acts, durationSec), [acts, durationSec]);
@@ -204,6 +211,7 @@ export function ScriptWorkspace({
             tabs={[
               { value: 'score' as const, label: '评分' },
               { value: 'rewrite' as const, label: '改写' },
+              { value: 'title' as const, label: '标题' },
               { value: 'material' as const, label: '素材' },
             ]}
             value={panel}
@@ -215,7 +223,10 @@ export function ScriptWorkspace({
               hardTotal={hard.total}
               baselineHardTotal={baselineHard}
               hardMax={hard.max}
+              imported={imported}
             />
+          ) : panel === 'title' ? (
+            <TitlePanel scriptId={scriptId} initial={titleSuggestions} />
           ) : panel === 'material' ? (
             <MaterialPanel
               narration={current.narration}

@@ -21,15 +21,30 @@ export function RewritePanel({
   hardTotal,
   baselineHardTotal,
   hardMax,
+  imported = false,
 }: {
   comparison: RewriteComparison | null;
   hardTotal: number;
   /** AI 原版的硬指标, 拿不到时传 null。 */
   baselineHardTotal: number | null;
   hardMax: number;
+  /** 用户自己写好导入的稿子 —— 没有 AI 原版是设计如此。 */
+  imported?: boolean;
 }) {
   if (!comparison) {
-    return (
+    /*
+     * 两种「没有对比」是不同的事, 说法必须分开。
+     *
+     * 导入稿本来就没有 AI 原版; 拿旧稿那套话术("下一份新稿会自动留底")去套,
+     * 等于告诉他一件不会发生的事 —— 他会一直等一个永远不出现的对比。
+     */
+    return imported ? (
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        这份稿子是你自己写的，<span className="text-foreground">改写度按定义就是 100%</span>——
+        没有 AI 原版可比，也不需要有。左边的硬指标才是对它有用的那栏：
+        它指出哪里啰嗦、哪一幕超时、缺什么声明，但不替你写句子。
+      </p>
+    ) : (
       <p className="text-xs leading-relaxed text-muted-foreground">
         这份稿子没有 AI 原版记录（在快照功能之前建的）。下一份新稿子会自动留底，
         之后这里能看到「你改了多少、改完分数怎么变」。
