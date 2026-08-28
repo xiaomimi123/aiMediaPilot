@@ -18,10 +18,15 @@ import {
   extractAudio,
   compositeCutawayVideo,
   burnCaptions,
+  probeVideoDimensions,
   muxAudioTrack,
   type CutawaySegment,
 } from '@/lib/video/ffmpeg';
 import type { PipPosition } from '@/lib/video/pip-layout';
+import { OVERLAY_PLAN, sanitizeOverlayItems } from '@/lib/llm/prompts/overlay-plan';
+import {
+  buildOverlayAss, REFERENCE_OVERLAY_STYLE, type OverlayItem,
+} from '@/lib/video-production/overlay-plan';
 import { LocalWhisperClient } from '@/lib/llm/local-whisper';
 import type { TranscriptSegment } from '@/lib/llm/whisper';
 import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
@@ -802,7 +807,9 @@ async function handleProduce(job: Job<JobData>) {
     // 外层按交付模式(vp.mode，与本函数的 preview/master 渲染档是两个不同概念)分岔，
     // 各交付模式的具体流程封装成独立函数——ppt-narration、talking-head-broll 与
     // illustration-tts(十九期新增)互不干扰，照此形状新增分支不需要改动这两个函数。
-    if (vp.mode === 'talking-head-broll') {
+    if (vp.mode === 'talking-head-overlay') {
+      await handleTalkingHeadOverlay(vp, mode, setStatus, outputFileName, readyStatus, outputField);
+    } else if (vp.mode === 'talking-head-broll') {
       await handleTalkingHeadBroll(vp, mode, setStatus, outputFileName, readyStatus, outputField);
     } else if (vp.mode === 'ppt-narration') {
       await handlePptNarration(vp, mode, setStatus, outputFileName, readyStatus, outputField);
@@ -855,4 +862,89 @@ export function startVideoProductionWorker() {
     console.log('[video-production] completed', job.id);
   });
   return worker;
+}
+
+/**
+ * `talking-head-overlay` 交付模式(二十三期)。
+ *
+ * 参考片拆解见 `docs/superpowers/specs/2026-08-29-talking-head-overlay-style.md`。
+ * 和 `talking-head-broll` 的关键差异 —— **少了整条渲染管线**:
+ *
+ * | | talking-head-broll | talking-head-overlay |
+ * |---|---|---|
+ * | 分镜 | Director 切镜 | 不切, 全片一镜到底 |
+ * | 画面 | Builder 出 HTML → Chromium 逐帧截图 | 无 |
+ * | 合成 | ffmpeg 挖空替换 | 一次字幕烧录 |
+ * | 耗时 | 三分多钟 | 几秒 |
+ *
+ * 所以这个分支没有 preview/master 之分的必要 —— 两档产出完全一样(都是原视频 +
+ * 一层字)。但仍然照既有形状写两档, 因为「确认导出」那一步的状态机是共用的,
+ * 特殊化它会让成片页的「等你」判断多一个例外。
+ */
+async function handleTalkingHeadOverlay(
+  vp: { id: string; userId: string; productionRoot: string; sourceVideoPath: string | null; templateId: string | null },
+  mode: 'preview' | 'master',
+  setStatus: SetStatusFn,
+  outputFileName: string,
+  readyStatus: string,
+  outputField: 'previewPath' | 'masterPath',
+): Promise<void> {
+  if (!vp.sourceVideoPath) throw new Error('尚未上传出镜视频');
+  const sourceVideoPath = vp.sourceVideoPath;
+
+  // 转写。复用真人出镜那条已经在跑的本地 Whisper。
+  await setStatus('directing');
+  const audioPath = path.join(vp.productionRoot, 'source-audio.wav');
+  await extractAudio({ videoPath: sourceVideoPath, audioPath });
+  const transcription = await new LocalWhisperClient().transcribe(audioPath);
+
+  const segments = transcription.segments.map((s) => ({
+    startMs: Math.round(s.startSec * 1000),
+    endMs: Math.round(s.endSec * 1000),
+    text: s.text.trim(),
+  })).filter((s) => s.text.length > 0);
+  if (segments.length === 0) throw new Error('转写结果是空的 —— 检查视频里有没有人声');
+
+  const durationMs = Math.round(transcription.durationSec * 1000);
+
+  // 叠加计划
+  await setStatus('building');
+  const deepseekKey = await resolveDeepSeekApiKey(vp.userId);
+  if (!deepseekKey) throw new Error('未配置 DeepSeek key');
+  const llm = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-reasoner' });
+  const { result } = await llm.callStructured({
+    systemPrompt: OVERLAY_PLAN.buildSystemPrompt(),
+    userMessage: OVERLAY_PLAN.buildUserMessage({ segments, durationMs }),
+    responseSchema: OVERLAY_PLAN.responseSchema,
+  });
+
+  const items = sanitizeOverlayItems(
+    result.items,
+    durationMs,
+    segments.map((s) => s.text),
+  ) as OverlayItem[];
+
+  // 画面尺寸必须探真的: 传错时 libass 会静默把整层拉伸, 字号和位置一起歪
+  const frame = await probeVideoDimensions(sourceVideoPath);
+
+  const template = vp.templateId
+    ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
+    : null;
+  const disclaimer = String(template?.description ?? '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const ass = buildOverlayAss(items, REFERENCE_OVERLAY_STYLE, frame, {
+    disclaimer: disclaimer.length > 0 ? disclaimer : undefined,
+    durationMs,
+  });
+  await fs.writeFile(path.join(vp.productionRoot, 'overlay.ass'), ass, 'utf-8');
+
+  // 一次烧录就完事 —— 没有分镜渲染, 没有挖空合成
+  await setStatus('assembling');
+  const outputPath = path.join(vp.productionRoot, outputFileName);
+  await burnCaptions({ videoPath: sourceVideoPath, srt: ass, outputPath, format: 'ass' });
+
+  await setStatus(readyStatus, { [outputField]: outputPath, alignedActs: items });
 }

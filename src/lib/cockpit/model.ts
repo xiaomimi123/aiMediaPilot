@@ -113,7 +113,21 @@ export interface Review {
 
 // 十九期: 交付模式收敛类型 —— manual(手动出镜) / ppt-narration(AI 图文口播,
 // 原 ai-faceless 改名) / talking-head-broll(真人出镜 + B-roll) / illustration-tts(插画 TTS)。
-export type DeliveryMode = 'manual' | 'ppt-narration' | 'talking-head-broll' | 'illustration-tts';
+/**
+ * 交付模式。
+ *
+ * `talking-head-overlay`(二十三期)和 `talking-head-broll` 的区别是**有没有整条
+ * 渲染管线**: broll 要 Director 切镜 + Builder 出 HTML + Chromium 逐帧截图 +
+ * 挖空合成, 三分多钟; overlay 全片一镜到底, 只往真人画面上叠一层字, 几秒钟。
+ * 拆参考片得到的结论是后者更贴近真实的口播视频, 见
+ * `docs/superpowers/specs/2026-08-29-talking-head-overlay-style.md`。
+ */
+export type DeliveryMode =
+  | 'manual'
+  | 'ppt-narration'
+  | 'talking-head-broll'
+  | 'talking-head-overlay'
+  | 'illustration-tts';
 
 export interface ContentItem {
   id: string;

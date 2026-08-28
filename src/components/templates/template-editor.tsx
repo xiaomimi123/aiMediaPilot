@@ -20,6 +20,7 @@ import type { VideoTemplateConfig } from '@/lib/video-template/model';
 const DELIVERY_LABELS: Record<VideoTemplateConfig['deliveryMode'], string> = {
   'ppt-narration': '图文口播',
   'talking-head-broll': '真人出镜 + B-roll',
+  'talking-head-overlay': '真人出镜 + 文字叠加',
   'illustration-tts': '插画配音',
 };
 

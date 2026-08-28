@@ -104,7 +104,7 @@ export const VideoTemplateConfigSchema: z.ZodType<VideoTemplateConfig> = z.objec
   name: z.string().min(1).max(40),
   description: z.string().max(200),
   // 'manual' 不是模板的合法值 —— 模板一定驱动某条 AI 生成管线
-  deliveryMode: z.enum(['ppt-narration', 'talking-head-broll', 'illustration-tts']),
+  deliveryMode: z.enum(['ppt-narration', 'talking-head-broll', 'talking-head-overlay', 'illustration-tts']),
   visualStyle: z.enum(['card', 'illustration']),
   palette: z.array(z.string().regex(HEX_COLOR)).nullable(),
   voicePreset: z.object({ voiceType: z.string().optional(), resourceId: z.string().optional() }).nullable(),
@@ -155,11 +155,50 @@ export function defaultCaptionStyle(): CaptionStyle {
 }
 
 /**
- * 内置 3 个预设 —— 按三种交付模式各一个(用户 2026-08-23 拍板)。首次进入模板页且
+ * 内置预设 —— 每种交付模式各一个。二十三期新增「真人出镜 + 文字叠加」(第 4 个)。首次进入模板页且
  * 该用户 0 条模板时播种; 播种后与普通模板完全一样, 可改可复制可删。
  * 素材(BGM/片头/片尾)一律为 null: 用户自己上传(spec §2.3)。
  */
 export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
+  {
+    /*
+     * 二十三期: 按用户给的参考片复刻(拆解见
+     * docs/superpowers/specs/2026-08-29-talking-head-overlay-style.md)。
+     * 每个取值都是量出来的, 不是拍脑袋:
+     *   零切镜 —— 参考片 147 秒场景检测 0 次
+     *   字幕 44px —— 实测占画面高 4%, 1080 竖屏上就是 44
+     *   不烧 BGM / 不加片头片尾 —— 参考片都没有
+     * description 的三行会被当成右上角常驻声明烧进画面。
+     */
+    name: '真人出镜 + 文字叠加',
+    description: '纯知识经验分享\n不售卖任何项目\n不招募任何人员',
+    deliveryMode: 'talking-head-overlay',
+    visualStyle: 'card',
+    palette: null,
+    voicePreset: null,
+    scriptPrompt: null,
+    captionStyle: {
+      fontFamily: 'PingFang SC',
+      fontSize: 44,
+      primaryColor: '#FFFFFF',
+      outlineColor: '#000000',
+      outlineWidth: 2,
+      marginV: 120,
+    },
+    bgmPath: null,
+    bgmVolume: 0,
+    introPath: null,
+    outroPath: null,
+    visualTone: 'dark',
+    shotPaceSec: null,
+    showChapterNav: false,
+    researchEnabled: false,
+    builderModel: 'deepseek-chat',
+    talkingHeadLayout: 'cutaway',
+    pipPosition: 'br',
+    pipScale: 0.25,
+    pipMargin: 40,
+  },
   {
     name: '图文口播',
     description: 'AI 分镜卡片串成完整片子, 无需出镜也无需配音',
