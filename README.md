@@ -923,6 +923,31 @@ top3, 注入两处——①研究层 `curatedParts` **最前**(亲身经历 > �
 
 API: `POST/GET /api/v1/topics`、`PATCH /api/v1/topics/[id]`、`POST/GET /api/v1/scripts/[id]/distributions`、`DELETE /api/v1/distributions/[id]`。 (旧工作台看板专用的 `GET /api/v1/workbench` 聚合接口已随看板一起删除。)
 
+### 抖音「投稿分析」接入 (二十三期)
+
+作品列表接口只给播放/点赞/评论/收藏/分享。**完播率、跳出率、封面点击率、条均播放时长**在另一组接口里:
+
+```
+/janus/douyin/creator/data/item_analysis/overview            账号级条均值
+/janus/douyin/creator/data/item_analysis/item_performance     逐条作品(含分端播放)
+/janus/douyin/creator/data/item_analysis/involved_vertical    平台判定的垂类
+```
+
+**这三条是从真实页面的 XHR 里抓出来的, 猜路径全部 404** —— 要改先去 `creator.douyin.com/creator-micro/data-center/content` 用 CDP 的 `Page.addScriptToEvaluateOnNewDocument` 打 XHR 补丁重新抓一次。
+
+两个必须知道的约束:
+
+- **不能像作品列表那样直接 `browserFetch`**: 这几条要签名参数 (`msToken`/`a_bogus`), 少了会**静默返回一组全 0 的数**而不是报错 —— 比报错坑得多(第一版就是这么拿到一份全 0 快照的)。所以让页面自己去请求, 在 XHR 上打补丁接住响应。
+- 代价是**窗口只能是页面默认的近 90 天**。窗口外的老作品没有这组指标, 页面上如实标「不在分析窗口里, 拿不到」, 不拿列表接口的数去顶。
+
+**两个接口对同一条作品报的数不一样**: 列表报 22.4 万播, 分析报 4,985 播。抖音没说明哪个是曝光、哪个是有效播放 —— 所以 `PublishedWork` 两组都存 (`play` / `anaPlay`), 页面并列展示。挑一个当真相就是在替平台编一个它自己没给的定义。
+
+`/data` 因此重做成卡片式: 账号总览卡片组 + 两张图 (播放量柱状、完播率×播放量散点) + 作品表格。`/data/[id]` 是作品详情: 两个口径的播放量、完播/跳出/时长、分端播放、钩子(开头第一句 + 文案特征 + 关联稿子的开场与预测分)、文案全文。
+
+图表手写 SVG 不引库 (`src/lib/works/chart.ts`), 因为要保证不撒谎: 柱状**基线永远是 0**(从非零起点画柱会把差不多的两条画成天壤之别), 散点**少于 5 个点直接不画**并说明原因, 单点放正中而不是角落(画在角落像「最差」, 而它只是唯一样本)。
+
+**拿不到的**: 流量来源分布(推荐页/关注页/搜索)和人群画像(年龄/性别/地域)不在这组接口里。作品详情页明写这件事, 不留空也不编。
+
 ### 数据与校准 (`/data`, `/calibration`)
 
 回采走独立脚本 + launchd (`scripts/collect-douyin.ts`, 每晚 20:00), 不走队列 —— 队列要 worker 在跑, 而这个项目已经因为 worker 静默不跑吃过大亏; 这个脚本直接写库, 连 web server 都不需要开着。全程只读, 只 GET 用户自己创作者后台的作品列表。

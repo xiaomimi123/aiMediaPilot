@@ -480,6 +480,20 @@ model PublishedWork {
 
   /// 是否属于当前赛道(AI 类), 计入分析。默认由关键词判, 用户可逐条改判。
   counted   Boolean  @default(false)
+  /// --- 二十三期: 抖音「投稿分析」接口(item_analysis/item_performance)的指标 ---
+  /// 注意这一组和上面 play/digg 那一组**来自两个不同的接口, 数字对不上**:
+  /// 同一条作品列表接口报 223,960 播, 分析接口报 4,985 播。抖音没说哪个是
+  /// 「曝光」哪个是「有效播放」, 所以两组都存、各自标明来源, 页面上并列展示 ——
+  /// 挑一个当真相就是在替平台编一个它自己都没给的定义。
+  anaPlay            Int?
+  /// 5 秒完播率 / 2 秒跳出率 / 条均播放时长(秒), 都是 0~1 的比例或秒数
+  completionRate5s   Float?
+  bounceRate2s       Float?
+  avgPlayDurationSec Float?
+  /// 分端播放: { douyin, xigua, yumme }
+  playPerClient      Json?
+  analyticsFetchedAt DateTime?
+
   /// 二十三期: 这条作品是用哪份稿子发的 → ScriptDraft。
   /// 校准要的是「预测分 vs 实际表现」的配对, 而回采回来的作品和库里的稿子之间
   /// 原本没有任何对应关系 —— 缺了这个字段, 校准永远接不上, 哪怕你真发了一条
@@ -520,6 +534,34 @@ model VideoTemplate {
   user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+/// 抖音账号级「投稿概览」快照(二十三期)。
+///
+/// 逐条作品的指标挂在 PublishedWork 上, 但账号级的条均值、中位数、封面点击率
+/// 是**按时间窗算出来的**, 挂不到任何一条作品上 —— 换个窗口就是另一组数。
+/// 所以按窗口存快照, 并保留 fetchedAt: 这些数字会随时间涨, 要知道快照多旧。
+model DouyinOverviewSnapshot {
+  id                 String   @id @default(cuid())
+  userId             String
+  /// 统计窗口(平台按 yyyyMMdd 传参, 这里存 ISO date 字符串)
+  windowStart        String
+  windowEnd          String
+  submissionCount    Int      @default(0)
+  medianPlay         Int      @default(0)
+  avgLike            Int      @default(0)
+  avgComment         Int      @default(0)
+  avgShare           Int      @default(0)
+  avgPlayDurationSec Float    @default(0)
+  bounceRate2s       Float    @default(0)
+  completionRate5s   Float    @default(0)
+  coverClickRate     Float    @default(0)
+  /// 平台判定的垂类, 如 ["随拍","旅行","时尚"] —— 和你自己认的赛道可能完全不一样
+  verticals          Json     @default("[]")
+  fetchedAt          DateTime @default(now())
+
+  @@unique([userId, windowStart, windowEnd])
+  @@index([userId, fetchedAt])
 }
 
 model CockpitInspiration {

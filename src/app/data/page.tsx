@@ -6,6 +6,8 @@ import { buildBaseline, BASELINE_YEAR_FROM } from '@/lib/works/model';
 import { buildHypotheses, adviseNextVideo } from '@/lib/works/insight';
 import { WorkList } from '@/components/data/work-list';
 import { WorkInsight } from '@/components/data/work-insight';
+import { OverviewCards } from '@/components/data/overview-cards';
+import { PlayBars, CompletionScatter } from '@/components/data/play-charts';
 import { isUnwritten, readActsFromDraftOutput } from '@/lib/cockpit/script-score';
 
 export const dynamic = 'force-dynamic';
@@ -29,12 +31,19 @@ export default async function DataPage() {
         id: true, title: true, caption: true, hashtags: true, url: true, publishedAt: true,
         play: true, digg: true, comment: true, collect: true, counted: true, scriptDraftId: true,
         durationSec: true, isPrivate: true, fetchedAt: true,
+        anaPlay: true, completionRate5s: true, bounceRate2s: true, avgPlayDurationSec: true,
       },
     }),
     prisma.scriptDraft.count({ where: { userId: user.id, archivedAt: null } }),
     prisma.videoProduction.count({ where: { userId: user.id, status: 'done' } }),
     prisma.cockpitContent.count({ where: { userId: user.id, publicationStatus: 'published' } }),
   ]);
+
+  // 账号级投稿分析快照。取最新一份 —— 窗口是平台定的, 我们只能记下它覆盖哪一段。
+  const snapshot = await prisma.douyinOverviewSnapshot.findFirst({
+    where: { userId: user.id },
+    orderBy: { fetchedAt: 'desc' },
+  });
 
   const baseline = buildBaseline(works.map((w) => ({ play: w.play, counted: w.counted })));
 
@@ -76,7 +85,66 @@ export default async function DataPage() {
   ];
 
   return (
-    <PageShell title="数据" description="账号历史表现的基线，以及校准链路断在哪一环。">
+    <PageShell
+      title="数据"
+      description="抖音后台的真实表现：账号总览、逐条作品，以及校准链路断在哪一环。"
+    >
+      <OverviewCards
+        snapshot={
+          snapshot
+            ? {
+                windowStart: snapshot.windowStart,
+                windowEnd: snapshot.windowEnd,
+                submissionCount: snapshot.submissionCount,
+                medianPlay: snapshot.medianPlay,
+                avgLike: snapshot.avgLike,
+                avgComment: snapshot.avgComment,
+                avgShare: snapshot.avgShare,
+                avgPlayDurationSec: snapshot.avgPlayDurationSec,
+                bounceRate2s: snapshot.bounceRate2s,
+                completionRate5s: snapshot.completionRate5s,
+                coverClickRate: snapshot.coverClickRate,
+                verticals: Array.isArray(snapshot.verticals) ? (snapshot.verticals as string[]) : [],
+                fetchedAt: snapshot.fetchedAt.toISOString(),
+              }
+            : null
+        }
+      />
+
+      <div className="mb-6 grid gap-4 lg:grid-cols-2">
+        <section className="rounded-md border border-border bg-card p-4">
+          <h2 className="text-base font-semibold">计入基线的作品播放量</h2>
+          <p className="mt-1 text-xs text-muted-foreground">作品列表口径。</p>
+          <div className="mt-3">
+            <PlayBars
+              rows={works
+                .filter((w) => w.counted)
+                .slice(0, 14)
+                .reverse()
+                .map((w) => ({ id: w.id, label: w.title || '(无标题)', value: w.play }))}
+              median={baseline.median ?? 0}
+            />
+          </div>
+        </section>
+
+        <section className="rounded-md border border-border bg-card p-4">
+          <h2 className="text-base font-semibold">完播率 × 播放量</h2>
+          <p className="mt-1 text-xs text-muted-foreground">只有分析窗口内的作品有完播率。</p>
+          <div className="mt-3">
+            <CompletionScatter
+              rows={works
+                .filter((w) => w.completionRate5s !== null)
+                .map((w) => ({
+                  id: w.id,
+                  label: w.title || '(无标题)',
+                  play: w.anaPlay ?? w.play,
+                  completion: w.completionRate5s as number,
+                }))}
+            />
+          </div>
+        </section>
+      </div>
+
       <section className="mb-6 grid gap-3 sm:grid-cols-3">
         <div className="rounded-md border border-border bg-card p-4">
           <p className="text-xs text-muted-foreground">基线播放（中位数）</p>
@@ -146,6 +214,7 @@ export default async function DataPage() {
           collect: w.collect,
           counted: w.counted,
           scriptDraftId: w.scriptDraftId,
+          completionRate5s: w.completionRate5s,
         }))}
         yearFrom={BASELINE_YEAR_FROM}
         drafts={draftOptions}

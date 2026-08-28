@@ -65,6 +65,53 @@ cliLog('@@RESULT@@' + JSON.stringify([...byId.values()]))
 `;
 
 /**
+ * 抓「投稿分析」。和上面的作品列表是**两个不同的接口**, 数字对不上:
+ * 同一条作品列表报 223,960 播, 分析报 4,985 播。抖音没说哪个是曝光哪个是有效
+ * 播放, 所以两组都存、各自标明来源, 不挑一个当真相。
+ *
+ * 这三条接口是从真实页面的 XHR 里抓出来的(猜路径全部 404)。
+ *
+ * **不能像作品列表那样直接 browserFetch**: 这几条要签名参数(msToken/a_bogus),
+ * 少了就静默返回空对象 —— 不是报错, 是一组全 0 的数, 比报错更坑。所以让页面
+ * 自己去请求, 我们在 XHR 上打补丁接住响应。
+ *
+ * 代价是**窗口只能是页面的默认值(近 90 天)**: 改窗口要去驱动页面上的日期选择器,
+ * 那是另一种脆弱。窗口外的老作品没有这组指标, 页面上如实标「没有分析数据」,
+ * 不拿列表接口的数去顶。
+ */
+const ANALYTICS_SCRIPT = `
+await useOrCreateTaskSpace(${JSON.stringify(TASK_SPACE)})
+await openOrReuseTab('https://creator.douyin.com/creator-micro/data-center/content', { wait: true, timeout: 30 })
+
+// 在新文档加载前打补丁 —— 导航会清掉页面里的一切, 事后注入抓不到首屏那几个请求
+await cdp('Page.addScriptToEvaluateOnNewDocument', {
+  source: \`
+    window.__cap = {};
+    const oo = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function (m, u, ...r) {
+      this.__u = String(u);
+      if (this.__u.includes('item_analysis')) {
+        this.addEventListener('load', () => {
+          try {
+            const key = this.__u.includes('overview') ? 'overview'
+              : this.__u.includes('item_performance') ? 'items'
+              : this.__u.includes('involved_vertical') ? 'vertical' : null;
+            if (key) window.__cap[key] = JSON.parse(this.responseText);
+          } catch (e) {}
+        });
+      }
+      return oo.call(this, m, u, ...r);
+    };
+  \`,
+})
+
+await gotoAndWait('https://creator.douyin.com/creator-micro/data-center/content', { timeout: 30 })
+await wait(14)
+const cap = await js('JSON.stringify(window.__cap || {})')
+cliLog('@@RESULT@@' + (typeof cap === 'string' ? cap : JSON.stringify(cap)))
+`;
+
+/**
  * 把脚本喂给 `ego-browser nodejs` 并收集输出。
  *
  * 两个坑, 都踩过:
@@ -156,9 +203,90 @@ async function main(): Promise<void> {
      */
     const linked = await backfillLinks(prisma, user.id);
     if (linked > 0) log(`补上 ${linked} 条「作品 ← 稿子」的关联`);
+
+    // 投稿分析 —— 失败不影响主回采(上面的数据已经落库了), 但要吵出来
+    try {
+      const n = await collectAnalytics(prisma, user.id);
+      log(`投稿分析: 账号级 1 条快照, 逐条作品 ${n} 条`);
+    } catch (e) {
+      log(`投稿分析抓取失败(不影响作品列表): ${e instanceof Error ? e.message : String(e)}`);
+    }
   } finally {
     await prisma.$disconnect();
   }
+}
+
+/**
+ * 抓投稿分析并落库。
+ *
+ * 窗口是页面默认的近 90 天, 不是我们挑的 —— 见 ANALYTICS_SCRIPT 的注释。窗口外
+ * 的老作品拿不到这组指标, 那就让它空着。
+ */
+async function collectAnalytics(prisma: PrismaClient, userId: string): Promise<number> {
+  const end = new Date();
+  // 页面默认窗口是近 90 天 —— 我们没法改它, 只能如实记下这个快照覆盖的是哪一段
+  const start = new Date(end.getTime() - 90 * 24 * 3600 * 1000);
+  const raw = await runEgo(ANALYTICS_SCRIPT);
+  const marker = raw.lastIndexOf('@@RESULT@@');
+  if (marker < 0) throw new Error('没拿到分析结果');
+  const data = JSON.parse(raw.slice(marker + '@@RESULT@@'.length).split('\n')[0]);
+
+  const ov = data.overview ?? {};
+  const num = (k: string): number => Number(ov[k]?.metric_value ?? 0);
+  const windowStart = start.toISOString().slice(0, 10);
+  const windowEnd = end.toISOString().slice(0, 10);
+
+  await prisma.douyinOverviewSnapshot.upsert({
+    where: { userId_windowStart_windowEnd: { userId, windowStart, windowEnd } },
+    update: {
+      submissionCount: num('submission_count'),
+      medianPlay: num('median_play_count'),
+      avgLike: num('average_like_count_per_video'),
+      avgComment: num('average_comment_count_per_video'),
+      avgShare: num('average_share_count_per_video'),
+      avgPlayDurationSec: num('average_play_duration'),
+      bounceRate2s: num('bounce_rate_2s'),
+      completionRate5s: num('completion_rate_5s'),
+      coverClickRate: num('cover_click_ratio'),
+      verticals: data.vertical?.primary_verticals ?? [],
+      fetchedAt: new Date(),
+    },
+    create: {
+      userId, windowStart, windowEnd,
+      submissionCount: num('submission_count'),
+      medianPlay: num('median_play_count'),
+      avgLike: num('average_like_count_per_video'),
+      avgComment: num('average_comment_count_per_video'),
+      avgShare: num('average_share_count_per_video'),
+      avgPlayDurationSec: num('average_play_duration'),
+      bounceRate2s: num('bounce_rate_2s'),
+      completionRate5s: num('completion_rate_5s'),
+      coverClickRate: num('cover_click_ratio'),
+      verticals: data.vertical?.primary_verticals ?? [],
+    },
+  });
+
+  // 逐条作品的分析指标, 按 externalId 打到已有的作品行上 —— 只更新分析那一组
+  // 字段, 不碰列表接口来的 play/digg(两组数字本来就不一样, 互相覆盖会更乱)
+  const items: unknown[] = Array.isArray(data.items?.items) ? data.items.items : [];
+  let n = 0;
+  for (const it of items as Record<string, unknown>[]) {
+    const externalId = String(it.item_id ?? '');
+    if (!externalId) continue;
+    const r = await prisma.publishedWork.updateMany({
+      where: { userId, externalId },
+      data: {
+        anaPlay: Number(it.play_count ?? 0),
+        completionRate5s: Number(it.completion_rate_5s ?? 0),
+        bounceRate2s: Number(it.bounce_rate_2s ?? 0),
+        avgPlayDurationSec: Number(it.average_play_duration ?? 0),
+        playPerClient: (it.play_count_per_client ?? {}) as object,
+        analyticsFetchedAt: new Date(),
+      },
+    });
+    n += r.count;
+  }
+  return n;
 }
 
 /**

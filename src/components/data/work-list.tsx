@@ -1,12 +1,16 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { pct } from '@/lib/works/chart';
 
 interface Row {
   id: string; title: string; url: string; publishedAt: string;
   play: number; digg: number; comment: number; collect: number; counted: boolean;
   scriptDraftId: string | null;
+  /** 分析窗口外的作品没有这个值。 */
+  completionRate5s: number | null;
 }
 
 export interface DraftOption {
@@ -108,19 +112,19 @@ export function WorkList({
       <ul className="flex flex-col divide-y divide-border rounded-md border border-border bg-card">
         {shown.map((r) => (
           <li key={r.id} className="flex items-center justify-between gap-4 p-3">
-            <div className="min-w-0">
-              {r.url ? (
-                <a href={r.url} target="_blank" rel="noreferrer" className="text-sm hover:underline">
-                  {r.title || '(无标题)'}
-                </a>
-              ) : (
-                <p className="text-sm">{r.title || '(无标题)'}</p>
-              )}
+            {/* 整行进详情 —— 那里才有两个口径的播放量、完播率、钩子和关联的稿子 */}
+            <Link href={`/data/${r.id}`} className="min-w-0 flex-1">
+              <p className="text-sm">{r.title || '(无标题)'}</p>
               <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
                 {r.publishedAt} · {r.play.toLocaleString()} 播 · {r.digg} 赞 · {r.comment} 评 ·{' '}
                 {r.collect} 藏
+                {r.completionRate5s !== null ? (
+                  <span className="ml-2 rounded bg-secondary px-1.5 py-0.5 text-foreground">
+                    完播 {pct(r.completionRate5s)}
+                  </span>
+                ) : null}
               </p>
-            </div>
+            </Link>
             <div className="flex shrink-0 items-center gap-2">
               {/* 0 播放的隐藏作品没有可校准的表现, 不给关联入口免得白填 */}
               {r.play > 0 ? (
