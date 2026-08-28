@@ -3,7 +3,8 @@
 import type { ScriptAct, ActFact } from '@/lib/script/six-act';
 import { estimateSpokenSec } from '@/lib/script/act-plan';
 import { cn } from '@/lib/utils';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { diagnoseSentences } from '@/lib/script/sentence-diagnosis';
 
 /**
  * 中栏: 当前幕编辑(阶段 4)。
@@ -109,6 +110,20 @@ export function ActEditor({
   const sec = estimateSpokenSec(act.narration);
   const over = targetSec > 0 && sec > targetSec * 1.1;
 
+  /*
+   * 逐句诊断。纯函数, 随打字实时重算, 不调模型。
+   *
+   * 放在旁白**正下方**而不是右侧评分栏: 评分栏回答「这稿子几分」, 这里回答
+   * 「我该看哪一句」—— 后者只在你正盯着这一幕改的时候才有用, 隔一屏就等于没有。
+   *
+   * 只报问题的位置, 不给替换文字: 让模型判断「这句好不好」, 它下一句必然是
+   * 「不如改成……」, 而 AI 润色过的句子, AI 也会写给别人。
+   */
+  const flagged = useMemo(
+    () => diagnoseSentences(act.narration).filter((x) => x.issues.length > 0),
+    [act.narration],
+  );
+
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-4">
       {/*
@@ -138,6 +153,21 @@ export function ActEditor({
           </span>
         }
       />
+      {flagged.length > 0 ? (
+        <ul className="-mt-2 flex flex-col gap-1.5">
+          {flagged.map((f) => (
+            <li key={f.start} className="border-l-2 border-destructive/40 pl-2.5 text-xs leading-relaxed">
+              <p className="text-muted-foreground">{f.text}</p>
+              <p className="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-destructive">
+                {f.issues.map((i) => (
+                  <span key={i.kind}>{i.detail}</span>
+                ))}
+              </p>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
       <Field
         label="画面"
         hint="这一幕拍什么 / 放什么"

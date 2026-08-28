@@ -1235,14 +1235,19 @@ worker (`src/jobs/workers/teardown-worker.ts`) 的两个细节:
 
 工具的分工是明确的: **中间那段必须是你**。用 AI 写久了写作能力会跟着 AI 走, 稿子最后和所有人长得一样, 而可模仿的内容都会被算法抹平。所以系统负责起点和评估, 不负责替你写。
 
-**起点有两种粒度** (`/write` 新建稿子时选, `POST /api/v1/scripts/generate` 的 `mode` 参数, 默认 `full` 保持向后兼容):
+**起点有三种** (`/write` 新建稿子时选; 前两种走 `POST /api/v1/scripts/generate` 的 `mode` 参数, 默认 `full` 保持向后兼容):
 
 - `skeleton`(**默认推荐**) — 六幕各给一句「这一幕该干什么」+ 时长预算 + 需要什么材料 + 关键词, **台词全空**。prompt (`src/lib/llm/prompts/script-skeleton.ts`) 里最重的一条是「不要写任何可以直接念出口的句子」, 并给出反例 —— 只说「不要写台词」模型照样会写。另外明令禁止把联网研究材料当成使用者的经历: 真机上出现过骨架把一段第三方创业故事写成「你 14 岁卖掉了第一家公司」, 只有素材库里列出的材料才是本人真有的。
 - `full` — 台词写满, 你在上面改。没思路时让 AI 开个头, 但容易改几个词就交差。
+- **导入我自己写好的**(二十三期, `POST /api/v1/scripts/import`) — 稿子已经在你手上时的入口。在这之前它进不来, 评分、时长、出片全用不上, 因为系统只认自己生成的六幕结构。模型在这里**只做切分, 一个字都不改**(`src/lib/llm/prompts/script-import.ts`), 切完还要 `checkImportFidelity` 逐字核对(多重集比对, 忽略标点——切分必然改变句末标点)。**核不过就整个拒绝、不落库**: 悄悄存一份被润色过的稿子比报错严重得多, 用户会以为那还是他写的, 而改写度会拿它当基线, 整条评估链就建在假的上面。最多重试两次——实测同一段稿子第一次丢 2 个字、第二次 171 字一字不差, 是随机滑落不是系统性问题, 每次手抖都硬拒会让功能没法用。导入稿**刻意不写 `aiBaseline`**(没有 AI 原版可比是设计如此), 「改写」页签因此换一套说法, 不说「下一份新稿会自动留底」那种对它永远不成立的话。
 
 **评估**: 硬指标 (纯函数, 35 分, `script-score.ts`) 随打字实时重算; 软指标 (DeepSeek, 65 分) 要花钱调模型, 只在稿库里手动发起, 且带 `SOFT_MODEL_VERSION` 防止用旧模型的分拼出不可比的总分。
 
 **「我的版 vs AI 版」** (`src/lib/script/rewrite-diff.ts`): 第一次保存时把 AI 原版快照进 `output.aiBaseline`(**之后永不覆盖**), 之后按 LCS 逐幕算改写度, 点名「一个字没改」的幕 —— 那些是会原样留在成片里的 AI 表达。它量的不是稿子好不好, 而是**这稿子还有多少是 AI 的**, 所以刻意不给「越高越好」的结论。
+
+**标题 / 话题标签**(二十三期, `POST /api/v1/scripts/[id]/titles`, 工作区右栏「标题」页签): 这是整条写稿链路里**唯一一处 AI 直接给成品文字**的地方。边界在于: 正文是你的声音, 标题是**包装**——它是给算法和滑动中的拇指看的一行字, 谁写的不影响这支片子是谁的。两点区别于完整生成时顺带产出的那三个标题: ①它读的是**当前正文**而不是主题词(生成时标题和正文同源, 你后来改了多少它都不知道), ②对导入的稿子一样能跑。prompt 禁止写入稿子里没有的事, 也禁止把收益数字写进标题(视频里说是叙事, 标题里挂出来平台按诱导处理); `checkTitleGrounding` 另外核一遍标题里的数字在稿子里有没有出处, 中文/阿拉伯数字互认, **只标不拦**——直接扔掉会连带扔掉好标题, 而标题总共三个, 扫一眼的成本极低。
+
+**逐句诊断**(二十三期, `src/lib/script/sentence-diagnosis.ts`, 旁白输入框正下方): 硬指标已经知道「垫话 1 处: 这个东西」, 但不告诉你是哪一句——三百多字的稿子里, 「有一处垫话」等于让你从头读一遍找。位置信息本来就在计算过程里, 只是被汇总成一个数字丢掉了。四类: 垫话(复用硬指标那份正则表)/气口太长(按逗号切, 口播真正的换气点是逗号)/套话句式/和前面重复。**全是纯函数, 不调模型**——让模型判断「这句写得好不好」, 它下一句必然是「不如改成……」, 而那正是要避的东西。只给问题的位置, 不给替换的文字。
 
 **还没写就不给分**: 空稿子在时长偏差、简洁度这些指标上天生满分, 骨架稿一打开会刷出个 22/35 —— 那是在教错的东西。`isUnwritten()` 命中时页头和右栏都换成「还没开始写」, 说明在等什么。
 
@@ -1435,7 +1440,7 @@ src/
 │   │   ├── preflight/             # 视频分析 (Phase 1, L1) — 列表页已删, 子路由保留
 │   │   ├── script/                # 脚本生成详情页 (E) + 分发登记, `script/new` 为深度写稿入口
 │   │   └── retro-sync/            # 抖音半自动复盘 (C)
-│   └── api/v1/                    # 所有 API routes (含 topics/ distributions/ cockpit/workspace/ cockpit/inspirations/ douyin/auto-sync/trigger/ radar/{items,keywords,config,trigger,runs/latest}/ scripts/generate(五期 douyin 两阶段化)/ scripts/[id]/refine(五期新增)/ style/{profile,samples}(五期新增)/ scripts/[id]/images/{plan,route,archive}(七期新增: 出图计划/逐张生图/zip 打包)/ cockpit/video-productions/{[id],[id]/approve,[id]/file,latest}(十五期新增: 触发生成/状态轮询/确认导出/预览-成片文件流)/ cockpit/video-productions/[id]/upload-source(十九期新增: 真人出镜模式的出镜视频上传)/ tts/volc-config(十九期新增: 火山 TTS 单条配置读写)/ video-templates/{[id],[id]/duplicate,[id]/assets,[id]/script,[id]/produce}(二十期新增: 模板 CRUD+首访播种/复制/素材上传/文案生成/发起出片))
+│   └── api/v1/                    # 所有 API routes (含 topics/ distributions/ cockpit/workspace/ cockpit/inspirations/ douyin/auto-sync/trigger/ radar/{items,keywords,config,trigger,runs/latest}/ scripts/generate(五期 douyin 两阶段化)/ scripts/[id]/refine(五期新增)/ style/{profile,samples}(五期新增)/ scripts/[id]/images/{plan,route,archive}(七期新增: 出图计划/逐张生图/zip 打包)/ scripts/import(二十三期新增: 导入自己写好的稿子, 只切分不改字)/ scripts/[id]/titles(二十三期新增: 按当前正文出标题与话题标签)/ cockpit/video-productions/{[id],[id]/approve,[id]/file,latest}(十五期新增: 触发生成/状态轮询/确认导出/预览-成片文件流)/ cockpit/video-productions/[id]/upload-source(十九期新增: 真人出镜模式的出镜视频上传)/ tts/volc-config(十九期新增: 火山 TTS 单条配置读写)/ video-templates/{[id],[id]/duplicate,[id]/assets,[id]/script,[id]/produce}(二十期新增: 模板 CRUD+首访播种/复制/素材上传/文案生成/发起出片))
 ├── components/
 │   ├── cockpit/                   # Creator Cockpit 移植主体
 │   │   ├── Cockpit.tsx             # 顶层组件: state + view 路由 (`NavView`, 三期起见 `lib/cockpit/view-routing.ts`) + 主题/onboarding (侧栏拖拽排序三期已移除)
