@@ -19,11 +19,20 @@ import {
   compositeCutawayVideo,
   burnCaptions,
   probeVideoDimensions,
+  probeVideo,
   muxAudioTrack,
   type CutawaySegment,
 } from '@/lib/video/ffmpeg';
 import type { PipPosition } from '@/lib/video/pip-layout';
 import type { PersonSide } from '@/lib/video/text-zone';
+import { buildSceneComposeArgs } from '@/lib/video/scene-compose';
+import type { SceneLayout } from '@/lib/video/scene-layout';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+/** 逐场景合成直接调 ffmpeg —— 参数由 buildSceneComposeArgs 构造(纯函数, 已测)。 */
+const execFileAsyncCompose = (args: string[]) =>
+  promisify(execFile)('ffmpeg', args, { timeout: 900_000, maxBuffer: 1 << 26 });
 import { OVERLAY_PLAN, sanitizeOverlayItems } from '@/lib/llm/prompts/overlay-plan';
 import {
   buildOverlayAss, REFERENCE_OVERLAY_STYLE, type OverlayItem,
@@ -489,7 +498,39 @@ export async function handleTalkingHeadBroll(
             margin: layoutTemplate.pipMargin ?? 40,
           }
         : undefined;
-    await compositeCutawayVideo({ sourceVideoPath, segments: cutawaySegments, outputPath: compositedPath, pip });
+    /*
+     * 逐场景版面(二十三期)。production 上存了 sceneLayouts 就走新的合成器
+     * (支持人物全屏/分屏/圆窗), 没存就走原来的顺序挖空 —— 已有任务零迁移。
+     *
+     * 这一步之前是个「界面在撒谎」的口子: 编辑台里能选分屏和圆窗、也能预览,
+     * 但出片时根本没实现, 成片和编辑台对不上。
+     */
+    const refreshedLayouts = vp.sceneLayouts as unknown[] | null;
+    const layoutMap = new Map(
+      (Array.isArray(refreshedLayouts) ? refreshedLayouts : []).map(
+        (x) => [String((x as { shotId?: string }).shotId ?? ''), String((x as { layout?: string }).layout ?? '')],
+      ),
+    );
+    if (layoutMap.size > 0) {
+      const { width, height } = await probeVideoDimensions(sourceVideoPath);
+      const { durationSec } = await probeVideo(sourceVideoPath);
+      await execFileAsyncCompose(
+        buildSceneComposeArgs({
+          sourceVideoPath,
+          outputPath: compositedPath,
+          frame: { width, height },
+          sourceDurationMs: Math.round(durationSec * 1000),
+          segments: direction.shots.map((shot, i) => ({
+            startMs: shot.startMs,
+            endMs: shot.endMs,
+            clipPath: cutawaySegments[i]?.clipPath,
+            layout: (layoutMap.get(shot.shotId) ?? 'content-full') as SceneLayout,
+          })),
+        }),
+      );
+    } else {
+      await compositeCutawayVideo({ sourceVideoPath, segments: cutawaySegments, outputPath: compositedPath, pip });
+    }
     const outputPath = path.join(vp.productionRoot, outputFileName);
     const captionTemplate = vp.templateId
       ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
@@ -566,7 +607,39 @@ export async function handleTalkingHeadBroll(
             margin: layoutTemplate.pipMargin ?? 40,
           }
         : undefined;
-    await compositeCutawayVideo({ sourceVideoPath, segments: cutawaySegments, outputPath: compositedPath, pip });
+    /*
+     * 逐场景版面(二十三期)。production 上存了 sceneLayouts 就走新的合成器
+     * (支持人物全屏/分屏/圆窗), 没存就走原来的顺序挖空 —— 已有任务零迁移。
+     *
+     * 这一步之前是个「界面在撒谎」的口子: 编辑台里能选分屏和圆窗、也能预览,
+     * 但出片时根本没实现, 成片和编辑台对不上。
+     */
+    const refreshedLayouts = vp.sceneLayouts as unknown[] | null;
+    const layoutMap = new Map(
+      (Array.isArray(refreshedLayouts) ? refreshedLayouts : []).map(
+        (x) => [String((x as { shotId?: string }).shotId ?? ''), String((x as { layout?: string }).layout ?? '')],
+      ),
+    );
+    if (layoutMap.size > 0) {
+      const { width, height } = await probeVideoDimensions(sourceVideoPath);
+      const { durationSec } = await probeVideo(sourceVideoPath);
+      await execFileAsyncCompose(
+        buildSceneComposeArgs({
+          sourceVideoPath,
+          outputPath: compositedPath,
+          frame: { width, height },
+          sourceDurationMs: Math.round(durationSec * 1000),
+          segments: direction.shots.map((shot, i) => ({
+            startMs: shot.startMs,
+            endMs: shot.endMs,
+            clipPath: cutawaySegments[i]?.clipPath,
+            layout: (layoutMap.get(shot.shotId) ?? 'content-full') as SceneLayout,
+          })),
+        }),
+      );
+    } else {
+      await compositeCutawayVideo({ sourceVideoPath, segments: cutawaySegments, outputPath: compositedPath, pip });
+    }
     const outputPath = path.join(vp.productionRoot, outputFileName);
     const captionTemplate = vp.templateId
       ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })

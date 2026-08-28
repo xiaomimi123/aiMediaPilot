@@ -347,6 +347,9 @@ model VideoProduction {
   previewPath     String?
   masterPath      String?
   templateId      String? // 二十期: 由哪个模板发起; null = 内容详情页旧入口, 包装段整段跳过
+  /// 二十三期: 逐场景版面 [{ shotId, layout }]。
+  /// null = 老行为(全部走顺序挖空), 保证已有任务零迁移。
+  sceneLayouts    Json?
   voiceOverride   Json? // 二十期收尾(task-10b): illustration-tts 本次任务的临时配音覆盖 { voiceType?, resourceId? }, 优先级高于模板 voicePreset
   errorMessage    String?
   createdAt       String
