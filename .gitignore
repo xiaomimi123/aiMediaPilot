@@ -29,3 +29,5 @@ video-productions/
 # src/app/api/v1/video-templates/、tests/api/video-templates/ 目录, 不锚定会把它们也吃掉。
 /video-templates/
 logs/
+
+/teardowns/

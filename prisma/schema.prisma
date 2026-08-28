@@ -434,11 +434,13 @@ model Teardown {
   author       String   @default("")
   /// 原始链接, 可空
   url          String   @default("")
-  /// 口播转写全文
+  /// 口播转写全文。走视频上传时先是空串, 转写完成后回填。
   transcript   String   @db.Text
+  /// 二十三期: 上传的对标视频本地路径。null = 直接贴的转写稿。
+  sourceVideoPath String?
   /// AI 拆出来的结构: { formula, segments[], hooks[], takeaways[] }
   result       Json?
-  status       String   @default("pending") // pending|done|failed
+  status       String   @default("pending") // pending|transcribing|analyzing|done|failed
   errorMessage String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

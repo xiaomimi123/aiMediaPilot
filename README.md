@@ -923,6 +923,24 @@ top3, 注入两处——①研究层 `curatedParts` **最前**(亲身经历 > �
 
 API: `POST/GET /api/v1/topics`、`PATCH /api/v1/topics/[id]`、`POST/GET /api/v1/scripts/[id]/distributions`、`DELETE /api/v1/distributions/[id]`。 (旧工作台看板专用的 `GET /api/v1/workbench` 聚合接口已随看板一起删除。)
 
+### 拆解 (`/teardowns`)
+
+拆同赛道创作者的结构、钩子和「他怎么把自己立起来的」。两条入口:
+
+- **贴转写稿** —— 同步跑完, 几秒钟。刻意不入队: 入队意味着要 worker 在跑, 而这个项目已经因为 worker 静默不跑吃过大亏。
+- **传视频** —— 走 `teardown` 队列自动转写再拆。本地 Whisper 约 1x 实时, 撑不住一个 HTTP 请求, 只能入队; 发起前先读 `/api/v1/health`, worker 不在时禁用并说明原因, 而不是让人传完 500MB 再让任务静静躺着。
+
+ASR 一直都有 (`LocalWhisperClient` + `PYTHON_BIN` 指的 venv 里的 faster-whisper, 真人出镜模式一直在用), 之前只是没接到拆解上 —— 表单上那句「视频上传 → 自动转写还没接」挂了很久, 而缺的其实只是把现成零件接起来。
+
+worker (`src/jobs/workers/teardown-worker.ts`) 的两个细节:
+
+- **转写完成先落库再拆解**。转写是这条链路上最贵的产物, 拆解失败不该让它重跑 —— 重试时 `transcript` 非空就直接跳过转写。
+- 转写结果短于 50 字直接失败并说明「检查视频里有没有人声」, 而不是把一段空文本送进 LLM 让它编。
+
+列表上「转写中 · 约 1 倍片长」和「拆解中」分开标 —— 两者等待时长差一个数量级, 混在一起会让人以为卡死了。
+
+拆完点「收进钩子库和灵感库」(`/teardowns/[id]/adopt`), 钩子进钩子库、衍生选题进灵感库, 写稿页可以直接挑。
+
 ### 成片 (`/films`, `/films/[id]`)
 
 **这条链路曾经断在最后一步。** 9 条出片任务全部停在 `preview_ready` 半个多月, 界面上「成功出片 0 次」—— 因为唯一能「确认导出」的界面 (`video-production-panel.tsx`) 在 v5 重建里连同旧的内容详情页一起被删了, 而 `approve` 接口和 worker 的 `master → packaging → done` 分支都还在。全站没有一处调用 approve, 所以每条片子跑到预览就永远停住。
