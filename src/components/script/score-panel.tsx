@@ -34,6 +34,7 @@ export function ScorePanel({
   softDimensions,
   softStaleReason = null,
   todos = [],
+  mechanical = [],
   unwritten = false,
 }: {
   hard: number;
@@ -47,6 +48,8 @@ export function ScorePanel({
   softStaleReason?: 'script' | 'model' | null;
   /** 把扣分翻译成「去改哪一幕的什么」。只给分不给去处等于没评。 */
   todos?: { text: string; act?: string }[];
+  /** 改台词永远拿不到的那几分 —— 要去填画面/关键词那几栏。 */
+  mechanical?: string[];
   /** 还一个字没写 —— 展示在等什么, 而不是一个空稿子刷出来的分数。 */
   unwritten?: boolean;
 }) {
@@ -126,6 +129,23 @@ export function ScorePanel({
           </>
         )}
       </section>
+      {/*
+        「填字段」和「改写法」必须分开说。
+        用户问过: 既然有评分标准, 为什么不给我一份能拿满分的写法 —— 但缺画面说明、
+        缺关键词丢的那 2 分跟台词一个字关系都没有, 台词改到天上去也拿不到。
+        混在一起说「照这个改能满分」就是骗人。
+      */}
+      {mechanical.length > 0 ? (
+        <section className="border-t border-border pt-3">
+          <h2 className="font-medium">这几分改台词拿不到</h2>
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {mechanical.map((m, i) => (
+              <li key={i} className="leading-relaxed text-muted-foreground">· {m}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {todos.length > 0 ? (
         <section className="border-t border-border pt-3">
           <h2 className="font-medium">

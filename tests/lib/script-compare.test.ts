@@ -151,3 +151,25 @@ describe('looksCopiedFromCompare', () => {
     expect(looksCopiedFromCompare({ narration: mine, compare: '', original: mine })).toBe(false);
   });
 });
+
+describe('对照要认识评分标准', () => {
+  it('把这一幕丢的分交给模型', () => {
+    const msg = SCRIPT_COMPARE.buildUserMessage({
+      acts: [{ act: 'hook', narration: '我卡了两天。' }],
+      gaps: { hook: ['念下来 6.8 秒，超出目标 0.8 秒，要删字'] },
+    });
+    const text = msg.map((p) => ('text' in p ? p.text : '')).join('');
+    expect(text).toContain('超出目标 0.8 秒');
+  });
+
+  it('有丢分的幕不许说「不用改」—— 那正是用户撞见的自相矛盾', () => {
+    expect(SCRIPT_COMPARE.buildSystemPrompt()).toContain('丢分');
+  });
+
+  it('没有丢分信息时照旧能用', () => {
+    const msg = SCRIPT_COMPARE.buildUserMessage({
+      acts: [{ act: 'hook', narration: '我卡了两天。' }],
+    });
+    expect(msg.map((p) => ('text' in p ? p.text : '')).join('')).toContain('我卡了两天');
+  });
+});

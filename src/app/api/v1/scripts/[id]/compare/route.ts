@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { getDeepSeekTextLLM } from '@/lib/llm/clients';
 import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
 import { SCRIPT_COMPARE, checkCompareFacts, isTooSmallToTeach } from '@/lib/llm/prompts/script-compare';
+import { splitGaps, stillOpenGaps } from '@/lib/script/score-gaps';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +29,10 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   });
   if (!draft) return fail('稿子不存在', 404);
 
-  const output = draft.output as { script?: { acts?: { act?: string; narration?: string }[] } } | null;
+  const output = draft.output as {
+    script?: { acts?: { act?: string; narration?: string }[] };
+    durationSec?: number;
+  } | null;
   const acts = (output?.script?.acts ?? [])
     .map((a) => ({ act: a.act ?? '', narration: (a.narration ?? '').trim() }))
     .filter((a) => a.act && a.narration);
@@ -43,9 +47,19 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
 
   try {
     const llm = getDeepSeekTextLLM(apiKey);
+    /*
+     * 把评分算出来的丢分喂给对照。
+     *
+     * 用户撞见的自相矛盾: 评分说丢了 14 分, 对照却说这一幕「不用改」—— 两套东西
+     * 互不认识。只喂写法类的; 缺画面说明、缺关键词那几条改台词永远拿不到, 混进去
+     * 就成了「照这个改能满分」的假话。
+     */
+    const full = (output?.script?.acts ?? []) as Parameters<typeof splitGaps>[0];
+    const gaps = splitGaps(full, output?.durationSec ?? 60).byAct;
+
     const out = await llm.callStructured({
       systemPrompt: SCRIPT_COMPARE.buildSystemPrompt(),
-      userMessage: SCRIPT_COMPARE.buildUserMessage({ acts }),
+      userMessage: SCRIPT_COMPARE.buildUserMessage({ acts, gaps }),
       responseSchema: SCRIPT_COMPARE.responseSchema,
     });
 
@@ -54,8 +68,21 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
       .filter((a) => byAct.has(a.act) && a.rewritten.trim())
       // 抠字眼的那几幕整幕丢掉 —— 见 isTooSmallToTeach 的说明
       .filter((a) => a.keep || !isTooSmallToTeach(byAct.get(a.act) ?? '', a.rewritten))
+      /*
+       * 丢了分的幕说「不用改」—— 那正是用户报的那个矛盾: 一边说你丢了 14 分,
+       * 一边说这一幕不用改。prompt 里已经禁了, 但模型照样会犯, 所以这里兜住:
+       * 宁可这一幕没有对照, 也不能出现自相矛盾的一句话。
+       */
+      .filter((a) => !(a.keep && (gaps[a.act]?.length ?? 0) > 0))
       .map((a) => {
         const facts = checkCompareFacts(byAct.get(a.act) ?? '', a.rewritten);
+        /*
+         * 它说解决了, 到底解决没有。
+         *
+         * 真机上模型写「删掉垫话」而那个词原封不动还在 —— 这比不改更糟, 因为你会
+         * 以为已经改好了。算得出来的就当场回查, 见 stillOpenGaps。
+         */
+        const target = full.find((x) => x.act === a.act)?.targetSec ?? 0;
         return {
           act: a.act,
           rewritten: a.rewritten.trim(),
@@ -64,6 +91,9 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
           keep: a.keep,
           // 编出来的细节最坏: 看起来像「写得更好了」, 其实是替他多说了一件他没有的事
           inventedNumbers: facts.inventedNumbers,
+          unresolved: a.keep
+            ? []
+            : stillOpenGaps({ rewritten: a.rewritten, gaps: gaps[a.act] ?? [], targetSec: target }),
         };
       });
 

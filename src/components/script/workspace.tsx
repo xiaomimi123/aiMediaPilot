@@ -11,6 +11,7 @@ import { MaterialPanel } from './material-panel';
 import { RewritePanel } from './rewrite-panel';
 import { TitlePanel, type TitleSuggestion } from './title-panel';
 import type { CompareAct } from './compare-block';
+import { splitGaps } from '@/lib/script/score-gaps';
 import { compareToBaseline } from '@/lib/script/rewrite-diff';
 import { ActStrip } from './act-strip';
 import { ActEditor } from './act-editor';
@@ -116,6 +117,8 @@ export function ScriptWorkspace({
 
   const plan = useMemo(() => buildActPlan(acts, durationSec), [acts, durationSec]);
   const hard = useMemo(() => scoreHardDimensions(acts, durationSec), [acts, durationSec]);
+  // 改台词拿不到的那几分单独列 —— 见 score-gaps.ts 的说明
+  const gaps = useMemo(() => splitGaps(acts, durationSec), [acts, durationSec]);
   // 骨架稿一打开六幕全空 —— 这时候的分数没有意义, 见页头的说明
   const unwritten = useMemo(() => isUnwritten(acts), [acts]);
   const current = acts.find((a) => a.act === currentAct) ?? acts[0];
@@ -279,6 +282,7 @@ export function ScriptWorkspace({
               softDimensions={softDimensions}
               softStaleReason={softStaleReason}
               todos={todos}
+              mechanical={gaps.mechanical}
               unwritten={unwritten}
             />
           ) : null}

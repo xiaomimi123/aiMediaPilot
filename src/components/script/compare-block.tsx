@@ -20,6 +20,8 @@ export interface CompareAct {
   /** 这一幕本来就写得对, whatChanged 说的是「它为什么成立」。 */
   keep: boolean;
   inventedNumbers: string[];
+  /** 它声称解决了、但实际没解决的丢分。 */
+  unresolved?: string[];
 }
 
 export function CompareBlock({
@@ -71,6 +73,17 @@ export function CompareBlock({
       {compare.keep ? null : (
         <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{compare.rewritten}</p>
       )}
+
+      {/*
+        它说解决了却没解决的, 当场戳穿。比不改更糟的是让你以为已经改好了。
+      */}
+      {(compare.unresolved ?? []).length > 0 ? (
+        <ul className="mt-1.5 flex flex-col gap-1">
+          {compare.unresolved!.map((u) => (
+            <li key={u} className="text-[11px] leading-relaxed text-destructive">{u}</li>
+          ))}
+        </ul>
+      ) : null}
 
       {compare.inventedNumbers.length > 0 ? (
         <p className="mt-1.5 text-[11px] leading-relaxed text-destructive">

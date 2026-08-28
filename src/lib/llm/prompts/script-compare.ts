@@ -90,11 +90,24 @@ function buildSystemPrompt(): string {
 他说「这个东西」你不要改成「这鬼东西」, 他说「所有想用的普通人」你不要改成
 「每个想用的普通人」。语气和用词的分寸是他的, 你换的是结构。
 
+## 这一幕丢了分的话, 对照要冲着那几条去
+
+每一幕后面如果标了「丢分」, 那是系统按评分标准算出来的、这一幕实际扣掉的分。
+**标了丢分的幕不许设 keep**, 你的对照必须真的解决它, 并在 whatChanged 里说清楚
+解决的是哪一条。
+
+用户的原话是: 既然有评分标准, 为什么不给我一份照着它能拿满分的写法。他是对的 ——
+一边说「你丢了 14 分」一边说「这一幕不用改」, 那是自相矛盾。
+
+  丢分「念下来 6.8 秒，超出目标 0.8 秒」→ 对照就要真的短下来, 不是换个说法
+  丢分「有垫话「这个东西」」→ 对照里那个词必须不见了
+  丢分「结尾只对同行成立」→ 对照要把结论扩到别的行当也成立
+
 ## 这一幕本来就写得对时
 
-不要硬凑。把 keep 设成 true, rewritten 原样返回他的句子, 然后在 whatChanged 里
-说清楚**它为什么成立**——用手法讲(「先给具体动作再给判断, 所以不空」), 不要写
-「写得很好」「很有冲击力」那种话, 那和评价一样不能学。
+**没有标丢分**的幕才可以 keep。不要硬凑: 把 keep 设成 true, rewritten 原样返回
+他的句子, 然后在 whatChanged 里说清楚**它为什么成立**——用手法讲(「先给具体动作
+再给判断, 所以不空」), 不要写「写得很好」「很有冲击力」那种话, 那和评价一样不能学。
 
 知道自己哪句写对了、对在哪, 和知道哪句要改一样重要。
 
@@ -108,6 +121,12 @@ function buildSystemPrompt(): string {
 编出来的细节是最坏的一种: 它看起来像是「写得更好了」, 但那是因为你替他多说了一件
 他没有的事。他照着学, 学到的就是编。
 
+## 不许跨幕搬内容
+
+六幕是对着时间轴的, 每一幕有自己的秒数预算。**不要把某一幕的内容并到另一幕**,
+也不要把一幕拆到两幕 —— 那不是写法, 那是改结构, 会让时长分配整个错位。
+每一幕的对照只能用这一幕自己的句子。
+
 ## 手法之外, 别改他的判断
 
 他的观点、立场、结论必须原样保留。你换的是怎么说, 不是说什么。
@@ -119,10 +138,18 @@ function buildSystemPrompt(): string {
 ${JSON_STRICTNESS}`;
 }
 
-function buildUserMessage(input: { acts: { act: string; narration: string }[] }): ContentPart[] {
+function buildUserMessage(input: {
+  acts: { act: string; narration: string }[];
+  /** 每一幕按评分标准实际丢的分 —— 对照要冲着这些去, 见 system prompt。 */
+  gaps?: Partial<Record<string, string[]>>;
+}): ContentPart[] {
   const body = input.acts
     .filter((a) => a.narration.trim())
-    .map((a) => `【${a.act}】\n${a.narration.trim()}`)
+    .map((a) => {
+      const g = input.gaps?.[a.act] ?? [];
+      const tail = g.length > 0 ? `\n丢分: ${g.join('; ')}` : '';
+      return `【${a.act}】\n${a.narration.trim()}${tail}`;
+    })
     .join('\n\n');
 
   return [{ type: 'text', text: `这是我写的六幕稿:\n\n${body}` }];

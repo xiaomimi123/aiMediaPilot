@@ -55,7 +55,7 @@ export default async function WriteDetailPage(props: { params: Promise<{ id: str
       compareVersions?: {
         acts: {
           act: string; rewritten: string; whatChanged: string;
-          keep: boolean; inventedNumbers: string[];
+          keep: boolean; inventedNumbers: string[]; unresolved?: string[];
         }[];
         overallNote: string;
         forNarration: Record<string, string>;
