@@ -50,6 +50,7 @@ import { probeShotHealth } from '@/lib/video-production/shot-renderer';
 import { judgeShotDensity } from '@/lib/video-production/frame-density';
 import { judgeHollowCard } from '@/lib/video-production/frame-detail';
 import { judgeShotLayout } from '@/lib/video-production/frame-layout';
+import { scoreAttempt, pickBestAttempt, type ScoredAttempt } from '@/lib/video-production/attempt-score';
 import type { ScriptAct } from '@/lib/script/six-act';
 import { synthesizeVolcTts } from '@/lib/tts/volcengine';
 import { decrypt } from '@/lib/crypto';
@@ -109,6 +110,12 @@ async function buildShotHtmlWithRetry(
   // 上一轮的诊断结论 —— 下一轮拼进 systemPrompt 喂回给模型。Builder 是盲写的,
   // 不把渲染结果告诉它, 它永远不知道自己排出来是整屏空白(用户点出的本质问题)。
   let feedback = '';
+  /*
+   * 每一版都留着 + 记分。三次都不合格时挑分最高的那一版, 而不是再盲调一次模型。
+   * 原来的兜底是: 再调一次拿第四版, 只做结构校验就直接用 —— 那一版从来没被体检过,
+   * 完全可能比第二版还差。真实出片里这条路走过 2 次。
+   */
+  const attempts: ScoredAttempt[] = [];
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     const { result } = await llm.callStructured({
@@ -148,6 +155,29 @@ async function buildShotHtmlWithRetry(
     }
 
     const density = judgeShotDensity(health.samples, health.details.map((d) => d.detailRatio));
+    const hollowJ = health.samples
+      .map((m, i) => judgeHollowCard({ contentRatio: m.contentRatio, detailRatio: health.details[i]?.detailRatio ?? 1 }))
+      .find((j) => !j.ok);
+    const layoutJ = judgeShotLayout(
+      health.samples.map((m, i) => ({
+        bottomReach: health.layouts[i]?.bottomReach ?? 1,
+        contentRatio: m.contentRatio,
+        sideBySide: health.sideBySide[i] ?? false,
+      })),
+      frame ?? { width: 1920, height: 1080 },
+    );
+    const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+    attempts.push({
+      html: result.html,
+      score: scoreAttempt({
+        densityOk: density.ok,
+        hollowOk: !hollowJ,
+        layoutOk: layoutJ.ok,
+        detailRatio: avg(health.details.map((d) => d.detailRatio)),
+        contentRatio: avg(health.samples.map((m) => m.contentRatio)),
+      }),
+    });
+
     if (!density.ok) {
       lastReason = density.reason ?? '画面密度不足';
       feedback = `\n\n上一版渲染出来的实际效果不合格: ${lastReason}`;
@@ -165,11 +195,8 @@ async function buildShotHtmlWithRetry(
      * 判据是**同一帧上占比与细节的背离**, 不是新的绝对阈值 —— 后者必须跟着一整套
      * 取样方法重新标定, 那是另一件事。
      */
-    const hollow = health.samples
-      .map((m, i) => judgeHollowCard({ contentRatio: m.contentRatio, detailRatio: health.details[i]?.detailRatio ?? 1 }))
-      .find((j) => !j.ok);
-    if (hollow) {
-      lastReason = hollow.reason ?? '画面被空色块占着';
+    if (hollowJ) {
+      lastReason = hollowJ.reason ?? '画面被空色块占着';
       feedback = `\n\n上一版渲染出来的实际效果不合格: ${lastReason}`;
       console.warn(`[video-production] 镜头 ${shot.shotId} 第 ${attempt} 次空壳色块: ${lastReason}`);
       continue;
@@ -181,16 +208,8 @@ async function buildShotHtmlWithRetry(
      * prompt 里已经写死了「最下沿落在 65%~80%」, 真实出片照样交上来只排到 46% 的
      * 版面, 下面一大片空着。同密度、空壳两关一个道理: 能量的就别指望它自觉。
      */
-    const layout = judgeShotLayout(
-      health.samples.map((m, i) => ({
-        bottomReach: health.layouts[i]?.bottomReach ?? 1,
-        contentRatio: m.contentRatio,
-        sideBySide: health.sideBySide[i] ?? false,
-      })),
-      frame ?? { width: 1920, height: 1080 },
-    );
-    if (!layout.ok) {
-      lastReason = layout.reason ?? '版面没铺开';
+    if (!layoutJ.ok) {
+      lastReason = layoutJ.reason ?? '版面没铺开';
       feedback = `\n\n上一版渲染出来的实际效果不合格: ${lastReason}`;
       console.warn(`[video-production] 镜头 ${shot.shotId} 第 ${attempt} 次版面不合格: ${lastReason}`);
       continue;
@@ -199,9 +218,23 @@ async function buildShotHtmlWithRetry(
     return result.html;
   }
 
-  // 三次都不达标就放行最后一版 —— 密度是质量问题不是可用性问题, 为它废掉整条
-  // 任务不划算(结构/语法不合格才是真的不能用, 那条路上面已经 continue 掉了)。
-  console.warn(`[video-production] 镜头 ${shot.shotId} 三次仍未达标, 放行最后一版: ${lastReason}`);
+  /*
+   * 三次都不达标: 挑**三版里分最高的那一版**, 不再盲调第四次。
+   *
+   * 画面质量不是可用性问题, 为它废掉整条任务不划算(结构/语法不合格才是真的不能用,
+   * 那条路上面已经 continue 掉了)。但「放行最后一版」是错的 —— 最后一版是反馈驱动下
+   * 越改越偏的产物, 而且从没被体检过。三版都量过, 谁好用谁, 顺带省一次模型调用。
+   */
+  const best = pickBestAttempt(attempts);
+  if (best) {
+    console.warn(
+      `[video-production] 镜头 ${shot.shotId} 三次仍未达标, 取三版里最好的一版: ${lastReason}`,
+    );
+    return best;
+  }
+
+  // 一版都没留下(三次全在结构/运行时那关就被打回了)—— 那才需要再要一版
+  console.warn(`[video-production] 镜头 ${shot.shotId} 三版都没通过结构校验, 再要一版: ${lastReason}`);
   const { result: fallback } = await llm.callStructured({
     systemPrompt: systemPrompt + feedback,
     userMessage,
