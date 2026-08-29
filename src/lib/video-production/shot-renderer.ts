@@ -1,6 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { measureFrameDensity, type FrameDensity } from '@/lib/video-production/frame-density';
+import { measureFrameDetail, type FrameDetail } from '@/lib/video-production/frame-detail';
+import { measureFrameLayout, type FrameLayout } from '@/lib/video-production/frame-layout';
 import os from 'os';
 import { chromium } from 'playwright-core';
 import { encodeFramesToClip } from '@/lib/video/ffmpeg';
@@ -146,8 +148,21 @@ export interface ProbeShotOpts {
   frame?: { width: number; height: number };
 }
 
-/** 统计用的取样图长边 —— 占比/分布对分辨率不敏感, 缩小只为快。 */
-const ANALYSIS_LONG = 160;
+/**
+ * 分析用的取样图长边。
+ *
+ * 171 不是随手取的: 2026-08-29 那次重标定, 所有基准点都是把帧缩到 96x171 量出来的
+ * (真空屏 0.00% / 一行小字 0.11% / 标题卡 2.36% / 正常成片中位 4.7%)。改这个数就等于
+ * 改了那套阈值的尺度, 要改必须连标定一起重做。
+ */
+const ANALYSIS_LONG = 171;
+
+/** 等比缩到长边 ANALYSIS_LONG —— 竖屏得 96x171, 横屏得 171x96。 */
+function analysisSize(w: number, h: number): { width: number; height: number } {
+  return h > w
+    ? { width: Math.max(1, Math.round((ANALYSIS_LONG * w) / h)), height: ANALYSIS_LONG }
+    : { width: ANALYSIS_LONG, height: Math.max(1, Math.round((ANALYSIS_LONG * h) / w)) };
+}
 
 /**
  * 体检渲染的视口。
@@ -167,10 +182,10 @@ const ANALYSIS_LONG = 160;
  *    所以这条路要走, 得连标定一起重做, 不能只换渲染尺寸。
  */
 export function probeViewport(frame?: { width: number; height: number }): { width: number; height: number } {
-  if (!frame || frame.width <= 0 || frame.height <= 0) return { width: 160, height: 90 };
+  if (!frame || frame.width <= 0 || frame.height <= 0) return { width: 1920, height: 1080 };
   return frame.height > frame.width
-    ? { width: Math.round((ANALYSIS_LONG * frame.width) / frame.height), height: ANALYSIS_LONG }
-    : { width: ANALYSIS_LONG, height: Math.round((ANALYSIS_LONG * frame.height) / frame.width) };
+    ? { width: frame.width, height: frame.height }
+    : { width: frame.width, height: frame.height };
 }
 /** 在镜头中段等距取几帧: 避开开头入场、结尾退场这两段天然稀疏的时间。 */
 const PROBE_POINTS = [0.35, 0.6, 0.85];
@@ -187,6 +202,10 @@ const PROBE_POINTS = [0.35, 0.6, 0.85];
  */
 export interface ShotHealth {
   samples: FrameDensity[];
+  /** 与 samples 一一对应的细节量 —— 用来分辨「大色块刷分」, 见 frame-detail.ts。 */
+  details: FrameDetail[];
+  /** 与 samples 一一对应的版面形状 —— 用来判「内容排到多低」, 见 frame-layout.ts。 */
+  layouts: FrameLayout[];
   /** 页面内抛出的 JS 错误 —— 语法与结构体检都拦不住的运行时问题(如 GSAP 用法错误)。 */
   runtimeErrors: string[];
 }
@@ -218,6 +237,8 @@ export async function probeShotHealth(opts: ProbeShotOpts): Promise<ShotHealth> 
     await page.goto(`file://${path.resolve(indexHtmlPath)}`);
 
     const samples: FrameDensity[] = [];
+    const details: FrameDetail[] = [];
+    const layouts: FrameLayout[] = [];
     for (const ratio of PROBE_POINTS) {
       const sec = (durationMs / 1000) * ratio;
       // 时间线不存在说明脚本压根没跑起来 —— 那是语法与结构体检的职责。这里放弃取样,
@@ -231,28 +252,40 @@ export async function probeShotHealth(opts: ProbeShotOpts): Promise<ShotHealth> 
         runtimeErrors.push(e instanceof Error ? e.message : String(e));
         return false;
       });
-      if (!hasTimeline) return { samples: [], runtimeErrors };
+      if (!hasTimeline) return { samples: [], details: [], layouts: [], runtimeErrors };
 
       const png = await page.screenshot({ type: 'png' });
-      const rgb = await page.evaluate(async (dataUrl) => {
+      /*
+       * **渲染按真实尺寸, 分析在缩图上做。** 两件事必须分开:
+       * - 渲染尺寸决定排版对不对(缩小视口会让绝对定位的元素跑出可视区)
+       * - 分析尺寸决定量出来的数, 阈值就是按 96/171 这个尺度标定的
+       *
+       * 一度让分析也在真实尺寸上做, 后果是逐像素读 200 万像素、拼成 600 万个数再
+       * 序列化回 Node —— 20 分钟只渲完 1 个镜头, BullMQ 的任务锁直接续不上。
+       */
+      const small = analysisSize(probe.width, probe.height);
+      const rgb = await page.evaluate(async ({ dataUrl, sw, sh }) => {
         const img = new Image();
         img.src = dataUrl;
         await img.decode();
         const c = document.createElement('canvas');
-        c.width = img.width; c.height = img.height;
+        c.width = sw; c.height = sh;
         const ctx = c.getContext('2d')!;
-        ctx.drawImage(img, 0, 0);
+        ctx.drawImage(img, 0, 0, sw, sh);
         const d = ctx.getImageData(0, 0, c.width, c.height).data;
         const out: number[] = [];
         for (let i = 0; i < d.length; i += 4) { out.push(d[i], d[i + 1], d[i + 2]); }
         return { w: c.width, h: c.height, data: out };
-      }, `data:image/png;base64,${png.toString('base64')}`);
-      samples.push(measureFrameDensity(Buffer.from(rgb.data), rgb.w, rgb.h));
+      }, { dataUrl: `data:image/png;base64,${png.toString('base64')}`, sw: small.width, sh: small.height });
+      const buf = Buffer.from(rgb.data);
+      samples.push(measureFrameDensity(buf, rgb.w, rgb.h));
+      details.push(measureFrameDetail(buf, rgb.w, rgb.h));
+      layouts.push(measureFrameLayout(buf, rgb.w, rgb.h));
     }
-    return { samples, runtimeErrors };
+    return { samples, details, layouts, runtimeErrors };
   } catch (e) {
     runtimeErrors.push(e instanceof Error ? e.message : String(e));
-    return { samples: [], runtimeErrors };
+    return { samples: [], details: [], layouts: [], runtimeErrors };
   } finally {
     await browser?.close();
   }

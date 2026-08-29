@@ -15,7 +15,16 @@ export interface DensityJudgement {
 /** 轻微色差(抗锯齿/渐变噪点)不算内容, 否则纯色帧也会被判成有东西。 */
 const BG_TOLERANCE = 18;
 /** 单格内非背景像素超过这个比例才算"这格有内容" */
-const CELL_CONTENT_THRESHOLD = 0.01;
+/**
+ * 一个格子里有多少比例的内容, 才算「这格有东西」。
+ *
+ * 2026-08-29 随探针改成真实尺寸一起重标: 原值 0.01 也是按缩小视口定的。真实尺寸下
+ * 九宫格每格是 360x640 = 23 万像素, 一行 48px 小字在它那格里只占 0.99% —— 差一点点
+ * 就被判成「这格是空的」, 于是 cellsUsed = 0, 整帧被当成空屏拦下。实测踩到。
+ *
+ * 取 0.002: 真空屏是 0, 一行小字是 0.99%, 中间留足余量。
+ */
+const CELL_CONTENT_THRESHOLD = 0.002;
 
 /**
  * 量一帧画面的"实在程度"(二十一期)。
@@ -74,32 +83,49 @@ export function measureFrameDensity(rgb: Buffer, width: number, height: number):
 }
 
 /**
- * 判定阈值(2026-08-26 复核后重标定)。
+ * 判定阈值(2026-08-29 第三次标定 —— 前两次都记在下面, 以免重犯)。
  *
- * **第一次标定错了, 记录在此以免重犯**: 当时抽的是参考视频里视觉冲击最强的几帧
- * (30%~54%), 把峰值当成了普遍水平, 阈值定在 0.12。后来把参考视频完整量了一遍才
- * 发现它自己的分布是:
- *   t=3s   标题页        5.6%
- *   t=45s  留白转场      5.4%
- *   t=106s 收尾          4.2%
- *   t=20s/62s 真实目录截图 39%~54%
- *   t=88s/95s 带对话截图  30%
- * 也就是「少数几帧铺满真实截图 + 多数帧留白」的节奏, 不是每帧都 30%。而且高占比
- * 那几帧靠的是**整块真实截图**(像素天然密), 纯文字排版再密也到不了 —— 拿它当
- * 每帧的及格线, 等于逼模型追一个结构上达不到的标准。实测后果: 模型收到"你只有
- * 5.6%, 人家 30%"的反馈后无所适从, 越改越乱, 甚至排出 0.0% 的纯空屏。
+ * **第一次(定 0.12)错在**: 抽的是参考视频里视觉冲击最强的几帧(30%~54%), 把峰值当
+ * 成了普遍水平。参考片自己的分布其实是「少数几帧铺满真实截图 + 多数帧留白」:
+ *   t=3s 标题页 5.6% / t=45s 留白转场 5.4% / t=106s 收尾 4.2% / t=20s 目录截图 39%
+ * 而且高占比那几帧靠的是整块真实截图(像素天然密), 纯文字排版到不了。实测后果:
+ * 模型收到「你只有 5.6%, 人家 30%」的反馈后无所适从, 越改越乱, 甚至排出纯空屏。
  *
- * 重标定为 0.03: 只拦**真正的空屏**(渲染事故、动画没入场), 不干预创作节奏。
- * 参考视频最低的正常帧是 4.2%, 留出余量。密度是否够"好看"不该由这个阈值裁决 ——
- * 它只负责拦掉"什么都没有"。
+ * **第二次(定 0.03)错在**: 那个数是在**缩小的探针视口**(160x90)下量出来的。探针
+ * 后来改成按真实尺寸渲染, 同一套画面的量级整个变了 —— 一支人眼确认正常的竖屏成片,
+ * 52 帧取样的内容占比中位数只有 4.7%, 而阈值 3% 就卡在中位数上, 等于在掷硬币。
+ * 真实后果: 一次出片里 4 个镜头被判「三次仍未达标」, 而它们渲出来的 clip 实测都是
+ * 4%~5%, 画面完全正常 —— 全是误报, 每个还白烧 3 次模型调用。
+ *
+ * **这一次的标定数据**(全部在真实尺寸下量, 分析图统一缩到长边 96/171):
+ *   真·空屏                0.00% 占比 / 0.00% 细节
+ *   一行 48px 小字          0.11% / 0.07%
+ *   真实标题卡(120px 两行)   2.36% / 0.60%
+ *   正常成片 52 帧          中位 4.7% / 4.2%, 5 分位 0.6% / 0.6%
+ *
+ * 结论: 真空屏和「任何真的渲出了东西的画面」之间是 **0 与非 0** 的区别, 不是量的
+ * 区别。所以判据取得极低, 只认「几乎一条边都没有」: 内容 < 1% **且** 细节 < 0.05%。
+ * 两个都要满足 —— 单看内容会把一行小字(0.11%)误伤, 单看细节会把纯色渐变放过。
+ *
+ * 密度是否「好看」仍然不该由这里裁决(第一次的教训), 它只负责拦「什么都没有」。
+ * 「有大色块但里面是空的」是另一种病, 归 `frame-detail.ts` 的 judgeHollowCard 管。
  */
-const MIN_CONTENT_RATIO = 0.03;
+const MIN_CONTENT_RATIO = 0.01;
+/** 真空屏一条边都没有; 任何渲出来的元素都会带来边缘。 */
+const MIN_DETAIL_RATIO = 0.0005;
 const MIN_CELLS_USED = 1;
 
-export function judgeFrameDensity(m: FrameDensity): DensityJudgement {
+/**
+ * @param detailRatio 同一帧的细节量(见 frame-detail.ts)。**不给就当作足够**, 退回
+ *   只看内容占比的老行为 —— 老调用方(单测、不关心细节的路径)因此零改动。
+ */
+export function judgeFrameDensity(m: FrameDensity, detailRatio?: number): DensityJudgement {
   const pct = (m.contentRatio * 100).toFixed(1);
 
-  if (m.contentRatio < MIN_CONTENT_RATIO) {
+  // 空屏要两个信号一起说了才算: 单看占比会误伤一行小字(实测 0.11%),
+  // 单看细节会把纯色渐变放过。见上方标定说明。
+  const blank = m.contentRatio < MIN_CONTENT_RATIO && (detailRatio ?? 1) < MIN_DETAIL_RATIO;
+  if (blank) {
     return {
       ok: false,
       reason: `画面太空: 只有 ${pct}% 的面积有内容(实测 ${m.contentRatio.toFixed(3)}), 底色 ${m.background} 占了其余全部。`
@@ -125,15 +151,15 @@ export function judgeFrameDensity(m: FrameDensity): DensityJudgement {
  * 逼着模型把每一帧都塞满, 反而更糟。所以只拦"普遍性空洞": 过半取样帧都空才重写。
  * 取不到样(渲染阶段的问题)时一律放行 —— 那不是 Builder 的错。
  */
-export function judgeShotDensity(samples: FrameDensity[]): DensityJudgement {
+export function judgeShotDensity(samples: FrameDensity[], details?: number[]): DensityJudgement {
   if (samples.length === 0) return { ok: true };
 
-  const bad = samples.filter((m) => !judgeFrameDensity(m).ok);
+  const bad = samples.filter((m, i) => !judgeFrameDensity(m, details?.[i]).ok);
   if (bad.length * 2 <= samples.length) return { ok: true };
 
   // 拿最空的那帧当代表, 反馈才具体
   const worst = bad.reduce((a, b) => (a.contentRatio <= b.contentRatio ? a : b));
-  const detail = judgeFrameDensity(worst).reason ?? '';
+  const detail = judgeFrameDensity(worst, details?.[samples.indexOf(worst)]).reason ?? '';
   return {
     ok: false,
     reason: `渲染出来的画面太空: 取样 ${samples.length} 帧, 有 ${bad.length} 帧不合格。${detail}`,

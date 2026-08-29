@@ -48,6 +48,8 @@ import { buildStyleSection, buildChapterNavSection, actAtMs } from '@/lib/video-
 import { validateShotHtml } from '@/lib/video-production/shot-html-guard';
 import { probeShotHealth } from '@/lib/video-production/shot-renderer';
 import { judgeShotDensity } from '@/lib/video-production/frame-density';
+import { judgeHollowCard } from '@/lib/video-production/frame-detail';
+import { judgeShotLayout } from '@/lib/video-production/frame-layout';
 import type { ScriptAct } from '@/lib/script/six-act';
 import { synthesizeVolcTts } from '@/lib/tts/volcengine';
 import { decrypt } from '@/lib/crypto';
@@ -145,12 +147,55 @@ async function buildShotHtmlWithRetry(
       continue;
     }
 
-    const density = judgeShotDensity(health.samples);
-    if (density.ok) return result.html;
+    const density = judgeShotDensity(health.samples, health.details.map((d) => d.detailRatio));
+    if (!density.ok) {
+      lastReason = density.reason ?? '画面密度不足';
+      feedback = `\n\n上一版渲染出来的实际效果不合格: ${lastReason}`;
+      console.warn(`[video-production] 镜头 ${shot.shotId} 第 ${attempt} 次密度不足: ${lastReason}`);
+      continue;
+    }
 
-    lastReason = density.reason ?? '画面密度不足';
-    feedback = `\n\n上一版渲染出来的实际效果不合格: ${lastReason}`;
-    console.warn(`[video-production] 镜头 ${shot.shotId} 第 ${attempt} 次密度不足: ${lastReason}`);
+    /*
+     * 「大色块刷分」: 占比够了, 但那块面积里面是空的。
+     *
+     * 排版指令调完之后内容占比确实涨了, 但抽帧一看是一张几乎空的大灰卡片, 角上
+     * 四个字 —— 占比数的是「和背景不同的像素」, 一块纯色色块就能撑起来。指标一旦
+     * 变成目标就不再是好指标, 所以补这一关: 见 frame-detail.ts。
+     *
+     * 判据是**同一帧上占比与细节的背离**, 不是新的绝对阈值 —— 后者必须跟着一整套
+     * 取样方法重新标定, 那是另一件事。
+     */
+    const hollow = health.samples
+      .map((m, i) => judgeHollowCard({ contentRatio: m.contentRatio, detailRatio: health.details[i]?.detailRatio ?? 1 }))
+      .find((j) => !j.ok);
+    if (hollow) {
+      lastReason = hollow.reason ?? '画面被空色块占着';
+      feedback = `\n\n上一版渲染出来的实际效果不合格: ${lastReason}`;
+      console.warn(`[video-production] 镜头 ${shot.shotId} 第 ${attempt} 次空壳色块: ${lastReason}`);
+      continue;
+    }
+
+    /*
+     * 版面: 内容有没有排到画面下半部分。
+     *
+     * prompt 里已经写死了「最下沿落在 65%~80%」, 真实出片照样交上来只排到 46% 的
+     * 版面, 下面一大片空着。同密度、空壳两关一个道理: 能量的就别指望它自觉。
+     */
+    const layout = judgeShotLayout(
+      health.samples.map((m, i) => ({
+        bottomReach: health.layouts[i]?.bottomReach ?? 1,
+        contentRatio: m.contentRatio,
+      })),
+      frame ?? { width: 1920, height: 1080 },
+    );
+    if (!layout.ok) {
+      lastReason = layout.reason ?? '版面没铺开';
+      feedback = `\n\n上一版渲染出来的实际效果不合格: ${lastReason}`;
+      console.warn(`[video-production] 镜头 ${shot.shotId} 第 ${attempt} 次版面不合格: ${lastReason}`);
+      continue;
+    }
+
+    return result.html;
   }
 
   // 三次都不达标就放行最后一版 —— 密度是质量问题不是可用性问题, 为它废掉整条

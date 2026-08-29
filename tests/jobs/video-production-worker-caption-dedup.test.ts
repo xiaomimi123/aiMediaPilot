@@ -79,6 +79,10 @@ vi.mock('@/lib/video-production/shot-renderer', () => ({
   // 密度体检真跑 Chromium, 本测试只关心接线参数, 给一份"合格"样本让它直接放行
   probeShotHealth: vi.fn(async () => ({
     samples: [{ contentRatio: 0.4, cellsUsed: 8, background: '#FFFFFF' }],
+    // 细节量要一起给: 占比够而细节极低会被判成「大色块刷分」(见 frame-detail.ts)
+    details: [{ detailRatio: 0.08, cellsWithDetail: 40, totalCells: 264 }],
+    // 版面: 内容要排到画面下半部分才算合格(见 frame-layout.ts)
+    layouts: [{ bottomReach: 0.75 }],
     runtimeErrors: [],
   })),
 }));

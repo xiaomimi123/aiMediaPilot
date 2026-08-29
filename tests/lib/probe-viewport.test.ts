@@ -19,15 +19,21 @@ describe('probeViewport', () => {
   });
 
   /*
-   * 尺寸不动(长边 160): 它和 frame-density 里那条 0.03 阈值是一起标定出来的。
-   * 试过按真实尺寸渲染 —— 同一份 HTML 量出 0.2% 对 5.1%, 差 25 倍, 既有的
-   * 「一行小字标题页应当通过」当场挂掉。要走那条路得连标定一起重做。
+   * 尺寸必须等于真实渲染尺寸, 不能缩。
+   *
+   * 缩小视口的代价是实测出来的: Builder 排版用的是按 1080 宽算的绝对像素, 在缩小的
+   * 窗口里元素跑出可视区 —— 一次出片里 4 个镜头被判「三次仍未达标」, 而它们渲出来的
+   * clip 实测是 4%~5%, 画面完全正常。全是误报, 每个还白烧 3 次模型调用。
+   *
+   * 换尺寸确实等于换了阈值那把尺, 所以 frame-density 的阈值已在 2026-08-29 一并
+   * 重新标定(见那边的注释)。
    */
-  it('长边仍是 160 —— 换了尺寸就等于换了阈值那把尺', () => {
-    expect(Math.max(...Object.values(probeViewport({ width: 1080, height: 1920 })))).toBe(160);
+  it('就是真实渲染尺寸, 一点都不缩', () => {
+    expect(probeViewport({ width: 1080, height: 1920 })).toEqual({ width: 1080, height: 1920 });
+    expect(probeViewport({ width: 1920, height: 1080 })).toEqual({ width: 1920, height: 1080 });
   });
 
-  it('不给画幅时退回老行为 160x90', () => {
-    expect(probeViewport()).toEqual({ width: 160, height: 90 });
+  it('不给画幅时按横屏 1920x1080', () => {
+    expect(probeViewport()).toEqual({ width: 1920, height: 1080 });
   });
 });

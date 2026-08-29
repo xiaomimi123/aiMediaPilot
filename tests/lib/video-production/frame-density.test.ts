@@ -82,9 +82,19 @@ describe('judgeFrameDensity', () => {
     expect(judgeFrameDensity({ contentRatio: 0.5, cellsUsed: 0, background: '#FFFFFF' }).ok).toBe(false);
   });
 
+  /*
+   * 2026-08-29 重标定后「空屏」需要两个信号一起成立: 占比低 **且** 细节低。
+   * 只看占比会误伤一行小字(真实尺寸下实测占比 0.11%、细节 0.07%, 那是正常画面)。
+   * 所以这里的夹具要带上细节量。
+   */
   it('反馈文案里带上实测数字, 好让模型知道差多少', () => {
-    const r = judgeFrameDensity({ contentRatio: 0.005, cellsUsed: 1, background: '#F9F6ED' });
+    const r = judgeFrameDensity({ contentRatio: 0.005, cellsUsed: 1, background: '#F9F6ED' }, 0);
     expect(r.reason).toMatch(/0\.5%|0\.005/);
+  });
+
+  it('占比低但细节还在 → 不是空屏, 那是一行小字这种正常画面', () => {
+    const r = judgeFrameDensity({ contentRatio: 0.0011, cellsUsed: 1, background: '#0E1420' }, 0.0007);
+    expect(r.ok).toBe(true);
   });
 });
 
@@ -92,22 +102,25 @@ describe('整镜判定(允许合理留白, 只拦普遍性空洞)', () => {
   const dense = { contentRatio: 0.35, cellsUsed: 8, background: '#F3EFE5' };
   const empty = { contentRatio: 0.004, cellsUsed: 1, background: '#F9F6ED' };
 
+  /** 真空屏: 占比和细节都趋近 0。 */
+  const blankDetails = [0, 0, 0];
+
   it('多数取样帧都空 → 判为不合格', () => {
-    const r = judgeShotDensity([empty, empty, empty]);
+    const r = judgeShotDensity([empty, empty, empty], blankDetails);
     expect(r.ok).toBe(false);
   });
 
   it('只有个别帧空(合理的留白转场)→ 通过, 不误伤', () => {
     // 参考视频实测就有 5.4% 的留白转场帧, 一刀切会把它也拦下
-    expect(judgeShotDensity([dense, empty, dense]).ok).toBe(true);
+    expect(judgeShotDensity([dense, empty, dense], [0.05, 0, 0.05]).ok).toBe(true);
   });
 
   it('全都够密 → 通过', () => {
-    expect(judgeShotDensity([dense, dense, dense]).ok).toBe(true);
+    expect(judgeShotDensity([dense, dense, dense], [0.05, 0.05, 0.05]).ok).toBe(true);
   });
 
   it('不合格时反馈里带上"几帧里有几帧是空的"', () => {
-    const r = judgeShotDensity([empty, empty, dense]);
+    const r = judgeShotDensity([empty, empty, dense], [0, 0, 0.05]);
     expect(r.reason).toMatch(/3 帧|2 帧|2\/3/);
   });
 
