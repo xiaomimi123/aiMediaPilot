@@ -55,3 +55,30 @@ ${styleBlock}${factsBlock}${assetBlock}
   },
   responseSchema: DirectorResponseSchema,
 };
+
+/** 裁完短于这个就没意义了。 */
+const MIN_SHOT_MS = 1000;
+
+/**
+ * 把导演给的分镜裁回素材长度之内。
+ *
+ * **真实事故**: 出镜素材 155 秒, 导演却排出 234 秒的分镜(s7 从 155 秒开始、s8 到
+ * 234 秒结束), 合成时照单全收地拼起来 —— 成片比素材长了 79 秒, 后面那 79 秒既没有
+ * 人声也没有对应台词, 纯粹是凑出来的画面。
+ *
+ * 同一份稿子上一轮导演给的是 0~154 秒, 完全正常。所以这是模型的随机性, 而管线
+ * **一条校验都没有**: 分镜是 LLM 出的, 出格是迟早的事, 不该指望它每次都对。
+ *
+ * 素材时长拿不到时**原样返回**: 宁可不裁, 也不要凭空裁错 —— 裁错会直接丢掉真实内容。
+ */
+export function clampShotsToSource<T extends { startMs: number; endMs: number }>(
+  shots: T[],
+  sourceDurationMs: number | undefined,
+): T[] {
+  if (!sourceDurationMs || sourceDurationMs <= 0) return shots;
+
+  return shots
+    .filter((s) => s.startMs < sourceDurationMs)
+    .map((s) => (s.endMs > sourceDurationMs ? { ...s, endMs: sourceDurationMs } : s))
+    .filter((s) => s.endMs - s.startMs >= MIN_SHOT_MS);
+}

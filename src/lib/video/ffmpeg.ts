@@ -68,6 +68,27 @@ export async function probeVideoDimensions(videoPath: string): Promise<VideoDime
   return parseProbeDimensionsOutput(stdout);
 }
 
+/**
+ * 探测视频时长(毫秒)。
+ *
+ * 给「分镜有没有排到素材之外」这个校验用 —— 真实事故里导演给 155 秒的素材排出了
+ * 234 秒的分镜, 合成照单全收。**探不到返回 null 而不是抛错**: 调用方的规则是
+ * 「拿不到时长就不裁」, 宁可不裁也不要凭空裁掉真实内容。
+ */
+export async function probeVideoDurationMs(videoPath: string): Promise<number | null> {
+  try {
+    const { stdout } = await execFileAsync(
+      FFPROBE_BIN,
+      ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', videoPath],
+      { timeout: 30_000 },
+    );
+    const sec = Number(stdout.trim());
+    return Number.isFinite(sec) && sec > 0 ? Math.round(sec * 1000) : null;
+  } catch {
+    return null;
+  }
+}
+
 export interface ExtractFramesOpts {
   videoPath: string;
   framesDir: string;

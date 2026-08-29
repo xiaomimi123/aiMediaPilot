@@ -7,7 +7,7 @@ import { redis } from '@/lib/redis';
 import { QUEUES } from '@/jobs/queue';
 import { DeepSeekTextLLM } from '@/lib/llm/deepseek';
 import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
-import { DIRECTOR, type DirectorResponse } from '@/lib/video-production/director-prompt';
+import { DIRECTOR, clampShotsToSource, type DirectorResponse } from '@/lib/video-production/director-prompt';
 import { BUILDER } from '@/lib/video-production/builder-prompt';
 import { ALIGNER } from '@/lib/video-production/aligner-prompt';
 import { renderShotToClip } from '@/lib/video-production/shot-renderer';
@@ -20,6 +20,7 @@ import {
   compositeCutawayVideo,
   burnCaptions,
   probeVideoDimensions,
+  probeVideoDurationMs,
   probeVideo,
   muxAudioTrack,
   type CutawaySegment,
@@ -458,11 +459,29 @@ export async function handleTalkingHeadBroll(
     // 二十一期: acts 已在上方取到, 直接派生画面层的事实护栏(见 facts-guard.ts)。
     const factsSection = buildFactsSection(acts, await loadResearch(vp.contentId));
     const directorLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-reasoner' });
-    const { result: direction } = await directorLLM.callStructured({
+    const { result: rawDirection } = await directorLLM.callStructured({
       systemPrompt: DIRECTOR.buildSystemPrompt(factsSection),
       userMessage: DIRECTOR.buildUserMessage(srt),
       responseSchema: DIRECTOR.responseSchema,
     });
+
+    /*
+     * 分镜必须裁回素材长度之内。
+     *
+     * 真实事故: 素材 155 秒, 导演排出 234 秒(s7 从 155 秒起、s8 到 234 秒止), 合成
+     * 照单全收 —— 成片比素材长 79 秒, 那 79 秒既没人声也没台词, 纯凑画面。同一份稿子
+     * 上一轮导演给的是 0~154 秒, 完全正常, 所以这是模型随机性, 而管线一条校验都没有。
+     */
+    const sourceMs = (await probeVideoDurationMs(sourceVideoPath)) ?? undefined;
+    const clamped = clampShotsToSource(rawDirection.shots, sourceMs);
+    if (clamped.length !== rawDirection.shots.length) {
+      console.warn(
+        `[video-production] 导演分镜超出素材长度(${((sourceMs ?? 0) / 1000).toFixed(0)}s), ` +
+        `丢掉 ${rawDirection.shots.length - clamped.length} 个越界镜头`,
+      );
+    }
+    const direction: DirectorResponse = { ...rawDirection, shots: clamped };
+
     await fs.writeFile(
       path.join(vp.productionRoot, 'direction.json'),
       JSON.stringify(direction),
@@ -780,11 +799,32 @@ export async function handleIllustrationTts(
     // 二十一期: acts 已在上方取到, 直接派生画面层的事实护栏(见 facts-guard.ts)。
     const factsSection = buildFactsSection(acts, await loadResearch(vp.contentId));
     const directorLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-reasoner' });
-    const { result: direction } = await directorLLM.callStructured({
+    const { result: rawDirection } = await directorLLM.callStructured({
       systemPrompt: DIRECTOR.buildSystemPrompt(factsSection),
       userMessage: DIRECTOR.buildUserMessage(srt),
       responseSchema: DIRECTOR.responseSchema,
     });
+
+    /*
+     * 分镜必须裁回素材长度之内。
+     *
+     * 真实事故: 素材 155 秒, 导演排出 234 秒(s7 从 155 秒起、s8 到 234 秒止), 合成
+     * 照单全收 —— 成片比素材长 79 秒, 那 79 秒既没人声也没台词, 纯凑画面。同一份稿子
+     * 上一轮导演给的是 0~154 秒, 完全正常, 所以这是模型随机性, 而管线一条校验都没有。
+     */
+    // 这条链没有出镜素材, 时间轴基准是 TTS 逐幕音频的总长
+    const sourceMs = alignedActs.length > 0
+      ? Math.max(...alignedActs.map((a) => a.endMs))
+      : undefined;
+    const clamped = clampShotsToSource(rawDirection.shots, sourceMs);
+    if (clamped.length !== rawDirection.shots.length) {
+      console.warn(
+        `[video-production] 导演分镜超出素材长度(${((sourceMs ?? 0) / 1000).toFixed(0)}s), ` +
+        `丢掉 ${rawDirection.shots.length - clamped.length} 个越界镜头`,
+      );
+    }
+    const direction: DirectorResponse = { ...rawDirection, shots: clamped };
+
     await fs.writeFile(
       path.join(vp.productionRoot, 'direction.json'),
       JSON.stringify(direction),

@@ -46,8 +46,9 @@ export const BUILDER = {
       ? [
           `- 画布尺寸固定 ${frame.width}x${frame.height}(**竖屏**)。`,
           `- 纵向排版: 元素上下堆叠、通栏铺满宽度, **不要左右分栏** —— 竖屏里并排两栏每栏只有 ${Math.round(frame.width / 2)}px, 字会挤成一条。`,
-          `- **可用高度是 0 到 ${usableH}px(画面高度的 80%)**, 版面要一直排到这条线附近, 不要全挤在上半屏。同样这些内容, 拉开行距、放大字号、把元素分层摊到整个可用高度上, 而不是堆在顶上留下面一片空。`,
-          `- 最底下 20%(${usableH}px 以下)**留空**: 字幕会烧在那里, 放元素会被盖住。`,
+          `- **版面的上下两端都要卡准**: 最上面那个元素的顶边落在 ${Math.round(frame.height * 0.05)}px ~ ${Math.round(frame.height * 0.15)}px 之间, 最下面那个元素的底边落在 ${Math.round(frame.height * 0.65)}px ~ ${usableH}px 之间。`,
+          `- 中间不要留大片空白: 同样这些内容, 拉开行距、放大字号、把元素分层摊到这段高度上。**既不要全堆在顶上, 也不要全压到底下** —— 两种都错, 只是错的方向相反。`,
+          `- 最底下 20%(${usableH}px 以下)**必须留空**: 字幕会烧在那里, 放元素会被盖住。`,
         ].join('\n')
       : `- 画布尺寸固定 ${frame.width}x${frame.height}。`;
     const factsBlock = factsSection && factsSection.trim() ? factsSection : '';

@@ -22,8 +22,18 @@ describe('竖屏要把版面铺到下半屏', () => {
   const portrait = () =>
     BUILDER.buildSystemPrompt(['#111'], 'card', undefined, undefined, { width: 1080, height: 1920 });
 
-  it('说清楚可用高度到哪, 而不是笼统说「铺满」', () => {
-    expect(portrait()).toContain('80%');
+  it('上下两端都要给出具体像素, 不能只说一端', () => {
+    const p = portrait();
+    expect(p).toContain('96px');   // 1920 的 5%
+    expect(p).toContain('1536px'); // 1920 的 80%
+  });
+
+  /*
+   * 只说「排到 80%」的那一版, 模型把内容整体压到了下半屏, 顶部 55% 全空 ——
+   * 上一版是全挤在顶上。两种都错, 只是方向相反, 所以两端都得锁。
+   */
+  it('明说「全压到底下」也是错的', () => {
+    expect(portrait()).toContain('压到底下');
   });
 
   it('底部要留给字幕 —— 不说的话模型会把字压在字幕上', () => {

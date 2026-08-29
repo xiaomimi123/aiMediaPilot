@@ -93,6 +93,8 @@ vi.mock('@/lib/video/ffmpeg', () => ({
   muxAudioTrack: vi.fn(async () => undefined),
   // 竖屏素材: B-roll 必须按这个画幅渲染, 不能写死 1920x1080
   probeVideoDimensions: vi.fn(async () => ({ width: 1080, height: 1920 })),
+  // 分镜要裁回素材长度之内 —— 导演排出过 234 秒而素材只有 155 秒
+  probeVideoDurationMs: vi.fn(async () => 155_200),
 }));
 
 const fsMock = vi.hoisted(() => ({
