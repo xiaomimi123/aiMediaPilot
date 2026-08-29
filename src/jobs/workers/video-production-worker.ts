@@ -162,7 +162,9 @@ async function buildShotHtmlWithRetry(
       health.samples.map((m, i) => ({
         bottomReach: health.layouts[i]?.bottomReach ?? 1,
         contentRatio: m.contentRatio,
-        sideBySide: health.sideBySide[i] ?? false,
+        sideBySide: health.geometry[i]?.sideBySide ?? false,
+        sidePair: health.geometry[i]?.sidePair ?? undefined,
+        clipped: health.geometry[i]?.clipped ?? false,
       })),
       frame ?? { width: 1920, height: 1080 },
     );

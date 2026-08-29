@@ -140,6 +140,13 @@ export async function renderShotToClip(opts: RenderShotOpts): Promise<void> {
   await encodeFramesToClip({ framesDir, fps, outputPath: outputClipPath });
 }
 
+/** 一个取样点上从浏览器里读到的真实布局信息。 */
+export interface ShotGeometry {
+  sideBySide: boolean;
+  sidePair: { ax: number; aw: number; bx: number; bw: number } | null;
+  clipped: boolean;
+}
+
 export interface ProbeShotOpts {
   html: string;
   durationMs: number;
@@ -215,8 +222,8 @@ export interface ShotHealth {
   details: FrameDetail[];
   /** 与 samples 一一对应的版面形状 —— 用来判「内容排到多低」, 见 frame-layout.ts。 */
   layouts: FrameLayout[];
-  /** 与 samples 一一对应: 这一帧里有没有两块内容并排(读 DOM 真实几何)。 */
-  sideBySide: boolean[];
+  /** 与 samples 一一对应的 DOM 几何(读浏览器里的真实布局, 不从像素猜)。 */
+  geometry: ShotGeometry[];
   /** 页面内抛出的 JS 错误 —— 语法与结构体检都拦不住的运行时问题(如 GSAP 用法错误)。 */
   runtimeErrors: string[];
 }
@@ -250,8 +257,8 @@ export async function probeShotHealth(opts: ProbeShotOpts): Promise<ShotHealth> 
     const samples: FrameDensity[] = [];
     const details: FrameDetail[] = [];
     const layouts: FrameLayout[] = [];
-    /** 每个取样点的 DOM 几何 —— 判「有没有两块内容并排」用, 见 frame-layout.ts。 */
-    const sideBySide: boolean[] = [];
+    /** 每个取样点的 DOM 几何 —— 判并排 / 文字被裁, 见 frame-layout.ts。 */
+    const geometry: ShotGeometry[] = [];
     for (const ratio of PROBE_POINTS) {
       const sec = (durationMs / 1000) * ratio;
       // 时间线不存在说明脚本压根没跑起来 —— 那是语法与结构体检的职责。这里放弃取样,
@@ -265,7 +272,7 @@ export async function probeShotHealth(opts: ProbeShotOpts): Promise<ShotHealth> 
         runtimeErrors.push(e instanceof Error ? e.message : String(e));
         return false;
       });
-      if (!hasTimeline) return { samples: [], details: [], layouts: [], sideBySide: [], runtimeErrors };
+      if (!hasTimeline) return { samples: [], details: [], layouts: [], geometry: [], runtimeErrors };
 
       const png = await page.screenshot({ type: 'png' });
       /*
@@ -302,7 +309,7 @@ export async function probeShotHealth(opts: ProbeShotOpts): Promise<ShotHealth> 
        * 宽度的 60% —— 那就是并排。只看叶子节点(不含其它内容块的那些), 否则外层容器
        * 会和它自己的子元素配成一对。
        */
-      const sbs = await page.evaluate(() => {
+      const geo = await page.evaluate(() => {
         const vw = window.innerWidth;
         const vh = window.innerHeight;
         const area = vw * vh;
@@ -319,23 +326,43 @@ export async function probeShotHealth(opts: ProbeShotOpts): Promise<ShotHealth> 
         const leaves = blocks.filter((a) => !blocks.some((b) =>
           b !== a && b.x >= a.x - 1 && b.y >= a.y - 1 &&
           b.x + b.w <= a.x + a.w + 1 && b.y + b.h <= a.y + a.h + 1));
-        for (let i = 0; i < leaves.length; i++) {
+
+        let sidePair: { ax: number; aw: number; bx: number; bw: number } | null = null;
+        for (let i = 0; i < leaves.length && !sidePair; i++) {
           for (let j = i + 1; j < leaves.length; j++) {
             const a = leaves[i];
             const b = leaves[j];
             const v = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
             const h = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
-            if (v > Math.min(a.h, b.h) * 0.6 && h <= 0 && a.w < vw * 0.6 && b.w < vw * 0.6) return true;
+            if (v > Math.min(a.h, b.h) * 0.6 && h <= 0 && a.w < vw * 0.6 && b.w < vw * 0.6) {
+              sidePair = { ax: a.x, aw: a.w, bx: b.x, bw: b.w };
+              break;
+            }
           }
         }
-        return false;
-      }).catch(() => false);
-      sideBySide.push(sbs);
+
+        /*
+         * 文字被容器裁掉: scrollWidth 明显大于 clientWidth 就是横向溢出。
+         * 真实成片里出现过「做到平台第」—— 少了最后一个「一」。
+         * 留 2px 容差: 抗锯齿和小数宽度会带来 1px 级的假阳性。
+         */
+        let clipped = false;
+        for (const el of Array.from(document.querySelectorAll('body *'))) {
+          const st = window.getComputedStyle(el);
+          if (st.display === 'none' || Number(st.opacity) < 0.05) continue;
+          if (st.overflow === 'visible' && st.overflowX === 'visible') continue;
+          const e = el as HTMLElement;
+          if (e.scrollWidth > e.clientWidth + 2 && e.clientWidth > 0) { clipped = true; break; }
+        }
+
+        return { sideBySide: sidePair !== null, sidePair, clipped };
+      }).catch(() => ({ sideBySide: false, sidePair: null, clipped: false }));
+      geometry.push(geo);
     }
-    return { samples, details, layouts, sideBySide, runtimeErrors };
+    return { samples, details, layouts, geometry, runtimeErrors };
   } catch (e) {
     runtimeErrors.push(e instanceof Error ? e.message : String(e));
-    return { samples: [], details: [], layouts: [], sideBySide: [], runtimeErrors };
+    return { samples: [], details: [], layouts: [], geometry: [], runtimeErrors };
   } finally {
     await browser?.close();
   }

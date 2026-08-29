@@ -124,6 +124,16 @@ export interface LayoutSample extends FrameLayout {
    * 拿不到(旧调用方/取样失败)时当作 false, 行为与加这条之前一致。
    */
   sideBySide?: boolean;
+  /**
+   * 并排那两块的实际位置(px)。**光说「不要并排」模型三次都改不对**, 给出坐标之后
+   * 它才知道自己错在哪 —— 这个项目里凡是反馈带上实测数字的那几关, 一次就改对了。
+   */
+  sidePair?: { ax: number; aw: number; bx: number; bw: number };
+  /**
+   * 有文字被容器裁掉。真实成片里出现过「做到平台第」—— 少了最后一个「一」。
+   * 和画幅无关, 横屏竖屏都要判。
+   */
+  clipped?: boolean;
 }
 
 /**
@@ -136,18 +146,34 @@ export function judgeShotLayout(
   samples: LayoutSample[],
   frame: { width: number; height: number },
 ): LayoutJudgement {
-  if (frame.height <= frame.width) return { ok: true };
-
   const meaningful = samples.filter((s) => s.contentRatio >= LAYOUT_MIN_CONTENT);
   if (meaningful.length === 0) return { ok: true };
 
-  const side = meaningful.filter((s) => s.sideBySide);
-  if (side.length * 2 > meaningful.length) {
+  // 文字被裁和画幅无关, 所以放在竖屏判据之前
+  const clipped = meaningful.filter((s) => s.clipped);
+  if (clipped.length * 2 > meaningful.length) {
     return {
       ok: false,
       reason:
-        '这是竖屏, 但你把两块内容并排放了。竖屏宽度只有 1080, 并排每块最多 540px, ' +
-        '文字会挤成两三个字一行。改成上下堆叠, 每块通栏铺满宽度。',
+        '有文字被容器裁掉了 —— 真实成片里出现过「做到平台第」这种少一个字的画面。' +
+        '把容器放宽、或者把字号调小、或者让文字换行, 但不要让它溢出。',
+    };
+  }
+
+  if (frame.height <= frame.width) return { ok: true };
+
+  const side = meaningful.filter((s) => s.sideBySide);
+  if (side.length * 2 > meaningful.length) {
+    const p = side.find((x) => x.sidePair)?.sidePair;
+    const where = p
+      ? `实测: 一块在 x=${Math.round(p.ax)} 宽 ${Math.round(p.aw)}px, 另一块在 x=${Math.round(p.bx)} 宽 ${Math.round(p.bw)}px, 两块在同一水平线上。`
+      : '';
+    return {
+      ok: false,
+      reason:
+        `这是竖屏, 但你把两块内容并排放了。${where}` +
+        `画面宽 ${frame.width}, 并排每块最多 ${Math.round(frame.width / 2)}px, 文字会挤成两三个字一行。` +
+        `改成上下堆叠: 每块 width:100%, 块与块之间用 margin 隔开, 不要让任何两块的 y 区间重叠。`,
     };
   }
 
