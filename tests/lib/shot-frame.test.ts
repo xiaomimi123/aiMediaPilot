@@ -45,3 +45,11 @@ describe('竖屏要把版面铺到下半屏', () => {
     expect(land).not.toContain('纵向排版');
   });
 });
+
+describe('入场速度', () => {
+  it('要求内容在镜头前 20% 内到位 —— 体检取样点也从这里开始', () => {
+    const p = BUILDER.buildSystemPrompt(['#111'], 'card', undefined, undefined, { width: 1080, height: 1920 });
+    expect(p).toContain('20%');
+    expect(p).toContain('入场');
+  });
+});
