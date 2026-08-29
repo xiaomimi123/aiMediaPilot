@@ -60,10 +60,26 @@ import { judgeHollowCard } from '@/lib/video-production/frame-detail';
 
 describe('judgeHollowCard —— 专抓「大色块刷分」', () => {
   it('占比高但细节极低 = 空壳卡片, 判为不合格', () => {
-    // 真实帧的数: 一张几乎空的大卡片
+    // 真实帧: 一张几乎空的大卡片
     const r = judgeHollowCard({ contentRatio: 0.26, detailRatio: 0.016 });
     expect(r.ok).toBe(false);
     expect(r.reason).toContain('空');
+  });
+
+  /*
+   * 绝对阈值不够用: 模型被要求「把版面排到画面 80%」之后, 回应是**把卡片放大**,
+   * 不是加内容 —— 一张占 70.7% 画面的大白卡, 里面只有一个徽章、一个奖杯和一个三角形,
+   * 细节 6.7% 刚好越过 3% 的绝对线。真正区分得开的是比值:
+   *   空壳小卡 0.06 / 空壳大卡 0.10 / 正常信息卡 0.28 / 满是文字的帧 1.0+
+   */
+  it('大卡片放大到 70% 但里面还是空的 —— 绝对细节越线了, 比值仍要拦', () => {
+    expect(judgeHollowCard({ contentRatio: 0.707, detailRatio: 0.067 }).ok).toBe(false);
+  });
+
+  it('同一轮里的正常帧都要放行', () => {
+    for (const [c, d] of [[0.248, 0.073], [0.437, 0.105], [0.337, 0.075], [0.49, 0.169], [0.238, 0.099]]) {
+      expect(judgeHollowCard({ contentRatio: c, detailRatio: d }).ok).toBe(true);
+    }
   });
 
   it('占比中等但细节扎实 = 正常信息卡, 放行', () => {

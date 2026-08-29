@@ -27,8 +27,14 @@ export interface FrameLayout {
   bottomReach: number;
 }
 
-/** 一**行**里有多少比例的像素算「这行有东西」—— 找内容最下沿用。 */
-const ROW_CONTENT_THRESHOLD = 0.01;
+/**
+ * 一行里有多少比例的像素算「这行有东西」—— 找内容最下沿用。
+ *
+ * 不能取 1%: 96 像素宽的分析图里 1% 不到 1 个像素, 背景渐变、卡片投影、JPEG 噪点
+ * 都能把一行点亮。列方向上已经因为同样的原因栽过一次(空档检测完全失效)。
+ * 3% 约 3 个像素, 真实的文字/图形在水平方向上至少铺得开这么宽。
+ */
+const ROW_CONTENT_THRESHOLD = 0.03;
 
 /**
  * 量一帧的版面形状。
@@ -63,8 +69,19 @@ export function measureFrameLayout(rgb: Buffer, width: number, height: number): 
 /** 内容低于这个占比的帧不判版面 —— 那是留白/转场, 归密度那一关。 */
 const LAYOUT_MIN_CONTENT = 0.01;
 
-/** 内容最下沿至少要到这里。prompt 要求 65%~80%, 判定放到 55% 留出余量。 */
+/** 内容最下沿至少要到这里。prompt 要求 65%~85%, 判定放到 55% 留出余量。 */
 const MIN_BOTTOM_REACH = 0.55;
+
+/**
+ * 内容最下沿不许越过这里 —— 再往下就压到字幕上了。
+ *
+ * 按字幕的**真实位置**定, 不是拍脑袋的「底部 20%」: 模板 marginV 90 + 字号 44, 在
+ * 1920 高的画面上字幕占 y=1786~1830, 也就是 93%~95%。所以 90% 是它上方的安全线。
+ *
+ * 加这条是因为上一条(下沿至少到 55%)单独存在时被反向利用了: 模型为了「排到 80%」
+ * 直接把卡片放大, 8 帧里 5 帧的下沿到了 86%~94%, 已经贴上字幕带。
+ */
+const MAX_BOTTOM_REACH = 0.90;
 
 export interface LayoutJudgement {
   ok: boolean;
@@ -89,6 +106,17 @@ export function judgeShotLayout(
 
   const meaningful = samples.filter((s) => s.contentRatio >= LAYOUT_MIN_CONTENT);
   if (meaningful.length === 0) return { ok: true };
+
+  const deep = meaningful.filter((s) => s.bottomReach > MAX_BOTTOM_REACH);
+  if (deep.length * 2 > meaningful.length) {
+    const worst = Math.max(...deep.map((s) => s.bottomReach));
+    return {
+      ok: false,
+      reason:
+        `内容一直排到画面 ${(worst * 100).toFixed(0)}% 的高度, 压到字幕上了 —— 字幕烧在 93%~95% 那一带。` +
+        '把最下面那个元素收回到 85% 以内。',
+    };
+  }
 
   const shallow = meaningful.filter((s) => s.bottomReach < MIN_BOTTOM_REACH);
   if (shallow.length * 2 > meaningful.length) {

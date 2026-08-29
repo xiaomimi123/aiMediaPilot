@@ -91,17 +91,25 @@ export function measureFrameDetail(rgb: Buffer, width: number, height: number): 
 /**
  * 「大色块刷分」的判定门槛。
  *
- * **这两个数是比值判断, 不是密度阈值。** 分开说清楚很重要: `frame-density.ts` 那条
- * 0.03 是绝对阈值, 必须跟着一整套取样方法标定; 这里判的是「同一帧上, 占比和细节
- * 严重背离」—— 背离本身就是缺陷信号, 不依赖参考视频的绝对水平。
+ * **判的是同一帧上占比与细节的比值, 不是绝对阈值。** 这一点和 `frame-density.ts`
+ * 那条 0.03 不同: 那个必须跟着一整套取样方法标定; 这里判的是「背离」, 背离本身
+ * 就是缺陷信号, 不依赖任何绝对水平。
  *
- * 取值来自真实成片的两帧:
- *   空壳卡片   占比 26.0%, 细节 1.6%   → 必须拦
- *   正常信息卡 占比 17.7%, 细节 5.0%   → 必须放行
- * 所以「占比 ≥ 15% 而细节 < 3%」这条线把两者分开, 两边都留了余量。
+ * **一度用过绝对阈值(细节 < 3%), 不够用**: 模型被要求「把版面排到画面 80%」之后,
+ * 回应是**把卡片放大**而不是加内容 —— 一张占 70.7% 画面的大白卡, 里面只有一个徽章、
+ * 一个奖杯 emoji 和一个三角形, 细节 6.7% 刚好越过 3% 那条线, 就这么混过去了。
+ *
+ * 比值把它们分得很开(全部来自真实帧):
+ *   空壳小卡  26.0% / 1.6%  = 0.06  拦
+ *   空壳大卡  70.7% / 6.7%  = 0.10  拦
+ *   正常信息卡 17.7% / 5.0%  = 0.28  过
+ *   同轮正常帧 24.8~49.0%    = 0.22~0.42  过
+ *   满是文字的帧              = 1.0+  过
+ * 0.15 这条线两边都留了足够余量。
  */
 const HOLLOW_MIN_CONTENT = 0.15;
-const HOLLOW_MAX_DETAIL = 0.03;
+/** 细节/占比 低于这个就是「有面积没内容」。 */
+const HOLLOW_MIN_RATIO = 0.15;
 
 export interface HollowJudgement {
   ok: boolean;
@@ -119,13 +127,14 @@ export interface HollowJudgement {
  */
 export function judgeHollowCard(m: { contentRatio: number; detailRatio: number }): HollowJudgement {
   if (m.contentRatio < HOLLOW_MIN_CONTENT) return { ok: true };
-  if (m.detailRatio >= HOLLOW_MAX_DETAIL) return { ok: true };
+  if (m.detailRatio / m.contentRatio >= HOLLOW_MIN_RATIO) return { ok: true };
 
   return {
     ok: false,
     reason:
       `画面被一大块纯色占着, 里面几乎是空的: 色块占了 ${(m.contentRatio * 100).toFixed(0)}% 的面积, ` +
       `但有内容的地方只有 ${(m.detailRatio * 100).toFixed(1)}%。` +
-      `把这块面积用起来 —— 放实际的文字、数据、图标, 而不是留一个空盒子。`,
+      `**把卡片放大不算把版面排开** —— 要在这块面积里放实际的文字、数据、图标, ` +
+      `而不是留一个空盒子。`,
   };
 }

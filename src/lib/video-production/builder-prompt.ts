@@ -41,14 +41,16 @@ export const BUILDER = {
      *
      * 底部 20% 必须空着: 字幕在打包阶段烧在那里, 元素放进去会被盖住。
      */
-    const usableH = Math.round(frame.height * 0.8);
+    // 0.85 而不是 0.8: 字幕实际只占 93%~95%(marginV 90 + 字号 44), 留 15% 太浪费
+    const usableH = Math.round(frame.height * 0.85);
     const canvasLine = portrait
       ? [
           `- 画布尺寸固定 ${frame.width}x${frame.height}(**竖屏**)。`,
           `- 纵向排版: 元素上下堆叠、通栏铺满宽度, **不要左右分栏** —— 竖屏里并排两栏每栏只有 ${Math.round(frame.width / 2)}px, 字会挤成一条。`,
           `- **版面的上下两端都要卡准**: 最上面那个元素的顶边落在 ${Math.round(frame.height * 0.05)}px ~ ${Math.round(frame.height * 0.15)}px 之间, 最下面那个元素的底边落在 ${Math.round(frame.height * 0.65)}px ~ ${usableH}px 之间。`,
           `- 中间不要留大片空白: 同样这些内容, 拉开行距、放大字号、把元素分层摊到这段高度上。**既不要全堆在顶上, 也不要全压到底下** —— 两种都错, 只是错的方向相反。`,
-          `- 最底下 20%(${usableH}px 以下)**必须留空**: 字幕会烧在那里, 放元素会被盖住。`,
+          `- **把卡片放大不算把版面排开**: 一个占了大半屏、里面只有三四个元素的空盒子, 比堆在顶上更糟。要摊开的是内容本身。`,
+          `- 最底下 ${Math.round(frame.height * 0.1)}px(画面 90% 以下)**必须留空**: 字幕烧在 93%~95% 那一带, 放元素会被盖住。`,
         ].join('\n')
       : `- 画布尺寸固定 ${frame.width}x${frame.height}。`;
     const factsBlock = factsSection && factsSection.trim() ? factsSection : '';

@@ -25,7 +25,7 @@ describe('竖屏要把版面铺到下半屏', () => {
   it('上下两端都要给出具体像素, 不能只说一端', () => {
     const p = portrait();
     expect(p).toContain('96px');   // 1920 的 5%
-    expect(p).toContain('1536px'); // 1920 的 80%
+    expect(p).toContain('1632px'); // 1920 的 85% —— 字幕实际只占 93%~95%, 留 15% 太浪费
   });
 
   /*
