@@ -11,13 +11,18 @@
  * 这个项目已经反复得到同一个结论: **能量出来的东西就别指望模型自觉**。密度、空壳
  * 色块两关都是这么来的, 都真的拦下过东西。版面是第三条。
  *
- * **只判「内容排到多低」这一条, 不判左右分栏 —— 试过, 量不出来。**
- * 分栏检测本来是按「中间有一条竖直空档、两侧都有内容」写的, 合成图上工作正常, 但在
- * 真实那一帧上完全不开火: 把分析图放到 96 宽、192 宽分别量, 中段每一列都有约 30% 的
- * 非背景像素 —— 两张并排卡片之间根本没有背景色的空档(卡片投影/圆角把它填满了)。
- * 一个永远不开火的检查比没有更坏: 它看起来像覆盖, 实际是假的。所以删掉, 不留。
+ * **只判「内容排到多低」这一条。左右分栏两条路都试过, 都抓不到, 所以不做检测器。**
  *
- * 好在那一帧被「内容只排到 46% 高度」这条拦下了 —— 真实失败没有漏掉。
+ * 1. 像素找空档(中间有一条竖直空档、两侧都有内容): 合成图上正常, 真实帧上两次失效。
+ *    第一次是因为背景判据用了「颜色桶精确相等」, 而底色是渐变的 —— 背景本身跨好几个
+ *    色阶, 只有一个被当成背景, 其余全算内容, 空档被填满(这条后来修了, 见 BG_TOLERANCE)。
+ *    修完之后一帧能测出来, 另一帧仍然测不出: 那两栏之间的空档在 96 宽的分析图里只有
+ *    1 列, 而把门槛降到 1 列, 元素之间的正常间距就会被误判成分栏。
+ * 2. 静态查 CSS: 真实产物里 grid-template-columns 一处都没有, 并排是用**绝对定位**
+ *    排出来的 —— 那等于要静态重算一遍布局, 不可行。
+ *
+ * 所以这条规则只留在 Builder 的 prompt 里, 没有检查兜底 —— 明说出来, 免得以为它被
+ * 覆盖了。一个抓不到的检测器比没有更坏: 看起来像覆盖, 实际是假的。
  *
  * 只判**竖屏**: 排版铺不到底在横屏不是问题。
  */
@@ -37,10 +42,20 @@ export interface FrameLayout {
 const ROW_CONTENT_THRESHOLD = 0.03;
 
 /**
+ * 轻微色差不算内容。**必须和 `frame-density.ts` 同一个容差**, 否则两边会对同一帧
+ * 给出互相矛盾的结论。
+ *
+ * 一度用「颜色桶精确相等」判背景, 结果在渐变底的画面上完全失效: 背景本身跨了好几个
+ * 色阶, 只有其中一个被当成背景, 其余全算成内容 —— 两张并排卡片之间明明有空档, 中段
+ * 每一列却都量出 56~69 个「非背景」像素。
+ */
+const BG_TOLERANCE = 18;
+
+/**
  * 量一帧的版面形状。
  *
- * 背景取出现最多的颜色, 和 `frame-density.ts` 同一套口径 —— 两边结论要能对上,
- * 用不同的背景判据会出现「密度说有内容、版面说全空」这种自相矛盾。
+ * 背景取出现最多的颜色 + 容差, 和 `frame-density.ts` 同一套口径 —— 两边结论要能
+ * 对上, 用不同的背景判据会出现「密度说有内容、版面说全空」这种自相矛盾。
  */
 export function measureFrameLayout(rgb: Buffer, width: number, height: number): FrameLayout {
   const bucket = (i: number) => `${rgb[i] >> 3},${rgb[i + 1] >> 3},${rgb[i + 2] >> 3}`;
@@ -49,11 +64,20 @@ export function measureFrameLayout(rgb: Buffer, width: number, height: number): 
     const k = bucket(i * 3);
     count.set(k, (count.get(k) ?? 0) + 1);
   }
-  let bg = '';
+  let bgKey = '';
   let best = -1;
-  for (const [k, n] of count) if (n > best) { best = n; bg = k; }
+  for (const [k, n] of count) if (n > best) { best = n; bgKey = k; }
+  // 桶心 → 实际 RGB(桶是 >>3 得来的, 乘回去再补半格)
+  const bg = bgKey.split(',').map((v) => Number(v) * 8 + 4);
 
-  const isContent = (x: number, y: number) => bucket((y * width + x) * 3) !== bg;
+  const isContent = (x: number, y: number) => {
+    const i = (y * width + x) * 3;
+    return (
+      Math.abs(rgb[i] - bg[0]) > BG_TOLERANCE ||
+      Math.abs(rgb[i + 1] - bg[1]) > BG_TOLERANCE ||
+      Math.abs(rgb[i + 2] - bg[2]) > BG_TOLERANCE
+    );
+  };
 
   // 最下沿: 从下往上找第一条「有东西」的扫描线
   let bottomReach = 0;
