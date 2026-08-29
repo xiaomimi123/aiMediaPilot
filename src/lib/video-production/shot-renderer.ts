@@ -13,6 +13,8 @@ export interface RenderShotOpts {
   fps: number;
   workDir: string;
   outputClipPath: string;
+  /** 成片画幅。不给则按老行为 1920x1080。 */
+  frame?: { width: number; height: number };
 }
 
 /**
@@ -77,6 +79,9 @@ export async function findChromiumExecutable(): Promise<string> {
 
 export async function renderShotToClip(opts: RenderShotOpts): Promise<void> {
   const { html, durationMs, fps, workDir, outputClipPath } = opts;
+  // 视口必须跟着成片画幅走。写死 1920x1080 会让竖屏成片里的 B-roll 只占 32% 高度,
+  // 其余全是黑边 —— 真机上第一条真人出镜成片就是这么废掉的。
+  const frame = opts.frame ?? { width: 1920, height: 1080 };
 
   const framesDir = path.join(workDir, 'frames');
   await fs.mkdir(framesDir, { recursive: true });
@@ -91,7 +96,7 @@ export async function renderShotToClip(opts: RenderShotOpts): Promise<void> {
 
   const browser = await chromium.launch({ executablePath, headless: true });
   try {
-    const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+    const page = await browser.newPage({ viewport: { width: frame.width, height: frame.height } });
     // `workDir`/`indexHtmlPath` 可能是相对路径 (productionRoot 默认 `./video-productions/<id>`,
     // 见 video-productions/route.ts) —— 直接拼进 file:// URL 会产出
     // `file://video-productions/...` 这种缺 host/根斜杠的非法 URL, Playwright 的

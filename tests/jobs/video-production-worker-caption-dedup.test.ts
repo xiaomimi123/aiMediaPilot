@@ -91,6 +91,8 @@ vi.mock('@/lib/video/ffmpeg', () => ({
   compositeCutawayVideo: vi.fn(async () => undefined),
   burnCaptions: burnCaptionsMock,
   muxAudioTrack: vi.fn(async () => undefined),
+  // 竖屏素材: B-roll 必须按这个画幅渲染, 不能写死 1920x1080
+  probeVideoDimensions: vi.fn(async () => ({ width: 1080, height: 1920 })),
 }));
 
 const fsMock = vi.hoisted(() => ({

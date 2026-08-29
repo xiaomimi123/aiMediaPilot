@@ -18,7 +18,20 @@ export const BUILDER = {
     visualStyle: 'card' | 'illustration' = 'card',
     factsSection?: string,
     chapterNavSection?: string,
+    /**
+     * 真实画布。**必须跟着成片走, 不能写死。**
+     *
+     * 真机上出过这个: 用户拍的是 1080x1920 竖屏, 而每个 B-roll 镜头都按 1920x1080
+     * 横屏渲染, 合成时等比缩进竖屏画面 —— 内容只剩 32% 的高度, 其余 68% 全是黑边。
+     * 光改渲染视口不够: 模型按横屏排的版塞进竖屏视口会溢出/被裁, 所以画布尺寸必须
+     * 同时写进 prompt。
+     */
+    frame: { width: number; height: number } = { width: 1920, height: 1080 },
   ): string {
+    const portrait = frame.height > frame.width;
+    const canvasLine = portrait
+      ? `- 画布尺寸固定 ${frame.width}x${frame.height}(**竖屏**)。纵向排版: 元素上下堆叠、通栏铺满宽度, 不要做左右分栏 —— 竖屏里并排两栏每栏只有 ${Math.round(frame.width / 2)}px, 字会挤成一条。`
+      : `- 画布尺寸固定 ${frame.width}x${frame.height}。`;
     const factsBlock = factsSection && factsSection.trim() ? factsSection : '';
     // 章节进度条(二十一期): 由模板 showChapterNav 驱动; 空串时输出不变
     const navBlock = chapterNavSection && chapterNavSection.trim() ? chapterNavSection : '';
@@ -29,7 +42,7 @@ export const BUILDER = {
 
 技术契约（必须严格遵守，渲染工具依赖这个契约来截帧）：
 - 输出一个完整、自包含的单个 HTML 文件。
-- 画布尺寸固定 1920x1080。
+${canvasLine}
 - 引入 <script src="gsap.min.js"></script>（本地文件已提供，不要用 CDN 或其它 <script src> 引用）。
 - 用一个暂停态（paused: true）的 GSAP 主时间线，挂到 window.__timelines["shot"] 上，供外部脚本调用 tl.seek(seconds) 跳到任意时间点截帧。时间线总时长要覆盖这个镜头的完整时长（毫秒转秒）。
 - 不要用 setTimeout/requestAnimationFrame 自驱动播放，画面状态必须完全由 GSAP timeline 的 seek 值决定。

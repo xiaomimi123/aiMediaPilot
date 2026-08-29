@@ -93,6 +93,8 @@ vi.mock('@/lib/video/ffmpeg', () => ({
   compositeCutawayVideo: vi.fn(async () => undefined),
   burnCaptions: vi.fn(async () => undefined),
   muxAudioTrack: vi.fn(async () => undefined),
+  // 竖屏素材: B-roll 要按这个画幅渲染, 不能写死 1920x1080
+  probeVideoDimensions: vi.fn(async () => ({ width: 1080, height: 1920 })),
 }));
 
 vi.mock('fs', () => ({
@@ -169,6 +171,24 @@ describe('handleTalkingHeadBroll(preview) — visualStyle 接线(终审发现2)'
 
     expect(prismaMock.videoTemplate.findUnique).not.toHaveBeenCalled();
     expect(spy.mock.calls[0][1]).toBe('card');
+  });
+
+  /*
+   * 锁住一个真实废掉过一条成片的 bug。
+   *
+   * 出镜素材是 1080x1920 竖屏, 而 B-roll 每个镜头都按写死的 1920x1080 横屏渲染,
+   * 合成时等比缩进竖屏画面 —— 内容只剩 32% 的高度, 其余 68% 全是黑边。
+   *
+   * 光换渲染视口不够: 拿旧的横屏 HTML 在竖屏视口里重渲, 标题直接跑出右边界(真机
+   * 验过)。所以画布尺寸必须同时进 Builder 的 prompt, 这里断言的就是这一路。
+   */
+  it('B-roll 按出镜素材的真实画幅生成, 不是写死的横屏', async () => {
+    const spy = vi.spyOn(BUILDER, 'buildSystemPrompt');
+    const vp = makeVp({ mode: 'talking-head-broll', templateId: null });
+
+    await handleTalkingHeadBroll(vp, 'preview', setStatus, 'preview.mp4', 'preview_ready', 'previewPath');
+
+    expect(spy.mock.calls[0][4]).toEqual({ width: 1080, height: 1920 });
   });
 });
 

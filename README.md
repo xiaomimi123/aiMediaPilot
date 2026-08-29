@@ -425,6 +425,8 @@ npm run collect:douyin                        # 手动跑一次
 抽屉「脚本」tab 六幕卡片区顶部有一条 lint 结果条, error 红点/warn 黄点分组展示, 点开列出
 `act + message`, 明确标注「仅提示, 不影响保存」。
 
+**B-roll 按成片真实画幅渲染**(二十三期修): 渲染视口曾写死 `1920x1080`。用户拍的是 1080x1920 竖屏, 每个 B-roll 镜头都出成横屏, 合成时等比缩进竖屏画面 —— 内容只剩 32% 的高度, 其余 68% 全是黑边, 第一条真人出镜成片就是这么废掉的。修法是两处一起改: `renderShotToClip` 新增 `frame` 参数(不给则保持老行为), `handleTalkingHeadBroll` 用 `probeVideoDimensions(sourceVideoPath)` 探出画幅传进去。**光换视口不够** —— 真机验过, 拿旧的横屏 HTML 在竖屏视口里重渲, 标题直接跑出右边界, 所以画布尺寸必须同时写进 `BUILDER.buildSystemPrompt`(竖屏时额外要求纵向排版、禁止左右分栏)。已有的横屏成片因此**不能只靠重渲修好, 要整个重新生成**。ppt-narration / illustration-tts 两条链暂时仍是 1920x1080——模板没有画幅设置, 那是另一件事。
+
 **六处消费点**: ①写稿 prompt(`script-write-douyin.ts`)与生成路由 —— `DouyinFullScriptSchema`
 从 `sections` 换成 `acts`+`four_dims`, system prompt 吸收 `script_spec.md` 的六幕职责/占比/
 科普严谨性原则, 生成后跑 lint、落库 `output.script.acts`+`output.four_dims`+`output.lintIssues`

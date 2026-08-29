@@ -459,6 +459,17 @@ export async function handleTalkingHeadBroll(
     const visualStyle = (visualStyleTemplate?.visualStyle as 'card' | 'illustration' | undefined) ?? 'card';
 
     const builderLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-chat' });
+    /*
+     * B-roll 必须按**成片真实画幅**渲染, 而成片画幅由出镜素材决定。
+     *
+     * 之前渲染视口写死 1920x1080: 用户拍的是 1080x1920 竖屏, 每个 B-roll 镜头都出成
+     * 横屏, 合成时等比缩进竖屏画面 —— 内容只剩 32% 的高度, 其余 68% 全是黑边。
+     * 第一条真人出镜成片就是这么废掉的。
+     *
+     * 画幅同时要写进 Builder 的 prompt: 光换视口不够, 模型按横屏排的版塞进竖屏视口
+     * 会溢出或被裁。
+     */
+    const shotFrame = await probeVideoDimensions(sourceVideoPath);
     const cutawaySegments: CutawaySegment[] = [];
     let shotIndex = 0;
     /*
@@ -472,7 +483,8 @@ export async function handleTalkingHeadBroll(
     for (const shot of brollOn ? direction.shots : []) {
       const builtHtml = await buildShotHtmlWithRetry(
         builderLLM,
-        BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection),
+        // 画幅要进 prompt: 只换渲染视口的话, 模型按横屏排的版塞进竖屏会溢出/被裁
+        BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection, undefined, shotFrame),
         shot,
         BUILDER.buildUserMessage(shot),
       );
@@ -486,6 +498,7 @@ export async function handleTalkingHeadBroll(
         fps: 15, // 预览档固定 15fps，与 ppt-narration 分支一致
         workDir: shotWorkDir,
         outputClipPath: clipPath,
+        frame: shotFrame,
       });
       cutawaySegments.push({ startMs: shot.startMs, endMs: shot.endMs, clipPath });
       shotIndex += 1;
@@ -593,6 +606,7 @@ export async function handleTalkingHeadBroll(
         durationMs: shot.endMs - shot.startMs,
         fps: 30, // 正式渲染档固定 30fps，与 ppt-narration 分支一致
         workDir: masterWorkDir,
+        frame: await probeVideoDimensions(sourceVideoPath),
         outputClipPath: clipPath,
       });
       cutawaySegments.push({ startMs: shot.startMs, endMs: shot.endMs, clipPath });
