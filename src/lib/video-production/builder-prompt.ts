@@ -29,8 +29,26 @@ export const BUILDER = {
     frame: { width: number; height: number } = { width: 1920, height: 1080 },
   ): string {
     const portrait = frame.height > frame.width;
+    /*
+     * 竖屏的排版规则要说得很具体, 因为实测的问题是**版面没铺开**, 不是内容不够。
+     *
+     * 量过一版真实成片: 把画面切成五条横带, 内容占比是 7% / 24% / 29% / 2% / 0%
+     * —— 八帧里六帧的下半部分完全空着。元素全挤在上半屏, 底下白白浪费。
+     *
+     * 注意这里**不是**要它"堆更多东西": 密度阈值那边记着一次教训 —— 拿参考片的
+     * 峰值当每帧及格线, 模型收到"你只有 5.6%, 人家 30%"之后无所适从, 越改越乱,
+     * 甚至排出纯空屏。所以这里只说**同样的内容摊到多大的高度上**, 不提密度。
+     *
+     * 底部 20% 必须空着: 字幕在打包阶段烧在那里, 元素放进去会被盖住。
+     */
+    const usableH = Math.round(frame.height * 0.8);
     const canvasLine = portrait
-      ? `- 画布尺寸固定 ${frame.width}x${frame.height}(**竖屏**)。纵向排版: 元素上下堆叠、通栏铺满宽度, 不要做左右分栏 —— 竖屏里并排两栏每栏只有 ${Math.round(frame.width / 2)}px, 字会挤成一条。`
+      ? [
+          `- 画布尺寸固定 ${frame.width}x${frame.height}(**竖屏**)。`,
+          `- 纵向排版: 元素上下堆叠、通栏铺满宽度, **不要左右分栏** —— 竖屏里并排两栏每栏只有 ${Math.round(frame.width / 2)}px, 字会挤成一条。`,
+          `- **可用高度是 0 到 ${usableH}px(画面高度的 80%)**, 版面要一直排到这条线附近, 不要全挤在上半屏。同样这些内容, 拉开行距、放大字号、把元素分层摊到整个可用高度上, 而不是堆在顶上留下面一片空。`,
+          `- 最底下 20%(${usableH}px 以下)**留空**: 字幕会烧在那里, 放元素会被盖住。`,
+        ].join('\n')
       : `- 画布尺寸固定 ${frame.width}x${frame.height}。`;
     const factsBlock = factsSection && factsSection.trim() ? factsSection : '';
     // 章节进度条(二十一期): 由模板 showChapterNav 驱动; 空串时输出不变

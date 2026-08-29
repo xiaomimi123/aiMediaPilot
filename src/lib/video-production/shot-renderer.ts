@@ -142,11 +142,36 @@ export interface ProbeShotOpts {
   html: string;
   durationMs: number;
   workDir: string;
+  /** 成片画幅。**必须和真实渲染一致**, 见 probeViewport。 */
+  frame?: { width: number; height: number };
 }
 
-/** 体检取样的宽高 —— 缩到很小不影响占比/分布统计, 但快得多(整帧 1920x1080 没必要)。 */
-const PROBE_W = 160;
-const PROBE_H = 90;
+/** 统计用的取样图长边 —— 占比/分布对分辨率不敏感, 缩小只为快。 */
+const ANALYSIS_LONG = 160;
+
+/**
+ * 体检渲染的视口。
+ *
+ * **只跟着画幅换比例, 尺寸仍然缩到长边 160。** 原因是这个尺寸和 `frame-density.ts`
+ * 里那条 0.03 阈值是一起标定出来的 —— 动了尺寸就等于动了那把尺, 而重新标定必须
+ * 拿参考视频用同一套方法整个量一遍, 不是顺手能改的事。
+ *
+ * 踩过两次, 都记在这里以免重犯:
+ *
+ * 1. 一开始固定 160x90 **横屏**。成片改成竖屏后真实渲染是 1080x1920, 给竖屏排的版
+ *    在横屏小窗里量, 量的根本不是同一个东西。(不过那次 23 秒纯空白镜头能过检的
+ *    真正原因不在这 —— 真人出镜那条链压根没传 probeDir, 整关跳过了。)
+ * 2. 试过改成按真实尺寸(1080x1920)渲染、分析时再缩。**量出来的数完全不是一个
+ *    量级**: 同一份 HTML, 真实尺寸下 0.2%~0.4%, 缩小视口下 5.1%, 差 25 倍。
+ *    既有的「一行小字标题页应当通过」那条测试当场挂掉 —— 那正是 0.03 阈值的锚。
+ *    所以这条路要走, 得连标定一起重做, 不能只换渲染尺寸。
+ */
+export function probeViewport(frame?: { width: number; height: number }): { width: number; height: number } {
+  if (!frame || frame.width <= 0 || frame.height <= 0) return { width: 160, height: 90 };
+  return frame.height > frame.width
+    ? { width: Math.round((ANALYSIS_LONG * frame.width) / frame.height), height: ANALYSIS_LONG }
+    : { width: ANALYSIS_LONG, height: Math.round((ANALYSIS_LONG * frame.height) / frame.width) };
+}
 /** 在镜头中段等距取几帧: 避开开头入场、结尾退场这两段天然稀疏的时间。 */
 const PROBE_POINTS = [0.35, 0.6, 0.85];
 
@@ -177,6 +202,7 @@ export interface ShotHealth {
  */
 export async function probeShotHealth(opts: ProbeShotOpts): Promise<ShotHealth> {
   const { html, durationMs, workDir } = opts;
+  const probe = probeViewport(opts.frame);
   const runtimeErrors: string[] = [];
   await fs.mkdir(workDir, { recursive: true });
   const indexHtmlPath = path.join(workDir, 'index.html');
@@ -186,7 +212,7 @@ export async function probeShotHealth(opts: ProbeShotOpts): Promise<ShotHealth> 
   let browser;
   try {
     browser = await chromium.launch({ executablePath: await findChromiumExecutable(), headless: true });
-    const page = await browser.newPage({ viewport: { width: PROBE_W, height: PROBE_H } });
+    const page = await browser.newPage({ viewport: { width: probe.width, height: probe.height } });
     page.on('pageerror', (e) => runtimeErrors.push(e.message));
     page.on('console', (m) => { if (m.type() === 'error') runtimeErrors.push(m.text()); });
     await page.goto(`file://${path.resolve(indexHtmlPath)}`);

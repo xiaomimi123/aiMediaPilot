@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { ASPECTS, ASPECT_LABELS } from '@/lib/video-template/aspect';
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -195,6 +196,24 @@ export function TemplateEditor({
       </Section>
 
       <Section title="画面">
+        {/*
+          画幅排在最前: 它决定整块画布, 后面所有排版设置都在它之下。
+          真人出镜不显示 —— 那条按出镜素材反推, 素材是竖的成片就必须是竖的,
+          在这里给个能设错的下拉只会让人以为它管用。
+        */}
+        {cfg.deliveryMode === 'talking-head-broll' ? (
+          <Row label="画幅" hint="真人出镜按你的出镜素材来——素材是竖屏，成片就是竖屏。">
+            <span className="text-sm text-muted-foreground">跟随出镜素材</span>
+          </Row>
+        ) : (
+          <Row label="画幅" hint="抖音是竖屏。改了要重新生成预览才生效。">
+            <Choice
+              value={cfg.aspect ?? '16:9'}
+              onChange={(v) => set('aspect', v)}
+              options={ASPECTS.map((a) => ({ v: a, label: ASPECT_LABELS[a] }))}
+            />
+          </Row>
+        )}
         <Row label="视觉风格">
           <Choice
             value={cfg.visualStyle}

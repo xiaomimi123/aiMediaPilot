@@ -11,6 +11,7 @@ import { DIRECTOR, type DirectorResponse } from '@/lib/video-production/director
 import { BUILDER } from '@/lib/video-production/builder-prompt';
 import { ALIGNER } from '@/lib/video-production/aligner-prompt';
 import { renderShotToClip } from '@/lib/video-production/shot-renderer';
+import { frameOfAspect } from '@/lib/video-template/aspect';
 import { buildSrtFromAlignedActs, buildCaptionSrtFromTranscript } from '@/lib/video-production/srt-synthesis';
 import {
   concatClips,
@@ -94,6 +95,12 @@ async function buildShotHtmlWithRetry(
   shot: { shotId: string; startMs: number; endMs: number },
   userMessage: ReturnType<typeof BUILDER.buildUserMessage>,
   probeDir?: string,
+  /**
+   * 成片画幅。**必须传, 否则密度体检是瞎的** —— 探针会按 160x90 横屏量, 而竖屏
+   * 成片真实渲染是 1080x1920, 量的不是同一个东西。真实事故: 一个整整 23 秒、
+   * 100% 纯空白的镜头一路过检, 报告零失败。
+   */
+  frame?: { width: number; height: number },
 ): Promise<string> {
   let lastReason = '';
   // 上一轮的诊断结论 —— 下一轮拼进 systemPrompt 喂回给模型。Builder 是盲写的,
@@ -124,6 +131,7 @@ async function buildShotHtmlWithRetry(
       html: result.html,
       durationMs: shot.endMs - shot.startMs,
       workDir: path.join(probeDir, `probe-${attempt}`),
+      frame,
     });
 
     // 运行时错误优先于密度 —— 页面报错时画面本来就是空的, 报"太空"会指向错的方向。
@@ -289,6 +297,8 @@ export async function handlePptNarration(
     // 5%~8%(参考视频 30%~54%)。模板可以指定更强的模型; 缺省沿用 deepseek-chat。
     const builderModel = (template?.builderModel as 'deepseek-chat' | 'deepseek-reasoner' | undefined) ?? 'deepseek-chat';
     const builderLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: builderModel });
+    // 画幅来自模板: 这条链纯由 AI 生成画面, 没有素材可反推(见 aspect.ts)
+    const shotFrame = frameOfAspect(template?.aspect);
     let shotIndex = 0;
     for (const shot of direction.shots) {
       // 章节条要高亮"这一镜讲到哪一幕", 用镜头起点落在哪个幕区间来判定
@@ -306,12 +316,14 @@ export async function handlePptNarration(
           visualStyle,
           factsSection + buildAssignedAssetSection(contentAssets, shot.assetIds),
           navSection,
+          shotFrame,
         ),
         shot,
         BUILDER.buildUserMessage(shot),
         // 密度体检的临时渲染目录; 只有走模板的任务开这一关(内容详情页旧入口
         // 不传 probeDir, 行为与之前完全一致)
         vp.templateId ? shotDir(vp.productionRoot, shotIndex) : undefined,
+        shotFrame,
       );
       const shotWorkDir = shotDir(vp.productionRoot, shotIndex);
       await fs.mkdir(shotWorkDir, { recursive: true });
@@ -324,6 +336,8 @@ export async function handlePptNarration(
         durationMs: shot.endMs - shot.startMs,
         fps: 15, // 预览档固定 15fps
         workDir: shotWorkDir,
+        // 画幅来自模板 —— 这条链纯由 AI 生成画面, 没有素材可反推(见 aspect.ts)
+        frame: shotFrame,
         outputClipPath: clipPath,
       });
       clipPaths.push(clipPath);
@@ -341,6 +355,8 @@ export async function handlePptNarration(
     }
 
     await setStatus('building');
+    // 和预览同一个画幅: master 复用预览生成的 HTML, 视口不一致会把它裁掉
+    const shotFrame = frameOfAspect((await templateOf(vp.templateId))?.aspect);
     let shotIndex = 0;
     for (const shot of direction.shots) {
       const shotWorkDir = shotDir(vp.productionRoot, shotIndex);
@@ -361,6 +377,7 @@ export async function handlePptNarration(
         durationMs: shot.endMs - shot.startMs,
         fps: 30, // 正式渲染档固定 30fps
         workDir: masterWorkDir,
+        frame: shotFrame,
         outputClipPath: clipPath,
       });
       clipPaths.push(clipPath);
@@ -487,6 +504,13 @@ export async function handleTalkingHeadBroll(
         BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection, undefined, shotFrame),
         shot,
         BUILDER.buildUserMessage(shot),
+        /*
+         * 这条链**之前根本没开密度体检**(不传 probeDir 就整关跳过)。
+         * 后果是真实的: 一个整整 23 秒、100% 纯空白的镜头一路进了成片, 而日志上
+         * 「零失败」—— 它压根没被检查过。图文口播那条一直开着, 所以只有它报过失败。
+         */
+        vp.templateId ? shotDir(vp.productionRoot, shotIndex) : undefined,
+        shotFrame,
       );
       const shotWorkDir = shotDir(vp.productionRoot, shotIndex);
       await fs.mkdir(shotWorkDir, { recursive: true });
@@ -772,14 +796,23 @@ export async function handleIllustrationTts(
     const visualStyle = (template?.visualStyle as 'card' | 'illustration' | undefined) ?? 'illustration';
 
     const builderLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-chat' });
+    // 画幅来自模板: 这条链纯由 AI 生成画面, 没有素材可反推(见 aspect.ts)
+    const shotFrame = frameOfAspect(template?.aspect);
     const clipPaths: string[] = [];
     let shotIndex = 0;
     for (const shot of direction.shots) {
       const builtHtml = await buildShotHtmlWithRetry(
         builderLLM,
-        BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection),
+        BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection, undefined, shotFrame),
         shot,
         BUILDER.buildUserMessage(shot),
+        /*
+         * 这条链**之前根本没开密度体检**(不传 probeDir 就整关跳过)。
+         * 后果是真实的: 一个整整 23 秒、100% 纯空白的镜头一路进了成片, 而日志上
+         * 「零失败」—— 它压根没被检查过。图文口播那条一直开着, 所以只有它报过失败。
+         */
+        vp.templateId ? shotDir(vp.productionRoot, shotIndex) : undefined,
+        shotFrame,
       );
       const shotWorkDir = shotDir(vp.productionRoot, shotIndex);
       await fs.mkdir(shotWorkDir, { recursive: true });
@@ -790,6 +823,7 @@ export async function handleIllustrationTts(
         durationMs: shot.endMs - shot.startMs,
         fps: 15, // 预览档固定 15fps，与另外两个分支一致
         workDir: shotWorkDir,
+        frame: shotFrame,
         outputClipPath: clipPath,
       });
       clipPaths.push(clipPath);
@@ -838,6 +872,8 @@ export async function handleIllustrationTts(
     }
 
     await setStatus('building');
+    // 和预览同一个画幅: master 复用预览生成的 HTML, 视口不一致会把它裁掉
+    const shotFrame = frameOfAspect((await templateOf(vp.templateId))?.aspect);
     const clipPaths: string[] = [];
     let shotIndex = 0;
     for (const shot of direction.shots) {
@@ -857,6 +893,7 @@ export async function handleIllustrationTts(
         durationMs: shot.endMs - shot.startMs,
         fps: 30, // 正式渲染档固定 30fps，与另外两个分支一致
         workDir: masterWorkDir,
+        frame: shotFrame,
         outputClipPath: clipPath,
       });
       clipPaths.push(clipPath);

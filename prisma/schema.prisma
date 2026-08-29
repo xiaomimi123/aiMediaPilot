@@ -517,6 +517,9 @@ model VideoTemplate {
   name            String
   description     String  @default("")
   deliveryMode    String // ppt-narration|talking-head-broll|illustration-tts
+  /// 成片画幅 '9:16' | '16:9'。空 = 老模板, 按横屏走(零迁移)。
+  /// 真人出镜不读它 —— 那条按出镜素材反推, 素材是竖的成片就必须是竖的。
+  aspect          String?
   visualStyle     String  @default("card") // card|illustration
   palette         Json?
   voicePreset     Json? // { voiceType?, resourceId? } — 仅 illustration-tts 消费

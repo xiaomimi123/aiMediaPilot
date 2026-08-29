@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ASPECTS, type Aspect } from './aspect';
 import { PIP_POSITIONS, PIP_SCALE_MIN, PIP_SCALE_MAX, type PipPosition } from '@/lib/video/pip-layout';
 import { PERSON_SIDES, type PersonSide } from '@/lib/video/text-zone';
 import type { DeliveryMode } from '@/lib/cockpit/model';
@@ -31,6 +32,14 @@ export interface VideoTemplateConfig {
   name: string;
   description: string;
   deliveryMode: TemplateDeliveryMode;
+  /**
+   * 成片画幅。空 = 老模板, 按横屏走(零迁移)。
+   *
+   * **真人出镜不读它** —— 那条按出镜素材反推画幅, 素材是竖的成片就必须是竖的,
+   * 设置错了也不该覆盖事实。它只对图文口播和插画配音有意义, 因为那两条纯由 AI
+   * 生成画面, 没有素材可反推。
+   */
+  aspect?: Aspect | null;
   visualStyle: 'card' | 'illustration';
   palette: string[] | null;
   voicePreset: { voiceType?: string; resourceId?: string } | null;
@@ -115,6 +124,7 @@ export const VideoTemplateConfigSchema: z.ZodType<VideoTemplateConfig> = z.objec
   description: z.string().max(200),
   // 'manual' 不是模板的合法值 —— 模板一定驱动某条 AI 生成管线
   deliveryMode: z.enum(['ppt-narration', 'talking-head-broll', 'illustration-tts']),
+  aspect: z.enum(ASPECTS).nullable().optional(),
   visualStyle: z.enum(['card', 'illustration']),
   palette: z.array(z.string().regex(HEX_COLOR)).nullable(),
   voicePreset: z.object({ voiceType: z.string().optional(), resourceId: z.string().optional() }).nullable(),
@@ -228,6 +238,7 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     name: '图文口播',
     description: 'AI 分镜卡片串成完整片子, 无需出镜也无需配音',
     deliveryMode: 'ppt-narration',
+    aspect: '9:16',
     visualStyle: 'card',
     palette: null,
     voicePreset: null,
@@ -280,6 +291,7 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     name: '插画配音',
     description: '火山 TTS 逐幕配音驱动插画风分镜, 全自动出片',
     deliveryMode: 'illustration-tts',
+    aspect: '9:16',
     visualStyle: 'illustration',
     palette: null,
     voicePreset: { voiceType: 'zh_female_vv_uranus_bigtts', resourceId: 'seed-tts-2.0' },
@@ -314,6 +326,7 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     name: '知识长视频(横屏)',
     description: '对标同行知识区横屏长视频: 亮底、快切镜、常驻章节进度条、大号深色字幕',
     deliveryMode: 'ppt-narration',
+    aspect: '16:9',
     visualStyle: 'card',
     palette: null,
     voicePreset: null,

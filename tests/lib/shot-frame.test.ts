@@ -17,3 +17,21 @@ describe('Builder 要知道真实画布', () => {
     expect(p).toMatch(/竖|纵向|上下/);
   });
 });
+
+describe('竖屏要把版面铺到下半屏', () => {
+  const portrait = () =>
+    BUILDER.buildSystemPrompt(['#111'], 'card', undefined, undefined, { width: 1080, height: 1920 });
+
+  it('说清楚可用高度到哪, 而不是笼统说「铺满」', () => {
+    expect(portrait()).toContain('80%');
+  });
+
+  it('底部要留给字幕 —— 不说的话模型会把字压在字幕上', () => {
+    expect(portrait()).toContain('字幕');
+  });
+
+  it('横屏不带这些竖屏专属的说法', () => {
+    const land = BUILDER.buildSystemPrompt(['#111'], 'card', undefined, undefined, { width: 1920, height: 1080 });
+    expect(land).not.toContain('纵向排版');
+  });
+});
