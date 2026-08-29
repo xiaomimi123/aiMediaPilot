@@ -206,6 +206,8 @@ export interface ShotHealth {
   details: FrameDetail[];
   /** 与 samples 一一对应的版面形状 —— 用来判「内容排到多低」, 见 frame-layout.ts。 */
   layouts: FrameLayout[];
+  /** 与 samples 一一对应: 这一帧里有没有两块内容并排(读 DOM 真实几何)。 */
+  sideBySide: boolean[];
   /** 页面内抛出的 JS 错误 —— 语法与结构体检都拦不住的运行时问题(如 GSAP 用法错误)。 */
   runtimeErrors: string[];
 }
@@ -239,6 +241,8 @@ export async function probeShotHealth(opts: ProbeShotOpts): Promise<ShotHealth> 
     const samples: FrameDensity[] = [];
     const details: FrameDetail[] = [];
     const layouts: FrameLayout[] = [];
+    /** 每个取样点的 DOM 几何 —— 判「有没有两块内容并排」用, 见 frame-layout.ts。 */
+    const sideBySide: boolean[] = [];
     for (const ratio of PROBE_POINTS) {
       const sec = (durationMs / 1000) * ratio;
       // 时间线不存在说明脚本压根没跑起来 —— 那是语法与结构体检的职责。这里放弃取样,
@@ -252,7 +256,7 @@ export async function probeShotHealth(opts: ProbeShotOpts): Promise<ShotHealth> 
         runtimeErrors.push(e instanceof Error ? e.message : String(e));
         return false;
       });
-      if (!hasTimeline) return { samples: [], details: [], layouts: [], runtimeErrors };
+      if (!hasTimeline) return { samples: [], details: [], layouts: [], sideBySide: [], runtimeErrors };
 
       const png = await page.screenshot({ type: 'png' });
       /*
@@ -281,11 +285,48 @@ export async function probeShotHealth(opts: ProbeShotOpts): Promise<ShotHealth> 
       samples.push(measureFrameDensity(buf, rgb.w, rgb.h));
       details.push(measureFrameDetail(buf, rgb.w, rgb.h));
       layouts.push(measureFrameLayout(buf, rgb.w, rgb.h));
+
+      /*
+       * 并排检测读**真实 DOM 几何**, 不从像素里猜。
+       *
+       * 条件: 两个内容块竖直方向重叠过半、水平方向完全不重叠、而且各自都不到画面
+       * 宽度的 60% —— 那就是并排。只看叶子节点(不含其它内容块的那些), 否则外层容器
+       * 会和它自己的子元素配成一对。
+       */
+      const sbs = await page.evaluate(() => {
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const area = vw * vh;
+        const blocks: { x: number; y: number; w: number; h: number }[] = [];
+        for (const el of Array.from(document.querySelectorAll('body *'))) {
+          const st = window.getComputedStyle(el);
+          if (st.display === 'none' || st.visibility === 'hidden' || Number(st.opacity) < 0.05) continue;
+          const r = el.getBoundingClientRect();
+          if (r.width <= 0 || r.height <= 0) continue;
+          if (r.width * r.height < area * 0.03) continue;            // 太小的不是内容块
+          if (r.width > vw * 0.92 && r.height > vh * 0.92) continue; // 整屏容器
+          blocks.push({ x: r.x, y: r.y, w: r.width, h: r.height });
+        }
+        const leaves = blocks.filter((a) => !blocks.some((b) =>
+          b !== a && b.x >= a.x - 1 && b.y >= a.y - 1 &&
+          b.x + b.w <= a.x + a.w + 1 && b.y + b.h <= a.y + a.h + 1));
+        for (let i = 0; i < leaves.length; i++) {
+          for (let j = i + 1; j < leaves.length; j++) {
+            const a = leaves[i];
+            const b = leaves[j];
+            const v = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+            const h = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+            if (v > Math.min(a.h, b.h) * 0.6 && h <= 0 && a.w < vw * 0.6 && b.w < vw * 0.6) return true;
+          }
+        }
+        return false;
+      }).catch(() => false);
+      sideBySide.push(sbs);
     }
-    return { samples, details, layouts, runtimeErrors };
+    return { samples, details, layouts, sideBySide, runtimeErrors };
   } catch (e) {
     runtimeErrors.push(e instanceof Error ? e.message : String(e));
-    return { samples: [], details: [], layouts: [], runtimeErrors };
+    return { samples: [], details: [], layouts: [], sideBySide: [], runtimeErrors };
   } finally {
     await browser?.close();
   }

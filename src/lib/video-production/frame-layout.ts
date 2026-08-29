@@ -11,18 +11,17 @@
  * 这个项目已经反复得到同一个结论: **能量出来的东西就别指望模型自觉**。密度、空壳
  * 色块两关都是这么来的, 都真的拦下过东西。版面是第三条。
  *
- * **只判「内容排到多低」这一条。左右分栏两条路都试过, 都抓不到, 所以不做检测器。**
+ * 判两条: **内容排到多低**, 以及**有没有两块内容并排**。
  *
- * 1. 像素找空档(中间有一条竖直空档、两侧都有内容): 合成图上正常, 真实帧上两次失效。
- *    第一次是因为背景判据用了「颜色桶精确相等」, 而底色是渐变的 —— 背景本身跨好几个
- *    色阶, 只有一个被当成背景, 其余全算内容, 空档被填满(这条后来修了, 见 BG_TOLERANCE)。
- *    修完之后一帧能测出来, 另一帧仍然测不出: 那两栏之间的空档在 96 宽的分析图里只有
- *    1 列, 而把门槛降到 1 列, 元素之间的正常间距就会被误判成分栏。
+ * **并排这条绕了两次弯路, 记下来免得重走**:
+ * 1. 从像素里找竖直空档: 合成图上正常, 真实帧上两次失效。一次是背景判据用了「颜色桶
+ *    精确相等」而底色是渐变的(后来修了, 见 BG_TOLERANCE); 修完仍有一帧测不出 ——
+ *    那两栏之间的空档在 96 宽的分析图里只有 1 列, 而把门槛降到 1 列, 元素之间的正常
+ *    间距就会被误判成并排。
  * 2. 静态查 CSS: 真实产物里 grid-template-columns 一处都没有, 并排是用**绝对定位**
  *    排出来的 —— 那等于要静态重算一遍布局, 不可行。
- *
- * 所以这条规则只留在 Builder 的 prompt 里, 没有检查兜底 —— 明说出来, 免得以为它被
- * 覆盖了。一个抓不到的检测器比没有更坏: 看起来像覆盖, 实际是假的。
+ * 3. **读 DOM 真实几何**: 探针本来就在 Playwright 里跑着这个页面, `getBoundingClientRect`
+ *    给的是精确答案, 不需要任何启发式。绕了两圈才想到最直接的那条。
  *
  * 只判**竖屏**: 排版铺不到底在横屏不是问题。
  */
@@ -114,6 +113,17 @@ export interface LayoutJudgement {
 
 export interface LayoutSample extends FrameLayout {
   contentRatio: number;
+  /**
+   * 这一帧里有没有两个内容块**并排**。
+   *
+   * 来自浏览器里的**真实 DOM 几何**, 不是从像素里猜的。前两条路都试过并且都失败:
+   * 像素找竖直空档在窄间距上失效, 静态查 CSS 又抓不到绝对定位排出来的并排。
+   * 而探针本来就在 Playwright 里跑着这个页面 —— 直接读 getBoundingClientRect
+   * 就是精确答案, 不需要任何启发式。
+   *
+   * 拿不到(旧调用方/取样失败)时当作 false, 行为与加这条之前一致。
+   */
+  sideBySide?: boolean;
 }
 
 /**
@@ -130,6 +140,16 @@ export function judgeShotLayout(
 
   const meaningful = samples.filter((s) => s.contentRatio >= LAYOUT_MIN_CONTENT);
   if (meaningful.length === 0) return { ok: true };
+
+  const side = meaningful.filter((s) => s.sideBySide);
+  if (side.length * 2 > meaningful.length) {
+    return {
+      ok: false,
+      reason:
+        '这是竖屏, 但你把两块内容并排放了。竖屏宽度只有 1080, 并排每块最多 540px, ' +
+        '文字会挤成两三个字一行。改成上下堆叠, 每块通栏铺满宽度。',
+    };
+  }
 
   const deep = meaningful.filter((s) => s.bottomReach > MAX_BOTTOM_REACH);
   if (deep.length * 2 > meaningful.length) {

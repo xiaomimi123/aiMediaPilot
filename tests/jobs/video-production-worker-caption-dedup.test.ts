@@ -83,6 +83,7 @@ vi.mock('@/lib/video-production/shot-renderer', () => ({
     details: [{ detailRatio: 0.08, cellsWithDetail: 40, totalCells: 264 }],
     // 版面: 内容要排到画面下半部分才算合格(见 frame-layout.ts)
     layouts: [{ bottomReach: 0.75 }],
+    sideBySide: [false],
     runtimeErrors: [],
   })),
 }));
