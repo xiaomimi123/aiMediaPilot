@@ -47,6 +47,7 @@ import { buildDirectorAssetSection, buildAssignedAssetSection, type ContentAsset
 import { buildStyleSection, buildChapterNavSection, actAtMs } from '@/lib/video-production/style-guard';
 import { validateShotHtml } from '@/lib/video-production/shot-html-guard';
 import { probeShotHealth } from '@/lib/video-production/shot-renderer';
+import { runFreezeDetect, judgeFreeze, DEFAULT_FREEZE_OPTS } from '@/lib/video/freeze-check';
 import { judgeShotDensity } from '@/lib/video-production/frame-density';
 import { judgeHollowCard } from '@/lib/video-production/frame-detail';
 import { judgeShotLayout } from '@/lib/video-production/frame-layout';
@@ -475,7 +476,40 @@ export async function handlePptNarration(
     concatListPath: path.join(vp.productionRoot, 'concat-list.txt'),
   });
 
+  await reportFreeze(outputPath);
   await setStatus(readyStatus, { [outputField]: outputPath });
+}
+
+/**
+ * 整片静止体检 —— 出片后最后一道关, **只报不拦**。
+ *
+ * 接这一道的理由: `freeze-check.ts` 写完之后一直没有调用方, 只在我手上跑过一次
+ * 一次性脚本。**一个没接进管线的检查等于没有** —— 这个项目里同样的坑栽过一次
+ * (并排检测写完不接线, 直到真机出片才发现一直没在跑)。
+ *
+ * 为什么只警告不拦: 前面四道画面关都是**逐镜**判的, 不合格可以重写那一镜; 静止是
+ * **整片**量出来的, 这时候几十镜已经渲完拼好, 拦下来除了让用户白等一次没有别的
+ * 用处。真正的修法在渲染那一步(环境运动层), 这里的职责是**在它失效时能被看见**。
+ */
+async function reportFreeze(videoPath: string): Promise<void> {
+  try {
+    const totalMs = await probeVideoDurationMs(videoPath);
+    const totalSec = (totalMs ?? 0) / 1000;
+    if (totalSec <= 0) return;
+    const segments = await runFreezeDetect(videoPath, DEFAULT_FREEZE_OPTS, undefined, totalSec);
+    const j = judgeFreeze(segments, totalSec);
+    if (!j.ok) {
+      console.warn(`[video-production] 静止体检不通过 (${videoPath}): ${j.reason}`);
+    } else {
+      const frozen = segments.reduce((n, x) => n + x.durationSec, 0);
+      console.log(
+        `[video-production] 静止体检通过 (${videoPath}): ${frozen.toFixed(1)}s / ${totalSec.toFixed(1)}s`,
+      );
+    }
+  } catch (e) {
+    // 体检本身炸了不该影响出片 —— 它是观测, 不是产物。
+    console.warn(`[video-production] 静止体检跑失败 (${videoPath}):`, e);
+  }
 }
 
 /**
@@ -691,7 +725,8 @@ export async function handleTalkingHeadBroll(
       await burnCaptions({ videoPath: compositedPath, srt: captionSrt, outputPath });
     }
 
-    await setStatus(readyStatus, { [outputField]: outputPath });
+    await reportFreeze(outputPath);
+  await setStatus(readyStatus, { [outputField]: outputPath });
   } else {
     // master 模式：复用持久化的 direction.json/source.html + 已对齐的 alignedActs/rawTranscript，
     // 不重新做 ASR/对齐这类耗时且非确定性的 AI 调用 —— 与 ppt-narration master 分支同一先例。
@@ -799,7 +834,8 @@ export async function handleTalkingHeadBroll(
       await burnCaptions({ videoPath: compositedPath, srt: captionSrt, outputPath });
     }
 
-    await setStatus(readyStatus, { [outputField]: outputPath });
+    await reportFreeze(outputPath);
+  await setStatus(readyStatus, { [outputField]: outputPath });
   }
 }
 
@@ -975,7 +1011,8 @@ export async function handleIllustrationTts(
     const outputPath = path.join(vp.productionRoot, outputFileName);
     await muxAudioTrack({ videoPath: videoOnlyPath, audioPath: concatenatedAudioPath, outputPath });
 
-    await setStatus(readyStatus, { [outputField]: outputPath });
+    await reportFreeze(outputPath);
+  await setStatus(readyStatus, { [outputField]: outputPath });
   } else {
     // master 模式：复用持久化的 direction.json/source.html + 已合成的 alignedActs/per-act TTS 音频，
     // 不重新调用 TTS(真实调用额度)/DeepSeek —— 与另外两个分支 master 分支同一先例。
@@ -1047,7 +1084,8 @@ export async function handleIllustrationTts(
     const outputPath = path.join(vp.productionRoot, outputFileName);
     await muxAudioTrack({ videoPath: videoOnlyPath, audioPath: concatenatedAudioPath, outputPath });
 
-    await setStatus(readyStatus, { [outputField]: outputPath });
+    await reportFreeze(outputPath);
+  await setStatus(readyStatus, { [outputField]: outputPath });
   }
 }
 
@@ -1118,6 +1156,7 @@ async function handleProduce(job: Job<JobData>) {
               setStatus,
             });
             if (r) {
+              await reportFreeze(withText);
               await setStatus(readyStatus, { [outputField]: withText, alignedActs: r.items });
             }
           } catch (e) {
