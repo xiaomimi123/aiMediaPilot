@@ -130,8 +130,10 @@ describe('版面模板(压排版能力)', () => {
     ],
   });
 
-  it('给出可直接照做的版面骨架, 而不是只说"可以放多块"', () => {
-    expect(s()).toMatch(/左右分栏|上下|骨架|版面/);
+  // 二十二期: 版面骨架换成构图契约后, 这条断言随之改成校验"给出可直接照做的构图契约"
+  // (原断言直接检测「左右分栏/骨架/版面」这类幻灯片语汇, 与本次要移除的东西字面冲突)。
+  it('给出可直接照做的构图契约, 而不是只说"可以放多块"', () => {
+    expect(s()).toMatch(/构图契约|evidence|relation|volume/);
   });
 
   it('要求每个区块内部有层次(标题+要点), 不是并排放两个大字', () => {
@@ -149,5 +151,51 @@ describe('版面模板(压排版能力)', () => {
   it('没有素材时不强推密度 —— 硬凑会退化成编造', () => {
     const empty = buildFactsSection([act({ facts: [] })]);
     expect(empty).not.toMatch(/至少|不少于/);
+  });
+});
+
+// 二十二期: 实测确认上一版「版面骨架」被 100% 照做, 但写的就是幻灯片构件
+// (圆角浅色卡 + 顶部小标题 + 带图标要点行), 所以产出 100% 是 PPT。规则本身要换掉,
+// 换成三种构图契约(evidence / relation / volume)。下面这批用例复用文件里已有的
+// act() 工厂(默认 facts: [] ), 用 act({ facts: [...] }) 造出「有 N 条 high fact」的幕。
+describe('版面骨架换成构图契约', () => {
+  const actsWithHighFacts = (n: number): ScriptAct[] => [
+    act({
+      facts: Array.from({ length: n }, (_, i) => ({
+        claim: `事实${i}`,
+        value: `${i}00元`,
+        source: '来源',
+        confidence: 'high' as const,
+      })),
+    }),
+  ];
+
+  it('不再用幻灯片语汇 —— 「圆角浅色卡 + 小标题 + 要点行」本来就是 PPT 的构件', () => {
+    const s = buildFactsSection(actsWithHighFacts(3));
+    expect(s).not.toContain('圆角浅色卡');
+    expect(s).not.toContain('带图标的要点');
+  });
+
+  it('给出三种构图契约, 并说清各自用在什么时候', () => {
+    const s = buildFactsSection(actsWithHighFacts(3));
+    for (const k of ['evidence', 'relation', 'volume']) expect(s).toContain(k);
+    expect(s).toContain('连接符');
+  });
+
+  it('料不够时不给构图契约 —— 没素材还压密度, 模型只会靠编来填满', () => {
+    const s = buildFactsSection(actsWithHighFacts(1));
+    expect(s).not.toContain('evidence');
+  });
+
+  it('relation 的连接符与事实纪律不冲突: 只许画 claim 本身的逻辑关系', () => {
+    const s = buildFactsSection(actsWithHighFacts(3));
+    // 事实纪律那条「不许做箭头图」是防**从数据里编因果**, 不是禁止一切连接符
+    expect(s).toContain('镜头 claim 本身');
+  });
+
+  it('事实纪律照旧保留 —— 换构图不等于放开编数字', () => {
+    const s = buildFactsSection(actsWithHighFacts(3));
+    expect(s).toContain('画面事实纪律');
+    expect(s).toContain('清单之外的任何数字');
   });
 });
