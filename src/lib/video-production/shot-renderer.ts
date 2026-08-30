@@ -414,6 +414,17 @@ export async function probeShotHealth(opts: ProbeShotOpts): Promise<ShotHealth> 
          * 只看**叶子文本节点**: 容器天然包着子元素, 拿容器比会满屏假阳性。
          * 判"盖住"用 z-index 与文档顺序都不可靠(层叠上下文规则复杂), 改用一个更笨
          * 但可靠的判据: 对方是不透明背景块, 且矩形相交。
+         *
+         * **这个简化已知漏掉两类情况(记下来免得当成没考虑过)**:
+         * 1. 漏报: `solids` 过滤了 `opacity < 0.5`, 所以 0.05~0.5 透明度的遮挡物完全不进
+         *    入判定 —— 半透明卡片压在文字上, 视觉上文字确实被压暗、可读性确实受损, 这道
+         *    关不会报。
+         * 2. 误报: 判据只看矩形相交, **完全不判断谁在上层**。文字若本来就画在遮挡物之上
+         *    (层叠顺序在前, 实际并未被挡住), 几何上仍然相交, 会被误判成被遮挡。
+         *
+         * 阈值 `MAX_COVER_RATIO` 目前是「先能报出来」的宽松值, 只用 1 个已知缺陷镜头
+         * (ddbd3156-57b 第 4 镜)验证过命中, 没有对干净镜头做过假阳性扫描, 真实误报率
+         * 未知。
          */
         const occluded: { coverRatio: number; text: string }[] = [];
         const texts = Array.from(document.querySelectorAll('body *')).filter((el) => {
