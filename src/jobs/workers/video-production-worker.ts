@@ -1202,7 +1202,10 @@ async function handleProduce(job: Job<JobData>) {
         });
         // 包装后的成片取代原 masterPath 作为交付物; 未包装的 master.mp4 保留在
         // productionRoot 里(包装若失败也有东西可下, spec §3.1)。
-        await setStatus('done', { masterPath: packagedPath });
+        // 包装会接片头片尾、烧字幕、混 BGM —— 画面变了, 静止数字必须跟着重量,
+        // 否则交付物挂的是未包装那一版的数字。
+        const packagedFreeze = await reportFreeze(packagedPath, 'master');
+        await setStatus('done', { masterPath: packagedPath, freezeReport: packagedFreeze });
       }
     }
   } catch (err) {
@@ -1275,7 +1278,14 @@ async function handleRecompose(
 
   const outputPath = path.join(vp.productionRoot, 'preview.mp4');
   await fs.copyFile(compositedPath, outputPath);
-  await setStatus('preview_ready', { previewPath: outputPath });
+  /*
+   * 重新合成也要复检。**这一步产出的是一份新成片**, 不复检的话页面上挂的还是上一版
+   * 的静止数字 —— 那正是这个项目反复栽的「界面在撒谎」: 数字看着有, 但它描述的那条
+   * 片子已经不存在了。真机撞到过: 重新合成跑完, 库里的 freezeReport 还是几小时前
+   * 补量那次的 checkedAt。
+   */
+  const freezeReport = await reportFreeze(outputPath, 'preview');
+  await setStatus('preview_ready', { previewPath: outputPath, freezeReport });
 }
 
 /**
