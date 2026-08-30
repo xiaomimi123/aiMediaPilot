@@ -45,6 +45,8 @@ import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
 import { buildFactsSection } from '@/lib/video-production/facts-guard';
 import { buildDirectorAssetSection, buildAssignedAssetSection, type ContentAsset } from '@/lib/video-production/asset-manifest';
 import { buildStyleSection, buildChapterNavSection, actAtMs } from '@/lib/video-production/style-guard';
+import { parseSrtCues } from '@/lib/video/timeline';
+import { ACT_LABELS, type ActKey } from '@/lib/script/six-act';
 import { validateShotHtml } from '@/lib/video-production/shot-html-guard';
 import { probeShotHealth } from '@/lib/video-production/shot-renderer';
 import {
@@ -86,6 +88,19 @@ function shotDir(productionRoot: string, shotIndex: number): string {
   // (可能包含 `..` 等构造出越权写入路径)。目录名固定用数组下标，
   // preview 与 master 两条渲染路径共用同一套下标规则，保证互相能对上。
   return path.join(productionRoot, 'shots', String(shotIndex));
+}
+
+/**
+ * 常驻框架层(二十四期)要的章节标签: 某个毫秒位置落在 alignedActs(真实对齐后的
+ * 六幕边界, {act,startMs,endMs})里的哪一幕, 取不到就不画(不画空标签)。
+ *
+ * 只给 illustration-tts 用: 它的六幕边界是真实对齐产物, 有精确的 startMs/endMs 可比对。
+ * ppt-narration 没有 alignedActs(六幕边界只按 targetSec 累加估出来), 那条链在调用处
+ * 直接复用已有的 actAtMs() + ACT_LABELS。
+ */
+function actLabelFromAlignedActs(acts: AlignedAct[], ms: number): string | null {
+  const hit = acts.find((a) => ms >= a.startMs && ms < a.endMs);
+  return hit ? ACT_LABELS[hit.act] : null;
 }
 
 /**
@@ -384,15 +399,19 @@ export async function handlePptNarration(
     const builderLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: builderModel });
     // 画幅来自模板: 这条链纯由 AI 生成画面, 没有素材可反推(见 aspect.ts)
     const shotFrame = frameOfAspect(template?.aspect);
+    // 常驻框架层(二十四期)要的两样: 全片字幕、总镜数。都是现成数据, 只是从没上过画面。
+    const chromeCues = parseSrtCues(vp.srt);
+    const shotTotal = direction.shots.length;
     let shotIndex = 0;
     for (const shot of direction.shots) {
       // 章节条要高亮"这一镜讲到哪一幕", 用镜头起点落在哪个幕区间来判定
       // 素材文件要拷进这一镜的 workDir, HTML 才能用相对路径引用
       await copyAssetsInto(shotDir(vp.productionRoot, shotIndex), contentAssets, vp.contentId);
+      const currentActKey = actAtMs(acts, shot.startMs);
       const navSection = buildChapterNavSection(
         template?.showChapterNav ?? false,
         chapterActs,
-        actAtMs(acts, shot.startMs),
+        currentActKey,
       );
       const builtHtml = await buildShotHtmlWithRetry(
         builderLLM,
@@ -424,6 +443,15 @@ export async function handlePptNarration(
         // 画幅来自模板 —— 这条链纯由 AI 生成画面, 没有素材可反推(见 aspect.ts)
         frame: shotFrame,
         outputClipPath: clipPath,
+        chrome: {
+          width: shotFrame.width,
+          height: shotFrame.height,
+          actLabel: currentActKey ? (ACT_LABELS[currentActKey as ActKey] ?? null) : null,
+          shotNo: shotIndex + 1,
+          shotTotal,
+          cues: chromeCues,
+          shotStartMs: shot.startMs,
+        },
       });
       clipPaths.push(clipPath);
       shotIndex += 1;
@@ -442,6 +470,11 @@ export async function handlePptNarration(
     await setStatus('building');
     // 和预览同一个画幅: master 复用预览生成的 HTML, 视口不一致会把它裁掉
     const shotFrame = frameOfAspect((await templateOf(vp.templateId))?.aspect);
+    // master 不重跑 Director/Builder，但常驻框架层的章节标签仍要算——重新取一次六幕稿
+    // (preview 分支同一份数据源，见 loadActs)，与预览阶段的章节判定同一套 actAtMs 逻辑。
+    const acts = await loadActs(vp.contentId);
+    const chromeCues = parseSrtCues(vp.srt);
+    const shotTotal = direction.shots.length;
     let shotIndex = 0;
     for (const shot of direction.shots) {
       const shotWorkDir = shotDir(vp.productionRoot, shotIndex);
@@ -464,6 +497,18 @@ export async function handlePptNarration(
         workDir: masterWorkDir,
         frame: shotFrame,
         outputClipPath: clipPath,
+        chrome: {
+          width: shotFrame.width,
+          height: shotFrame.height,
+          actLabel: (() => {
+            const key = actAtMs(acts, shot.startMs);
+            return key ? (ACT_LABELS[key as ActKey] ?? null) : null;
+          })(),
+          shotNo: shotIndex + 1,
+          shotTotal,
+          cues: chromeCues,
+          shotStartMs: shot.startMs,
+        },
       });
       clipPaths.push(clipPath);
       shotIndex += 1;
@@ -964,6 +1009,10 @@ export async function handleIllustrationTts(
     const builderLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-chat' });
     // 画幅来自模板: 这条链纯由 AI 生成画面, 没有素材可反推(见 aspect.ts)
     const shotFrame = frameOfAspect(template?.aspect);
+    // 常驻框架层(二十四期)要的字幕: 用上面刚合成的 srt(基于真实 TTS 时长的 alignedActs),
+    // 不用 vp.srt —— 那是创建时按 targetSec 估出来的时间轴, 跟真实配音时长对不上。
+    const chromeCues = parseSrtCues(srt);
+    const shotTotal = direction.shots.length;
     const clipPaths: string[] = [];
     let shotIndex = 0;
     for (const shot of direction.shots) {
@@ -991,6 +1040,15 @@ export async function handleIllustrationTts(
         workDir: shotWorkDir,
         frame: shotFrame,
         outputClipPath: clipPath,
+        chrome: {
+          width: shotFrame.width,
+          height: shotFrame.height,
+          actLabel: actLabelFromAlignedActs(alignedActs, shot.startMs),
+          shotNo: shotIndex + 1,
+          shotTotal,
+          cues: chromeCues,
+          shotStartMs: shot.startMs,
+        },
       });
       clipPaths.push(clipPath);
       shotIndex += 1;
@@ -1041,6 +1099,12 @@ export async function handleIllustrationTts(
     await setStatus('building');
     // 和预览同一个画幅: master 复用预览生成的 HTML, 视口不一致会把它裁掉
     const shotFrame = frameOfAspect((await templateOf(vp.templateId))?.aspect);
+    // master 不重跑 TTS/DeepSeek，但常驻框架层的字幕仍要算——重新取一次六幕稿的台词文本
+    // (preview 分支同一份数据源, 见 loadActs)，配合已持久化的 alignedActs 重建同一份 srt。
+    const chromeActs = await loadActs(vp.contentId);
+    const chromeNarrations = Object.fromEntries(chromeActs.map((a) => [a.act, a.narration]));
+    const chromeCues = parseSrtCues(buildSrtFromAlignedActs(alignedActs, chromeNarrations));
+    const shotTotal = direction.shots.length;
     const clipPaths: string[] = [];
     let shotIndex = 0;
     for (const shot of direction.shots) {
@@ -1062,6 +1126,15 @@ export async function handleIllustrationTts(
         workDir: masterWorkDir,
         frame: shotFrame,
         outputClipPath: clipPath,
+        chrome: {
+          width: shotFrame.width,
+          height: shotFrame.height,
+          actLabel: actLabelFromAlignedActs(alignedActs, shot.startMs),
+          shotNo: shotIndex + 1,
+          shotTotal,
+          cues: chromeCues,
+          shotStartMs: shot.startMs,
+        },
       });
       clipPaths.push(clipPath);
       shotIndex += 1;

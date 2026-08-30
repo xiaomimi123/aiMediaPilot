@@ -4,6 +4,7 @@ import { measureFrameDensity, type FrameDensity } from '@/lib/video-production/f
 import { measureFrameDetail, type FrameDetail } from '@/lib/video-production/frame-detail';
 import { measureFrameLayout, type FrameLayout } from '@/lib/video-production/frame-layout';
 import { buildAmbientRig } from '@/lib/video-production/ambient-rig';
+import { buildShotChrome } from '@/lib/video-production/shot-chrome';
 import os from 'os';
 import { chromium } from 'playwright-core';
 import { encodeFramesToClip } from '@/lib/video/ffmpeg';
@@ -25,6 +26,11 @@ export interface RenderShotOpts {
    * 正常出片不要关: 关掉之后画面会退回 90% 以上时长纹丝不动。
    */
   ambient?: boolean;
+  /**
+   * 常驻框架层的上下文。不给就不挂 —— 老任务与单元测试零迁移。
+   * 见 shot-chrome.ts: 它补的是「我们的空是真空」这个问题。
+   */
+  chrome?: import('./shot-chrome').ChromeOpts;
 }
 
 /**
@@ -123,8 +129,19 @@ export async function renderShotToClip(opts: RenderShotOpts): Promise<void> {
         width: frame.width, height: frame.height, durationMs,
       }));
 
+  /*
+   * 注入常驻框架层 —— 章节标签 / 镜头编号 / 预览字幕 / 背景纹理, 每一镜都有。
+   *
+   * **必须在环境运动层之后注入**: 环境层会把 body 的既有子节点搬进一个 `stage`
+   * 容器再整体缩放做运动, 框架层的元素要留在 `stage` 外面, 否则章节标签和字幕
+   * 会跟着相机一起漂移。见 shot-chrome.ts。
+   */
+  const withChrome = opts.chrome
+    ? injectBeforeBodyEnd(withAmbient, buildShotChrome(opts.chrome))
+    : withAmbient;
+
   const indexHtmlPath = path.join(workDir, 'index.html');
-  await fs.writeFile(indexHtmlPath, withAmbient, 'utf-8');
+  await fs.writeFile(indexHtmlPath, withChrome, 'utf-8');
 
   const gsapDestPath = path.join(workDir, 'gsap.min.js');
   await fs.copyFile(GSAP_ASSET_PATH, gsapDestPath);
