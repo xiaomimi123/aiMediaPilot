@@ -491,7 +491,9 @@ export async function handlePptNarration(
  * **整片**量出来的, 这时候几十镜已经渲完拼好, 拦下来除了让用户白等一次没有别的
  * 用处。真正的修法在渲染那一步(环境运动层), 这里的职责是**在它失效时能被看见**。
  */
-async function reportFreeze(videoPath: string): Promise<void> {
+/** 导出仅供测试用(见 tests/jobs/video-production-freeze-report.test.ts) —— 这道关只写日志,
+ * 不落库也不改状态, 除了真跑一遍拿它的输出之外没有别的观测点。 */
+export async function reportFreeze(videoPath: string): Promise<void> {
   try {
     const totalMs = await probeVideoDurationMs(videoPath);
     const totalSec = (totalMs ?? 0) / 1000;
