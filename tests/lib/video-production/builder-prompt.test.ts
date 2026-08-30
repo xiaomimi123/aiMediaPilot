@@ -15,20 +15,24 @@ describe('BUILDER.buildSystemPrompt', () => {
     expect(prompt).toContain('window.__timelines');
   });
 
-  it('不传 visualStyle 时，含"文字卡片"关键字符串（默认分支文本不变）', () => {
+  // 这三条原来锁的是"文字卡片/插画风格"这两个具体措辞, 而这两处措辞正是这次要拆掉的
+  // 画面封顶指令的一部分("第一版构图从简"用文字卡片举例、插画风格许诺了做不到的手绘感)。
+  // 锁措辞不是这几条测试的本意——本意是锁"card/illustration 两个分支各自谈的是不同风格
+  // 指引、互不串味"，所以改成断言各分支的新措辞。
+  it('不传 visualStyle 时，含 card 分支的风格指引（默认分支文本不变）', () => {
     const prompt = BUILDER.buildSystemPrompt(['#111', '#eee', '#f80']);
-    expect(prompt).toContain('文字卡片');
+    expect(prompt).toContain('信息画面风格');
   });
 
-  it('显式传 visualStyle: "card" 时，含"文字卡片"关键字符串', () => {
+  it('显式传 visualStyle: "card" 时，含 card 分支的风格指引', () => {
     const prompt = BUILDER.buildSystemPrompt(['#111', '#eee', '#f80'], 'card');
-    expect(prompt).toContain('文字卡片');
+    expect(prompt).toContain('信息画面风格');
   });
 
-  it('传 visualStyle: "illustration" 时，含"插画风格"关键字符串，不含"文字卡片"', () => {
+  it('传 visualStyle: "illustration" 时，含 illustration 分支的风格指引，不含 card 分支的', () => {
     const prompt = BUILDER.buildSystemPrompt(['#111', '#eee', '#f80'], 'illustration');
-    expect(prompt).toContain('插画风格');
-    expect(prompt).not.toContain('文字卡片');
+    expect(prompt).toContain('扁平几何风格');
+    expect(prompt).not.toContain('信息画面风格');
   });
 });
 

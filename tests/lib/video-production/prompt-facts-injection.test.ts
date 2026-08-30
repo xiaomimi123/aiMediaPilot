@@ -77,7 +77,9 @@ describe('BUILDER 事实护栏注入', () => {
 
   it('插画风格与事实护栏可以同时生效', () => {
     const p = BUILDER.buildSystemPrompt(PALETTE, 'illustration', SECTION);
-    expect(p).toContain('插画风格');
+    // "插画风格"这个措辞连带承诺了做不到的"手绘感"(spec §1.6 订正一), 已改成
+    // "扁平几何风格"的实话版本, 这里跟着改, 不再锁旧措辞。
+    expect(p).toContain('扁平几何风格');
     expect(p).toContain('只有 A 允许上画面');
   });
 });

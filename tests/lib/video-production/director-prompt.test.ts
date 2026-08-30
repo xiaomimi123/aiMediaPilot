@@ -2,11 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { DIRECTOR, DirectorResponseSchema, ShotSchema } from '@/lib/video-production/director-prompt';
 
 describe('DIRECTOR.buildSystemPrompt', () => {
-  it('包含"导演"、"微节拍"、"从简"相关字样', () => {
+  // 原来断言的"从简"是"第一版要求构图从简"那句画面封顶指令的一部分——那句话被
+  // 主动删掉了(实测确认它把产出摁死在幻灯片上), 所以"从简"不该再留在 prompt 里。
+  // 这条测试真正要锁的是"导演/微节拍这两个核心概念在"、以及新的构图意图指引在,
+  // 改成断言这些。
+  it('包含"导演"、"微节拍"、"构图意图"相关字样', () => {
     const prompt = DIRECTOR.buildSystemPrompt();
     expect(prompt).toContain('导演');
     expect(prompt).toContain('微节拍');
-    expect(prompt).toContain('从简');
+    expect(prompt).toContain('构图意图');
   });
 });
 

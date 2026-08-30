@@ -43,7 +43,7 @@ export const DIRECTOR = {
 - 把表达同一个意思的字幕行合并成一个镜头，在语义转折处切镜，不要机械按字幕行切分。
 - 单个镜头不超过 40000 毫秒。
 - 每个镜头要写清楚：观众理解到的主张(claim)、这个画面要完成的视觉任务(visualJob，如 clarify/reveal/compare/prove)、2-6 个"微节拍"(beats，每个节拍要说清楚画面变成了什么样(visibleState)以及这个变化本身是什么(development))。
-- 第一版要求构图从简：优先保证时长覆盖完整、字幕/文字清晰可读，不追求视觉丰富度和复杂运镜——用简单的文字卡片+基础过渡即可，不要设计复杂的隐喻或多层构图。
+- 每个镜头的 visualJob 要能对应一种**构图意图**，而不只是"展示这句话"：prove(摆证据)/compare(两组对照)/clarify(用体量说明)/reveal(揭示转折)。构图契约由画面层按 visualJob 选，你只需要把意图写准。
 - 统一的调色板(palette)只给 3-8 个十六进制色值，覆盖全片使用。
 
 ${styleBlock}${factsBlock}${assetBlock}
