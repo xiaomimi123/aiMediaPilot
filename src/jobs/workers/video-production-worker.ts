@@ -55,6 +55,7 @@ import {
 import { judgeShotDensity } from '@/lib/video-production/frame-density';
 import { judgeHollowCard } from '@/lib/video-production/frame-detail';
 import { judgeShotLayout } from '@/lib/video-production/frame-layout';
+import { judgeOverlap } from '@/lib/video-production/frame-overlap';
 import { scoreAttempt, pickBestAttempt, type ScoredAttempt } from '@/lib/video-production/attempt-score';
 import type { ScriptAct } from '@/lib/script/six-act';
 import { synthesizeVolcTts } from '@/lib/tts/volcengine';
@@ -186,6 +187,17 @@ async function buildShotHtmlWithRetry(
       })),
       frame ?? { width: 1920, height: 1080 },
     );
+    // 元素遮挡(二十四期): 前五道关都在看单个元素自己怎么样, 没有一道看两个元素撞没撞上
+    const overlapJ = judgeOverlap(
+      health.geometry.map((g) => ({ occluded: g.occluded ?? [] })),
+    );
+    if (!overlapJ.ok) {
+      lastReason = overlapJ.reason ?? '有文字被遮挡';
+      feedback = `\n\n上一版渲染出来的实际效果不合格: ${lastReason}`;
+      console.warn(`[video-production] 镜头 ${shot.shotId} 第 ${attempt} 次有遮挡: ${lastReason}`);
+      continue;
+    }
+
     const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
     attempts.push({
       html: result.html,

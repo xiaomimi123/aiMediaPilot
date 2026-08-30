@@ -197,6 +197,8 @@ export interface ShotGeometry {
   sideBySide: boolean;
   sidePair: { ax: number; aw: number; bx: number; bw: number } | null;
   clipped: boolean;
+  /** 被其它元素盖住的文字(二十四期)。见 frame-overlap.ts。 */
+  occluded?: { coverRatio: number; text: string }[];
 }
 
 export interface ProbeShotOpts {
@@ -407,8 +409,46 @@ export async function probeShotHealth(opts: ProbeShotOpts): Promise<ShotHealth> 
           if (e.scrollWidth > e.clientWidth + 2 && e.clientWidth > 0) { clipped = true; break; }
         }
 
-        return { sideBySide: sidePair !== null, sidePair, clipped };
-      }).catch(() => ({ sideBySide: false, sidePair: null, clipped: false }));
+        /*
+         * 文字被别的元素盖住。真实缺陷: 顶部标题被两张卡片压住, 「差距」二字全没了。
+         * 只看**叶子文本节点**: 容器天然包着子元素, 拿容器比会满屏假阳性。
+         * 判"盖住"用 z-index 与文档顺序都不可靠(层叠上下文规则复杂), 改用一个更笨
+         * 但可靠的判据: 对方是不透明背景块, 且矩形相交。
+         */
+        const occluded: { coverRatio: number; text: string }[] = [];
+        const texts = Array.from(document.querySelectorAll('body *')).filter((el) => {
+          const st = window.getComputedStyle(el);
+          if (st.display === 'none' || st.visibility === 'hidden' || Number(st.opacity) < 0.05) return false;
+          if (el.children.length > 0) return false;            // 只要叶子
+          return (el.textContent ?? '').trim().length > 0;
+        });
+        const solids = Array.from(document.querySelectorAll('body *')).filter((el) => {
+          const st = window.getComputedStyle(el);
+          if (st.display === 'none' || Number(st.opacity) < 0.5) return false;
+          const bg = st.backgroundColor;
+          if (!bg || bg === 'transparent' || bg.endsWith(', 0)')) return false;
+          const r = el.getBoundingClientRect();
+          return r.width * r.height > 0;
+        });
+        for (const t of texts) {
+          const a = t.getBoundingClientRect();
+          const areaA = a.width * a.height;
+          if (areaA <= 0) continue;
+          let covered = 0;
+          for (const s of solids) {
+            if (s === t || s.contains(t) || t.contains(s)) continue;
+            const b = s.getBoundingClientRect();
+            const w = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+            const h = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+            if (w > 0 && h > 0) covered = Math.max(covered, (w * h) / areaA);
+          }
+          if (covered > 0.02) {
+            occluded.push({ coverRatio: covered, text: (t.textContent ?? '').trim().slice(0, 40) });
+          }
+        }
+
+        return { sideBySide: sidePair !== null, sidePair, clipped, occluded };
+      }).catch(() => ({ sideBySide: false, sidePair: null, clipped: false, occluded: [] }));
       geometry.push(geo);
     }
     return { samples, details, layouts, geometry, runtimeErrors };
