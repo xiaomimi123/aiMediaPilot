@@ -1,4 +1,5 @@
 import type { CaptionStyle } from '@/lib/video-template/model';
+import { clampCaptionMargin } from './caption-safe-zone';
 import type { AlignedAct } from '@/lib/video-production/aligner-prompt';
 import type { TranscriptSegment } from '@/lib/llm/whisper';
 
@@ -55,6 +56,19 @@ export function buildAssCaptions(
   frame?: { width: number; height: number },
 ): string {
   const playRes = frame ? `PlayResX: ${frame.width}\nPlayResY: ${frame.height}\n` : '';
+
+  /*
+   * 竖屏字幕要避开平台自己的 UI。
+   *
+   * 我们所有的画面检查都只看画面本身, 看不见抖音会在底部盖上作者名、文案、音乐条。
+   * 模板里的 marginV 是 90~120, 在 1080x1920 上离底只有 5%~6% —— 正好落在那条 UI 里,
+   * 字幕会被盖住, 而在我们自己的成片上完全看不出来。见 caption-safe-zone.ts。
+   *
+   * 拿不到画幅时不动它: 那时连是不是竖屏都不知道, 凭空抬会把横屏字幕顶到画面中间。
+   */
+  const marginV = frame
+    ? clampCaptionMargin(style.marginV, frame).marginV
+    : style.marginV;
   const header = `[Script Info]
 ScriptType: v4.00+
 ${playRes}WrapStyle: 0
@@ -62,7 +76,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,${style.fontFamily},${style.fontSize},${hexToAssColor(style.primaryColor)},&H000000FF,${hexToAssColor(style.outlineColor)},&H00000000,0,0,0,0,100,100,0,0,1,${style.outlineWidth},0,2,40,40,${style.marginV},1
+Style: Default,${style.fontFamily},${style.fontSize},${hexToAssColor(style.primaryColor)},&H000000FF,${hexToAssColor(style.outlineColor)},&H00000000,0,0,0,0,100,100,0,0,1,${style.outlineWidth},0,2,40,40,${marginV},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`;
