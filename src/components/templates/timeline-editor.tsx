@@ -37,6 +37,15 @@ export interface CaptionCue {
   text: string;
 }
 
+/**
+ * 场景块窄于时间线宽度的百分之几就不画标签。
+ *
+ * 块宽是**按时长等比映射**的, 短镜头必然很窄: 实测一条 60 秒片子里 2.5 秒的镜头
+ * 占 4%、约 42px, `truncate` 之后只剩「"…」一个字符 —— 那既读不出内容, 又比留白更脏。
+ * 低于这个阈值就只留色块(仍然点得到, tooltip 仍给全文), 让宽块把字讲清楚。
+ */
+export const MIN_LABEL_WIDTH_PCT = 6;
+
 export function TimelineEditor({
   scenes,
   captions,
@@ -363,6 +372,14 @@ export function TimelineEditor({
           </p>
         </div>
       ) : null}
+
+      {/*
+        提示跟着控制区走。放在时间线下面时右列比画布矮约 90px, 空一块;
+        挪上来既填了那块空, 也离它讲的那两个操作(拖时间线、点场景块)更近。
+      */}
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        按住拖动时间线，预览会跟着停在那一刻。点场景块选中它，上面的「这一幕的版面」就切到那一幕。
+      </p>
       </div>
       </div>
 
@@ -395,27 +412,35 @@ export function TimelineEditor({
                   )}
                   title={`${s.label} · ${SCENE_LAYOUT_LABELS[s.layout]}`}
                 >
-                  {b.label}
+                  {b.widthPct >= MIN_LABEL_WIDTH_PCT ? b.label : null}
                 </button>
               );
             })}
           </div>
 
-          <p className="mb-1 mt-2 text-[0.65rem] uppercase tracking-wider text-muted-foreground">
-            字幕 {captions.length}
-          </p>
-          <div className="relative h-5">
-            {captionTrack.map((b) => (
-              <div
-                key={b.id}
-                style={{ left: `${b.leftPct}%`, width: `${b.widthPct}%` }}
-                className="absolute top-0 h-full overflow-hidden truncate rounded-sm bg-foreground/15 px-1 text-[0.6rem] text-muted-foreground"
-                title={b.label}
-              >
-                {b.label}
+          {/*
+            没有字幕就整条不画。**「字幕 0」加一条 20px 空轨是纯占位** —— 图文口播
+            这条链本来就没有字幕轨, 每次都给它留一行, 只是在时间线里插一条永远空着的带子。
+          */}
+          {captions.length > 0 ? (
+            <>
+              <p className="mb-1 mt-2 text-[0.65rem] uppercase tracking-wider text-muted-foreground">
+                字幕 {captions.length}
+              </p>
+              <div className="relative h-5">
+                {captionTrack.map((b) => (
+                  <div
+                    key={b.id}
+                    style={{ left: `${b.leftPct}%`, width: `${b.widthPct}%` }}
+                    className="absolute top-0 h-full overflow-hidden truncate rounded-sm bg-foreground/15 px-1 text-[0.6rem] text-muted-foreground"
+                    title={b.label}
+                  >
+                    {b.label}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          ) : null}
 
           {/* 播放头。pointer-events-none 让它不挡住下面的块 */}
           <div
@@ -425,9 +450,6 @@ export function TimelineEditor({
             <span className="absolute -left-1 -top-1 h-2 w-2 rounded-full bg-destructive" />
           </div>
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          按住拖动时间线，预览会跟着停在那一刻。点场景块选中它，上面的「这一幕的版面」就切到那一幕。
-        </p>
       </div>
 
     </div>

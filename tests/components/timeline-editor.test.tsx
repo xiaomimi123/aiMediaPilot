@@ -72,8 +72,12 @@ describe('TimelineEditor 画布尺寸', () => {
     const zone = canvas.parentElement;
     expect(zone?.className).toContain('md:flex-row');
     expect(zone?.textContent).toContain('这一幕的版面');
-    // 时间线不在这个区里: 它要整宽, 挤进窄栏时场景块每块只剩一个字(真机量过)
-    expect(zone?.textContent).not.toContain('按住拖动时间线');
+    /*
+     * 时间线不在这个区里: 它要整宽, 挤进窄栏时场景块每块只剩一个字(真机量过)。
+     * 判据用轨道标题「场景 N」, 不用那句操作提示 —— 提示后来被**有意**挪进了这个区
+     * (它讲的两个操作就在这儿), 拿它当替身会把一次正确的改动判成回归。
+     */
+    expect(zone?.textContent).not.toMatch(/场景 \d/);
   });
 
   it('五种版面都给得出来, 结构改动没有弄丢按钮', () => {
@@ -81,5 +85,50 @@ describe('TimelineEditor 画布尺寸', () => {
     for (const label of ['人物全屏', '内容全屏', '左内容·右人物', '左人物·右内容', '内容铺满·圆形人物']) {
       expect(screen.getByRole('button', { name: label })).toBeTruthy();
     }
+  });
+});
+
+describe('TimelineEditor 退化情形', () => {
+  it('没有字幕时整条字幕轨不渲染 —— 「字幕 0」加一条空轨是纯占位', () => {
+    const { container } = renderEditor(220);
+    expect(container.textContent).not.toContain('字幕 0');
+  });
+
+  it('有字幕时照常渲染', () => {
+    const { container } = render(
+      <TimelineEditor
+        scenes={scenes}
+        captions={[{ startMs: 0, endMs: 1000, text: '第一句' }]}
+        frame={{ width: 1920, height: 1080 }}
+        onLayoutChange={() => {}} onSelect={() => {}} captionStyle={captionStyle}
+        canvasMaxHeightPx={220}
+      />,
+    );
+    expect(container.textContent).toContain('字幕 1');
+  });
+
+  it('窄到放不下字的场景块不画标签 —— 截成一个字符比留白更难看, 也更没用', () => {
+    // 第一幕 1.5 秒 / 全片 60 秒 = 2.5%, 低于 MIN_LABEL_WIDTH_PCT
+    const uneven = [
+      { id: 'tiny', startMs: 0, endMs: 1500, label: '很短的一幕', claim: '很短的一幕', layout: 'content-full' as const, previewHtml: '' },
+      { id: 'long', startMs: 1500, endMs: 60000, label: '很长的一幕', claim: '很长的一幕', layout: 'content-full' as const, previewHtml: '' },
+    ];
+    render(
+      <TimelineEditor
+        scenes={uneven} captions={[]} frame={{ width: 1920, height: 1080 }}
+        onLayoutChange={() => {}} onSelect={() => {}} captionStyle={captionStyle}
+        canvasMaxHeightPx={220}
+      />,
+    );
+    // 块还在(点得到、有 tooltip), 只是不显示文字
+    const tiny = screen.getByTitle(/很短的一幕/);
+    expect(tiny.textContent).toBe('');
+    const long = screen.getByTitle(/很长的一幕/);
+    expect(long.textContent).toBe('很长的一幕');
+  });
+
+  it('操作提示跟着控制区走, 不留在时间线下面', () => {
+    const { canvas } = renderEditor(220);
+    expect(canvas.parentElement?.textContent).toContain('按住拖动时间线');
   });
 });
