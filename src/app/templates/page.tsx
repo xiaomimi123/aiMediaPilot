@@ -3,6 +3,8 @@ import { getOrCreateDefaultUser } from '@/lib/user';
 import { PageShell } from '@/components/layout/page-shell';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
+import { MissingPresets } from '@/components/templates/missing-presets';
+import { missingPresets } from '@/lib/video-template/store';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,8 +15,12 @@ export default async function TemplatesPage() {
     prisma.videoProduction.count({ where: { userId: user.id, status: 'done' } }),
   ]);
 
+  // 播种只在 0 条模板时发生, 之后新增的预设永远到不了老用户手里 —— 见 MissingPresets
+  const missing = missingPresets(templates.map((t) => t.name));
+
   return (
     <PageShell title="模板" description="决定成片的画面结构、字幕样式和转场，出片时套用。">
+      <MissingPresets presets={missing} />
       {doneFilms === 0 && templates.length > 0 ? (
         <p className="mb-4 rounded-md border border-border bg-secondary/50 p-3 text-xs leading-relaxed text-muted-foreground">
           {templates.length} 个模板都还没产出过成片。模板本身没问题，卡在出片链路。

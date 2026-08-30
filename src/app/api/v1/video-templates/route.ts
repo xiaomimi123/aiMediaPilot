@@ -3,7 +3,7 @@ import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { VideoTemplateConfigSchema } from '@/lib/video-template/model';
-import { seedPresetsIfEmpty, newTemplateId } from '@/lib/video-template/store';
+import { seedPresetsIfEmpty, newTemplateId, missingPresets } from '@/lib/video-template/store';
 
 export async function GET() {
   const user = await getOrCreateDefaultUser();
@@ -12,7 +12,14 @@ export async function GET() {
     where: { userId: user.id },
     orderBy: { createdAt: 'asc' },
   });
-  return ok({ templates });
+  /*
+   * 一并回「你还缺哪些内置预设」。
+   *
+   * 播种只在 0 条模板时发生, 所以之后新增的预设永远到不了老用户手里。真实后果:
+   * 对标参考片的「真人口播 · 文字叠加」一直在代码里却从没进过库, 十几轮出片全跑在
+   * 带 B-roll 的模板上 —— 而参考片一帧 B-roll 都没有。界面上当时看不出任何异常。
+   */
+  return ok({ templates, missingPresets: missingPresets(templates.map((t) => t.name)) });
 }
 
 export async function POST(req: Request) {
@@ -57,6 +64,22 @@ export async function POST(req: Request) {
       showChapterNav: cfg.showChapterNav,
       researchEnabled: cfg.researchEnabled,
       builderModel: cfg.builderModel,
+      /*
+       * 下面这几个此前**整组漏写**, 全落回数据库默认值。
+       *
+       * 真实后果: 「从预设新建」把「真人口播 · 文字叠加」加进库之后, 存成了
+       * B-roll=true / 文字叠加=false —— 正好和预设相反。而这两个开关就是「像不像
+       * 参考片」的全部区别: 参考片实测 49 帧全是真人实拍、一帧 B-roll 都没有。
+       * 画幅同理, 竖屏预设进库会变成横屏。
+       */
+      aspect: cfg.aspect ?? undefined,
+      talkingHeadLayout: cfg.talkingHeadLayout,
+      textOverlayEnabled: cfg.textOverlayEnabled,
+      personSide: cfg.personSide,
+      brollEnabled: cfg.brollEnabled,
+      pipPosition: cfg.pipPosition,
+      pipScale: cfg.pipScale,
+      pipMargin: cfg.pipMargin,
     },
   });
   return ok({ template: created });
