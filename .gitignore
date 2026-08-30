@@ -31,3 +31,4 @@ video-productions/
 logs/
 
 /teardowns/
+.venv/
