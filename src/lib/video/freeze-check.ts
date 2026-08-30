@@ -133,3 +133,51 @@ export function judgeFreeze(segments: FreezeSegment[], totalSec: number): Freeze
       `最长的几段在 ${worst.map((s) => `${s.startSec.toFixed(0)}s 起 ${s.durationSec.toFixed(1)}s`).join('、')}。`,
   };
 }
+
+/**
+ * 落库/上界面用的整片静止报告。
+ *
+ * 单独一个纯函数而不是在 worker 里拼对象: 这个形状**界面要读**, 变了就是接口变了,
+ * 得有测试盯着。`segments` 只留最长的几段 —— 界面上要的是「最坏的在哪几秒」,
+ * 全量段数在一条 3 分钟的死画面片子上能有上百条, 存进库只是噪音。
+ */
+export interface FreezeReport {
+  ok: boolean;
+  /** 静止总时长(秒)。 */
+  frozenSec: number;
+  totalSec: number;
+  /** 静止占比 0~1。 */
+  ratio: number;
+  /** 一共多少段(不是 worst 的长度)。 */
+  count: number;
+  /** 最长的几段, 供界面直接跳过去看。 */
+  worst: FreezeSegment[];
+  reason?: string;
+  /** 量的是预览片还是正式成片 —— 两者画面可能不同(正式档 30fps, 预览 15fps)。 */
+  kind: 'preview' | 'master';
+  checkedAt: string;
+}
+
+/** 界面上最多列几段。多了没人看, 而且屏幕会被刷屏。 */
+export const WORST_SEGMENTS_SHOWN = 3;
+
+export function buildFreezeReport(
+  segments: FreezeSegment[],
+  totalSec: number,
+  kind: 'preview' | 'master',
+  checkedAt: string,
+): FreezeReport {
+  const frozenSec = segments.reduce((n, s) => n + s.durationSec, 0);
+  const j = judgeFreeze(segments, totalSec);
+  return {
+    ok: j.ok,
+    frozenSec,
+    totalSec,
+    ratio: totalSec > 0 ? frozenSec / totalSec : 0,
+    count: segments.length,
+    worst: [...segments].sort((a, b) => b.durationSec - a.durationSec).slice(0, WORST_SEGMENTS_SHOWN),
+    reason: j.reason,
+    kind,
+    checkedAt,
+  };
+}

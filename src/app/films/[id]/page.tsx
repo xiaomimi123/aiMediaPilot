@@ -8,6 +8,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { probeVideoDimensions } from '@/lib/video/ffmpeg';
 import type { SceneLayout } from '@/lib/video/scene-layout';
+import type { FreezeReport } from '@/lib/video/freeze-check';
 
 export const dynamic = 'force-dynamic';
 
@@ -114,6 +115,8 @@ export default async function FilmDetailPage(props: { params: Promise<{ id: stri
           savedLayouts,
           brollEnabled: template?.brollEnabled ?? true,
           frame,
+          // null 有确切含义: 这条片子出在静止关接线之前, 界面要说「没量过」而不是显示 0
+          freezeReport: (vp.freezeReport as FreezeReport | null) ?? null,
         }}
       />
     </PageShell>

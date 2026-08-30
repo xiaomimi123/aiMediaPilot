@@ -18,6 +18,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     previewPath: vp.previewPath,
     masterPath: vp.masterPath,
     errorMessage: vp.errorMessage,
+    // 轮询也要带上 —— 出片跑完那一刻页面是靠轮询更新的, 不带就得刷新才看得到体检结果
+    freezeReport: vp.freezeReport,
   });
 }
 

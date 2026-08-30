@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { canStartProduction } from '@/lib/cockpit/production-status';
 import {
@@ -10,6 +10,7 @@ import {
 import { cn } from '@/lib/utils';
 import { FilmLayoutEditor } from './film-layout-editor';
 import type { SceneLayout } from '@/lib/video/scene-layout';
+import type { FreezeReport } from '@/lib/video/freeze-check';
 
 interface Film {
   id: string;
@@ -32,6 +33,85 @@ interface Film {
   frame: { width: number; height: number };
   /** 模板开没开 B-roll。关着时编辑台只给「人物全屏」—— 其余版面没有内容画面可放。 */
   brollEnabled: boolean;
+  /** 出片后量到的整片静止情况。**null = 没量过**(出在这道关接线之前), 不是 0。 */
+  freezeReport: FreezeReport | null;
+}
+
+function mmss(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+/**
+ * 画面活跃度 —— 出片后 ffmpeg 量出来的「有多少时长画面纹丝不动」。
+ *
+ * 为什么值得占界面上一块: 这一维**肉眼在编辑台里看不出来**。四道画面关都是逐帧判的,
+ * 每一帧都合格的片子可以整整二十秒是死的; 而真实数据是, 接这道关之前三条交付链的
+ * 静止占比分别是 77% / 86% / 94% —— 基本上是在做 PPT。
+ *
+ * 三条显示上的取舍:
+ * - **null 显示「没量过」而不是 0%**。「没测过」和「测过是 0」是两件事, 混起来就是
+ *   界面在撒谎 —— 这个项目里已经栽过一次(空壳色块用占比刷分)。
+ * - **不通过时把最坏几段做成可点的时间戳**, 点了直接跳到播放器那一刻。只报一个百分比
+ *   等于让用户自己去 3 分钟片子里找, 那他就不会去找。
+ * - **通过时也显示数字**, 不是只在失败时才出现。一个只在坏的时候才说话的指标, 你无从
+ *   判断它到底有没有在跑 —— freeze-check 本身就当过一阵子谁也没调用的死代码。
+ */
+function FreezePanel({
+  report, onSeek,
+}: {
+  report: FreezeReport | null;
+  onSeek: (sec: number) => void;
+}) {
+  if (!report) {
+    return (
+      <p className="mt-2 text-xs text-muted-foreground">
+        画面活跃度：<span className="text-muted-foreground/70">没量过</span>{' '}
+        —— 这条片子出在这道检查接线之前。重做一次预览就会量。
+      </p>
+    );
+  }
+
+  const pct = Math.round(report.ratio * 100);
+  return (
+    <div
+      className={cn(
+        'mt-3 rounded-md border p-3 text-xs',
+        report.ok ? 'border-border bg-card' : 'border-destructive/50 bg-destructive/5',
+      )}
+    >
+      <p className="font-medium">
+        画面活跃度：{report.ok ? '正常' : '有大段死画面'}
+        <span className="ml-2 font-normal text-muted-foreground">
+          静止 {report.frozenSec.toFixed(1)}s / {report.totalSec.toFixed(1)}s（{pct}%，{report.count} 段）
+        </span>
+      </p>
+      {report.ok ? (
+        <p className="mt-1 text-muted-foreground">
+          {report.kind === 'master' ? '正式成片' : '预览片'}整片扫过一遍，没有长时间不动的画面。
+        </p>
+      ) : (
+        <>
+          <p className="mt-1 text-muted-foreground">
+            画面有大段时间纹丝不动。点时间戳直接跳过去看：
+          </p>
+          <p className="mt-2 flex flex-wrap gap-2">
+            {report.worst.map((seg) => (
+              <button
+                key={seg.startSec}
+                type="button"
+                onClick={() => onSeek(seg.startSec)}
+                className="rounded border border-border bg-background px-2 py-1 font-mono hover:border-foreground/50"
+              >
+                {mmss(seg.startSec)} 起 {seg.durationSec.toFixed(1)}s
+              </button>
+            ))}
+          </p>
+        </>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -55,6 +135,8 @@ export function FilmDetail({ initial }: { initial: Film }) {
    * 等于没预览。所以按钮旁边要明说, 并把「重做预览」摆在前面。
    */
   const [layoutStale, setLayoutStale] = useState(false);
+  // 静止段时间戳点了要跳到播放器那一刻 —— 只报百分比等于让人自己去几分钟片子里找
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [publishUrl, setPublishUrl] = useState('');
   const [publishNote, setPublishNote] = useState('');
 
@@ -73,6 +155,8 @@ export function FilmDetail({ initial }: { initial: Film }) {
             errorMessage: d.errorMessage ?? null,
             hasPreview: Boolean(d.previewPath) || f.hasPreview,
             hasMaster: Boolean(d.masterPath) || f.hasMaster,
+            // 出片跑完那一刻页面是靠轮询更新的, 不接回来就得手动刷新才看得到体检结果
+            freezeReport: d.freezeReport ?? f.freezeReport,
           }));
         }
       } catch {
@@ -211,10 +295,25 @@ export function FilmDetail({ initial }: { initial: Film }) {
           {/* key 让换源时播放器真的重载, 否则会继续放旧文件 */}
           <video
             key={film.hasMaster ? 'master' : 'preview'}
+            ref={videoRef}
             controls
             className="mt-3 w-full max-w-2xl rounded-md border border-border bg-black"
             src={`/api/v1/cockpit/video-productions/${film.id}/file?kind=${film.hasMaster ? 'master' : 'preview'}`}
           />
+          <div className="max-w-2xl">
+            <FreezePanel
+              report={film.freezeReport}
+              onSeek={(sec) => {
+                const v = videoRef.current;
+                if (!v) return;
+                v.currentTime = sec;
+                // 跳过去还得让它动起来, 否则停在那一帧 —— 而「静止的画面」和「暂停」
+                // 肉眼分不出来, 用户会以为跳转没生效
+                void v.play().catch(() => {});
+                v.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }}
+            />
+          </div>
         </section>
       ) : null}
 

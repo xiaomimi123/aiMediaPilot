@@ -351,6 +351,10 @@ model VideoProduction {
   /// null = 老行为(全部走顺序挖空), 保证已有任务零迁移。
   sceneLayouts    Json?
   voiceOverride   Json? // 二十期收尾(task-10b): illustration-tts 本次任务的临时配音覆盖 { voiceType?, resourceId? }, 优先级高于模板 voicePreset
+  /// 二十三期: 出片后量到的整片静止情况 { frozenSec, totalSec, ratio, ok, segments[], checkedAt, kind }。
+  /// null = 这条片子出在这道关接线之前, 界面上如实说「没量过」而不是显示 0 ——
+  /// 「没测过」和「测过是 0」是两件完全不同的事, 混起来就是界面在撒谎。
+  freezeReport    Json?
   errorMessage    String?
   createdAt       String
   updatedAt       String

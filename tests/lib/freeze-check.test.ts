@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { buildFreezeDetectArgs, parseFreezeOutput, judgeFreeze } from '@/lib/video/freeze-check';
+import {
+  buildFreezeDetectArgs, parseFreezeOutput, judgeFreeze, buildFreezeReport,
+} from '@/lib/video/freeze-check';
 
 describe('buildFreezeDetectArgs', () => {
   it('用 ffmpeg 的 freezedetect, 不解码整片', () => {
@@ -71,5 +73,41 @@ describe('静止一直持续到片尾', () => {
 
   it('不给片长时只能丢掉那一段 —— 行为要可预期', () => {
     expect(parseFreezeOutput('lavfi.freezedetect.freeze_start: 5')).toEqual([]);
+  });
+});
+
+describe('buildFreezeReport —— 落库/上界面的形状', () => {
+  const segs = [
+    { startSec: 10, durationSec: 2 },
+    { startSec: 30, durationSec: 9 },
+    { startSec: 50, durationSec: 5 },
+    { startSec: 70, durationSec: 1 },
+  ];
+
+  it('worst 是按时长排的前几段 —— 界面上要的是「最坏的在哪几秒」', () => {
+    const r = buildFreezeReport(segs, 100, 'preview', '2026-08-30T00:00:00.000Z');
+    expect(r.worst.map((s) => s.durationSec)).toEqual([9, 5, 2]);
+    // count 是总段数, 不是 worst 的长度 —— 界面显示「20 段」时不能只数列出来的那三段
+    expect(r.count).toBe(4);
+  });
+
+  it('占比与判定跟 judgeFreeze 一致, 不各算各的', () => {
+    const r = buildFreezeReport(segs, 100, 'preview', 'x');
+    expect(r.frozenSec).toBe(17);
+    expect(r.ratio).toBeCloseTo(0.17);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBeTruthy();
+  });
+
+  it('没有静止段 → 通过, 且占比是 0 而不是 NaN', () => {
+    const r = buildFreezeReport([], 100, 'master', 'x');
+    expect(r.ok).toBe(true);
+    expect(r.ratio).toBe(0);
+    expect(r.worst).toEqual([]);
+    expect(r.kind).toBe('master');
+  });
+
+  it('总时长为 0 时不产生 NaN —— 界面会把它显示成「NaN%」', () => {
+    expect(buildFreezeReport([], 0, 'preview', 'x').ratio).toBe(0);
   });
 });

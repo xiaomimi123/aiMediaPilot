@@ -43,29 +43,36 @@ describe('reportFreeze —— 出片最后一道静止关', () => {
   it('整片死画面 → 报出不通过, 并说清占了多少', async () => {
     const { reportFreeze } = await import('@/jobs/workers/video-production-worker');
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    await reportFreeze(frozenPath);
+    const report = await reportFreeze(frozenPath, 'preview');
     const said = warn.mock.calls.map((c) => c.join(' ')).join('\n');
     warn.mockRestore();
     expect(said).toContain('静止体检不通过');
     expect(said).toMatch(/纹丝不动/);
+    // 报告要能落库给界面读: 判定、占比、最坏几段都在里面
+    expect(report?.ok).toBe(false);
+    expect(report?.ratio).toBeGreaterThan(0.5);
+    expect(report?.worst.length).toBeGreaterThan(0);
+    expect(report?.kind).toBe('preview');
   }, 60_000);
 
   it('一直在动 → 通过, 并把实测数字打出来(不能只在失败时才有输出)', async () => {
     const { reportFreeze } = await import('@/jobs/workers/video-production-worker');
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    await reportFreeze(movingPath);
+    const report = await reportFreeze(movingPath, 'master');
     const said = log.mock.calls.map((c) => c.join(' ')).join('\n');
     const warned = warn.mock.calls.map((c) => c.join(' ')).join('\n');
     log.mockRestore(); warn.mockRestore();
     expect(said).toContain('静止体检通过');
     expect(warned).not.toContain('静止体检');
+    expect(report?.ok).toBe(true);
+    expect(report?.kind).toBe('master');
   }, 60_000);
 
   it('文件不存在 → 只警告, 不抛 —— 体检是观测, 不该拖垮出片', async () => {
     const { reportFreeze } = await import('@/jobs/workers/video-production-worker');
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    await expect(reportFreeze(path.join(dir, '不存在.mp4'))).resolves.toBeUndefined();
+    await expect(reportFreeze(path.join(dir, '不存在.mp4'), 'preview')).resolves.toBeNull();
     warn.mockRestore();
   }, 60_000);
 });

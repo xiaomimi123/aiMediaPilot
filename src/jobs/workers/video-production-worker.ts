@@ -47,7 +47,9 @@ import { buildDirectorAssetSection, buildAssignedAssetSection, type ContentAsset
 import { buildStyleSection, buildChapterNavSection, actAtMs } from '@/lib/video-production/style-guard';
 import { validateShotHtml } from '@/lib/video-production/shot-html-guard';
 import { probeShotHealth } from '@/lib/video-production/shot-renderer';
-import { runFreezeDetect, judgeFreeze, DEFAULT_FREEZE_OPTS } from '@/lib/video/freeze-check';
+import {
+  runFreezeDetect, buildFreezeReport, DEFAULT_FREEZE_OPTS, type FreezeReport,
+} from '@/lib/video/freeze-check';
 import { judgeShotDensity } from '@/lib/video-production/frame-density';
 import { judgeHollowCard } from '@/lib/video-production/frame-detail';
 import { judgeShotLayout } from '@/lib/video-production/frame-layout';
@@ -476,8 +478,8 @@ export async function handlePptNarration(
     concatListPath: path.join(vp.productionRoot, 'concat-list.txt'),
   });
 
-  await reportFreeze(outputPath);
-  await setStatus(readyStatus, { [outputField]: outputPath });
+  const freezeReport = await reportFreeze(outputPath, mode);
+  await setStatus(readyStatus, { [outputField]: outputPath, freezeReport });
 }
 
 /**
@@ -493,24 +495,29 @@ export async function handlePptNarration(
  */
 /** 导出仅供测试用(见 tests/jobs/video-production-freeze-report.test.ts) —— 这道关只写日志,
  * 不落库也不改状态, 除了真跑一遍拿它的输出之外没有别的观测点。 */
-export async function reportFreeze(videoPath: string): Promise<void> {
+export async function reportFreeze(
+  videoPath: string,
+  kind: 'preview' | 'master',
+): Promise<FreezeReport | null> {
   try {
     const totalMs = await probeVideoDurationMs(videoPath);
     const totalSec = (totalMs ?? 0) / 1000;
-    if (totalSec <= 0) return;
+    if (totalSec <= 0) return null;
     const segments = await runFreezeDetect(videoPath, DEFAULT_FREEZE_OPTS, undefined, totalSec);
-    const j = judgeFreeze(segments, totalSec);
-    if (!j.ok) {
-      console.warn(`[video-production] 静止体检不通过 (${videoPath}): ${j.reason}`);
+    const report = buildFreezeReport(segments, totalSec, kind, new Date().toISOString());
+    if (!report.ok) {
+      console.warn(`[video-production] 静止体检不通过 (${videoPath}): ${report.reason}`);
     } else {
-      const frozen = segments.reduce((n, x) => n + x.durationSec, 0);
       console.log(
-        `[video-production] 静止体检通过 (${videoPath}): ${frozen.toFixed(1)}s / ${totalSec.toFixed(1)}s`,
+        `[video-production] 静止体检通过 (${videoPath}): ` +
+        `${report.frozenSec.toFixed(1)}s / ${report.totalSec.toFixed(1)}s`,
       );
     }
+    return report;
   } catch (e) {
-    // 体检本身炸了不该影响出片 —— 它是观测, 不是产物。
+    // 体检本身炸了不该影响出片 —— 它是观测, 不是产物。返回 null, 界面照实说「没量到」。
     console.warn(`[video-production] 静止体检跑失败 (${videoPath}):`, e);
+    return null;
   }
 }
 
@@ -727,8 +734,8 @@ export async function handleTalkingHeadBroll(
       await burnCaptions({ videoPath: compositedPath, srt: captionSrt, outputPath });
     }
 
-    await reportFreeze(outputPath);
-  await setStatus(readyStatus, { [outputField]: outputPath });
+    const freezeReport = await reportFreeze(outputPath, mode);
+  await setStatus(readyStatus, { [outputField]: outputPath, freezeReport });
   } else {
     // master 模式：复用持久化的 direction.json/source.html + 已对齐的 alignedActs/rawTranscript，
     // 不重新做 ASR/对齐这类耗时且非确定性的 AI 调用 —— 与 ppt-narration master 分支同一先例。
@@ -836,8 +843,8 @@ export async function handleTalkingHeadBroll(
       await burnCaptions({ videoPath: compositedPath, srt: captionSrt, outputPath });
     }
 
-    await reportFreeze(outputPath);
-  await setStatus(readyStatus, { [outputField]: outputPath });
+    const freezeReport = await reportFreeze(outputPath, mode);
+  await setStatus(readyStatus, { [outputField]: outputPath, freezeReport });
   }
 }
 
@@ -1013,8 +1020,8 @@ export async function handleIllustrationTts(
     const outputPath = path.join(vp.productionRoot, outputFileName);
     await muxAudioTrack({ videoPath: videoOnlyPath, audioPath: concatenatedAudioPath, outputPath });
 
-    await reportFreeze(outputPath);
-  await setStatus(readyStatus, { [outputField]: outputPath });
+    const freezeReport = await reportFreeze(outputPath, mode);
+  await setStatus(readyStatus, { [outputField]: outputPath, freezeReport });
   } else {
     // master 模式：复用持久化的 direction.json/source.html + 已合成的 alignedActs/per-act TTS 音频，
     // 不重新调用 TTS(真实调用额度)/DeepSeek —— 与另外两个分支 master 分支同一先例。
@@ -1086,8 +1093,8 @@ export async function handleIllustrationTts(
     const outputPath = path.join(vp.productionRoot, outputFileName);
     await muxAudioTrack({ videoPath: videoOnlyPath, audioPath: concatenatedAudioPath, outputPath });
 
-    await reportFreeze(outputPath);
-  await setStatus(readyStatus, { [outputField]: outputPath });
+    const freezeReport = await reportFreeze(outputPath, mode);
+  await setStatus(readyStatus, { [outputField]: outputPath, freezeReport });
   }
 }
 
@@ -1158,8 +1165,10 @@ async function handleProduce(job: Job<JobData>) {
               setStatus,
             });
             if (r) {
-              await reportFreeze(withText);
-              await setStatus(readyStatus, { [outputField]: withText, alignedActs: r.items });
+              const freezeReport = await reportFreeze(withText, mode);
+              await setStatus(readyStatus, {
+                [outputField]: withText, alignedActs: r.items, freezeReport,
+              });
             }
           } catch (e) {
             console.error('[text-overlay]', e);
