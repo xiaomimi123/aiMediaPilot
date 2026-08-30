@@ -102,9 +102,12 @@ export default async function FilmDetailPage(props: { params: Promise<{ id: stri
     : null;
 
   return (
+    /*
+      不给 description: 「这条片子走到哪一步了，以及下一步等谁」和下面那张状态卡
+      说的是同一件事, 而它占掉首屏 26px + 一份页头边距。状态卡说得更准(它带真实状态)。
+    */
     <PageShell
       title={title}
-      description="这条片子走到哪一步了，以及下一步等谁。"
       actions={
         <Link
           href="/films"

@@ -235,8 +235,14 @@ export function FilmDetail({ initial }: { initial: Film }) {
 
   return (
     <>
-      {/* 「下一步等谁」放在最上面。这一条就是这页存在的理由。 */}
+      {/*
+        **状态与进度合成一块。** 拆开时它们在说同一件事却各占一份边距: 实测状态区三块
+        (页面副标题 + 等你卡 + 阶段条)共 293px, 而视口 771px —— 38% 的首屏在重复
+        「这条片子停在预览就绪、等你确认导出」, 把真正要看的画面和它的毛病推到折叠线以下。
+        合并之后徽标、那一句话、阶段条在同一张卡里, 读一次就够。
+      */}
       <div
+        data-testid="film-status"
         className={cn(
           'mb-6 rounded-md border-l-2 px-4 py-3',
           failed
@@ -246,41 +252,44 @@ export function FilmDetail({ initial }: { initial: Film }) {
               : 'border-border bg-card',
         )}
       >
-        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          {failed ? '失败' : wait === 'you' ? '等你' : wait === 'machine' ? '在跑' : '完成'}
-        </p>
-        <p className="mt-1 text-sm leading-relaxed">{stageHint(film.status)}</p>
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {failed ? '失败' : wait === 'you' ? '等你' : wait === 'machine' ? '在跑' : '完成'}
+          </p>
+          <p className="text-sm leading-relaxed">{stageHint(film.status)}</p>
+        </div>
+
         {film.errorMessage ? (
           <p className="mt-2 whitespace-pre-wrap break-all font-mono text-xs text-destructive">
             {film.errorMessage}
           </p>
         ) : null}
-      </div>
 
-      {/* failed 不画进度 —— 把失败画成"进行到某一步"是在美化它 */}
-      {!failed ? (
-        <ol className="mb-6 flex flex-wrap gap-x-1 gap-y-2">
-          {PRODUCTION_STAGES.map((s, i) => (
-            <li key={s.key} className="flex items-center gap-1">
-              <span
-                className={cn(
-                  'rounded px-2 py-1 text-xs',
-                  i < idx
-                    ? 'text-muted-foreground'
-                    : i === idx
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground/40',
-                )}
-              >
-                {s.label}
-              </span>
-              {i < PRODUCTION_STAGES.length - 1 ? (
-                <span className="text-xs text-muted-foreground/30">›</span>
-              ) : null}
-            </li>
-          ))}
-        </ol>
-      ) : null}
+        {/* failed 不画进度 —— 把失败画成"进行到某一步"是在美化它 */}
+        {!failed ? (
+          <ol className="mt-2 flex flex-wrap gap-x-1 gap-y-1">
+            {PRODUCTION_STAGES.map((s, i) => (
+              <li key={s.key} className="flex items-center gap-1">
+                <span
+                  className={cn(
+                    'rounded px-1.5 py-0.5 text-xs',
+                    i < idx
+                      ? 'text-muted-foreground'
+                      : i === idx
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground/40',
+                  )}
+                >
+                  {s.label}
+                </span>
+                {i < PRODUCTION_STAGES.length - 1 ? (
+                  <span className="text-xs text-muted-foreground/30">›</span>
+                ) : null}
+              </li>
+            ))}
+          </ol>
+        ) : null}
+      </div>
 
       {/*
         **这一页原来是 3.17 屏, 主操作在 2400px 处。** 量出来的三条毛病:
