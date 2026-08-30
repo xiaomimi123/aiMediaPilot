@@ -15,6 +15,8 @@ export interface AttemptMetrics {
   densityOk: boolean;
   hollowOk: boolean;
   layoutOk: boolean;
+  /** 有没有元素互相遮挡(二十四期)。见 frame-overlap.ts。 */
+  overlapOk: boolean;
   /** 取样帧的平均细节占比。 */
   detailRatio: number;
   /** 取样帧的平均内容占比。 */
@@ -27,9 +29,15 @@ export interface AttemptMetrics {
  * 主序是「过了几关」—— 过关数差一关, 比任何细节差异都重要。
  * 同关数时看细节/占比的比值: 那个比值低意味着画面是靠大色块撑的, 见 frame-detail.ts。
  * 比值封顶到 1: 超过 1 只说明画面几乎全是线条, 再高没有意义。
+ *
+ * 画面关现在是四道(密度/空壳/版面/遮挡), overlapOk 必须计入 passed —— 否则一个只因
+ * 遮挡被拒的版本和一个干净版本同为 passed=3, 「三次都不合格时谁最不坏」这个排序对
+ * 遮挡完全失明。`passed * 10` 这个常数在四关下依然成立: richness 与 contentRatio 项
+ * 加起来最大约 2, 拉不平一关的差距。
  */
 export function scoreAttempt(m: AttemptMetrics): number {
-  const passed = (m.densityOk ? 1 : 0) + (m.hollowOk ? 1 : 0) + (m.layoutOk ? 1 : 0);
+  const passed =
+    (m.densityOk ? 1 : 0) + (m.hollowOk ? 1 : 0) + (m.layoutOk ? 1 : 0) + (m.overlapOk ? 1 : 0);
   const richness = m.contentRatio > 0 ? Math.min(1, m.detailRatio / m.contentRatio) : 0;
   // 再加一点点内容量, 用来把「全空」和「有一点东西」区分开
   return passed * 10 + richness + Math.min(1, m.contentRatio * 2);

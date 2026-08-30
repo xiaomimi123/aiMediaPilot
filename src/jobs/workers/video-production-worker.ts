@@ -191,12 +191,6 @@ async function buildShotHtmlWithRetry(
     const overlapJ = judgeOverlap(
       health.geometry.map((g) => ({ occluded: g.occluded ?? [] })),
     );
-    if (!overlapJ.ok) {
-      lastReason = overlapJ.reason ?? '有文字被遮挡';
-      feedback = `\n\n上一版渲染出来的实际效果不合格: ${lastReason}`;
-      console.warn(`[video-production] 镜头 ${shot.shotId} 第 ${attempt} 次有遮挡: ${lastReason}`);
-      continue;
-    }
 
     const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
     attempts.push({
@@ -205,6 +199,7 @@ async function buildShotHtmlWithRetry(
         densityOk: density.ok,
         hollowOk: !hollowJ,
         layoutOk: layoutJ.ok,
+        overlapOk: overlapJ.ok,
         detailRatio: avg(health.details.map((d) => d.detailRatio)),
         contentRatio: avg(health.samples.map((m) => m.contentRatio)),
       }),
@@ -244,6 +239,17 @@ async function buildShotHtmlWithRetry(
       lastReason = layoutJ.reason ?? '版面没铺开';
       feedback = `\n\n上一版渲染出来的实际效果不合格: ${lastReason}`;
       console.warn(`[video-production] 镜头 ${shot.shotId} 第 ${attempt} 次版面不合格: ${lastReason}`);
+      continue;
+    }
+
+    // 元素遮挡(二十四期): 判定放在 attempts.push 之后, 与密度/空壳/版面三关同一位置 ——
+    // 放在 attempts.push 之前会导致只因遮挡被拒的版本不进 attempts 数组, 三次都不合格时
+    // pickBestAttempt 就少了这一版可选, 甚至可能因为 attempts 空了而触发「再要第四版」
+    // (那条路正是 ccce069 特意拆掉的: 第四版从没体检过, 可能比第二版还差)。
+    if (!overlapJ.ok) {
+      lastReason = overlapJ.reason ?? '有文字被遮挡';
+      feedback = `\n\n上一版渲染出来的实际效果不合格: ${lastReason}`;
+      console.warn(`[video-production] 镜头 ${shot.shotId} 第 ${attempt} 次有遮挡: ${lastReason}`);
       continue;
     }
 
