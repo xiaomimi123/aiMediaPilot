@@ -3,6 +3,7 @@ import path from 'path';
 import { measureFrameDensity, type FrameDensity } from '@/lib/video-production/frame-density';
 import { measureFrameDetail, type FrameDetail } from '@/lib/video-production/frame-detail';
 import { measureFrameLayout, type FrameLayout } from '@/lib/video-production/frame-layout';
+import { buildAmbientRig } from '@/lib/video-production/ambient-rig';
 import os from 'os';
 import { chromium } from 'playwright-core';
 import { encodeFramesToClip } from '@/lib/video/ffmpeg';
@@ -17,6 +18,13 @@ export interface RenderShotOpts {
   outputClipPath: string;
   /** 成片画幅。不给则按老行为 1920x1080。 */
   frame?: { width: number; height: number };
+  /**
+   * 关掉环境运动层。缺省开着。
+   *
+   * 留这个开关只为**能做对照测量** —— 「加了这层到底有没有用」必须能量, 不能靠说。
+   * 正常出片不要关: 关掉之后画面会退回 90% 以上时长纹丝不动。
+   */
+  ambient?: boolean;
 }
 
 /**
@@ -79,6 +87,18 @@ export async function findChromiumExecutable(): Promise<string> {
   );
 }
 
+/**
+ * 把一段脚本插到 `</body>` 之前。
+ *
+ * 必须在 Builder 自己的时间线脚本**之后**执行 —— 环境层要往 `__timelines.shot` 上
+ * 追加动画, 那条时间线得先存在。找不到 `</body>` 就追加到末尾(浏览器会自行闭合)。
+ */
+function injectBeforeBodyEnd(html: string, script: string): string {
+  const tag = `<script>${script}</script>`;
+  const i = html.lastIndexOf('</body>');
+  return i < 0 ? html + tag : html.slice(0, i) + tag + html.slice(i);
+}
+
 export async function renderShotToClip(opts: RenderShotOpts): Promise<void> {
   const { html, durationMs, fps, workDir, outputClipPath } = opts;
   // 视口必须跟着成片画幅走。写死 1920x1080 会让竖屏成片里的 B-roll 只占 32% 高度,
@@ -88,8 +108,23 @@ export async function renderShotToClip(opts: RenderShotOpts): Promise<void> {
   const framesDir = path.join(workDir, 'frames');
   await fs.mkdir(framesDir, { recursive: true });
 
+  /*
+   * 注入环境运动层 —— 让任何一帧都不完全静止。
+   *
+   * 静止段实测: 我们的 B-roll 成片 94% 的时长画面纹丝不动, 插画配音 86%, 而参考片
+   * 是 0%。Builder 写的时间线在头一两秒把元素放进来之后就不动了。见 ambient-rig.ts。
+   *
+   * 放在**渲染这一步**而不是让 Builder 自己写: 它是每一镜都必须有的东西, 交给模型
+   * 就会时有时无 —— 这个项目里凡是「让模型自觉」的规则都被违反过。
+   */
+  const withAmbient = opts.ambient === false
+    ? html
+    : injectBeforeBodyEnd(html, buildAmbientRig({
+        width: frame.width, height: frame.height, durationMs,
+      }));
+
   const indexHtmlPath = path.join(workDir, 'index.html');
-  await fs.writeFile(indexHtmlPath, html, 'utf-8');
+  await fs.writeFile(indexHtmlPath, withAmbient, 'utf-8');
 
   const gsapDestPath = path.join(workDir, 'gsap.min.js');
   await fs.copyFile(GSAP_ASSET_PATH, gsapDestPath);
