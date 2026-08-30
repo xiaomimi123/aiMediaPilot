@@ -13,6 +13,10 @@ interface Row {
   status: string;
   createdAt: string;
   errorMessage: string | null;
+  /** 整片静止占比 0~1。**null = 没量过**, 不是 0 —— 两者在列表上必须长得不一样。 */
+  freezeRatio: number | null;
+  /** 静止体检过没过。null = 没量过。 */
+  freezeOk: boolean | null;
 }
 
 const LABEL: Record<string, string> = {
@@ -82,6 +86,19 @@ export function FilmQueue({ rows }: { rows: Row[] }) {
                   {waitingOn(r.status) === 'you' && r.status !== 'queued' && r.status !== 'source_uploaded' ? (
                     <span className="ml-2 rounded bg-secondary px-1.5 py-0.5 font-medium text-foreground">
                       等你
+                    </span>
+                  ) : null}
+                  {/*
+                    静止体检不合格的片子在列表上就要认得出来。**只标坏的**:
+                    通过是常态, 每条都挂一个绿标只会把「等你」那个真正要人动手的
+                    标记淹掉。没量过的不标 —— 那不是坏, 只是没测。
+                  */}
+                  {r.freezeOk === false ? (
+                    <span
+                      className="ml-2 rounded bg-destructive/10 px-1.5 py-0.5 font-medium text-destructive"
+                      title="画面有大段时间纹丝不动，点进去看是哪几秒"
+                    >
+                      死画面 {Math.round((r.freezeRatio ?? 0) * 100)}%
                     </span>
                   ) : null}
                 </p>

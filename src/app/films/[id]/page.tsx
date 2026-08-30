@@ -7,6 +7,7 @@ import { FilmDetail } from '@/components/films/film-detail';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { probeVideoDimensions } from '@/lib/video/ffmpeg';
+import { frameOfAspect } from '@/lib/video-template/aspect';
 import type { SceneLayout } from '@/lib/video/scene-layout';
 import type { FreezeReport } from '@/lib/video/freeze-check';
 
@@ -35,7 +36,8 @@ export default async function FilmDetailPage(props: { params: Promise<{ id: stri
       // brollEnabled 要一起取: 关着时编辑台只能给「人物全屏」一种版面, 见 availableLayouts
       ? prisma.videoTemplate.findUnique({
           where: { id: vp.templateId },
-          select: { name: true, brollEnabled: true },
+          // aspect 要一起取: 没有出镜素材的链(图文口播/插画配音)画幅由模板定, 见下面 frame
+          select: { name: true, brollEnabled: true, aspect: true },
         })
       : Promise.resolve(null),
   ]);
@@ -58,10 +60,25 @@ export default async function FilmDetailPage(props: { params: Promise<{ id: stri
     }));
   } catch { /* 还没跑到导演阶段 */ }
 
-  // 画幅探真的 —— 版面框的位置全按它算, 猜错就画在错的地方
-  let frame = { width: 1080, height: 1920 };
-  if (vp.sourceVideoPath) {
-    try { frame = await probeVideoDimensions(vp.sourceVideoPath); } catch { /* 用默认 */ }
+  /*
+   * 画幅探真的 —— 版面框的位置全按它算, 猜错就画在错的地方。
+   *
+   * **原来只有真人出镜那条链是对的。** 有 source.mov 就探素材, 否则一律默认 1080x1920,
+   * 可图文口播/插画配音两条链根本没有出镜素材, 它们的画幅是**模板 aspect 定的**
+   * (worker 里就是 `frameOfAspect(template.aspect)`)。结果: 一条 1920x1080 的横屏
+   * 成片, 编辑台画的是竖屏示意图 —— 界面和出片用的坐标对不上, 而这一页的说明文字
+   * 还写着「和 ffmpeg 合成用的是同一套坐标」。真机上量出来才发现(画布 124x220)。
+   *
+   * 取值顺序: **已渲出来的成片文件 > 出镜素材 > 模板 aspect > 16:9 兜底**。
+   *
+   * 成片文件排第一, 因为对一条已经渲完的片子, 它自己就是画幅的最终事实。真机上撞到过:
+   * 模板 aspect 现在写着 9:16, 而这条片子的 preview.mp4 是 1920x1080 —— 渲染之后模板
+   * 被改过。信模板就会画一个和成片对不上的竖框, 而信文件永远对。
+   */
+  let frame = frameOfAspect(template?.aspect);
+  for (const candidate of [vp.masterPath, vp.previewPath, vp.sourceVideoPath]) {
+    if (!candidate) continue;
+    try { frame = await probeVideoDimensions(candidate); break; } catch { /* 试下一个 */ }
   }
 
   const savedLayouts = Object.fromEntries(

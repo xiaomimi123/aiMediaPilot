@@ -480,7 +480,7 @@ export function TemplateStudio({
         <section className="mb-6">
           <h2 className="text-base font-semibold">4 · 编辑台</h2>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            拖时间线，停在哪一刻就看哪一刻。点场景块选中它，下面切这一幕的版面——
+            拖时间线，停在哪一刻就看哪一刻。点场景块选中它，画面右边切这一幕的版面——
             <span className="text-foreground">版面是逐场景的</span>，讲道理时人物全屏、
             摆证据时内容占大半、演示时录屏铺满你缩成圆窗。画面上的框和出片时 ffmpeg 叠的是同一套坐标。
           </p>

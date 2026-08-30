@@ -46,6 +46,7 @@ export function TimelineEditor({
   captionStyle,
   contentLabel,
   brollEnabled,
+  canvasMaxHeightPx,
 }: {
   scenes: EditorScene[];
   captions: CaptionCue[];
@@ -66,6 +67,19 @@ export function TimelineEditor({
     outlineColor: string;
     outlineWidth: number;
   };
+  /**
+   * 画布最高多少像素。**不给 = 只按宽度约束**(试做台的行为: 那里画布放的是 Builder
+   * 刚出的真实 HTML, 大才有用)。
+   *
+   * 为什么需要这个: 画布是 `max-w-md` + `aspectRatio`, **按宽度定尺寸**。9:16 竖屏
+   * 下实测被撑到 504x896 —— 一块示意图占满一屏还多, 右边 558px 全空, 而成片详情页
+   * 上面还有一个真播放器, 两个竖屏画面上下叠着, 看的人分不清哪个是真画面。
+   * 那一页要的是「小示意图 + 旁边就是真播放器」, 所以按高度封顶。
+   *
+   * 这是个尺寸约束, 不是 5.4 禁止的那种「让组件在两种身份间切换」的模式开关 ——
+   * 两边都还是同一个编辑台, 只是画多大。
+   */
+  canvasMaxHeightPx?: number;
   /**
    * 内容区没有实时预览时显示的说明。
    *
@@ -183,10 +197,29 @@ export function TimelineEditor({
 
   return (
     <div className="flex flex-col gap-4">
+      {/*
+        上半区: **画布和「改哪一幕的版面」并排**, 时间线整宽放在下面。
+        改之前四块是一列到底(画布→走带→时间线→版面选项)。9:16 的画布按宽度撑到
+        896px 高, 后面三块被推到一屏之外 —— 而选版面时你恰恰要盯着画布看框在哪。
+        画布要高度、时间线要宽度, 两个诉求正交, 所以拆成上下两区各取所需。
+      */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-start">
       {/* 画布 */}
       <div
         ref={stageRef}
-        style={{ containerType: 'inline-size', aspectRatio: `${frame.width} / ${frame.height}` }}
+        style={{
+          containerType: 'inline-size',
+          aspectRatio: `${frame.width} / ${frame.height}`,
+          /*
+           * 封顶要给**确定的 height**, 不能只给 maxHeight。
+           * 第一版写的是 `maxHeight + width:'auto'`: 宽度让出去之后没有任何确定尺寸,
+           * aspectRatio 两头都解不出来, 画布真机上塌成 2x4 像素(实测)。
+           * 给死高度、宽度由 aspectRatio 反推, 才有一个确定的边。
+           */
+          ...(canvasMaxHeightPx
+            ? { height: canvasMaxHeightPx, width: 'auto', maxWidth: '100%' }
+            : {}),
+        }}
         className="relative mx-auto w-full max-w-md overflow-hidden rounded-md border border-border bg-black"
       >
         {/* 内容(B-roll)块 */}
@@ -269,6 +302,7 @@ export function TimelineEditor({
         ) : null}
       </div>
 
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
       {/* 走带 */}
       <div className="flex flex-wrap items-center gap-3">
         <button
@@ -293,6 +327,43 @@ export function TimelineEditor({
             当前：{scene.label} · {SCENE_LAYOUT_LABELS[scene.layout]}
           </span>
         ) : null}
+      </div>
+
+      {/* 版面模式 —— 逐场景 */}
+      {scene ? (
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            这一幕的版面
+          </p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {availableLayouts(brollEnabled).map((l) => (
+              <button
+                key={l}
+                type="button"
+                onClick={() => onLayoutChange(scene.id, l)}
+                className={cn(
+                  'rounded-md border px-3 py-1.5 text-xs transition-colors',
+                  scene.layout === l
+                    ? 'border-foreground bg-primary text-primary-foreground'
+                    : 'border-border bg-card text-muted-foreground hover:border-foreground/30',
+                )}
+              >
+                {SCENE_LAYOUT_LABELS[l]}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+            {/*
+              B-roll 关着时只有「人物全屏」一种可选 —— 说清楚原因, 否则看起来像是
+              功能坏了。其余四种都需要一路内容画面, 而关掉之后一个镜头都不会渲。
+            */}
+            {brollEnabled === false
+              ? '这个模板关掉了 B-roll，画面从头到尾是你的出镜素材，视觉全靠文字叠加层——参考片就是这么做的。想要分屏或画中画，去模板里打开 B-roll。'
+              : SCENE_LAYOUT_HINTS[scene.layout]}
+          </p>
+        </div>
+      ) : null}
+      </div>
       </div>
 
       {/* 时间线 */}
@@ -355,44 +426,10 @@ export function TimelineEditor({
           </div>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
-          按住拖动时间线，预览会跟着停在那一刻。点场景块选中它，右边就切到那一幕。
+          按住拖动时间线，预览会跟着停在那一刻。点场景块选中它，上面的「这一幕的版面」就切到那一幕。
         </p>
       </div>
 
-      {/* 版面模式 —— 逐场景 */}
-      {scene ? (
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            这一幕的版面
-          </p>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {availableLayouts(brollEnabled).map((l) => (
-              <button
-                key={l}
-                type="button"
-                onClick={() => onLayoutChange(scene.id, l)}
-                className={cn(
-                  'rounded-md border px-3 py-1.5 text-xs transition-colors',
-                  scene.layout === l
-                    ? 'border-foreground bg-primary text-primary-foreground'
-                    : 'border-border bg-card text-muted-foreground hover:border-foreground/30',
-                )}
-              >
-                {SCENE_LAYOUT_LABELS[l]}
-              </button>
-            ))}
-          </div>
-          <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-            {/*
-              B-roll 关着时只有「人物全屏」一种可选 —— 说清楚原因, 否则看起来像是
-              功能坏了。其余四种都需要一路内容画面, 而关掉之后一个镜头都不会渲。
-            */}
-            {brollEnabled === false
-              ? '这个模板关掉了 B-roll，画面从头到尾是你的出镜素材，视觉全靠文字叠加层——参考片就是这么做的。想要分屏或画中画，去模板里打开 B-roll。'
-              : SCENE_LAYOUT_HINTS[scene.layout]}
-          </p>
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -89,11 +89,11 @@ export function FilmLayoutEditor({
   }));
 
   return (
-    <section className="mb-6">
+    <section className="rounded-md border border-border bg-card p-4">
       <h2 className="text-base font-semibold">版面</h2>
       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
         拖时间线选中一幕，切它的版面。画面里的框是<span className="text-foreground">出片时真实的位置</span>——
-        和 ffmpeg 合成用的是同一套坐标。真正的画面看上面的预览。
+        和 ffmpeg 合成用的是同一套坐标。真正的画面看<span className="text-foreground">上面的播放器</span>。
         {editable ? '' : ' 这条任务正在渲染，改版面会让成片混着两种版面，所以现在是只读的。'}
       </p>
 
@@ -113,7 +113,14 @@ export function FilmLayoutEditor({
             outlineWidth: 3,
           }}
           brollEnabled={brollEnabled}
-          contentLabel="内容区（真实画面见上方预览）"
+          contentLabel="内容区"
+          /*
+           * 画布封到 220px 高。它是**示意图**不是画面 —— 真画面就在上面的播放器里,
+           * 不封顶的话 9:16 会被撑到 896px, 把整页顶成三屏(实测)。
+           * 220 是量出来的: 300 时右边那列(走带 + 五个版面按钮)只有约 130px 高,
+           * 画布底下空掉 170px —— 正是这一页原来到处都是的那种死空间。
+           */
+          canvasMaxHeightPx={220}
         />
       </div>
 

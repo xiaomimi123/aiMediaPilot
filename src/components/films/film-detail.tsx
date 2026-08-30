@@ -282,25 +282,53 @@ export function FilmDetail({ initial }: { initial: Film }) {
         </ol>
       ) : null}
 
-      {film.hasPreview || film.hasMaster ? (
-        <section className="mb-6">
-          <h2 className="text-base font-semibold">
-            {film.hasMaster ? '成片' : '预览'}
-          </h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {film.hasMaster
-              ? '正式成片，已按模板加过字幕、BGM 和片头片尾。'
-              : '预览片。分辨率和码率都是低的，只用来判断内容对不对——确认导出之后才渲染正式版。'}
-          </p>
-          {/* key 让换源时播放器真的重载, 否则会继续放旧文件 */}
-          <video
-            key={film.hasMaster ? 'master' : 'preview'}
-            ref={videoRef}
-            controls
-            className="mt-3 w-full max-w-2xl rounded-md border border-border bg-black"
-            src={`/api/v1/cockpit/video-productions/${film.id}/file?kind=${film.hasMaster ? 'master' : 'preview'}`}
-          />
-          <div className="max-w-2xl">
+      {/*
+        **这一页原来是 3.17 屏, 主操作在 2400px 处。** 量出来的三条毛病:
+        ①编辑台那块示意画布按宽度约束, 9:16 被撑到 504x896 —— 一块示意图占满一屏还多,
+        右边 558px 全空; ②页面上下叠着两个竖屏画面(真播放器 + 示意画布), 看的人
+        分不清哪个是真的; ③「确认导出」——这一页存在的理由——要滚三屏才够得着。
+        中途试过把播放器和编辑台切成页面级两栏, 真机上更糟: 左栏到底只有一半高、
+        空出一大片, 而时间线被挤到 400px 宽, 场景块每块只剩一个字。**时间线要宽度、
+        画布要高度, 这两个诉求正交**, 所以并排要发生在编辑台内部(画布 | 版面选项,
+        时间线整宽在下), 页面本身保持单列。
+      */}
+      <div className="mb-6 flex flex-col gap-6">
+        {film.hasPreview || film.hasMaster ? (
+          <section>
+            <h2 className="text-base font-semibold">
+              {film.hasMaster ? '成片' : '预览'}
+            </h2>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              {film.hasMaster
+                ? '正式成片，已按模板加过字幕、BGM 和片头片尾。'
+                : '预览片。分辨率和码率都是低的，只用来判断内容对不对——确认导出之后才渲染正式版。'}
+            </p>
+            {/*
+              播放器与体检面板并排, 放不下自动换行(flex-wrap)。竖屏成片的播放器只有
+              260px 宽, 右边会空出 800px —— 而横屏的有 820px 宽, 旁边就塞不下了。
+              让它按画幅自己决定, 比给两个画幅各写一套规则可靠。
+            */}
+            <div className="mt-3 flex flex-wrap items-start gap-4">
+            {/* key 让换源时播放器真的重载, 否则会继续放旧文件 */}
+            <video
+              key={film.hasMaster ? 'master' : 'preview'}
+              ref={videoRef}
+              controls
+              // 竖屏成片的播放器同样会顶得很高, 按视口封顶
+              /*
+               * **按高度封顶, 宽度让给画幅。** 用 `w-full` 的话竖屏成片会被拉成一个
+               * 满宽的盒子, 画面在里面居中、两边全是黑边; 而且不封高的话 9:16 在
+               * 1062px 宽的正文里能顶到 1800px 以上, 又把主操作推出视口。
+               *
+               * aspectRatio 直接给成片的真实画幅(服务端已经探过, 版面框也用同一份) ——
+               * 不给的话, 元数据到位之前 `w-auto` 只有 300x150 的默认盒子, 加载完再
+               * 跳成正确尺寸, 页面明显闪一下; 而视频加载失败时会一直停在那个小盒子。
+               */
+              style={{ aspectRatio: `${film.frame.width} / ${film.frame.height}` }}
+              className="max-h-[50vh] w-auto max-w-full shrink-0 rounded-md border border-border bg-black"
+              src={`/api/v1/cockpit/video-productions/${film.id}/file?kind=${film.hasMaster ? 'master' : 'preview'}`}
+            />
+            <div className="min-w-[19rem] max-w-2xl flex-1">
             <FreezePanel
               report={film.freezeReport}
               onSeek={(sec) => {
@@ -313,24 +341,32 @@ export function FilmDetail({ initial }: { initial: Film }) {
                 v.scrollIntoView({ behavior: 'smooth', block: 'center' });
               }}
             />
-          </div>
-        </section>
-      ) : null}
+            </div>
+            </div>
+          </section>
+        ) : null}
 
-      {film.scenes.length > 0 ? (
-        <FilmLayoutEditor
-          productionId={film.id}
-          scenes={film.scenes}
-          captions={film.captions}
-          frame={film.frame}
-          initialLayouts={film.savedLayouts}
-          editable={waitingOn(film.status) === 'you'}
-          brollEnabled={film.brollEnabled}
-          onNeedsRerender={setLayoutStale}
-        />
-      ) : null}
+        {film.scenes.length > 0 ? (
+          <FilmLayoutEditor
+            productionId={film.id}
+            scenes={film.scenes}
+            captions={film.captions}
+            frame={film.frame}
+            initialLayouts={film.savedLayouts}
+            editable={waitingOn(film.status) === 'you'}
+            brollEnabled={film.brollEnabled}
+            onNeedsRerender={setLayoutStale}
+          />
+        ) : null}
+      </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      {/*
+        主操作贴在视口底。改之前它跟在编辑台后面, 落在 2400px 处 —— 一条 3.17 屏的
+        页面上, 「确认导出」这个**这一页存在的理由**要滚到底才看得见。
+        贴底之后它永远在手边, 而且「版面改过还没重渲」这句警告跟着它一起被看见 ——
+        那句话正是要在按下去之前读到的。
+      */}
+      <div className="sticky bottom-0 z-10 -mx-10 mt-2 flex flex-wrap items-center gap-2 border-t border-border bg-background/95 px-10 py-3 backdrop-blur">
         {layoutStale && film.status === 'preview_ready' ? (
           <Button variant="outline" disabled={busy !== ''} onClick={() => void post('/recompose', 'recompose')}>
             {busy === 'recompose' ? '合成中…' : '按新版面重新合成'}
