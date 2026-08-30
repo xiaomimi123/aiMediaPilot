@@ -30,6 +30,8 @@ interface Film {
   captions: { startMs: number; endMs: number; text: string }[];
   savedLayouts: Record<string, SceneLayout>;
   frame: { width: number; height: number };
+  /** 模板开没开 B-roll。关着时编辑台只给「人物全屏」—— 其余版面没有内容画面可放。 */
+  brollEnabled: boolean;
 }
 
 /**
@@ -224,6 +226,7 @@ export function FilmDetail({ initial }: { initial: Film }) {
           frame={film.frame}
           initialLayouts={film.savedLayouts}
           editable={waitingOn(film.status) === 'you'}
+          brollEnabled={film.brollEnabled}
           onNeedsRerender={setLayoutStale}
         />
       ) : null}

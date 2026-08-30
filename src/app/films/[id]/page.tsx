@@ -31,7 +31,11 @@ export default async function FilmDetailPage(props: { params: Promise<{ id: stri
       select: { title: true, scriptDraftId: true },
     }),
     vp.templateId
-      ? prisma.videoTemplate.findUnique({ where: { id: vp.templateId }, select: { name: true } })
+      // brollEnabled 要一起取: 关着时编辑台只能给「人物全屏」一种版面, 见 availableLayouts
+      ? prisma.videoTemplate.findUnique({
+          where: { id: vp.templateId },
+          select: { name: true, brollEnabled: true },
+        })
       : Promise.resolve(null),
   ]);
 
@@ -108,6 +112,7 @@ export default async function FilmDetailPage(props: { params: Promise<{ id: stri
           scenes,
           captions,
           savedLayouts,
+          brollEnabled: template?.brollEnabled ?? true,
           frame,
         }}
       />

@@ -5,7 +5,7 @@ import {
   buildTrack, formatTimecode, pxToMs, sceneAt, totalMs, type TimelineScene,
 } from '@/lib/video/timeline';
 import {
-  SCENE_LAYOUTS, SCENE_LAYOUT_HINTS, SCENE_LAYOUT_LABELS, computeSceneRects, type SceneLayout,
+  SCENE_LAYOUT_HINTS, SCENE_LAYOUT_LABELS, availableLayouts, computeSceneRects, type SceneLayout,
 } from '@/lib/video/scene-layout';
 import { cn } from '@/lib/utils';
 
@@ -45,6 +45,7 @@ export function TimelineEditor({
   onSelect,
   captionStyle,
   contentLabel,
+  brollEnabled,
 }: {
   scenes: EditorScene[];
   captions: CaptionCue[];
@@ -52,6 +53,11 @@ export function TimelineEditor({
   onLayoutChange: (sceneId: string, layout: SceneLayout) => void;
   /** 选中项变化时通知外层, 让「3 · 画面」那一块跟着切。 */
   onSelect: (sceneId: string) => void;
+  /**
+   * 这条任务的模板开没开 B-roll。**关着时只能选「人物全屏」** —— 其余四种版面都要
+   * 有一路内容画面, 而 B-roll 关掉之后一个镜头都不会渲(真机实测 0 个)。不传按开着算。
+   */
+  brollEnabled?: boolean;
   captionStyle: {
     on: boolean;
     fontSize: number;
@@ -360,7 +366,7 @@ export function TimelineEditor({
             这一幕的版面
           </p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {SCENE_LAYOUTS.map((l) => (
+            {availableLayouts(brollEnabled).map((l) => (
               <button
                 key={l}
                 type="button"
@@ -377,7 +383,13 @@ export function TimelineEditor({
             ))}
           </div>
           <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-            {SCENE_LAYOUT_HINTS[scene.layout]}
+            {/*
+              B-roll 关着时只有「人物全屏」一种可选 —— 说清楚原因, 否则看起来像是
+              功能坏了。其余四种都需要一路内容画面, 而关掉之后一个镜头都不会渲。
+            */}
+            {brollEnabled === false
+              ? '这个模板关掉了 B-roll，画面从头到尾是你的出镜素材，视觉全靠文字叠加层——参考片就是这么做的。想要分屏或画中画，去模板里打开 B-roll。'
+              : SCENE_LAYOUT_HINTS[scene.layout]}
           </p>
         </div>
       ) : null}

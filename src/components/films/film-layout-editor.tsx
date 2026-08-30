@@ -25,6 +25,7 @@ export function FilmLayoutEditor({
   frame,
   initialLayouts,
   editable,
+  brollEnabled,
   onNeedsRerender,
 }: {
   productionId: string;
@@ -34,6 +35,8 @@ export function FilmLayoutEditor({
   initialLayouts: Record<string, SceneLayout>;
   /** 渲染中的任务不许改 —— 改了会让成片混着两种版面。 */
   editable: boolean;
+  /** 模板开没开 B-roll。关着时只有「人物全屏」可选, 见 availableLayouts。 */
+  brollEnabled?: boolean;
   onNeedsRerender: (dirty: boolean) => void;
 }) {
   const router = useRouter();
@@ -54,7 +57,7 @@ export function FilmLayoutEditor({
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          layouts: scenes.map((s) => ({ shotId: s.shotId, layout: layouts[s.shotId] ?? 'content-full' })),
+          layouts: scenes.map((s) => ({ shotId: s.shotId, layout: layouts[s.shotId] ?? fallbackLayout })),
         }),
       });
       const body = await res.json();
@@ -68,13 +71,20 @@ export function FilmLayoutEditor({
     } finally { setBusy(''); }
   }
 
+  /*
+   * 没存过版面时的缺省值也要跟着 B-roll 走。
+   * 关掉 B-roll 却缺省成「内容全屏」, 播放头那行会显示一个**根本选不了**的版面 ——
+   * 又是界面和管线对不上。
+   */
+  const fallbackLayout: SceneLayout = brollEnabled === false ? 'person-full' : 'content-full';
+
   const editorScenes: EditorScene[] = scenes.map((s) => ({
     id: s.shotId,
     startMs: s.startMs,
     endMs: s.endMs,
     label: s.claim.slice(0, 12) || s.shotId,
     claim: s.claim,
-    layout: layouts[s.shotId] ?? 'content-full',
+    layout: layouts[s.shotId] ?? fallbackLayout,
     previewHtml: '',
   }));
 
@@ -102,6 +112,7 @@ export function FilmLayoutEditor({
             outlineColor: '#000000',
             outlineWidth: 3,
           }}
+          brollEnabled={brollEnabled}
           contentLabel="内容区（真实画面见上方预览）"
         />
       </div>

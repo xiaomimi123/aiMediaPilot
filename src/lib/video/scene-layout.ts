@@ -128,3 +128,18 @@ export function needsContent(layout: SceneLayout): boolean {
 export function needsPerson(layout: SceneLayout): boolean {
   return layout !== 'content-full';
 }
+
+/**
+ * 这条任务能选哪几种版面。
+ *
+ * **模板关掉 B-roll 时只剩「人物全屏」。** 其余四种(内容全屏 / 两种分屏 / 圆窗)
+ * 都要有一路内容画面才成立, 而 B-roll 关着时一个镜头都不会渲 —— 真机实测 0 个。
+ * 之前编辑台把五种都摆出来, 选了也没有东西可放: 又是「界面给出管线做不到的选项」,
+ * 这个项目一路上反复栽在这上面。
+ *
+ * 拿不到开关状态时按开着算 —— 老任务(templateId 为空的旧入口)行为不变。
+ */
+export function availableLayouts(brollEnabled: boolean | undefined): SceneLayout[] {
+  if (brollEnabled === false) return ['person-full'];
+  return [...SCENE_LAYOUTS];
+}
