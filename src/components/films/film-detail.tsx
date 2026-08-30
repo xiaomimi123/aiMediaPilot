@@ -329,15 +329,20 @@ export function FilmDetail({ initial }: { initial: Film }) {
                * 满宽的盒子, 画面在里面居中、两边全是黑边; 而且不封高的话 9:16 在
                * 1062px 宽的正文里能顶到 1800px 以上, 又把主操作推出视口。
                *
+               * 45vh 是**算出来的**, 不是调出来的: 横屏 1920x1080 在 45vh(=347px, 视口 771)
+               * 下宽 617px, 加 16px gap 加面板最低 272px = 905px, 装得进正文宽 1062px ——
+               * 于是活跃度面板能贴在播放器右边、留在首屏里。50vh 时播放器 685px 宽,
+               * 三者相加 1043px 装不下, 面板就换行掉到折叠线以下(实测 y=429)。
+               *
                * aspectRatio 直接给成片的真实画幅(服务端已经探过, 版面框也用同一份) ——
                * 不给的话, 元数据到位之前 `w-auto` 只有 300x150 的默认盒子, 加载完再
                * 跳成正确尺寸, 页面明显闪一下; 而视频加载失败时会一直停在那个小盒子。
                */
               style={{ aspectRatio: `${film.frame.width} / ${film.frame.height}` }}
-              className="max-h-[50vh] w-auto max-w-full shrink-0 rounded-md border border-border bg-black"
+              className="max-h-[45vh] w-auto max-w-full shrink-0 rounded-md border border-border bg-black"
               src={`/api/v1/cockpit/video-productions/${film.id}/file?kind=${film.hasMaster ? 'master' : 'preview'}`}
             />
-            <div className="min-w-[19rem] max-w-2xl flex-1">
+            <div className="min-w-[17rem] max-w-2xl flex-1">
             <FreezePanel
               report={film.freezeReport}
               onSeek={(sec) => {
