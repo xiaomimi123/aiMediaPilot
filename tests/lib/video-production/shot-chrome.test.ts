@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+// @vitest-environment jsdom
+import { describe, it, expect, beforeEach } from 'vitest';
 import { buildShotChrome, hasShotChrome, CHROME_MARKER } from '@/lib/video-production/shot-chrome';
 
 /*
@@ -58,5 +59,101 @@ describe('buildShotChrome', () => {
 
   it('框架层不许挡住内容 —— 全部 pointer-events:none 且贴边', () => {
     expect(js).toContain('pointer-events:none');
+  });
+});
+
+/*
+ * 运行时行为(真机验证抓出来的坑, 补回归网)。
+ *
+ * 上面那组测试全是字符串体检——只看 buildShotChrome 吐出来的 JS 文本里有没有
+ * 某个子串, 从不执行它。真机验证时踩过的 bug 恰恰是字符串体检测不出来的那类:
+ * 第一版用 tl.call() 挂字幕, 文本体检全过(`0.5`、`这一镜的第一句` 都在), 但
+ * GSAP 的 tl.seek() 默认 suppressEvents=true, 渲染器逐帧靠的正是 tl.seek()——
+ * 于是 .call() 回调永远不触发, 字幕在真机上是空的。
+ *
+ * 这里真正执行 buildShotChrome 产出的脚本(用一个最小 stub 时间线模拟
+ * window.__timelines['shot']), 反复调用 wrapped 之后的 tl.seek(), 断言
+ * cap 的文本在「字幕区间内」「两句之间的空档」「最后一句结束之后」这三种
+ * 时刻都对——只测「有字幕时显示」不够, 清空逻辑同样是这次改动的一部分。
+ */
+describe('buildShotChrome 注入后的运行时行为', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    delete (window as unknown as { __timelines?: unknown }).__timelines;
+  });
+
+  /** 挂一条最小 stub 时间线, 模拟渲染器逐帧 seek(); 记录/透传自己的返回值。 */
+  function stubTimeline() {
+    const SEEK_RETURN = { marker: 'original-seek-return' };
+    let t = 0;
+    const tl = {
+      seek(position: number, _suppressEvents?: boolean) {
+        t = position;
+        return SEEK_RETURN;
+      },
+      time() {
+        return t;
+      },
+    };
+    (window as unknown as { __timelines: Record<string, unknown> }).__timelines = { shot: tl };
+    return { tl, SEEK_RETURN };
+  }
+
+  /** 预览字幕 div: 唯一一个 textAlign:center 的 fixed 定位 div。 */
+  function captionText(): string {
+    const div = Array.from(document.querySelectorAll('div')).find(
+      (d) => d.style.position === 'fixed' && d.style.textAlign === 'center',
+    );
+    return div?.textContent ?? '';
+  }
+
+  const cues = [
+    { startMs: 0, endMs: 2000, text: '第一句' },
+    { startMs: 3000, endMs: 5000, text: '第二句' },
+  ];
+
+  it('seek 到某句字幕的区间内 —— 显示该句', () => {
+    const { tl } = stubTimeline();
+    // eslint-disable-next-line no-new-func
+    new Function(buildShotChrome({
+      width: 1920, height: 1080, actLabel: null, shotNo: 1, shotTotal: 1, shotStartMs: 0, cues,
+    }))();
+    tl.seek(1);
+    expect(captionText()).toBe('第一句');
+    tl.seek(4);
+    expect(captionText()).toBe('第二句');
+  });
+
+  it('seek 到两句字幕之间的空档 —— 清空', () => {
+    const { tl } = stubTimeline();
+    // eslint-disable-next-line no-new-func
+    new Function(buildShotChrome({
+      width: 1920, height: 1080, actLabel: null, shotNo: 1, shotTotal: 1, shotStartMs: 0, cues,
+    }))();
+    tl.seek(2.5); // 第一句已结束(2s), 第二句还没开始(3s)
+    expect(captionText()).toBe('');
+  });
+
+  it('seek 到最后一句结束之后 —— 清空, 不会一直挂着最后一句', () => {
+    const { tl } = stubTimeline();
+    // eslint-disable-next-line no-new-func
+    new Function(buildShotChrome({
+      width: 1920, height: 1080, actLabel: null, shotNo: 1, shotTotal: 1, shotStartMs: 0, cues,
+    }))();
+    // 先 seek 到第二句里面, 确认它先真的显示出来过——不然下面的"清空"断言
+    // 测不出「从有到无」, 只是巧合地一直是空的。
+    tl.seek(4);
+    expect(captionText()).toBe('第二句');
+    tl.seek(6);
+    expect(captionText()).toBe('');
+  });
+
+  it('包装后的 tl.seek 仍把原时间线自己的返回值透传出去 —— 渲染器可能依赖链式调用', () => {
+    const { tl, SEEK_RETURN } = stubTimeline();
+    // eslint-disable-next-line no-new-func
+    new Function(buildShotChrome({
+      width: 1920, height: 1080, actLabel: null, shotNo: 1, shotTotal: 1, shotStartMs: 0, cues,
+    }))();
+    expect(tl.seek(1)).toBe(SEEK_RETURN);
   });
 });
