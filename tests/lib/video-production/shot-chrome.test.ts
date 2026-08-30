@@ -60,6 +60,34 @@ describe('buildShotChrome', () => {
   it('框架层不许挡住内容 —— 全部 pointer-events:none 且贴边', () => {
     expect(js).toContain('pointer-events:none');
   });
+
+  /*
+   * 真机验证抓到的 bug: chapter/no/cap 三个文字构件原来都没有显式 color, 全部
+   * 继承 document.body 的文字色。Builder 常把 body 文字设成深色配浅色卡片,
+   * 深底画面上就变成"深色字压深色背景", 完全读不出来(见 e0bd0fd1-9f4 第 55 秒帧)。
+   *
+   * 这里只能做字符串体检: 断言生成的 JS 里, 三个构件的 style.cssText 都带有
+   * "自己声明的颜色相关样式"(color / background), 不再是一句只有 font-size /
+   * opacity 之类、完全没碰 color 属性的样式串。**jsdom 不做真实渲染, 测不出
+   * "对比度是否真的够"——这条只能靠下面"真机复验"那一步的抽帧亮度差判定**,
+   * 这里的断言仅证明"确实写了显式颜色声明, 不再是纯继承"。
+   */
+  it('三个文字构件都显式声明了颜色/底衬 —— 不再继承 body 的文字色(回归 bug: 深底画面读不出字)', () => {
+    // 章节标签: 深色底衬 + 显式文字色, 而不是只有 opacity 靠 body 文字色顶着
+    const chapterCss = js.slice(js.indexOf("chapter.style.cssText"), js.indexOf('document.body.appendChild(chapter)'));
+    expect(chapterCss).toMatch(/color:rgba\(/);
+    expect(chapterCss).toMatch(/background:rgba\(/);
+
+    // 镜头编号同理
+    const noCss = js.slice(js.indexOf('no.style.cssText'), js.indexOf("document.body.appendChild(no)"));
+    expect(noCss).toMatch(/color:rgba\(/);
+    expect(noCss).toMatch(/background:rgba\(/);
+
+    // 预览字幕同理
+    const capCss = js.slice(js.indexOf('cap.style.cssText'), js.indexOf('document.body.appendChild(cap)'));
+    expect(capCss).toMatch(/color:rgba\(/);
+    expect(capCss).toMatch(/background:rgba\(/);
+  });
 });
 
 /*
@@ -155,5 +183,44 @@ describe('buildShotChrome 注入后的运行时行为', () => {
       width: 1920, height: 1080, actLabel: null, shotNo: 1, shotTotal: 1, shotStartMs: 0, cues,
     }))();
     expect(tl.seek(1)).toBe(SEEK_RETURN);
+  });
+
+  /*
+   * 回归 bug: chapter/no/cap 三个文字构件曾经没有显式 color, 于是继承
+   * document.body 的文字色——Builder 常把 body 文字设成深色, 深底画面上就变成
+   * "深色字压深色背景"。这里把 body 文字色显式设成深色(模拟 Builder 的深色配色),
+   * 再检查三个构件的**行内样式**(不是计算样式)里有没有它们自己声明的 color/
+   * background, 从而证明它们不再靠继承 body 拿颜色。
+   *
+   * 局限(如实写清): jsdom 不做布局与像素渲染, 这里测不出"文字和底衬的对比度
+   * 是否真的够看"——那只能靠真机渲染后截屏抽帧算亮度差(见任务里的真机复验步骤),
+   * 这组用例只能证明"三个构件有自己的颜色声明, 不是空白继承 body"这一件事。
+   */
+  it('body 文字色设成深色时, 三个构件仍各自带有自己的行内 color/background —— 不是继承 body 拿颜色', () => {
+    document.body.style.color = '#111111'; // 模拟 Builder 把 body 文字设成深色
+    stubTimeline();
+    // eslint-disable-next-line no-new-func
+    new Function(buildShotChrome({
+      width: 1920, height: 1080, actLabel: '知识串联', shotNo: 7, shotTotal: 7, shotStartMs: 0, cues,
+    }))();
+
+    const divs = Array.from(document.querySelectorAll('div'));
+    const chapterEl = divs.find((d) => d.className === 'chapter-label');
+    const noEl = divs.find((d) => d.textContent === '7 / 7');
+    const capEl = divs.find((d) => d.style.position === 'fixed' && d.style.textAlign === 'center');
+
+    expect(chapterEl).toBeTruthy();
+    expect(noEl).toBeTruthy();
+    expect(capEl).toBeTruthy();
+
+    for (const el of [chapterEl, noEl, capEl]) {
+      // 行内样式自己声明了 color, 且不是空字符串(空字符串就是"没声明, 靠继承")
+      expect(el!.style.color).not.toBe('');
+      // 行内样式自己声明了 background, 提供一个我们自己控制、不受 body 影响的底色
+      expect(el!.style.backgroundColor).not.toBe('');
+      // 显式声明的文字色应该是浅色(与深色 body 文字色明显不同), 不能又巧合等于
+      // body 那个深色——不然虽然"声明了", 但声明的还是同一个会读不出来的颜色。
+      expect(el!.style.color).not.toBe(document.body.style.color);
+    }
   });
 });

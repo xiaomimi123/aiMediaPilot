@@ -65,13 +65,36 @@ export function buildShotChrome(opts: ChromeOpts): string {
     }))
     .filter((c) => c.to > 0);
 
+  /*
+   * 真机验证抓到的 bug(见本文件头部注释外的修复记录): chapter/no/cap 这三个文字构件
+   * 原来都没有显式 color, 全部继承 document.body 的文字色。Builder 为配色经常把
+   * body 文字设成深色, 于是深底画面上就是"深色字压在深色背景上", 完全读不出来。
+   *
+   * 修法: 不再依赖"文字色 vs 场景色"这对关系(那对关系我们管不了, Builder 想怎么配
+   * 都行), 而是把文字放进一个我们自己控制背景色的"胶囊底衬"里——深色半透明底 +
+   * 白色文字, 从此这三个构件的可读性只取决于"白字 vs 我们自己画的深底", 不再取决
+   * 于 body 是浅是深。这与 builder-prompt.ts 里对 Builder 的约束(前景背景不许同色)
+   * 是同一个原理, 只是我们把"背景"从"继承来的 body 色"换成了"自己画的固定深底"。
+   *
+   * 失效场景(如实写清, 不假装万无一失): 底衬是半透明(0.55 透明度)而不是全不透明,
+   * 这是有意选择——全不透明的胶囊会变成一张实心卡片, 违背"补框架不填内容"的立意,
+   * 而且过厚会喧宾夺主。半透明意味着如果 Builder 的场景恰好是大面积高亮度纯白
+   * (比如全屏白色背景/过曝画面), 白底 * 0.45 权重 + 深底 * 0.55 权重叠加后仍会
+   * 明显变暗、留出对比空间, 但极端情况下(比如 Builder 又在同一角落叠加了半透明
+   * 白色蒙层)理论上仍可能把胶囊冲淡到与白字接近——这是"半透明底衬"这条路线本身
+   * 的边界, 不是这次没修到; 真出现这种叠加, 需要把透明度调高或退回不透明卡片。
+   */
+  const chip = 'background:rgba(10,10,14,0.55);color:rgba(255,255,255,0.92);' +
+    'text-shadow:0 1px 3px rgba(0,0,0,0.5);';
+
   const chapter = opts.actLabel
     ? `
   var chapter = document.createElement('div');
   chapter.className = 'chapter-label';
   chapter.textContent = ${JSON.stringify(opts.actLabel)};
   chapter.style.cssText = 'position:fixed;left:${pad}px;top:${pad}px;pointer-events:none;z-index:9990;' +
-    'font-size:${labelPx}px;letter-spacing:0.15em;opacity:0.45;';
+    'font-size:${labelPx}px;letter-spacing:0.15em;padding:0.3em 0.75em;border-radius:999px;' +
+    '${chip}';
   document.body.appendChild(chapter);`
     : '';
 
@@ -96,16 +119,25 @@ ${chapter}
   var no = document.createElement('div');
   no.textContent = '${opts.shotNo} / ${opts.shotTotal}';
   no.style.cssText = 'position:fixed;right:${pad}px;top:${pad}px;pointer-events:none;z-index:9990;' +
-    'font-size:${labelPx}px;letter-spacing:0.1em;opacity:0.35;font-variant-numeric:tabular-nums;';
+    'font-size:${labelPx}px;letter-spacing:0.1em;font-variant-numeric:tabular-nums;' +
+    'padding:0.3em 0.75em;border-radius:999px;' +
+    '${chip}';
   document.body.appendChild(no);
 
   /* 预览字幕。**预览阶段就要有** —— 现在字幕是最后用 ffmpeg 烧的, 所以预览里的
      画面永远缺底部这一块, 看起来比成片更空。这里画的只是预览用的近似, 正式字幕
-     仍由 ass-captions 烧, 两者不冲突(成片走的是 master 档, 这一层同样在)。 */
+     仍由 ass-captions 烧, 两者不冲突(成片走的是 master 档, 这一层同样在)。
+
+     宽度改成 width:fit-content + left:50%/translateX(-50%)(原来是 left:6%;right:6%
+     撑满整条), 是为了让底衬只贴着文字本身、不在没有字幕的时刻露出一整条空胶囊——
+     配合下面 seek 里"没有命中字幕就把 opacity 设成 0"一起才是完整方案, 单看这里
+     的 CSS 不够。 */
   var cap = document.createElement('div');
-  cap.style.cssText = 'position:fixed;left:6%;right:6%;bottom:${Math.round(height * 0.08)}px;' +
-    'pointer-events:none;z-index:9991;text-align:center;font-size:${capPx}px;font-weight:700;' +
-    'line-height:1.3;text-shadow:0 2px 8px rgba(0,0,0,0.35);';
+  cap.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);max-width:88%;width:fit-content;' +
+    'bottom:${Math.round(height * 0.08)}px;pointer-events:none;z-index:9991;text-align:center;' +
+    'font-size:${capPx}px;font-weight:700;line-height:1.3;padding:0.3em 0.7em;border-radius:0.5em;' +
+    'text-shadow:0 2px 8px rgba(0,0,0,0.35);opacity:0;' +
+    '${chip}';
   document.body.appendChild(cap);
 
   var CUES = ${JSON.stringify(local)};
@@ -130,6 +162,9 @@ ${chapter}
       if (t >= CUES[i].from && t < CUES[i].to) { hit = CUES[i]; break; }
     }
     cap.textContent = hit ? hit.text : '';
+    /* 没有命中字幕时把底衬也隐藏掉, 不然 fit-content 的空 div 仍会在屏幕上留一个
+       看得见的小胶囊(哪怕没有文字, padding 还在)。 */
+    cap.style.opacity = hit ? '1' : '0';
     return result;
   };
 })();
