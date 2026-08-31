@@ -177,15 +177,18 @@ TTS 出音频 → timestamps_cpu.py 做字级对齐 → timing.json → 存进 p
 - **两套设计语言。** `motion-systems/theme.ts`（深空色系）与 `components/lib.tsx`（纸白/墨蓝/黄红）是两条不同路线，混用会串味。本期**只选一套**，另一套留待卡片库扩展时再评估。
 - **竖屏的位移单位。** 相机 `x` 位移是 px，横屏调好的量到竖屏偏大，需要按画幅缩放。已知，不是硬伤。
 - **bundle 成本。** Remotion 需要先 `bundle()` 再渲染。要确认 bundle 能复用而不是每条片子重来一次，否则会吃掉渲染速度的优势。**这一条在实施第一步就要量。**
-- **Remotion 侧目前没有对应旧管线「环境运动层」的东西。** 旧管线的
-  `src/lib/video-production/ambient-rig.ts` 是三轮实测调出来的：高频 yoyo 暗角 + 单调扫光叠加，
-  单独跑纯 yoyo 暗角仍留 1.03 秒静止段，必须叠一个单调层填住 yoyo 折返点那个洞才够。Remotion
-  侧搬进来了 `motion/camera.tsx` 的 `CameraRig` 与 `motion/env.tsx` 的 `Environment`，但
-  **当前在 `Film.tsx` 里零引用**——`Film.tsx` 只有 `AbsoluteFill + Sequence×Card + Audio`，没有接
+- **Remotion 侧「环境运动层」缺口——二十六期已补上。** 端到端出片曾实测**静止占比 71%
+  （9.9s / 14.06s）**：`Film.tsx` 当时只有 `AbsoluteFill + Sequence×Card + Audio`，没有接
   相机层也没有接环境层；唯一带运动的是 `motion/life.tsx` 的 `Live`，纯 yoyo、且只作用于单个文字
-  元素，覆盖不到整个画面。端到端出片实测**静止占比 71%（9.9s / 14.06s）**。
-  不能把旧参数直接照搬过来：`ambient-rig.ts` 那套频率/幅度是**针对旧渲染管线**（HTML+GSAP 逐帧
-  截图合成）实测调出来的，新框架下运动是由卡片自身的进场/退场动效与合成层共同构成，两边的"底噪"
-  运动构成不是一回事，照搬旧参数是无据的猜测，需要在新框架里自己做一轮 A/B 实测才能定参数。
-  **本轮已裁决不实现**——这是下一份计划的量，这里只记下缺口本身、为什么不能照搬、以及现状的
-  实测数字，避免下一轮重新踩坑。
+  元素，覆盖不到整个画面。搬进来的 `motion/camera.tsx`（`CameraRig`）与 `motion/env.tsx`
+  （`Environment`）当时零引用。二十六期**没有照搬 `ambient-rig.ts` 的参数，也没有直接参数化
+  `Environment`**（它的 `ACTS`/`EXPOSURE_HITS` 等是 video-talkcraft 那条片子自己的戏剧节拍，
+  硬套会把别人片子的节奏叠到我们的内容上）：新写了一个不含内容相关节拍的 `motion/ambient.tsx`
+  （`Ambient` 组件：呼吸 vignette + 对角扫光），并在 `Film.tsx` 里给每一镜套一层 `CameraRig`
+  单调推近。参数由新框架里的真实 A/B 实测定出（不是沿用旧数字）——关键发现：决定成败的是**频率**
+  而不是"单调 vs yoyo"的分类本身，8s/2.6s 这类慢周期的呼吸会在正弦折返点留静止段，把周期提到
+  1.7s 就不会（折返点"导数趋零"的窗口本身撑不满 `freezedetect` 0.8s 的判定下限）；仍然叠加了
+  单调扫光与逐镜的相机推近作为双保险，防止真实 `filmPlan`（镜长动态）撞上呼吸相位盲区。最终把
+  这条 14 秒三镜样片的静止占比压到 **0%**。完整 A/B 表格、参数取舍与观感判断见
+  `.superpowers/sdd/2026-08-31-remotion-foundation/ambient-layer-report.md`；回归测试见
+  `tests/lib/video-production/ambient-layer.test.ts`（真渲染 + 真跑 `freezedetect`）。

@@ -616,9 +616,32 @@ worker 里 `renderer === 'remotion' && mode === 'ppt-narration'` 时走新增的
 本期只验通了 `ppt-narration` 一条链, 且 `filmPlan` 全程手填(未改 Builder 提示词), 验证的是渲染通路
 本身, 不是"模型能不能填对槽"; 其余两条交付链的迁移与 Builder 产 `FilmPlan` 是后续计划的范围。
 
-**已知缺口(本轮不修, 已裁决留到下一份计划)**: Remotion 侧还没有对应旧管线 `ambient-rig.ts`
-的环境运动层——`motion/camera.tsx`/`motion/env.tsx` 已搬入但当前零引用, 端到端出片实测静止占比
+**已知缺口(二十六期已补上, 见下)**: Remotion 侧曾经没有对应旧管线 `ambient-rig.ts`
+的环境运动层——`motion/camera.tsx`/`motion/env.tsx` 搬入后一度零引用, 端到端出片实测静止占比
 71%(9.9s / 14.06s), 详见设计文档「七、风险」。
+
+### 二十六期: Remotion 环境运动层(设计见 `docs/superpowers/specs/2026-08-31-remotion-migration-design.md` §七)
+
+**补的是上面那道缺口。** 新增 `remotion/src/motion/ambient.tsx` 的 `Ambient` 组件(呼吸 vignette +
+对角扫光), 接进 `Film.tsx` 顶层; 同时给每一镜套一层 `CameraRig`(`camera.tsx`, 之前也是零引用),
+做逐镜归一化的缓慢单调推近。**不是把 `motion/env.tsx` 的 `Environment` 参数化**——那个组件里的
+`ACTS`/`EXPOSURE_HITS`/`TRANSITION_FLASHES` 是 video-talkcraft 那条片子按秒数写死的戏剧节拍,
+我们的 `filmPlan` 由 Builder 按内容动态生成、镜数镜长都不固定, 硬套一张写死秒数表只会在我们的内容
+上出现节拍错位, 所以另写了一个不含任何内容相关节拍、只用 `useVideoConfig` 自适应画幅的干净实现。
+
+**参数是在新框架里重新 A/B 出来的, 没有照搬 `ambient-rig.ts` 的数字**(那套频率/幅度是针对旧
+HTML+GSAP 逐帧截图管线调的, 新框架下卡片自身已有入场动效+数字滚动+`Live` 的 idle 抖动, 底噪构成
+不是一回事)。用 Task 5 那条 14 秒三镜 filmPlan 反复渲染 + `freezedetect` 实测, 关键发现:
+**决定成败的是频率, 不是"单调 vs yoyo"这个分类本身**——呼吸(vignette 明暗)周期拉到 2.6s 会在
+正弦折返点留 0.8~1.7 秒静止段(复现了 `ambient-rig.ts` 头部注释记的结论), 但把周期压到 1.7s、
+振幅仍然很浅(0.04), 折返点"导数趋零"的窗口本身就撑不满 `freezedetect` 0.8 秒的判定下限, 单独
+这一项就把静止压到 0%; 仍然叠加了一条对角扫光(单调项, 1.5s 周期)与逐镜相机推近作为双保险, 防止
+真实 `filmPlan`(镜长动态)撞上呼吸的相位盲区——这条样片本身没撞上最坏相位, 但不能把鲁棒性押在
+一次样片的运气上。**14 秒样片的静止占比: 71% → 0%。** 完整 A/B 表格(基线/纯单调/纯 yoyo/两者
+叠加/最终配置各自的静止秒数)、抽帧观感判断见
+`.superpowers/sdd/2026-08-31-remotion-foundation/ambient-layer-report.md`；回归测试见
+`tests/lib/video-production/ambient-layer.test.ts`(真渲染 14 秒样片 + 真跑 `freezedetect`, 断言
+落回 `MAX_FREEZE_RATIO` 以内, 防止以后改参数悄悄退步)。
 
 ### AI 视频交付三模式 (十九期新增)
 
