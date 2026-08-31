@@ -11,6 +11,14 @@
  * 堆栈 —— 这样"缺内容"这件事在渲染阶段就拦下来, 不必等到有人打开成片。
  * 唯一代价是坏一镜可能拖累整条片子的渲染, 但这正是我们想要的: 宁可这条
  * 片子渲不出来, 也不让空白悄悄混进成片。
+ *
+ * 审查追加(Important #2): 这里是"组件渲染时"才触发的最后一道兜底——真正的
+ * 第一道防线挪到了主项目侧的 `src/lib/video-production/remotion-render.ts`
+ * (`findBlankSlots`), 它在 `renderMedia` 之前把所有 shots 的槽位一次扫完、
+ * 一次报出全部问题, 不必等渲染推进到坏镜头那一帧才失败。**这里的判断逻辑
+ * 与那边是同一条规则的两处实现, 改一处要改另一处**(两边不能共享代码——
+ * `remotion/` 是独立子项目, 主项目 tsc 编译不到它)。这个函数依然保留,
+ * 防的是"万一将来有调用方绕过 renderFilm 直接渲染"。
  */
 export function assertContent(value: string | undefined | null, field: string): string {
   if (value === undefined || value === null || value.trim().length === 0) {

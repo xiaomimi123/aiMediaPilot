@@ -34,6 +34,70 @@ export type FilmInput = {
 };
 
 /**
+ * 空白槽位预检(审查 Important #2)。
+ *
+ * 这条规则在两处各实现一份、刻意不共享代码: `remotion/src/cards/guard.ts`
+ * 的 `assertContent` 是渲染时组件里的最后一道兜底(万一将来有调用方绕过
+ * `renderFilm` 直接拿 Film.tsx 去渲染), 这里是 `renderMedia` 之前的一次性
+ * 体检。**两处是同一条规则的两处实现, 改一处要改另一处。** 不能 import
+ * 共享是因为 `remotion/` 是独立子项目, 主项目 tsc 编译不到它的依赖(Task 1
+ * 已经踩过这个坑)。
+ *
+ * 为什么要在渲染前查, 而不是等组件里的 `assertContent` 抛错: 组件抛错要等
+ * `renderMedia` 推进到对应帧才触发——如果坏镜头排在后面, 前面几个镜头已经
+ * 白白编码过一遍才失败, 而且一次只报一个槽位, 修一个、重跑、再报下一个。
+ * 这里一次扫完全部 shots, 一次列出所有问题槽位, 渲染还没开始就能失败。
+ */
+const isBlank = (v: unknown): boolean => typeof v !== 'string' || v.trim().length === 0;
+
+type ShotLike = { shotId?: unknown; card?: unknown; slots?: Record<string, unknown> };
+
+function findBlankSlots(shots: unknown[]): string[] {
+  const problems: string[] = [];
+  for (const raw of shots) {
+    const shot = raw as ShotLike;
+    const shotId = typeof shot.shotId === 'string' ? shot.shotId : '(shotId 缺失)';
+    const card = shot.card;
+    const slots = shot.slots ?? {};
+    const bad = (field: string) => problems.push(`${shotId} [${String(card)}].${field}`);
+
+    // 与 shot-plan.ts 的 CARD_TYPES/SLOTS 对应: 每种卡片必填的字符串字段,
+    // 就是各卡片组件里调用 assertContent 的那几个字段。
+    switch (card) {
+      case 'statement':
+        if (isBlank(slots.text)) bad('text');
+        break;
+      case 'stat':
+        if (isBlank(slots.label)) bad('label');
+        break;
+      case 'contrast':
+        if (isBlank(slots.leftLabel)) bad('leftLabel');
+        if (isBlank(slots.leftText)) bad('leftText');
+        if (isBlank(slots.rightLabel)) bad('rightLabel');
+        if (isBlank(slots.rightText)) bad('rightText');
+        break;
+      case 'list': {
+        if (isBlank(slots.title)) bad('title');
+        const items = slots.items;
+        if (Array.isArray(items)) {
+          items.forEach((item, i) => {
+            if (isBlank(item)) problems.push(`${shotId} [list].items[${i}]`);
+          });
+        } else {
+          problems.push(`${shotId} [list].items 缺失或不是数组`);
+        }
+        break;
+      }
+      default:
+        // 未知卡片类型不在这里管——那是 CARD_TYPES/CARDS 注册表对齐的事,
+        // 有 card-registry.test.ts 守着, 这里只管"内容是不是空白"。
+        break;
+    }
+  }
+  return problems;
+}
+
+/**
  * Remotion 渲染入口(二十五期)。
  *
  * **bundle 必须缓存。** 实测 bundle 一次 0.8 秒, 而一条 64 秒片子渲染 36~48 秒 ——
@@ -60,6 +124,15 @@ export async function renderFilm(opts: {
   durationInFrames: number;
   fps?: number;
 }): Promise<void> {
+  const problems = findBlankSlots(opts.input.shots);
+  if (problems.length > 0) {
+    throw new Error(
+      `[渲染前预检失败] 以下槽位是空白或缺失, 未进入 renderMedia:\n${problems
+        .map((p) => `  - ${p}`)
+        .join('\n')}`,
+    );
+  }
+
   const serveUrl = await getBundle();
   const id = opts.input.aspect === '9:16' ? 'portrait' : 'landscape';
   const composition = await selectComposition({

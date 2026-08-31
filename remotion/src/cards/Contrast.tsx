@@ -36,7 +36,16 @@ export const Contrast: React.FC<{
   const rightLabel = assertContent(slots.rightLabel, 'contrast.rightLabel');
 
   const column = (label: string, text: string, seed: number) => (
-    <div style={{flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center'}}>
+    <div
+      style={{
+        flex: 1,
+        // flex:1 的子项默认 min-width:auto, 内容(尤其是不含空格的长文本)会撑破
+        // 分配到的那一份宽度、把兄弟列挤到安全区外——这不是审查压力测试测出来的,
+        // 是 flexbox 本身的已知坑, 顺手一起修了。minWidth:0 让它老实按分配宽度换行。
+        minWidth: 0,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
+      }}
+    >
       <Live seed={seed} style={{fontFamily: FONT_CN, fontSize: scaleFont(width, height, 28), color: C.blue, letterSpacing: '0.1em'}}>
         {label}
       </Live>
@@ -60,6 +69,9 @@ export const Contrast: React.FC<{
         display: 'flex',
         flexDirection: 'row',
         alignItems: 'center',
+        // 兜底(审查 Important #1): 压力样片(四个文本都取上限)实测没挤出安全区,
+        // overflow:hidden 是防未来更极端输入的最后一道线。
+        overflow: 'hidden',
       }}
     >
       {column(leftLabel, leftText, 1)}

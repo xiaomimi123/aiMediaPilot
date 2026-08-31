@@ -26,6 +26,9 @@ export const Statement: React.FC<{
         justifyContent: 'center',
         display: 'flex',
         flexDirection: 'column',
+        // 兜底(审查 Important #1): 压力样片(text 24 字/sub 20 字)实测没挤出安全区,
+        // overflow:hidden 是防未来更极端输入的最后一道线——正常长度用不上它。
+        overflow: 'hidden',
       }}
     >
       <Live

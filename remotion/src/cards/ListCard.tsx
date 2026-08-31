@@ -32,6 +32,10 @@ export const ListCard: React.FC<{
         justifyContent: 'center',
         display: 'flex',
         flexDirection: 'column',
+        // 兜底(审查 Important #1): 压力样片(title 16 字 + 8 条 × 20 字, schema 上限)
+        // 实测没挤出安全区, overflow:hidden 是防未来更极端输入(比如条目更多)的
+        // 最后一道线——超出后果是内容被裁掉看不全, 而不是挣脱安全区把字幕挤没。
+        overflow: 'hidden',
       }}
     >
       <Live seed={0} style={{fontFamily: FONT_CN, fontWeight: 900, color: C.ink, fontSize: scaleFont(width, height, 52)}}>
