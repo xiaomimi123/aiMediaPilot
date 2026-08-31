@@ -37,4 +37,102 @@ describe('checkFilmPlanTiming', () => {
     const issues = checkFilmPlanTiming(plan(shot('a', 0, 4000), shot('b', 5000, 10000)), 10000);
     expect(issues.join('')).not.toContain('statement');
   });
+
+  // ---- 复审补充: 容差边界(32/33/34ms), 三处独立比较各自钉住 ----
+  // TOLERANCE_MS = 33, 边界判断都是 `>` / `<`(不含等号)。
+  // 只测一个远离边界的值(比如 brief 原有的 20ms)区分不了 `>` 和 `>=`——
+  // 谁把任意一处误改成 `>=`, 那条测试依然全绿。这里用 32/33/34 三个值
+  // 把「33 不算问题、34 才算问题」钉死, 三处比较(首镜偏移/镜间空档/末镜差距)
+  // 各自独立测, 改坏一处不该被另外两处掩盖。
+
+  describe('容差边界 —— 首镜偏移', () => {
+    it('32ms 不报', () => {
+      expect(checkFilmPlanTiming(plan(shot('a', 32, 10032)), 10032)).toEqual([]);
+    });
+    it('33ms(容差本身)不报', () => {
+      expect(checkFilmPlanTiming(plan(shot('a', 33, 10033)), 10033)).toEqual([]);
+    });
+    it('34ms 报', () => {
+      const issues = checkFilmPlanTiming(plan(shot('a', 34, 10034)), 10034);
+      expect(issues.some((i) => i.includes('第一镜'))).toBe(true);
+    });
+  });
+
+  describe('容差边界 —— 镜间空档', () => {
+    it('32ms 不报', () => {
+      expect(
+        checkFilmPlanTiming(plan(shot('a', 0, 5000), shot('b', 5032, 10032)), 10032),
+      ).toEqual([]);
+    });
+    it('33ms(容差本身)不报', () => {
+      expect(
+        checkFilmPlanTiming(plan(shot('a', 0, 5000), shot('b', 5033, 10033)), 10033),
+      ).toEqual([]);
+    });
+    it('34ms 报', () => {
+      const issues = checkFilmPlanTiming(plan(shot('a', 0, 5000), shot('b', 5034, 10034)), 10034);
+      expect(issues.some((i) => i.includes('黑屏'))).toBe(true);
+    });
+  });
+
+  describe('容差边界 —— 末镜差距(超出片长方向)', () => {
+    it('32ms 不报', () => {
+      expect(checkFilmPlanTiming(plan(shot('a', 0, 10032)), 10000)).toEqual([]);
+    });
+    it('33ms(容差本身)不报', () => {
+      expect(checkFilmPlanTiming(plan(shot('a', 0, 10033)), 10000)).toEqual([]);
+    });
+    it('34ms 报', () => {
+      const issues = checkFilmPlanTiming(plan(shot('a', 0, 10034)), 10000);
+      expect(issues.some((i) => i.includes('10034') && i.includes('10000'))).toBe(true);
+    });
+  });
+
+  describe('容差边界 —— 末镜差距(不足片长方向)', () => {
+    it('32ms 不报', () => {
+      expect(checkFilmPlanTiming(plan(shot('a', 0, 9968)), 10000)).toEqual([]);
+    });
+    it('33ms(容差本身)不报', () => {
+      expect(checkFilmPlanTiming(plan(shot('a', 0, 9967)), 10000)).toEqual([]);
+    });
+    it('34ms 报', () => {
+      const issues = checkFilmPlanTiming(plan(shot('a', 0, 9966)), 10000);
+      expect(issues.some((i) => i.includes('9966') && i.includes('10000'))).toBe(true);
+    });
+  });
+
+  // ---- 复审补充: 不夹带卡片类型名 —— 五条产出路径逐一钉住 ----
+  // 只测一条路径不够: `stat` 卡存活率 0/3 的事故就是错误信息里夹带了一个不该
+  // 出现的分支词, 模型照字面意思弃了整张卡。能让模型跑偏的字样, 每一条产出
+  // 路径都得钉住, 只钉一条等于没钉。
+  describe('五条产出路径都不夹带卡片类型名', () => {
+    it('分镜为空', () => {
+      const issues = checkFilmPlanTiming(plan(), 10000);
+      expect(issues.join('')).not.toContain('statement');
+    });
+    it('首镜不从零起', () => {
+      const issues = checkFilmPlanTiming(plan(shot('a', 800, 10000)), 10000);
+      expect(issues.join('')).not.toContain('statement');
+    });
+    it('镜间有空档', () => {
+      const issues = checkFilmPlanTiming(plan(shot('a', 0, 4000), shot('b', 5000, 10000)), 10000);
+      expect(issues.join('')).not.toContain('statement');
+    });
+    it('超出片长', () => {
+      const issues = checkFilmPlanTiming(plan(shot('a', 0, 12000)), 10000);
+      expect(issues.join('')).not.toContain('statement');
+    });
+    it('不足片长', () => {
+      const issues = checkFilmPlanTiming(plan(shot('a', 0, 8000)), 10000);
+      expect(issues.join('')).not.toContain('statement');
+    });
+  });
+
+  // ---- 复审补充: 空分镜分支 ----
+  // `FilmPlanSchema` 有 `.min(1)`, 这条分支在 schema 校验之后理论上不可达,
+  // 属于防御性代码。已核实其行为、故意保留测试而非仅靠注释说明——
+  // 免得下一个读代码的人以为是漏测。
+  it('分镜为空数组时给出明确提示(schema 之后理论不可达的防御性分支)', () => {
+    expect(checkFilmPlanTiming(plan(), 10000)).toEqual(['分镜是空的, 至少要有一镜。']);
+  });
 });
