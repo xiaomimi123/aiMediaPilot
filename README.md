@@ -578,6 +578,44 @@ key/顺序不被打乱)与六幕版 `scope:'all'`(整稿改稿, 校验幕数固�
 describe 块, 3 条用例)。E2E 过程中产生的测试用 `ScriptDraft`(生成稿 1 条 + 旧稿克隆 1 条)与
 对应 `StyleSample`(1 条)已清理; 用户真实存在的旧三段式草稿全程只读, 内容与创建时间未变。
 
+### 二十五期: Remotion 渲染层(第一批, 设计见 `docs/superpowers/specs/2026-08-31-remotion-migration-design.md`)
+
+**为什么迁**: 自建管线(HTML + GSAP 暂停态时间线 + Playwright 逐帧截图 + ffmpeg 拼接)有三个改不动的问题。
+①**合成发生在画面之外** —— 画面与视频是两套东西, 最后靠 ffmpeg 拼(`compositeCutawayVideo` 挖空替换 +
+ASS 烧字幕), 二十三、二十四期踩的一串坑(`handleRecompose` 绕过静止复检、预览里没有字幕)根子都在这里;
+Remotion 里视频是合成的一等公民, 这一整类问题消失。②**没有组合模型** —— 我们的"时间线"是一条裸的
+GSAP timeline, 没有 track/clip/lane 的概念, 轨道冲突、片段重叠这类结构问题既查不出也描述不了。
+③**调试循环不可用** —— 改一版要"改代码 → 渲 7 分钟 → 抽帧读图", 反复调动效在这个循环下做不了。
+
+**核心决定: Builder 不再写代码, 改为填槽。** 每一镜从固定的卡片类型(`statement`/`stat`/`contrast`/`list`)
+里选一个, 只填它的槽位(文字/数字), 不接触坐标、样式、动效参数——画面由预先写好的 Remotion 组件渲染。
+三条实测证据缺一不可: ①**规则本身写的就是 PPT** —— 二十四期实测确认版面骨架下发了、模型也照做了,
+产出仍是幻灯片, 因为只要画面由模型的审美决定, 画质上限就是模型的审美, 填槽把画质上限交给我们写的组件。
+②**零件库不会自己正确, 模型更不会** —— 验货时开发者本人亲手填坐标仍然撞出元素重叠, `NumberRoll`
+把 `1850%` 渲成 `+1,850%`(千分位写死), 版面约束和格式化必须由系统兜住。③**模型写 TSX 的可靠性是未知数**,
+而填槽不需要赌它, 把模型的职责压缩到它确实擅长的部分: 理解内容、选择表达形式、填文字。
+
+**落地**: 新增 `remotion/` 子项目(自带 `package.json`/`tsconfig`/独立 `node_modules`, 需单独
+`cd remotion && npm install`, 不并入主项目依赖图——Remotion 拖着 React 19 与自己的渲染器, 并入会让
+Next.js 构建把它们一起打进去)。`src/motion/`(相机/环境/转场/数字滚动等, 搬自
+[video-talkcraft](https://github.com/Vincentwei1021/video-talkcraft), 已获书面商用授权, `LICENSE-video-talkcraft`
+随目录同放)、`src/cards/`(`Statement`/`Stat`/`Contrast`/`ListCard` 四张卡 + `index.ts` 的 `CardType`
+注册表 + `guard.ts`)、`src/layout/grid.ts`(栅格 + 具名区域, 卡片不接受任意坐标)。主项目侧新增
+`src/lib/video-production/shot-plan.ts` 的 `FilmPlanSchema`(zod `.strict()`, 拒绝分镜时间轴重叠)与
+`remotion-render.ts` 的 `renderFilm()`(bundle 缓存复用 + 渲染前对空槽位做预检, 一发现问题立刻 `throw`,
+不会有一个字节进 bundle/render 流程)。
+
+**实测数字**: bundle 一次 0.8 秒且可在同进程内复用(第二次调用直接返回缓存, 毫秒级); 同一条 64 秒内容
+渲染耗时 36~48 秒(自建管线同等内容约 7 分钟); 横屏 `1920x1080` / 竖屏 `1080x1920` 是同一套代码只改
+画幅参数(运动系统全部用 `useVideoConfig`, 无写死宽高), 字号数值在两种画幅下完全一致。
+
+**旧链路仍然完好**: `VideoProduction` 新增 `renderer` 字段(`@default("legacy")`)与 `filmPlan Json?`。
+worker 里 `renderer === 'remotion' && mode === 'ppt-narration'` 时走新增的 `handlePptNarrationRemotion`
+分支(整片一次渲染, 渲后接现有的 `reportFreeze` 静止体检); 不满足条件时走原有分支, 旧渲染层
+`shot-renderer.ts`/`ambient-rig.ts`/`shot-chrome.ts`/`frame-overlap.ts` 等**一行未改、一个未删**——
+本期只验通了 `ppt-narration` 一条链, 且 `filmPlan` 全程手填(未改 Builder 提示词), 验证的是渲染通路
+本身, 不是"模型能不能填对槽"; 其余两条交付链的迁移与 Builder 产 `FilmPlan` 是后续计划的范围。
+
 ### AI 视频交付三模式 (十九期新增)
 
 一句话: 十五期的「AI 自动生成无人出镜成片」改名为 `ppt-narration`(读稿形式), 并新增两种
