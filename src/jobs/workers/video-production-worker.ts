@@ -67,7 +67,9 @@ import type { DeliveryMode } from '@/lib/cockpit/model';
 import { runPackaging } from '@/lib/video-production/packaging';
 import { buildPackagingOptions } from '@/lib/video-production/packaging-input';
 import { renderFilm } from '@/lib/video-production/remotion-render';
-import { FilmPlanSchema } from '@/lib/video-production/shot-plan';
+import { FilmPlanSchema, describeCardsForPrompt, type FilmPlan } from '@/lib/video-production/shot-plan';
+import { actWindows } from '@/lib/video-production/film-plan-prompt';
+import { buildFilmPlan } from '@/lib/video-production/film-plan-builder';
 
 /**
  * `recompose`(二十三期): 只重新合成, 不重新生成。
@@ -561,12 +563,52 @@ async function handlePptNarrationRemotion(
   readyStatus: string,
   outputField: 'previewPath' | 'masterPath',
 ): Promise<void> {
-  await setStatus('building');
-
-  const plan = FilmPlanSchema.parse(vp.filmPlan);
-  const lastMs = Math.max(...plan.shots.map((s: any) => s.endMs));
-  const fps = mode === 'master' ? 30 : 15;
   const template = await templateOf(vp.templateId);
+
+  // 状态推进: preview 走 directing(编排分镜, 调 LLM) → building(落库+渲染);
+  // master 没有编排这一步(复用 preview 落库的 plan), 直接进 building。
+  // 旧链 handlePptNarration 也是 directing → building 这个顺序, 这里保持一致,
+  // 不要反过来变成 building → directing → building, 否则前端进度条会先跳后退。
+  let plan: FilmPlan;
+  if (mode === 'preview') {
+    await setStatus('directing');
+    const deepseekKey = await resolveDeepSeekApiKey(vp.userId);
+    if (!deepseekKey) throw new Error('未配置 DeepSeek key');
+
+    const acts = await loadActs(vp.contentId);
+    if (acts.length === 0) throw new Error('取不到六幕稿, 无法编排画面');
+
+    const windows = actWindows(acts);
+    const totalMs = windows[windows.length - 1].endMs;
+
+    // `'cards'` 不能省: 默认的 `'freeform'` 会下发旧链的"条目数不少于 8 条",
+    // 与 `list` 卡 items 上限 8 自相矛盾, 实测会把模型逼去编条目凑数(见 spec §6½)。
+    const research = await loadResearch(vp.contentId);
+    const factsSection = buildFactsSection(acts, research, 'cards');
+
+    const llm = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-chat' });
+    const built = await buildFilmPlan({
+      llm,
+      windows,
+      cardsSection: describeCardsForPrompt(),
+      factsSection,
+      totalMs,
+    });
+    plan = built.plan;
+    console.log(`[video-production] FilmPlan 产出完成 (修复 ${built.rounds} 轮, ${plan.shots.length} 镜)`);
+
+    await setStatus('building');
+    // 落库供 master 复用 —— 与旧链把 Director 结果写进 direction.json 是同一个理由:
+    // 正式导出必须和用户看过的预览是同一份画面, 不能重新问一次模型。
+    await prisma.videoProduction.update({ where: { id: vp.id }, data: { filmPlan: plan } });
+  } else {
+    await setStatus('building');
+    if (!vp.filmPlan) throw new Error('没有已保存的 FilmPlan, 请先生成预览');
+    plan = FilmPlanSchema.parse(vp.filmPlan);
+  }
+
+  const lastMs = Math.max(...plan.shots.map((s) => s.endMs));
+  const fps = mode === 'master' ? 30 : 15;
   const aspect = template?.aspect === '9:16' ? '9:16' : '16:9';
 
   await setStatus('assembling');

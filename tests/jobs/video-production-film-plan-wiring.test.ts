@@ -1,0 +1,48 @@
+import { describe, it, expect } from 'vitest';
+import fs from 'fs';
+import path from 'path';
+
+const SRC = fs.readFileSync(
+  path.join(process.cwd(), 'src/jobs/workers/video-production-worker.ts'),
+  'utf-8',
+);
+const BRANCH = SRC.slice(
+  SRC.indexOf('async function handlePptNarrationRemotion'),
+  SRC.indexOf('export async function reportFreeze'),
+);
+
+describe('handlePptNarrationRemotion 接上 FilmPlan 生成', () => {
+  it('preview 走 buildFilmPlan, 不再直接读手填的 vp.filmPlan', () => {
+    expect(BRANCH).toContain('buildFilmPlan');
+  });
+
+  it('buildFactsSection 必须显式传 cards —— 默认的 freeform 会让 list 凑数', () => {
+    expect(BRANCH).toMatch(/buildFactsSection\([^)]*'cards'\)/s);
+  });
+
+  it('产出的 plan 落库到 filmPlan, 供 master 复用', () => {
+    expect(BRANCH).toContain('filmPlan');
+    expect(BRANCH).toContain('videoProduction.update');
+  });
+
+  it('master 不重新调 LLM —— 与旧链 direction.json 的先例一致', () => {
+    expect(BRANCH).toMatch(/mode === 'preview'/);
+  });
+
+  it('静止体检仍然接着 —— 这个项目栽过两次"新出片路径绕过体检"', () => {
+    expect(BRANCH).toContain('reportFreeze');
+  });
+});
+
+describe('先建后拆: 旧渲染层一个文件都没删', () => {
+  for (const f of [
+    'src/lib/video-production/shot-renderer.ts',
+    'src/lib/video-production/ambient-rig.ts',
+    'src/lib/video-production/shot-chrome.ts',
+    'src/lib/video-production/frame-overlap.ts',
+  ]) {
+    it(`${f} 还在`, () => {
+      expect(fs.existsSync(path.join(process.cwd(), f))).toBe(true);
+    });
+  }
+});
