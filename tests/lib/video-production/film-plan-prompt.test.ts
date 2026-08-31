@@ -44,8 +44,16 @@ describe('FILM_PLAN.buildUserMessage', () => {
     const [part] = FILM_PLAN.buildUserMessage(actWindows(acts));
     expect(part.type).toBe('text');
     const text = (part as { text: string }).text;
-    expect(text).toContain('0');
+    expect(text).toContain('0 ~ 9000');
     expect(text).toContain('9000');
     expect(text).toContain('刷到过三天赚五千吗');
+  });
+});
+
+describe('FILM_PLAN.buildSystemPrompt 短幕例外', () => {
+  it('讲清楚幕本身短于 1200 毫秒时怎么办 —— 铺满不留空档优先于最短镜长', () => {
+    const p = FILM_PLAN.buildSystemPrompt(describeCardsForPrompt(), '');
+    expect(p).toMatch(/一幕本身的时间窗就短于 1200 毫秒|时间窗短于 1200/);
+    expect(p).toContain('铺满不留空档');
   });
 });
