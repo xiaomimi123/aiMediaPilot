@@ -613,8 +613,15 @@ Next.js 构建把它们一起打进去)。`src/motion/`(相机/环境/转场/数
 worker 里 `renderer === 'remotion' && mode === 'ppt-narration'` 时走新增的 `handlePptNarrationRemotion`
 分支(整片一次渲染, 渲后接现有的 `reportFreeze` 静止体检); 不满足条件时走原有分支, 旧渲染层
 `shot-renderer.ts`/`ambient-rig.ts`/`shot-chrome.ts`/`frame-overlap.ts` 等**一行未改、一个未删**——
-本期只验通了 `ppt-narration` 一条链, 且 `filmPlan` 全程手填(未改 Builder 提示词), 验证的是渲染通路
-本身, 不是"模型能不能填对槽"; 其余两条交付链的迁移与 Builder 产 `FilmPlan` 是后续计划的范围。
+本期只验通了 `ppt-narration` 一条链。**现状(二十八期更新)**: Builder 产 `FilmPlan` 已接线
+(`buildFactsSection(acts, research, 'cards')`), 端到端真机验收已跑通(`handlePptNarrationRemotion`
+真调 `buildFilmPlan` + 真渲染 + 真跑静止体检), 不再是"filmPlan 全程手填"。真机实测: 一条六幕稿
+16 镜 FilmPlan 0 轮修复产出, 卡片分布 `statement=11, stat=3, contrast=2, list=0`, 静止占比 0%,
+成片 60.05s、1080×1920。人工抽帧核对 `stat` 数字出处与画面值逐位一致、文字不裁切/不越安全区两条
+稳定通过; `contrast` 连接符判定(`arrow`/`versus`/`plus` 三选一)在三条真实稿反复实测里正确率始终
+卡在 61%~70% 区间且错误在三个取值间零和搬运, 已判定为无法用提示词工程解决, 拍板去掉这道选择,
+`contrast` 改渲染中性分隔件(见下面对应小节)。其余两条交付链(`talking-head-broll`/`illustration-tts`)
+的迁移仍是后续计划的范围。
 
 **已知缺口(二十六期已补上, 见下)**: Remotion 侧曾经没有对应旧管线 `ambient-rig.ts`
 的环境运动层——`motion/camera.tsx`/`motion/env.tsx` 搬入后一度零引用, 端到端出片实测静止占比
@@ -642,6 +649,36 @@ HTML+GSAP 逐帧截图管线调的, 新框架下卡片自身已有入场动效+�
 `.superpowers/sdd/2026-08-31-remotion-foundation/ambient-layer-report.md`；回归测试见
 `tests/lib/video-production/ambient-layer.test.ts`(真渲染 14 秒样片 + 真跑 `freezedetect`, 断言
 落回 `MAX_FREEZE_RATIO` 以内, 防止以后改参数悄悄退步)。
+
+### 二十七期: Builder 接线产 FilmPlan(计划见 `docs/superpowers/plans/2026-08-31-builder-film-plan.md`)
+
+**接上二十五期留的缺口**: 之前 `vp.filmPlan` 全程手填, 没有任何生产路径真正调用模型产出它。这期把
+`handlePptNarrationRemotion` 接通 `buildFilmPlan`(新增 `film-plan-prompt.ts`/`film-plan-builder.ts`),
+真调 LLM 产出 `ShotPlan[]` 并落库。关键接线点: `buildFactsSection(acts, research, 'cards')` 必须显式传
+第三个参数, 否则默认的 `'freeform'` 会同时下发"条目数不少于 8 条"与 `list` 卡 8 条上限两条自相矛盾
+的指令, 二十六期实测证实这正是 `list` 注水的根因; `tests/jobs/video-production-film-plan-wiring.test.ts`
+直接断言生产分支源码里出现这个调用模式, 传错/漏传都会变红。另修了 `shotId` 类型宽松化(真机实测模型把
+它当"第几镜"填成数字, 修复循环两轮教不会, 按"格式化必须由系统兜住"的原则加 `z.preprocess` 兜底转字符串)。
+
+### 二十八期: `contrast` 连接符——三轮实测推翻原设计, 改渲染中性分隔件
+
+**背景**: `contrast` 卡原设计里, 模型要在 `arrow`(变成)/`versus`(二选一)/`plus`(同时成立)三个连接符
+里选一个。三轮真机实测(3 条真实六幕稿 × 3 遍, 每轮约 20 处 `contrast`)测出总正确率 64.7% / 70% /
+61.1%, 在 n≈20 上彼此都落在噪声区间内, 且每轮现象一致: 收紧规则让某个取值变准, 错误就整批迁移到
+另一个取值上——零和搬运, 不是判断力在提升。选错连接符等于画面断言了一个原文没有的因果或取舍关系,
+比不断言更糟。
+
+**处置**: 拍板去掉 `connector` 这道选择。`src/lib/video-production/shot-plan.ts` 的 `SLOTS.contrast`
+不再要求 `connector` 字段(加了 `z.preprocess` 兜底历史落库数据里的旧字段, 老 `filmPlan` 仍能在 master
+渲染时解析成功); `remotion/src/cards/Contrast.tsx` 改渲染一条左右对称、无方向性的线+点中性分隔件,
+不再断言具体是哪种关系。详细的三轮数据与判断依据记在
+`docs/superpowers/specs/2026-08-31-remotion-migration-design.md` §六又四分之三。
+
+**顺带修复**: `NumberRoll`/`Stat` 卡的取整精度 bug——非整数 `stat.value`(如 `32.2%`)末帧定格前会被
+`Math.round` 抹掉小数位, 画面值与 facts 台账不再逐位一致。新增 `roundToSourceDecimals(value, source)`
+(`remotion/src/motion/lib.tsx`), 取整精度跟随源值的小数位数, `remotion/src/motion/components.tsx` 的
+`NumberRoll` 与 `remotion/src/cards/Stat.tsx` 都改用这个共享函数, 真机验证 `32.2%` 定格帧原样渲成
+`32.2%`。
 
 ### AI 视频交付三模式 (十九期新增)
 
