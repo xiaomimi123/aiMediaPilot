@@ -17,7 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "worker:dev": "tsx src/jobs/workers/index.ts",
-    "postinstall": "prisma generate && rebrowser-patches patch --packagePath node_modules/playwright-core || true"
+    "postinstall": "prisma generate && (rebrowser-patches patch --packagePath node_modules/playwright-core || true) && node scripts/setup-remotion.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
