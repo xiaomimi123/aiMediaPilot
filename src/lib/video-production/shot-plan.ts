@@ -45,9 +45,26 @@ const SLOTS = {
   }).strict(),
 } as const;
 
+/**
+ * `shotId` 只是个标识符, 不承载内容判断——模型该不该把它写成字符串跟"这镜该讲
+ * 什么"毫无关系, 所以不该占用修复循环的额度。
+ *
+ * 实测(2026-08-31, 真机跑闲鱼AI服务稿): 提示词只说了"每一镜的字段是 shotId、
+ * startMs、endMs、card、slots", 没规定 shotId 的类型, 模型自然把它当成"第几镜"
+ * 填了整数 1/2/3。修复循环把 zod 的
+ * `shots.0.shotId: Expected string, received number` 喂回去两轮, 模型两轮都
+ * 没改——这条错误信息在教一个和内容无关的格式细节, 不像 `stat.value` 那样
+ * 是模型能读懂"该怎么改"的语义错误。按 §2.2「格式化必须由系统兜住」的既定
+ * 原则, 数字标识符在这里做类型宽松处理, 而不是继续赌模型会读懂这条反馈。
+ */
+const ShotIdSchema = z.preprocess(
+  (v) => (typeof v === 'number' ? String(v) : v),
+  z.string().min(1),
+);
+
 /** 分镜的公共字段。四种卡片只在 `card` 与 `slots` 上分岔。 */
 const SHOT_BASE = {
-  shotId: z.string().min(1),
+  shotId: ShotIdSchema,
   startMs: z.number().int().min(0),
   endMs: z.number().int().min(1),
 } as const;

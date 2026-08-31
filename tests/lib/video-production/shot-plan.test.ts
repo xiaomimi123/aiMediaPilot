@@ -44,6 +44,19 @@ describe('ShotPlanSchema', () => {
     });
     expect(r.success).toBe(false);
   });
+
+  /*
+   * 真机回归(2026-08-31): 提示词没规定 shotId 的类型, 模型把它当"第几镜"填了整数,
+   * 修复循环喂回 `Expected string, received number` 两轮都没能让模型改过来——
+   * shotId 只是标识符, 不该占用修复循环的额度, 系统兜底把数字转成字符串。
+   */
+  it('shotId 是数字时自动转成字符串 —— 标识符不该占用修复循环的额度', () => {
+    const r = ShotPlanSchema.safeParse({
+      shotId: 1, startMs: 0, endMs: 3000, card: 'statement', slots: { text: 'x' },
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.shotId).toBe('1');
+  });
 });
 
 /*
