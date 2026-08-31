@@ -616,6 +616,10 @@ worker 里 `renderer === 'remotion' && mode === 'ppt-narration'` 时走新增的
 本期只验通了 `ppt-narration` 一条链, 且 `filmPlan` 全程手填(未改 Builder 提示词), 验证的是渲染通路
 本身, 不是"模型能不能填对槽"; 其余两条交付链的迁移与 Builder 产 `FilmPlan` 是后续计划的范围。
 
+**已知缺口(本轮不修, 已裁决留到下一份计划)**: Remotion 侧还没有对应旧管线 `ambient-rig.ts`
+的环境运动层——`motion/camera.tsx`/`motion/env.tsx` 已搬入但当前零引用, 端到端出片实测静止占比
+71%(9.9s / 14.06s), 详见设计文档「七、风险」。
+
 ### AI 视频交付三模式 (十九期新增)
 
 一句话: 十五期的「AI 自动生成无人出镜成片」改名为 `ppt-narration`(读稿形式), 并新增两种

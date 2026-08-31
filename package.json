@@ -9,6 +9,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "typecheck:remotion": "cd remotion && npm run typecheck",
+    "typecheck:all": "npm run typecheck && npm run typecheck:remotion",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",

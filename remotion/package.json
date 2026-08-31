@@ -2,6 +2,9 @@
   "name": "mediapilot-remotion",
   "private": true,
   "version": "1.0.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "@remotion/bundler": "4.0.399",
     "@remotion/renderer": "4.0.399",

@@ -1263,6 +1263,22 @@ async function handleProduce(job: Job<JobData>) {
      */
     if (vp.renderer === 'remotion' && vp.mode === 'ppt-narration') {
       await handlePptNarrationRemotion(vp, mode, setStatus, outputFileName, readyStatus, outputField);
+      // 范围限制(终审已裁决, 本轮不补): 这条分支渲完就 return, 不会走下面的文字叠加层
+      // (二十三期)与成片包装段(二十期, BGM 混音/片头片尾/包装后静止复检)——那两段是
+      // 针对旧渲染层的成片路径写的, 尚未对接到 Remotion 分支。显式出声而不是悄悄跳过,
+      // 是因为「静默跳过」违反本项目的原则; 目前没有任何 UI/API 路径能把 renderer 置成
+      // 'remotion'(终审已 grep 确认), 所以这是休眠风险, 一旦入口打开就会被下面这条日志
+      // 立刻暴露出来。
+      const t = vp.templateId
+        ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
+        : null;
+      console.warn(
+        `[video-production] renderer=remotion 跳过文案叠加与成片包装段 (videoProductionId=${vp.id})，` +
+        `本分支尚未接入这两段(见 docs/superpowers/specs/2026-08-31-remotion-migration-design.md)` +
+        (t?.textOverlayEnabled
+          ? `——模板 ${vp.templateId} 已开启 textOverlayEnabled, 但该叠加效果不会出现在这条渲染分支的产物上。`
+          : '。'),
+      );
       return;
     }
 

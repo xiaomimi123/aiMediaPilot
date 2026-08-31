@@ -116,7 +116,10 @@ await renderMedia({
 
 卡片组件内部使用**栅格 + 具名区域**，不接受任意坐标。安全区（字幕带、平台 UI 遮挡区）作为栅格的一部分声明，卡片不能越界。
 
-`caption-safe-zone.ts` 现有的结论（按画幅把 `marginV` 抬到 `height × 350/1920` 以上，只抬不降）**保留**，改为栅格里的一条约束。
+`caption-safe-zone.ts` 现有的结论并非原样沿用：legacy 按画幅分流（横屏固定 100px，竖屏才用
+`height × 350/1920`），而 `grid.ts` 的 `safeBox` 图简单，两种画幅一律用 `bottomPct = 350/1920`——
+1080p 横屏算下来约 197px，比 legacy 的 100px 保守近一倍，代价是横屏卡片可用高度少约 97px。
+这是有意选择的从严（安全的一侧），不是照抄；差异与代价见 `remotion/src/layout/grid.ts` 注释。
 
 ### 3.5 字级对齐进管线
 
@@ -147,6 +150,11 @@ TTS 出音频 → timestamps_cpu.py 做字级对齐 → timing.json → 存进 p
 ## 五、不做什么
 
 - **不做"生成前剪辑台"**（用户已确认排在迁移之后）。
+- **`handlePptNarrationRemotion` 分支不接文案叠加层（二十三期）与成片包装段（二十期，BGM
+  混音/片头片尾/包装后静止复检）** —— 渲完直接 `return`，是明确的范围限制而非遗漏。目前没有
+  任何 UI/API 路径能把 `VideoProduction.renderer` 置成 `'remotion'`，因此是休眠风险；worker
+  在这条分支的 `return` 之前打一条 `console.warn`（模板开了 `textOverlayEnabled` 时会在日志里
+  点出来），保证这个缺口一旦被触发就能被看见，而不是静默丢功能。接上这两段是后续计划的量。
 - **不搬 HyperFrames 的规则库** —— 那是 GSAP 配方，Remotion 下要重写；video-talkcraft 提供的是 Remotion 原生同类能力。HyperFrames 保留为概念参考。
 - **不在本期删除旧管线** —— 见 §六。
 - **不动色调策略** —— 四条参考片帧均亮度 213/119/113/105，"亮底深字"不是通例，样本不支持定这条规矩。
@@ -169,3 +177,15 @@ TTS 出音频 → timestamps_cpu.py 做字级对齐 → timing.json → 存进 p
 - **两套设计语言。** `motion-systems/theme.ts`（深空色系）与 `components/lib.tsx`（纸白/墨蓝/黄红）是两条不同路线，混用会串味。本期**只选一套**，另一套留待卡片库扩展时再评估。
 - **竖屏的位移单位。** 相机 `x` 位移是 px，横屏调好的量到竖屏偏大，需要按画幅缩放。已知，不是硬伤。
 - **bundle 成本。** Remotion 需要先 `bundle()` 再渲染。要确认 bundle 能复用而不是每条片子重来一次，否则会吃掉渲染速度的优势。**这一条在实施第一步就要量。**
+- **Remotion 侧目前没有对应旧管线「环境运动层」的东西。** 旧管线的
+  `src/lib/video-production/ambient-rig.ts` 是三轮实测调出来的：高频 yoyo 暗角 + 单调扫光叠加，
+  单独跑纯 yoyo 暗角仍留 1.03 秒静止段，必须叠一个单调层填住 yoyo 折返点那个洞才够。Remotion
+  侧搬进来了 `motion/camera.tsx` 的 `CameraRig` 与 `motion/env.tsx` 的 `Environment`，但
+  **当前在 `Film.tsx` 里零引用**——`Film.tsx` 只有 `AbsoluteFill + Sequence×Card + Audio`，没有接
+  相机层也没有接环境层；唯一带运动的是 `motion/life.tsx` 的 `Live`，纯 yoyo、且只作用于单个文字
+  元素，覆盖不到整个画面。端到端出片实测**静止占比 71%（9.9s / 14.06s）**。
+  不能把旧参数直接照搬过来：`ambient-rig.ts` 那套频率/幅度是**针对旧渲染管线**（HTML+GSAP 逐帧
+  截图合成）实测调出来的，新框架下运动是由卡片自身的进场/退场动效与合成层共同构成，两边的"底噪"
+  运动构成不是一回事，照搬旧参数是无据的猜测，需要在新框架里自己做一轮 A/B 实测才能定参数。
+  **本轮已裁决不实现**——这是下一份计划的量，这里只记下缺口本身、为什么不能照搬、以及现状的
+  实测数字，避免下一轮重新踩坑。
