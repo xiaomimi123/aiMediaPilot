@@ -358,6 +358,11 @@ model VideoProduction {
   errorMessage    String?
   createdAt       String
   updatedAt       String
+  /// 二十五期: 这条任务走哪套渲染层。'legacy' = 旧的 HTML+GSAP 管线(缺省, 老任务零迁移),
+  /// 'remotion' = 新链路。**先建后拆**: 两套并存, 验收通过后才删旧的。
+  renderer        String  @default("legacy")
+  /// 二十五期: Builder 的填槽产出(FilmPlan)。null = 还没跑到 Builder 或走的是旧链路。
+  filmPlan        Json?
   user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, contentId])

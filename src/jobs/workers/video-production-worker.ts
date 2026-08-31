@@ -66,6 +66,8 @@ import type { AlignedAct } from '@/lib/video-production/aligner-prompt';
 import type { DeliveryMode } from '@/lib/cockpit/model';
 import { runPackaging } from '@/lib/video-production/packaging';
 import { buildPackagingOptions } from '@/lib/video-production/packaging-input';
+import { renderFilm } from '@/lib/video-production/remotion-render';
+import { FilmPlanSchema } from '@/lib/video-production/shot-plan';
 
 /**
  * `recompose`(二十三期): 只重新合成, 不重新生成。
@@ -541,6 +543,42 @@ export async function handlePptNarration(
     concatListPath: path.join(vp.productionRoot, 'concat-list.txt'),
   });
 
+  const freezeReport = await reportFreeze(outputPath, mode);
+  await setStatus(readyStatus, { [outputField]: outputPath, freezeReport });
+}
+
+/**
+ * 图文口播 · Remotion 链(二十五期)。
+ *
+ * 与旧链的关键差异: **Builder 不写 HTML, 只产 FilmPlan(选卡片 + 填槽)**;
+ * 整片一次渲染, 不再有"分镜各渲各的再 concat"这一步。
+ */
+async function handlePptNarrationRemotion(
+  vp: VideoProduction,
+  mode: 'preview' | 'master',
+  setStatus: SetStatusFn,
+  outputFileName: string,
+  readyStatus: string,
+  outputField: 'previewPath' | 'masterPath',
+): Promise<void> {
+  await setStatus('building');
+
+  const plan = FilmPlanSchema.parse(vp.filmPlan);
+  const lastMs = Math.max(...plan.shots.map((s: any) => s.endMs));
+  const fps = mode === 'master' ? 30 : 15;
+  const template = await templateOf(vp.templateId);
+  const aspect = template?.aspect === '9:16' ? '9:16' : '16:9';
+
+  await setStatus('assembling');
+  const outputPath = path.join(vp.productionRoot, outputFileName);
+  await renderFilm({
+    input: { shots: plan.shots as any, audioSrc: null, aspect },
+    outputPath,
+    durationInFrames: Math.ceil((lastMs / 1000) * fps),
+    fps,
+  });
+
+  // 静止体检照旧 —— 它读的是成片 mp4, 与渲染器无关(spec §四)
   const freezeReport = await reportFreeze(outputPath, mode);
   await setStatus(readyStatus, { [outputField]: outputPath, freezeReport });
 }
@@ -1216,6 +1254,15 @@ async function handleProduce(job: Job<JobData>) {
     if (mode === 'recompose') {
       // 只重新合成 —— 分镜和 B-roll 原样复用, 见 handleRecompose 的说明
       await handleRecompose(vp, setStatus);
+      return;
+    }
+
+    /*
+     * 二十五期: Remotion 渲染分支。**与旧分支并存, 由 vp.renderer 选。**
+     * 先建后拆 —— 新链路验收通过之前, 旧链路必须始终能出片。
+     */
+    if (vp.renderer === 'remotion' && vp.mode === 'ppt-narration') {
+      await handlePptNarrationRemotion(vp, mode, setStatus, outputFileName, readyStatus, outputField);
       return;
     }
 
