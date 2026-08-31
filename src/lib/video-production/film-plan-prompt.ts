@@ -25,16 +25,21 @@ export type ActWindow = {
  * 就是按 `targetSec` 逐幕累加铺 SRT 的。两边口径一旦分叉, 画面会和字幕/配音错位,
  * 而且**不会有任何报错**。
  *
- * `targetSec` 在 six-act.ts 的 schema 里是 `z.number().int().min(1)`, 恒为整数,
- * 所以这里的 Math.round 只是防御性写法(不改变任何实际取值), 与
- * `synthesizeSrtFromSixActScript` 里 `const targetMs = act.targetSec * 1000` 的
- * 累加结果逐位相同。
+ * 这里曾经写过 `Math.round(a.targetSec * 1000)`, 理由是"`targetSec` 恒为整数,
+ * round 只是无害的防御性写法"。这个前提只在 `SixActScriptSchema`(six-act.ts,
+ * `z.number().int()`)里成立——但 Remotion 链实际的读取路径走的是
+ * `SixActDraftSchema`(`targetSec: z.number()`, 无整数约束)和工作区自动保存端点
+ * (`z.number().min(0)`, 同样无整数约束), 这两个真正的把关点都不保证整数。一旦
+ * 有分数秒的 targetSec 进来, 这里的 Math.round 就是**唯一**让本函数与
+ * `synthesizeSrtFromSixActScript`(那边的累加是 `cursorMs += targetMs`, 没有
+ * round)在幕边界上分叉的地方——分叉是静默的, 没有任何报错。所以去掉它: 时间窗
+ * 带小数远好过两边悄悄对不上。
  */
 export function actWindows(acts: ScriptAct[]): ActWindow[] {
   let cursorMs = 0;
   return acts.map((a) => {
     const startMs = cursorMs;
-    cursorMs += Math.round(a.targetSec * 1000);
+    cursorMs += a.targetSec * 1000;
     return { act: a.act, title: a.title, startMs, endMs: cursorMs, narration: a.narration };
   });
 }
