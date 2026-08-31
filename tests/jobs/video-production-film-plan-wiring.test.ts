@@ -20,13 +20,22 @@ describe('handlePptNarrationRemotion 接上 FilmPlan 生成', () => {
     expect(BRANCH).toMatch(/buildFactsSection\([^)]*'cards'\)/s);
   });
 
-  it('产出的 plan 落库到 filmPlan, 供 master 复用', () => {
-    expect(BRANCH).toContain('filmPlan');
+  it('产出的 plan 落库到 filmPlan 字段, 供 master 复用', () => {
     expect(BRANCH).toContain('videoProduction.update');
+    // 锚住 data 对象的结构, 字段名写错(如 plan: plan)或传错变量都会真正变红
+    expect(BRANCH).toMatch(/data:\s*\{\s*filmPlan:\s*plan\s*\}/);
   });
 
   it('master 不重新调 LLM —— 与旧链 direction.json 的先例一致', () => {
     expect(BRANCH).toMatch(/mode === 'preview'/);
+  });
+
+  it('master 复用的 plan 为空时抛错, 不静默回退到重新生成', () => {
+    expect(BRANCH).toMatch(/if \(!vp\.filmPlan\) throw/);
+  });
+
+  it('取不到六幕稿时抛错, 不静默跳过编排', () => {
+    expect(BRANCH).toMatch(/if \(acts\.length === 0\) throw/);
   });
 
   it('静止体检仍然接着 —— 这个项目栽过两次"新出片路径绕过体检"', () => {
