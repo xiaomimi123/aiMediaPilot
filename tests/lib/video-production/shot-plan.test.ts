@@ -57,6 +57,46 @@ describe('ShotPlanSchema', () => {
     expect(r.success).toBe(true);
     if (r.success) expect(r.data.shotId).toBe('1');
   });
+
+  it('接受合法的 contrast 卡 —— 不再需要 connector', () => {
+    const r = ShotPlanSchema.safeParse({
+      ...base, card: 'contrast',
+      slots: { leftLabel: '技术', leftText: '人人可得', rightLabel: '提问', rightText: '拉开差距' },
+    });
+    expect(r.success).toBe(true);
+  });
+
+  /*
+   * 二十八期兜底: 改动之前落库的 filmPlan 里, contrast 槽位带着旧方案的
+   * connector 字段。这些历史数据在 master 渲染时还要能解析成功——不能因为
+   * 一个已经废弃的字段让老片子渲不出来。这里锁住两件事: ①带 connector 的
+   * 旧数据仍能解析成功, ②解析结果里不再带 connector 这个字段(不是"容忍
+   * 多余字段"，是"丢弃这一个已知的历史字段"，其它多余字段仍然要被拒绝)。
+   */
+  it('contrast 槽位带着历史遗留的 connector 字段仍能解析, 且解析结果里丢掉了它', () => {
+    const r = ShotPlanSchema.safeParse({
+      ...base, card: 'contrast',
+      slots: {
+        leftLabel: '技术', leftText: '人人可得', rightLabel: '提问', rightText: '拉开差距',
+        connector: 'arrow',
+      },
+    });
+    expect(r.success).toBe(true);
+    if (r.success && r.data.card === 'contrast') {
+      expect(r.data.slots).not.toHaveProperty('connector');
+    }
+  });
+
+  it('contrast 槽位真正未知的字段(不是历史 connector)仍然被拒绝', () => {
+    const r = ShotPlanSchema.safeParse({
+      ...base, card: 'contrast',
+      slots: {
+        leftLabel: '技术', leftText: '人人可得', rightLabel: '提问', rightText: '拉开差距',
+        somethingElse: 'x',
+      },
+    });
+    expect(r.success).toBe(false);
+  });
 });
 
 /*
@@ -122,20 +162,25 @@ describe('describeCardsForPrompt', () => {
   });
 
   /*
-   * 二十六期: 实测(电池稿「换电池/换新机」)模型把互斥的二选一标成了 arrow, 应该是
-   * versus。之前的说明只罗列了三个值的含义, 没有例子; 这里给每个值配一个具体例子,
-   * 并专门点名最容易混的那组。
+   * 二十六期: 加例子的修法只对"点名过的那对"有效; 二十七期换成可判定的规程
+   * (先问"同一主体+不同时间点", 再问能否同时成立分 plus/versus)。
+   *
+   * 二十八期把这整条路推翻了: 三轮真机实测(3 条真实六幕稿 × 3 遍)显示总正确率
+   * 在 61%~70% 之间来回摆, 且每轮现象一致——收紧规则让一个取值变准, 错误就整批
+   * 迁移到另一个取值上, 是零和搬运不是判断力提升。选错连接符等于画面断言了一个
+   * 原文没有的关系, 比不断言更糟, 所以拍板去掉 connector 这道选择, 不再要求模型
+   * 判断 arrow/versus/plus。下面这组测试锁住"新说明里已经不提这套判定规程,
+   * 只交代中性分隔件"。
    */
-  it('给 versus/arrow/plus 各配一个具体例子', () => {
+  it('不再要求模型判断 arrow/versus/plus —— 连接符已从槽位里去掉', () => {
     const text = describeCardsForPrompt();
-    expect(text).toMatch(/versus.*例|例.*versus/);
-    expect(text).toMatch(/arrow.*例|例.*arrow/);
-    expect(text).toMatch(/plus.*例|例.*plus/);
+    expect(text).not.toContain('connector');
+    expect(text).not.toMatch(/`arrow`|`versus`|`plus`/);
   });
 
-  it('专门点名"互斥选项用 versus, 不是 arrow"这个最容易混的判断', () => {
+  it('contrast 的说明交代了"中性分隔件"以及为什么不再判断关系', () => {
     const text = describeCardsForPrompt();
-    expect(text).toContain('互斥');
-    expect(text).toMatch(/versus/);
+    expect(text).toMatch(/中性/);
+    expect(text).toMatch(/零和搬运|不需要.*关系|不能指定.*关系/);
   });
 });

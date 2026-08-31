@@ -14,6 +14,22 @@ import { z } from 'zod';
 export const CARD_TYPES = ['statement', 'stat', 'contrast', 'list'] as const;
 export type CardType = (typeof CARD_TYPES)[number];
 
+/**
+ * 历史数据兜底(2026-09-01)：改动之前落库的 `filmPlan` 里, `contrast` 槽位带
+ * 着旧方案的 `connector` 字段。`.strict()` 拒绝多余字段是这份契约的核心
+ * 设计, 不能为兼容旧数据而放松——但也不能让老片子在 master 渲染时因为一个
+ * 已经废弃的字段直接解析失败。所以在真正的 `.strict()` 校验之前, 先把
+ * `connector` 键原样丢掉(如果存在的话), 新数据本来就不带这个字段, 这一步
+ * 对它是空操作。
+ */
+const stripLegacyConnector = (v: unknown): unknown => {
+  if (v && typeof v === 'object' && 'connector' in (v as Record<string, unknown>)) {
+    const { connector: _connector, ...rest } = v as Record<string, unknown>;
+    return rest;
+  }
+  return v;
+};
+
 /** 每种卡片的槽位。`.strict()` 是关键: 多一个字段就解析失败。 */
 const SLOTS = {
   statement: z.object({
@@ -29,14 +45,32 @@ const SLOTS = {
     note: z.string().max(24).optional(),
   }).strict(),
 
-  contrast: z.object({
+  /*
+   * 二十八期推翻了这张卡原来的设计。原设计里 `connector` 要模型在
+   * `arrow`/`versus`/`plus` 三个取值里选一个，理由是"少了它就只是两张卡并排
+   * 摆着，不构成一个论断"。
+   *
+   * 但连续三轮真机实测（3 条真实六幕稿 × 3 遍，每轮约 20 处 contrast）测出来的
+   * 是：总正确率在 61%~70% 之间来回摆（64.7% / 70% / 61.1%），n≈20 上这三个
+   * 数彼此都落在噪声区间里，看不出谁比谁"更准"。更关键的是每一轮现象一致——
+   * 只要收紧提示词让某个取值变准（比如第五轮把 arrow 从 33% 提到 75%），错误
+   * 就整批迁移到另一个取值上（同一轮 plus 掉到 43%）。这是**零和搬运**，不是
+   * 判断力在变强；说明模型在这道判定题上就是不具备把三个取值分开的能力，靠堆
+   * 判定规程、加例子已经到顶（详见下面 describeCardsForPrompt 的历史注释）。
+   *
+   * 选错连接符不是"画面差一点"，是画面在断言一个原文没有的关系（"变成了"/
+   * "二选一"/"同时成立"三选一，选错就是编了一个不存在的因果或取舍）。这个
+   * 项目的事实纪律本来就不允许素材里没有明确关系时做断言式图形——一个 1/3
+   * 概率错的断言不该出现在画面上。所以拍板去掉这道选择，`contrast` 改成渲染
+   * 一个不表态的中性分隔件：画面仍是"左右两组+中间有东西连着"，但不再断言
+   * 具体是哪种关系。等将来有能实测到 85% 以上的做法，再考虑把三个取值放回来。
+   */
+  contrast: z.preprocess(stripLegacyConnector, z.object({
     leftLabel: z.string().min(1).max(12),
     leftText: z.string().min(1).max(16),
     rightLabel: z.string().min(1).max(12),
     rightText: z.string().min(1).max(16),
-    /** 中间的连接符。**不可省** —— 少了它就只是两张卡并排摆着, 不构成一个论断。 */
-    connector: z.enum(['arrow', 'versus', 'plus']),
-  }).strict(),
+  }).strict()),
 
   list: z.object({
     title: z.string().min(1).max(16),
@@ -162,10 +196,8 @@ export function describeCardsForPrompt(): string {
     '- `stat`：一个数字是主角，从 0 数上去。**什么时候用**：这一镜的重点就是**某一个确定的数值**时。槽位：label、value、prefix/suffix（可选，单位与限定词放这里）、note（可选注脚）。',
     '  - `value` 必须是**裸数字**（JSON 的 number）：写 `82`，不要写 `"82"`、`"82%"`、`"11000元"`。单位、正负号、"约"这类限定词一律放进 prefix/suffix。',
     '  - 画面是从 0 数到这个数的动画，所以**数不出来的东西不要用这张卡**：区间（300-500）、"翻倍""三倍"这类倍率、没有具体数值的概括。这些情况改用 statement 或 contrast，把数字写进文字里。',
-    '- `contrast`：左右两组东西 + 中间连接符。**什么时候用**：讲 A 与 B 的对照或转变。槽位：leftLabel/leftText、rightLabel/rightText、connector。**连接符不可省**——少了它就只是两张卡并排摆着，不构成一个论断。三个取值不要凭直觉选，按下面的判断标准来：',
-    '  - `versus`（对立/互斥，二选一）：左右是**互斥的选项**，选了一个就没有另一个。例：「换电池·299 元」versus「换新机·价格昂贵」——这是两条路二选一，不是谁变成谁。例：「加班到深夜」versus「按时下班」。**最容易错的地方**：两个并列选项之间**不要**因为它们能放在一个句子里比较就写成 arrow——没有"从左变成右"这件事发生，就不是 arrow。',
-    '  - `arrow`（前后变化）：**同一个东西**自己随时间/条件发生了变化，左是"之前"，右是"之后"。例：「电池健康度 100%」arrow「电池健康度 82%」——同一块电池，用久了退化了。例：「月薪 6000」arrow「月薪 12000」——同一个人涨薪了。',
-    '  - `plus`（叠加/并存）：左右两件事**同时成立**，不互斥也不是谁变成谁。例：「一边融资 74 亿美元」plus「一边给用户涨价」——两件事都在发生。',
+    '- `contrast`：左右两组东西，中间用一个中性分隔件连起来。**什么时候用**：讲 A 与 B 的对照。槽位：leftLabel/leftText、rightLabel/rightText。',
+    '  **不需要、也不能指定左右两边之间是什么关系**（没有这个字段可填）。三轮真机实测（3 条真实六幕稿 × 3 遍，每轮约 20 处 contrast）测出总正确率在 61%~70% 之间来回摆，且每轮现象一致：只要收紧判断规则让某个关系类型变准，错误就整批迁移到另一个类型上——这是**零和搬运**，不是判断力在变强，说明这道判定题超出了当前可控的范围。选错关系 = 画面在断言一个原文没有的因果或取舍，比不断言更糟，所以这一步已经拿掉：你只管把左右两组内容填对，连接件长什么样、表不表态由渲染层决定。',
     '- `list`：一份条目清单。**什么时候用**：用"多"本身说明问题时。槽位：title、items（3~8 条，每条 ≤20 字）。少于 3 条请改用 statement。',
     '',
     '不要输出坐标、颜色、字号、动画参数——版面与动效由渲染层决定，你只负责选型与填字。',

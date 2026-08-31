@@ -25,7 +25,7 @@ describe('环境运动层: 静止占比回归', () => {
       const shots = [
         { shotId: 'a', startMs: 0, endMs: 4000, card: 'statement', slots: { text: '三天用AI赚5000？', sub: '刷到过吗' } },
         { shotId: 'b', startMs: 4000, endMs: 9000, card: 'stat', slots: { label: '月均成交额', value: 900, prefix: '不足 ', suffix: ' 元' } },
-        { shotId: 'c', startMs: 9000, endMs: 14000, card: 'contrast', slots: { leftLabel: '技术', leftText: '人人可得', rightLabel: '提问', rightText: '拉开差距', connector: 'arrow' } },
+        { shotId: 'c', startMs: 9000, endMs: 14000, card: 'contrast', slots: { leftLabel: '技术', leftText: '人人可得', rightLabel: '提问', rightText: '拉开差距' } },
       ];
       const fps = 15; // 与 Task 5 端到端验收一致的预览帧率
       const durationInFrames = Math.ceil((4000 + 5000 + 5000) / 1000 * fps);

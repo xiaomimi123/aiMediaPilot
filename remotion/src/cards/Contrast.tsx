@@ -5,18 +5,46 @@ import {Live} from '../motion/life';
 import {safeBox, scaleFont} from '../layout/grid';
 import {assertContent} from './guard';
 
-const CONNECTOR_GLYPH: Record<'arrow' | 'versus' | 'plus', string> = {
-  arrow: '→',
-  versus: 'VS',
-  plus: '+',
+/**
+ * 中性分隔件：一条对称的短线, 中间一个点。
+ *
+ * 二十八期推翻了这张卡原来的设计。原来中间画的是 `connector`
+ * (`arrow`/`versus`/`plus` 三选一, 对应 →/VS/+), 由模型判断左右两边是什么关系。
+ * 三轮真机实测(3 条真实六幕稿 × 3 遍, 每轮约 20 处 contrast)测出总正确率在
+ * 61%~70% 之间来回摆, 且每轮现象一致——收紧规则让一个取值变准, 错误就整批
+ * 迁移到另一个取值上, 是零和搬运不是判断力提升。选错连接符 = 画面断言了一个
+ * 原文没有的因果或取舍关系, 比不断言更糟。所以拍板去掉这道判断, 改成渲染一个
+ * 不表态的分隔件: 画面仍是"左右两组+中间有东西连着", 但不再断言具体是哪种关系。
+ *
+ * 形状约束(不能带方向性——箭头、渐变方向、大小不对称都算): 左右各一段等长的线,
+ * 中间一个点。线段长度、粗细、颜色左右完全对称, 没有箭头、没有指向、没有从左到
+ * 右或从右到左的视觉暗示。字号按短边缩放, 横竖屏都成立。
+ */
+const NeutralDivider: React.FC<{width: number; height: number}> = ({width, height}) => {
+  const armLength = scaleFont(width, height, 40);
+  const lineHeight = Math.max(2, Math.round(scaleFont(width, height, 2)));
+  const dotSize = scaleFont(width, height, 10);
+  const arm = (
+    <div style={{width: armLength, height: lineHeight, background: C.ink, opacity: 0.35}} />
+  );
+  return (
+    <div style={{display: 'flex', flexDirection: 'row', alignItems: 'center'}}>
+      {arm}
+      <div
+        style={{
+          width: dotSize, height: dotSize, borderRadius: '50%', background: C.ink, opacity: 0.55,
+          margin: `0 ${scaleFont(width, height, 10)}px`,
+        }}
+      />
+      {arm}
+    </div>
+  );
 };
 
 /**
- * 对照卡：左右两组东西 + 中间连接符, 讲 A 与 B 的对照或转变。
+ * 对照卡：左右两组东西 + 中间一个中性分隔件, 讲 A 与 B 的对照。
  *
- * 左右两列用 flex row 平分, 连接符居中 —— 不用绝对坐标摆放三块内容。
- * `connector` 不可省: 少了它就只是两张卡并排摆着, 不构成一个论断
- * (这条约束在 shot-plan.ts 的 schema 里也是必填, 这里只是把它画出来)。
+ * 左右两列用 flex row 平分, 分隔件居中 —— 不用绝对坐标摆放三块内容。
  */
 export const Contrast: React.FC<{
   slots: {
@@ -24,7 +52,6 @@ export const Contrast: React.FC<{
     leftText: string;
     rightLabel: string;
     rightText: string;
-    connector: 'arrow' | 'versus' | 'plus';
   };
   durationInFrames: number;
 }> = ({slots}) => {
@@ -77,12 +104,9 @@ export const Contrast: React.FC<{
       {column(leftLabel, leftText, 1)}
       <Live
         seed={5}
-        style={{
-          fontFamily: FONT_CN, fontWeight: 900, color: C.red,
-          fontSize: scaleFont(width, height, 48), padding: `0 ${scaleFont(width, height, 24)}px`,
-        }}
+        style={{padding: `0 ${scaleFont(width, height, 24)}px`}}
       >
-        {CONNECTOR_GLYPH[slots.connector]}
+        <NeutralDivider width={width} height={height} />
       </Live>
       {column(rightLabel, rightText, 3)}
     </AbsoluteFill>
