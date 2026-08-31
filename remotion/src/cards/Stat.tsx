@@ -1,6 +1,6 @@
 import React from 'react';
 import {AbsoluteFill, useVideoConfig, useCurrentFrame, interpolate, Easing} from 'remotion';
-import {C, FONT_CN} from '../motion/lib';
+import {C, FONT_CN, roundToSourceDecimals} from '../motion/lib';
 import {Live} from '../motion/life';
 import {safeBox, scaleFont} from '../layout/grid';
 import {assertContent} from './guard';
@@ -24,7 +24,10 @@ export const Stat: React.FC<{
   const p = interpolate(frame, [fps * 0.6, fps * 0.6 + countDur], [0, 1], {
     extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic),
   });
-  const shown = Math.round(p * slots.value);
+  // 本项目修改(2026-08-31)：取整不能一律 Math.round —— facts 台账里 32.2% 这类
+  // 非整数 value，末帧定格若取整成 32 就和台账不再逐位一致(见 lib.tsx 的
+  // roundToSourceDecimals 注释)。取整精度跟随 value 自身的小数位数。
+  const shown = roundToSourceDecimals(p * slots.value, slots.value);
 
   return (
     <AbsoluteFill

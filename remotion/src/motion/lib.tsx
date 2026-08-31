@@ -34,6 +34,24 @@ export const backOut = (p: number, s = 1.70158) => {
 export const prog = (frame: number, start: number, dur: number) =>
   clamp((frame - start) / Math.max(dur, 1), 0, 1);
 
+/**
+ * 本项目修改：数字滚动的取整精度必须跟随源值的小数位数，而不是一律 `Math.round`。
+ *
+ * 实测(2026-08-31)：facts 台账里 `32.2%` 这类非整数 `stat.value`，末帧定格用
+ * `Math.round(to)` 会把 `32.2` 显示成 `32`——数字本身有出处(不是编造)，但呈现值
+ * 和台账不再逐位一致，这是静默的、每一个非整数 stat 都会中招的系统性误差。
+ * 这个项目的事实护栏要求画面上的数字必须是观众能查证的那个值，所以取整精度
+ * 要跟着 `to` 走：`to` 是 32.2 就显示 32.2，是 900 就显示 900——不凭空补 `.0`。
+ * 这与 `grouping` 那条修改同类：都是「上游对数字呈现做了想当然的假设」。
+ *
+ * 只保证**末帧**定格值与 `to` 完全相等；滚动过程中的中间帧仍按同样的小数位数
+ * 取整，不会出现中途才补出小数位又消失的跳动。
+ */
+export const roundToSourceDecimals = (value: number, source: number): number => {
+  const decimals = (source.toString().split('.')[1] || '').length;
+  return Number(value.toFixed(decimals));
+};
+
 /** Pop-in: scale overshoot entrance (6-12 frame recipe from replica analysis). */
 export const popScale = (frame: number, start: number, dur = 9) =>
   backOut(prog(frame, start, dur), 2.2);

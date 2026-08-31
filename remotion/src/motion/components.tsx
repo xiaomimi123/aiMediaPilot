@@ -1,6 +1,6 @@
 import React from 'react';
 import {Img, staticFile, useCurrentFrame} from 'remotion';
-import {C, DirBlur, FONT_CN, FONT_MONO, backOut, breathe, clamp, easeOut, keyframes, popScale, prog} from './lib';
+import {C, DirBlur, FONT_CN, FONT_MONO, backOut, breathe, clamp, easeOut, keyframes, popScale, prog, roundToSourceDecimals} from './lib';
 
 // ---------- subtitle track (r07 recipe: white + double black stroke, whole-clause hard cut) ----------
 // chunks come from your project's data layer (split timestamps.json sentences at
@@ -239,7 +239,8 @@ export const NumberRoll: React.FC<{
 }> = ({to, at, dur = 40, size = 150, color = C.yellow, prefix = '', suffix = '', grouping = false, x, y}) => {
   const f = useCurrentFrame();
   if (f < at) return null;
-  const v = Math.round(easeOut(prog(f, at, dur)) * to);
+  // 本项目修改：取整精度跟随 `to` 的小数位数，见 lib.tsx 的 roundToSourceDecimals 注释。
+  const v = roundToSourceDecimals(easeOut(prog(f, at, dur)) * to, to);
   return (
     <div
       style={{
