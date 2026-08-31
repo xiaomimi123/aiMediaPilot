@@ -46,6 +46,38 @@ describe('ShotPlanSchema', () => {
   });
 });
 
+/*
+ * 这组测的不是"拒不拒绝"，是**报错报得对不对**。
+ *
+ * 曾用 z.union，`stat.value` 填成字符串时报的是 invalid_union，里面并排装着四个分支
+ * 的失败；排第一的 statement 分支写着「expected "statement"」+「Unrecognized key(s):
+ * 'label','value','suffix'」。实测三条真实稿子，模型把这段读成"这镜该用 statement"，
+ * 于是整张 stat 卡被放弃，存活率 0/3。错误信息是修复循环的输入，所以它属于契约本身。
+ */
+describe('ShotPlanSchema 的报错必须可执行', () => {
+  const statShot = {
+    shotId: 's1', startMs: 0, endMs: 3000, card: 'stat',
+    slots: { label: '涨幅', value: '300-500', suffix: '元' },
+  };
+
+  it('value 类型错时只报 value 这一条, 不报成 invalid_union', () => {
+    const r = ShotPlanSchema.safeParse(statShot);
+    expect(r.success).toBe(false);
+    if (r.success) return;
+    expect(r.error.issues).toHaveLength(1);
+    expect(r.error.issues[0].code).toBe('invalid_type');
+    expect(r.error.issues[0].path).toEqual(['slots', 'value']);
+  });
+
+  it('不许出现"改用别的卡片"这类会把模型带偏的字样', () => {
+    const r = ShotPlanSchema.safeParse(statShot);
+    if (r.success) throw new Error('这份数据本该解析失败');
+    const text = JSON.stringify(r.error.issues);
+    expect(text).not.toContain('statement');
+    expect(text).not.toContain('Unrecognized key');
+  });
+});
+
 describe('FilmPlanSchema', () => {
   const shot = (id: string, a: number, b: number) => ({
     shotId: id, startMs: a, endMs: b, card: 'statement' as const, slots: { text: id },

@@ -45,26 +45,59 @@ const SLOTS = {
   }).strict(),
 } as const;
 
+/** 分镜的公共字段。四种卡片只在 `card` 与 `slots` 上分岔。 */
+const SHOT_BASE = {
+  shotId: z.string().min(1),
+  startMs: z.number().int().min(0),
+  endMs: z.number().int().min(1),
+} as const;
+
+const shotVariant = <T extends CardType>(card: T) =>
+  z.object({ ...SHOT_BASE, card: z.literal(card), slots: SLOTS[card] }).strict();
+
 /**
  * 每种卡片类型对应的分镜 schema。
  *
- * 注意: 这里刻意不用 `discriminatedUnion(...).refine(...)` —— 二者组合在这个
- * zod 版本下会触发类型报错(discriminatedUnion 返回的联合类型与 refine 的
- * 输入类型推导冲突)。改用 `z.union(...)` 描述"选哪种卡片、填哪套槽位"，
- * `endMs > startMs` 的校验挪到顶层 `superRefine` 里统一做 —— 断言行为不变，
- * 只是校验的位置从"每个分支各自 refine"改成"顶层集中 refine"。
+ * **必须是 `discriminatedUnion`，不能退回 `z.union`。** 这里曾经用过 `z.union` +
+ * 顶层 `superRefine`(为绕开当时 `discriminatedUnion().refine()` 的类型报错)，当时
+ * 判断"断言行为不变"—— 就接受/拒绝而言这话没错，**但错误信息变了，而修复循环吃的
+ * 就是错误信息**，这个代价当时没看出来。
+ *
+ * 实测(2026-08-31，三条真实六幕稿)：`z.union` 在 `stat` 卡的 `value` 填成字符串时，
+ * 报的是 `invalid_union`，里面并排装着四个分支各自的失败；真正有用的
+ * `Expected number, received string` 排在第二个分支，而排第一的 statement 分支写着
+ * 「Invalid literal value, expected "statement"」+「Unrecognized key(s): 'label',
+ * 'value', 'suffix'」。把这段喂回给模型，它读到的字面意思是「这镜该用 statement，
+ * 而 label/value/suffix 不是合法字段」—— 于是三条稿子无一例外地**放弃 `stat` 整张卡**，
+ * 把数字揉进 statement 文本里。`stat` 的存活率是 0/3。
+ * 错误信息不是在教它改类型，是在教它别用这张卡。
+ *
+ * `discriminatedUnion` 先按 `card` 选定分支，只报那一个分支的问题，
+ * 修复循环拿到的才是可执行的指令。
  */
-const SHOT_VARIANTS = CARD_TYPES.map((card) =>
-  z.object({
-    shotId: z.string().min(1),
-    startMs: z.number().int().min(0),
-    endMs: z.number().int().min(1),
-    card: z.literal(card),
-    slots: SLOTS[card],
-  }).strict(),
-) as unknown as [z.ZodTypeAny, z.ZodTypeAny, ...z.ZodTypeAny[]];
+const SHOT_VARIANTS = [
+  shotVariant('statement'),
+  shotVariant('stat'),
+  shotVariant('contrast'),
+  shotVariant('list'),
+] as const;
 
-export const ShotPlanSchema = z.union(SHOT_VARIANTS).superRefine((s, ctx) => {
+/**
+ * 上面那个数组是手写的，不是从 `CARD_TYPES` 生成的(`discriminatedUnion` 需要字面量
+ * 元组类型，`.map()` 出来的数组喂不进去)。手写就有漏写的风险 —— 加一张卡却忘了加
+ * 分支，schema 会安静地拒绝那张新卡。这条断言让"忘了"在模块加载时就炸。
+ */
+{
+  const covered = SHOT_VARIANTS.map((v) => v.shape.card.value as string);
+  const missing = CARD_TYPES.filter((c) => !covered.includes(c));
+  if (missing.length > 0) {
+    throw new Error(`SHOT_VARIANTS 漏了卡片类型: ${missing.join(', ')}`);
+  }
+}
+
+export const ShotPlanSchema = z.discriminatedUnion('card', SHOT_VARIANTS as unknown as [
+  ReturnType<typeof shotVariant>, ReturnType<typeof shotVariant>, ...ReturnType<typeof shotVariant>[],
+]).superRefine((s, ctx) => {
   const shot = s as { startMs: number; endMs: number };
   if (shot.endMs <= shot.startMs) {
     ctx.addIssue({
@@ -74,7 +107,6 @@ export const ShotPlanSchema = z.union(SHOT_VARIANTS).superRefine((s, ctx) => {
     });
   }
 });
-
 export type ShotPlan = z.infer<typeof ShotPlanSchema>;
 
 export const FilmPlanSchema = z.object({
@@ -110,7 +142,9 @@ export function describeCardsForPrompt(): string {
     '可用的画面卡片（每一镜必须选且只选一种，并填满它的槽位）：',
     '',
     '- `statement`：一句判断占据画面。**什么时候用**：开场、转折、收尾这类需要停顿的地方。槽位：text（≤24 字）、sub（可选，≤20 字）。',
-    '- `stat`：一个数字是主角，从 0 数上去。**什么时候用**：这一镜的重点就是某个具体数值时。槽位：label、value（数字本身，不带单位）、prefix/suffix（可选，单位与限定词放这里）、note（可选注脚）。',
+    '- `stat`：一个数字是主角，从 0 数上去。**什么时候用**：这一镜的重点就是**某一个确定的数值**时。槽位：label、value、prefix/suffix（可选，单位与限定词放这里）、note（可选注脚）。',
+    '  - `value` 必须是**裸数字**（JSON 的 number）：写 `82`，不要写 `"82"`、`"82%"`、`"11000元"`。单位、正负号、"约"这类限定词一律放进 prefix/suffix。',
+    '  - 画面是从 0 数到这个数的动画，所以**数不出来的东西不要用这张卡**：区间（300-500）、"翻倍""三倍"这类倍率、没有具体数值的概括。这些情况改用 statement 或 contrast，把数字写进文字里。',
     '- `contrast`：左右两组东西 + 中间连接符。**什么时候用**：讲 A 与 B 的对照或转变。槽位：leftLabel/leftText、rightLabel/rightText、connector（arrow 表示变成、versus 表示对立、plus 表示叠加）。**连接符不可省**——少了它就只是两张卡并排摆着，不构成一个论断。',
     '- `list`：一份条目清单。**什么时候用**：用"多"本身说明问题时。槽位：title、items（3~8 条，每条 ≤20 字）。少于 3 条请改用 statement。',
     '',
