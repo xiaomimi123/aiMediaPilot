@@ -107,4 +107,22 @@ describe('describeCardsForPrompt', () => {
   it('说明里写了"什么时候用", 不只是列字段', () => {
     expect(describeCardsForPrompt()).toMatch(/什么时候用|用在/);
   });
+
+  /*
+   * 二十六期: 实测(电池稿「换电池/换新机」)模型把互斥的二选一标成了 arrow, 应该是
+   * versus。之前的说明只罗列了三个值的含义, 没有例子; 这里给每个值配一个具体例子,
+   * 并专门点名最容易混的那组。
+   */
+  it('给 versus/arrow/plus 各配一个具体例子', () => {
+    const text = describeCardsForPrompt();
+    expect(text).toMatch(/versus.*例|例.*versus/);
+    expect(text).toMatch(/arrow.*例|例.*arrow/);
+    expect(text).toMatch(/plus.*例|例.*plus/);
+  });
+
+  it('专门点名"互斥选项用 versus, 不是 arrow"这个最容易混的判断', () => {
+    const text = describeCardsForPrompt();
+    expect(text).toContain('互斥');
+    expect(text).toMatch(/versus/);
+  });
 });

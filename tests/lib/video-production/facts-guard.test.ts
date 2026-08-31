@@ -199,3 +199,62 @@ describe('版面骨架换成构图契约', () => {
     expect(s).toContain('清单之外的任何数字');
   });
 });
+
+/*
+ * 二十六期: `mode` 参数。根因(见 spike-builder-filmplan.md 复跑记录)——旧链"构图契约"
+ * 里的 volume 一项写着"条目数不少于 8 条", 而填槽链 `list` 卡的 schema 是 3~8 条、
+ * 固定版面。同一段文案套在两条链上, 旧链是"密度建议", 新链变成"提示词要求不少于 8
+ * 条、schema 上限是 8"的自相矛盾指令——实测三条真实稿子的 list 卡都在凑数。
+ *
+ * 默认值 `'freeform'` 必须与不传第三个参数时完全一致(旧调用方零改动); `'cards'` 模式
+ * 才换成与固定卡片一致的措辞。
+ */
+describe('mode 参数(二十六期): 旧链 freeform 不变, 新链 cards 换掉冲突措辞', () => {
+  const actsWithHighFacts = (n: number) => [
+    {
+      act: 'hook', title: '标题', narration: '台词', visual: '画面', note: '备注', targetSec: 10,
+      beats: [{ keyword: 'k1' }],
+      facts: Array.from({ length: n }, (_, i) => ({
+        claim: `事实${i}`, value: `${i}00元`, source: '来源', confidence: 'high' as const,
+      })),
+    },
+  ] as unknown as ScriptAct[];
+
+  it('不传 mode 时与传 "freeform" 字符级一致', () => {
+    const acts = actsWithHighFacts(3);
+    expect(buildFactsSection(acts)).toBe(buildFactsSection(acts, undefined, 'freeform'));
+  });
+
+  it('不传 mode 时的输出与改动前完全一致(回归防线): 仍含"不少于 8 条"与"一屏可以放多块信息"', () => {
+    const s = buildFactsSection(actsWithHighFacts(3));
+    expect(s).toContain('不少于 8 条');
+    expect(s).toContain('一屏可以放多块信息');
+  });
+
+  it('cards 模式不再出现"不少于 8 条"这类跟固定卡片版面冲突的密度要求', () => {
+    const s = buildFactsSection(actsWithHighFacts(3), undefined, 'cards');
+    expect(s).not.toContain('不少于 8 条');
+    expect(s).not.toContain('一屏可以放多块信息');
+    expect(s).not.toContain('一屏只放一句话');
+  });
+
+  it('cards 模式明确要求 list 条目必须有出处, 凑不满 3 条就改用 statement', () => {
+    const s = buildFactsSection(actsWithHighFacts(3), undefined, 'cards');
+    expect(s).toContain('list');
+    expect(s).toMatch(/出处/);
+    expect(s).toContain('statement');
+    expect(s).toMatch(/不许.*编造|不要.*编造/);
+  });
+
+  it('cards 模式下事实纪律与事实清单本体照旧保留(只换构图/密度措辞)', () => {
+    const s = buildFactsSection(actsWithHighFacts(3), undefined, 'cards');
+    expect(s).toContain('画面事实纪律');
+    expect(s).toContain('清单之外的任何数字');
+  });
+
+  it('料不够(entries < 2)时 cards 模式同样不给密度/构图指令', () => {
+    const acts = actsWithHighFacts(1);
+    const s = buildFactsSection(acts, undefined, 'cards');
+    expect(s).not.toContain('选卡与填槽纪律');
+  });
+});
