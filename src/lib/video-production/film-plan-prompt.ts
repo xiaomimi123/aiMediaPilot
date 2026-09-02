@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { ContentPart } from '@/lib/llm/vision';
 import type { ScriptAct } from '@/lib/script/six-act';
+import type { AlignedAct } from './aligner-prompt';
 
 /**
  * FilmPlan 提示词(二十七期)。
@@ -42,6 +43,38 @@ export function actWindows(acts: ScriptAct[]): ActWindow[] {
     cursorMs += a.targetSec * 1000;
     return { act: a.act, title: a.title, startMs, endMs: cursorMs, narration: a.narration };
   });
+}
+
+/**
+ * 幕时间窗(接 TTS 版)——时间来自真实语音对齐结果 `AlignedAct`, 而不是 `actWindows`
+ * 那样按 `targetSec` 估算累加。
+ *
+ * 为什么不再用 targetSec: `targetSec` 是写稿阶段对朗读时长的估算, 真实 TTS 合成出的
+ * 语音时长与它可差数秒(语速、停顿、多音字断句都会让估算偏移)。如果画面时间窗仍按
+ * `targetSec` 铺, 而人声按真实时长播放, 两条轴会越走越不同步——观众看到的就是画面
+ * 已经翻到下一幕、人声还在念上一幕。接入 TTS 之后, 画面窗口必须以对齐产出的
+ * `AlignedAct.startMs/endMs`(真实时长)为准, `targetSec` 只保留给旧的估算链
+ * (`actWindows`)和写稿阶段的节奏参考, 不再驱动最终画面时间轴。
+ *
+ * narration/title 仍取自 `acts`(六幕脚本本身的文字内容, 对齐结果里没有这些字段)。
+ * `aligned` 里没有覆盖到的幕(未讲到、被跳过的幕)不产生窗口——没有配音就不该有
+ * 对应的画面, 否则会出现一段无声黑屏或复用错的画面。
+ */
+export function actWindowsFromAligned(acts: ScriptAct[], aligned: AlignedAct[]): ActWindow[] {
+  const alignedByAct = new Map(aligned.map((a) => [a.act, a]));
+  const windows: ActWindow[] = [];
+  for (const act of acts) {
+    const window = alignedByAct.get(act.act);
+    if (!window) continue;
+    windows.push({
+      act: act.act,
+      title: act.title,
+      startMs: window.startMs,
+      endMs: window.endMs,
+      narration: act.narration,
+    });
+  }
+  return windows;
 }
 
 /**

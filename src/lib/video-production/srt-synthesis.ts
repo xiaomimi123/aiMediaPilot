@@ -1,6 +1,7 @@
 import type { ActKey, ScriptAct } from '@/lib/script/six-act';
 import type { AlignedAct } from './aligner-prompt';
 import type { TranscriptSegment } from '@/lib/llm/whisper';
+import type { CaptionEvent } from './ass-captions';
 
 /**
  * 六幕脚本 → SRT 合成纯函数 (十三期任务二)。
@@ -11,8 +12,15 @@ import type { TranscriptSegment } from '@/lib/llm/whisper';
  * 不依赖任何真实语音时长, 只是六幕脚本既有字段的确定性重排。
  */
 
-/** 按全角句末标点 (。！？) 切句, 标点保留在句尾; 未以标点结尾的残余文字视为切不出句子, 丢弃。 */
-function splitSentences(narration: string): string[] {
+/**
+ * 按全角句末标点 (。！？) 切句, 标点保留在句尾; 未以标点结尾的残余文字视为切不出句子, 丢弃。
+ *
+ * 导出给 `sentenceCaptionEvents`(二十七期)复用——切句口径必须与
+ * `synthesizeSrtFromSixActScript` 完全一致, 两边各写一份迟早会分叉, 所以不复制实现,
+ * 直接共享这一个函数。**实现本身不改**: `synthesizeSrtFromSixActScript` 依赖它现在的
+ * 行为, 改了会动旧链。
+ */
+export function splitSentences(narration: string): string[] {
   const parts = narration.split(/([。！？])/);
   const sentences: string[] = [];
   for (let i = 0; i + 1 < parts.length; i += 2) {
@@ -145,4 +153,50 @@ export function ttsResultsToAlignedActs(results: TtsActResult[]): AlignedAct[] {
     cursorMs = endMs;
     return { act: result.act, startMs, endMs };
   });
+}
+
+/**
+ * 真实幕边界 (AlignedAct) → 逐句字幕事件 (二十七期)。
+ *
+ * 比例分配算法与 `synthesizeSrtFromSixActScript` 完全一致(前 n-1 句按字符占比取整,
+ * 末句吃掉四舍五入余数)——只是把"targetMs 估算窗口"换成"aligned 的真实窗口",
+ * 原因与 `actWindowsFromAligned` 相同: 字幕要跟真实人声对齐, 不能再按估算时长切。
+ * "末句吃余数"而不是简单等比例除法, 是为了保证幕内各句时长精确加总等于窗口时长、
+ * 首尾相接不留缝隙——自己发明一种除法容易在取整时产生几毫秒的空档或重叠。
+ *
+ * aligned 里没有的幕(未讲到、被跳过)不产生字幕事件, 与 `actWindowsFromAligned`
+ * 保持一致: 没有配音的幕既不该有画面, 也不该有字幕。
+ */
+export function sentenceCaptionEvents(acts: ScriptAct[], aligned: AlignedAct[]): CaptionEvent[] {
+  const alignedByAct = new Map(aligned.map((a) => [a.act, a]));
+  const events: CaptionEvent[] = [];
+
+  for (const act of acts) {
+    const window = alignedByAct.get(act.act);
+    if (!window) continue;
+
+    const windowMs = window.endMs - window.startMs;
+    const sentences = splitSentences(act.narration);
+    if (sentences.length === 0) continue;
+
+    const totalChars = sentences.reduce((sum, s) => sum + s.length, 0);
+    const durationsMs: number[] = [];
+    let allocatedMs = 0;
+    for (let i = 0; i < sentences.length - 1; i += 1) {
+      const durationMs = Math.round((windowMs * sentences[i].length) / totalChars);
+      durationsMs.push(durationMs);
+      allocatedMs += durationMs;
+    }
+    durationsMs.push(windowMs - allocatedMs);
+
+    let cursorMs = window.startMs;
+    for (let i = 0; i < sentences.length; i += 1) {
+      const startMs = cursorMs;
+      const endMs = cursorMs + durationsMs[i];
+      events.push({ startMs, endMs, text: sentences[i] });
+      cursorMs = endMs;
+    }
+  }
+
+  return events;
 }
