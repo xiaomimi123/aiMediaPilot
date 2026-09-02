@@ -37,6 +37,8 @@ interface Film {
   freezeReport: FreezeReport | null;
   /** 这条任务走哪条渲染链 —— 'remotion' 是带人声的新链, 'legacy' 是老链。 */
   renderer: string;
+  /** 面向用户的非失败提醒(如"本条为无声成片")。null = 没有要说的话。 */
+  productionNotice: string | null;
 }
 
 function mmss(sec: number): string {
@@ -159,6 +161,7 @@ export function FilmDetail({ initial }: { initial: Film }) {
             hasMaster: Boolean(d.masterPath) || f.hasMaster,
             // 出片跑完那一刻页面是靠轮询更新的, 不接回来就得手动刷新才看得到体检结果
             freezeReport: d.freezeReport ?? f.freezeReport,
+            productionNotice: d.productionNotice ?? f.productionNotice,
           }));
         }
       } catch {
@@ -465,6 +468,16 @@ export function FilmDetail({ initial }: { initial: Film }) {
                 ? '切换到旧版渲染'
                 : '切换到新版渲染'}
           </Button>
+        ) : null}
+
+        {/*
+          无声降级提醒(二十八期终审)。之前只有 worker 日志知道, 用户点开一条没声音
+          的成片会以为是 bug。有值才显示——有声路径/legacy 路径这个字段是 null。
+        */}
+        {film.productionNotice ? (
+          <span className="rounded bg-secondary/60 px-1.5 py-0.5 text-xs text-muted-foreground">
+            {film.productionNotice}
+          </span>
         ) : null}
 
         {film.hasMaster ? (

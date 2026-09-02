@@ -363,6 +363,11 @@ model VideoProduction {
   renderer        String  @default("legacy")
   /// 二十五期: Builder 的填槽产出(FilmPlan)。null = 还没跑到 Builder 或走的是旧链路。
   filmPlan        Json?
+  /// 二十八期终审: 面向用户的非失败提醒(如"本条为无声成片")。null = 没有要说的话。
+  /// 与 errorMessage 分开: errorMessage 语义是"失败", 无声降级不是失败, 混进
+  /// errorMessage 会让用户把正常出片当报错。有声路径/legacy 路径保持 null,
+  /// 不要用一句无关提醒污染没有降级的任务。
+  productionNotice String?
   user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, contentId])

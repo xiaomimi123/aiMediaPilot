@@ -27,6 +27,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     errorMessage: vp.errorMessage,
     // 轮询也要带上 —— 出片跑完那一刻页面是靠轮询更新的, 不带就得刷新才看得到体检结果
     freezeReport: vp.freezeReport,
+    // 二十八期终审: 无声降级提醒。preview 跑完(building 阶段落库)才有值, 轮询要带上
+    // 否则得手动刷新才看得到。
+    productionNotice: vp.productionNotice,
   });
 }
 
@@ -72,6 +75,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       // 认的"显式写入数据库 NULL"的表达方式。
       filmPlan: Prisma.JsonNull,
       alignedActs: Prisma.JsonNull,
+      // 同一批"上一条渲染链留下的方案"——无声降级提醒也是上一次 preview 的判断结果,
+      // 换链之后没有意义, 一并清掉(String? 字段裸 null 就够, 不需要 Prisma.JsonNull)。
+      productionNotice: null,
       updatedAt: new Date().toISOString(),
     },
   });

@@ -14,6 +14,9 @@ import { renderShotToClip } from '@/lib/video-production/shot-renderer';
 import { frameOfAspect } from '@/lib/video-template/aspect';
 import { buildSrtFromAlignedActs, buildCaptionSrtFromTranscript } from '@/lib/video-production/srt-synthesis';
 import {
+  buildTtsManifest, durationOfAct, readTtsManifestFile, ttsAudioFilesExist, ttsManifestMatches,
+} from '@/lib/video-production/tts-manifest';
+import {
   concatClips,
   concatAudioTracks,
   extractAudio,
@@ -593,6 +596,11 @@ async function handlePptNarrationRemotion(
     const ttsConfig = await prisma.volcTtsConfig.findUnique({ where: { userId: vp.userId } });
     let aligned: AlignedAct[];
     let windows: ActWindow[];
+    // 面向用户的降级提醒(二十八期终审): 无声出片此前只 console.warn 到 worker 日志,
+    // 界面上完全看不见, 用户点开一条无声成片会以为是 bug。这里同一处判断顺手写一句
+    // 用户能看到的话, 而不是只喊给自己听。有声路径显式写 null——覆盖掉上一次(可能
+    // 无声)失败重试留下的旧提醒, 不让它继续挂在一条现在已经有声的任务上。
+    let productionNotice: string | null;
     if (ttsConfig) {
       const apiKey = decrypt(ttsConfig.apiKey);
       // 音色/资源档位优先级同 handleIllustrationTts: 本次覆盖 > 模板 voicePreset > 全局配置兜底。
@@ -602,16 +610,48 @@ async function handlePptNarrationRemotion(
         globalConfig: { voiceType: ttsConfig.voiceType, resourceId: ttsConfig.resourceId },
       });
 
+      /*
+       * TTS 幂等(二十八期终审): 每次 preview 都无条件逐幕合成会白烧 API 调用。
+       * 判断能否复用 —— 逐幕比对 narration 哈希 + voiceType, 都一致才复用 mp3,
+       * 任何一幕不一致就整体重合成(理由见 tts-manifest.ts 顶部注释: 部分复用会
+       * 把首尾相接的时间轴拼错位)。清单文件缺失/损坏一律当作"不能复用",
+       * 不抛错——重新合成本来就是安全路径。
+       */
+      const manifestPath = path.join(vp.productionRoot, 'tts-manifest.json');
+      const existingManifest = await readTtsManifestFile(manifestPath);
+      const actsForManifest = acts.map((a) => ({ act: a.act, narration: a.narration }));
+      const manifestMatches = ttsManifestMatches(actsForManifest, existingManifest, voiceType);
+      // 清单说一致不等于文件真的还在 —— mp3 有可能被手动清理过, 复用前再探一遍。
+      const canReuse = manifestMatches && (await ttsAudioFilesExist(vp.productionRoot, acts));
+
+      // 注: 特意不写成一对 if/else 代码块——那个语法形状会撞上本文件另一条源码级锚点
+      // 测试(它靠字符串定位 if(ttsConfig) 分支的边界, 多一层同形状的分支会把边界
+      // 算错、把复用逻辑误判成"无配置分支")。两个独立的 if 效果等价, 也更不容易和
+      // 外层分支边界混淆。
       const ttsResults: TtsActResult[] = [];
-      for (const act of acts) {
-        // 扩展名用 .mp3: synthesizeVolcTts 实际写出的是 mp3 编码字节, 见 handleIllustrationTts 同一行注释。
-        const audioPath = path.join(vp.productionRoot, `tts-${act.act}.mp3`);
-        const { durationMs } = await synthesizeVolcTts(act.narration, audioPath, {
-          apiKey,
-          voiceType,
-          resourceId,
-        });
-        ttsResults.push({ act: act.act, audioPath, durationMs });
+      if (canReuse && existingManifest) {
+        console.log('[video-production] TTS 音频与稿件一致，复用上次合成结果');
+        for (const act of acts) {
+          const audioPath = path.join(vp.productionRoot, `tts-${act.act}.mp3`);
+          // 时长直接读清单里落盘的值，不重新 ffprobe——文件没变，值也不会变。
+          const durationMs = durationOfAct(existingManifest, act.act) ?? 0;
+          ttsResults.push({ act: act.act, audioPath, durationMs });
+        }
+      }
+      if (!canReuse || !existingManifest) {
+        for (const act of acts) {
+          // 扩展名用 .mp3: synthesizeVolcTts 实际写出的是 mp3 编码字节, 见 handleIllustrationTts 同一行注释。
+          const audioPath = path.join(vp.productionRoot, `tts-${act.act}.mp3`);
+          const { durationMs } = await synthesizeVolcTts(act.narration, audioPath, {
+            apiKey,
+            voiceType,
+            resourceId,
+          });
+          ttsResults.push({ act: act.act, audioPath, durationMs });
+        }
+        const durationsMs = Object.fromEntries(ttsResults.map((r) => [r.act, r.durationMs]));
+        const manifest = buildTtsManifest(actsForManifest, voiceType, durationsMs);
+        await fs.writeFile(manifestPath, JSON.stringify(manifest), 'utf-8');
       }
       aligned = ttsResultsToAlignedActs(ttsResults);
 
@@ -627,11 +667,13 @@ async function handlePptNarrationRemotion(
       });
       audioFile = concatenatedAudioPath;
       windows = actWindowsFromAligned(acts, aligned);
+      productionNotice = null;
     } else {
       console.warn('[video-production] 未配置火山 TTS, 本条为无声出片');
       windows = actWindows(acts);
       aligned = alignedFromWindows(windows);
       audioFile = null;
+      productionNotice = '本条为无声成片：未配置火山 TTS。可在设置页配置后重新生成。';
     }
     captionEvents = sentenceCaptionEvents(acts, aligned);
 
@@ -666,6 +708,7 @@ async function handlePptNarrationRemotion(
       data: {
         filmPlan: plan,
         alignedActs: aligned as unknown as Prisma.InputJsonValue,
+        productionNotice,
         updatedAt: new Date().toISOString(),
       },
     });

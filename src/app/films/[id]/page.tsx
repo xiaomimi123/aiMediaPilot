@@ -138,6 +138,7 @@ export default async function FilmDetailPage(props: { params: Promise<{ id: stri
           // null 有确切含义: 这条片子出在静止关接线之前, 界面要说「没量过」而不是显示 0
           freezeReport: (vp.freezeReport as FreezeReport | null) ?? null,
           renderer: vp.renderer,
+          productionNotice: vp.productionNotice,
         }}
       />
     </PageShell>
