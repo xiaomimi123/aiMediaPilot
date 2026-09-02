@@ -207,6 +207,10 @@ describe('PATCH /api/v1/cockpit/video-productions/[id] —— 切换渲染方式
     // 这条任务的语义要求换渲染器后旧方案必须真的被抹掉, 不是维持原样。
     expect(data.filmPlan).toEqual(Prisma.JsonNull);
     expect(data.alignedActs).toEqual(Prisma.JsonNull);
+    // productionNotice 是 String? 不是 Json?, 清空用裸 null 即可。终审修复轮的 scoped
+    // 复审实测: 删掉路由里这行清空, 全部测试照常绿 —— 这条断言就是补那个洞的。
+    // 不清的后果: 无声片的提醒会顶在切换后的新任务上, 有声片顶着「无声」提示比没提示更糟。
+    expect(data.productionNotice).toBeNull();
   });
 
   it('复审(幂等): 传的 renderer 跟当前值一样 —— 直接返回, 不清 filmPlan/alignedActs, 不该有副作用', async () => {
