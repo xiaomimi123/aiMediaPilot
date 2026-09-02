@@ -1,7 +1,14 @@
 import fs from 'fs/promises';
+import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
+import { canStartProduction } from '@/lib/cockpit/production-status';
+
+const PatchBodySchema = z.object({
+  renderer: z.enum(['remotion', 'legacy']),
+}).strict();
 
 /**
  * 单条成片生成状态轮询 (十八期 T8) — 归属校验用 404 而非 403,
@@ -21,6 +28,43 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     // 轮询也要带上 —— 出片跑完那一刻页面是靠轮询更新的, 不带就得刷新才看得到体检结果
     freezeReport: vp.freezeReport,
   });
+}
+
+/**
+ * 切换渲染器(任务四)——面板上「新版渲染/旧版渲染」的切换走这里。
+ *
+ * 只在任务还没开工时允许切(`canStartProduction`, 与开始制作按钮共用同一条判断,
+ * 避免两处各写一份而漂移)。切换必须把 `filmPlan`/`alignedActs` 一并清掉:
+ * 这两个字段是上一条渲染链留下的方案/对齐结果, 换链之后对新链毫无意义 ——
+ * 残留下来会让 master 阶段误以为有现成方案可以直接复用, 结果是拿旧链的产物拼新链的片子。
+ */
+export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  let body: unknown;
+  try { body = await req.json(); } catch { return fail('请求体不是合法 JSON', 400); }
+  const parsed = PatchBodySchema.safeParse(body);
+  if (!parsed.success) return fail('renderer 只能是 remotion 或 legacy', 400);
+
+  const user = await getOrCreateDefaultUser();
+  const vp = await prisma.videoProduction.findUnique({ where: { id: params.id } });
+  if (!vp || vp.userId !== user.id) return fail('不存在', 404);
+
+  if (!canStartProduction(vp.status)) {
+    return fail(`这条任务当前是「${vp.status}」, 已经在处理或已完成, 不能再切换渲染方式`, 400);
+  }
+
+  const updated = await prisma.videoProduction.update({
+    where: { id: params.id },
+    data: {
+      renderer: parsed.data.renderer,
+      // Json? 字段的"清空"要用 Prisma.JsonNull, 裸 null 会被当成"未设置"忽略
+      // (与 produce/route.ts voiceOverride 字段的既有惯用法一致)。
+      filmPlan: Prisma.JsonNull,
+      alignedActs: Prisma.JsonNull,
+      updatedAt: new Date().toISOString(),
+    },
+  });
+
+  return ok({ id: updated.id, renderer: updated.renderer });
 }
 
 /** 进行中的状态 —— worker 还在往 productionRoot 写盘, 此时删目录会让它中途崩在莫名其妙的地方。 */

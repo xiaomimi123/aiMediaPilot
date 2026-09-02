@@ -17,6 +17,8 @@ interface Row {
   freezeRatio: number | null;
   /** 静止体检过没过。null = 没量过。 */
   freezeOk: boolean | null;
+  /** 这条任务走哪条渲染链 —— 'remotion' 是带人声的新链, 'legacy' 是老链。 */
+  renderer: string;
 }
 
 const LABEL: Record<string, string> = {
@@ -81,6 +83,12 @@ export function FilmQueue({ rows }: { rows: Row[] }) {
                 <p className="truncate text-sm">{r.title}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {r.mode} · {r.createdAt} · {LABEL[r.status] ?? r.status}
+                  {/* 渲染方式只标新版——旧版是当前多数, 每条都挂标只会增加噪音 */}
+                  {r.renderer === 'remotion' ? (
+                    <span className="ml-2 rounded bg-secondary px-1.5 py-0.5 font-medium text-foreground">
+                      新版渲染
+                    </span>
+                  ) : null}
                   {/* 「等你」必须在列表上就看得见: 9 条任务停在预览就绪半个多月,
                       就是因为列表上它和「在跑」长得一模一样 */}
                   {waitingOn(r.status) === 'you' && r.status !== 'queued' && r.status !== 'source_uploaded' ? (

@@ -1,12 +1,16 @@
 import { randomUUID } from 'crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { z } from 'zod';
 import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { videoProductionQueue } from '@/jobs/queue';
 import { synthesizeSrtFromSixActScript } from '@/lib/video-production/srt-synthesis';
 import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
+import { defaultRendererForMode } from '@/lib/video-production/renderer';
+
+const RendererSchema = z.enum(['remotion', 'legacy']);
 
 /**
  * 触发一次成片生成 (十八期 T8) — 六幕脚本 → SRT → 落一条 VideoProduction
@@ -23,10 +27,17 @@ import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
  * 加载复用同一份逻辑) 解出 acts/four_dims。
  */
 export async function POST(req: Request) {
-  let body: { contentId?: unknown };
+  let body: { contentId?: unknown; renderer?: unknown };
   try { body = await req.json(); } catch { return fail('请求体不是合法 JSON', 400); }
   if (typeof body.contentId !== 'string' || !body.contentId) return fail('缺少 contentId', 400);
   const contentId = body.contentId;
+
+  let requestedRenderer: 'remotion' | 'legacy' | undefined;
+  if (body.renderer !== undefined) {
+    const parsedRenderer = RendererSchema.safeParse(body.renderer);
+    if (!parsedRenderer.success) return fail('renderer 只能是 remotion 或 legacy', 400);
+    requestedRenderer = parsedRenderer.data;
+  }
 
   try {
     const user = await getOrCreateDefaultUser();
@@ -61,6 +72,9 @@ export async function POST(req: Request) {
         userId: user.id,
         contentId,
         mode,
+        // 任务四: 缺省按落库后的 mode 走(不是按 body 的 deliveryMode)——ppt-narration
+        // 缺省 remotion, 另两条链还没迁, 缺省 legacy; 显式传了就照用户说的来。
+        renderer: requestedRenderer ?? defaultRendererForMode(mode),
         srt,
         productionRoot,
         status: 'queued',

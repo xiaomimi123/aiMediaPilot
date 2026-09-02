@@ -35,6 +35,8 @@ interface Film {
   brollEnabled: boolean;
   /** 出片后量到的整片静止情况。**null = 没量过**(出在这道关接线之前), 不是 0。 */
   freezeReport: FreezeReport | null;
+  /** 这条任务走哪条渲染链 —— 'remotion' 是带人声的新链, 'legacy' 是老链。 */
+  renderer: string;
 }
 
 function mmss(sec: number): string {
@@ -182,6 +184,37 @@ export function FilmDetail({ initial }: { initial: Film }) {
       router.refresh();
     } catch {
       setError('操作失败，请检查网络');
+    } finally {
+      setBusy('');
+    }
+  }
+
+  /**
+   * 切换渲染方式(「新版渲染」/「旧版渲染」)。只在还没开工时才会被调用——按钮本身
+   * 就只在 `canStartProduction` 时渲染, 这里不重复判断。
+   *
+   * 切换会把服务端的 filmPlan/alignedActs 一并清空, 界面上没有对应展示, 不用额外处理;
+   * 但状态得整条刷新(不只是改 renderer 一个字段), 万一以后加了依赖这两个字段的展示,
+   * 别悄悄留着一份看起来还有效的旧数据。
+   */
+  async function switchRenderer(next: 'remotion' | 'legacy') {
+    setBusy('renderer');
+    setError('');
+    try {
+      const res = await fetch(`/api/v1/cockpit/video-productions/${film.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ renderer: next }),
+      });
+      const body = await res.json();
+      if (!res.ok || !body?.success) {
+        setError(body?.message ?? '切换失败');
+        return;
+      }
+      setFilm((f) => ({ ...f, renderer: body.data?.renderer ?? next }));
+      router.refresh();
+    } catch {
+      setError('切换失败，请检查网络');
     } finally {
       setBusy('');
     }
@@ -402,6 +435,35 @@ export function FilmDetail({ initial }: { initial: Film }) {
         {canStartProduction(film.status) ? (
           <Button variant="outline" disabled={busy !== ''} onClick={() => void post('/start', 'start')}>
             {busy === 'start' ? '启动中…' : failed ? '重新制作' : '开始制作'}
+          </Button>
+        ) : null}
+
+        {/*
+          渲染方式徽标 + 切换。只在任务还没开工(canStartProduction)时给切换按钮——
+          处理中/已完成的任务改这个没有意义, 也回不了头(素材/中间产物已经按旧方式走了)。
+        */}
+        <span
+          className={cn(
+            'rounded px-1.5 py-0.5 text-xs font-medium',
+            film.renderer === 'remotion'
+              ? 'bg-secondary text-foreground'
+              : 'text-muted-foreground',
+          )}
+        >
+          {film.renderer === 'remotion' ? '新版渲染 (Remotion)' : '旧版渲染'}
+        </span>
+        {canStartProduction(film.status) ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={busy !== ''}
+            onClick={() => void switchRenderer(film.renderer === 'remotion' ? 'legacy' : 'remotion')}
+          >
+            {busy === 'renderer'
+              ? '切换中…'
+              : film.renderer === 'remotion'
+                ? '切换到旧版渲染'
+                : '切换到新版渲染'}
           </Button>
         ) : null}
 

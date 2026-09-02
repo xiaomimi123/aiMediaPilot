@@ -23,7 +23,7 @@ const base = {
   createdAt: '2026-08-30', errorMessage: null, hasPreview: true, hasMaster: false,
   templateName: '图文口播', scriptDraftId: null, publishedUrl: null,
   scenes: [], captions: [], savedLayouts: {}, brollEnabled: true,
-  frame: { width: 1920, height: 1080 }, freezeReport: null,
+  frame: { width: 1920, height: 1080 }, freezeReport: null, renderer: 'legacy',
 };
 
 afterEach(cleanup);

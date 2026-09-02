@@ -20,7 +20,7 @@ export default async function FilmsPage() {
     take: 30,
     select: {
       id: true, mode: true, status: true, createdAt: true, contentId: true, errorMessage: true,
-      freezeReport: true,
+      freezeReport: true, renderer: true,
     },
   });
 
@@ -43,6 +43,7 @@ export default async function FilmsPage() {
           // 只把列表要用的两个数拆出来 —— 整份报告(含最长几段)是详情页才需要的
           freezeOk: (p.freezeReport as FreezeReport | null)?.ok ?? null,
           freezeRatio: (p.freezeReport as FreezeReport | null)?.ratio ?? null,
+          renderer: p.renderer,
         }))}
       />
     </PageShell>

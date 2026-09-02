@@ -11,6 +11,9 @@ import { synthesizeSrtFromSixActScript } from '@/lib/video-production/srt-synthe
 import { SixActScriptSchema, type ScriptAct } from '@/lib/script/six-act';
 import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
 import { bumpCockpitRev } from '@/lib/cockpit/server-store';
+import { defaultRendererForMode } from '@/lib/video-production/renderer';
+
+const RendererSchema = z.enum(['remotion', 'legacy']);
 
 /**
  * 模板页发起出片(二十期)。两种入口:
@@ -37,8 +40,18 @@ const VoiceOverrideSchema = z.object({
 }).strict();
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
-  let body: { contentId?: unknown; script?: unknown; title?: unknown; voiceOverride?: unknown; research?: unknown };
+  let body: {
+    contentId?: unknown; script?: unknown; title?: unknown; voiceOverride?: unknown; research?: unknown;
+    renderer?: unknown;
+  };
   try { body = await req.json(); } catch { return fail('请求体不是合法 JSON', 400); }
+
+  let requestedRenderer: 'remotion' | 'legacy' | undefined;
+  if (body.renderer !== undefined) {
+    const parsedRenderer = RendererSchema.safeParse(body.renderer);
+    if (!parsedRenderer.success) return fail('renderer 只能是 remotion 或 legacy', 400);
+    requestedRenderer = parsedRenderer.data;
+  }
 
   // 写稿阶段(/script)采到的素材简报, 由前端原样带回来一并落库 —— 见下方 output.research 注释。
   // 形状校验从宽: 只要求是带非空 points 数组的对象, 内容由 /script 那边的 schema 保证。
@@ -164,6 +177,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       contentId,
       templateId: template.id,
       mode: template.deliveryMode,
+      // 任务四: 缺省按 mode 走(ppt-narration → remotion, 另两条链还没迁 → legacy);
+      // 显式传了就照用户说的来。
+      renderer: requestedRenderer ?? defaultRendererForMode(template.deliveryMode),
       // Prisma 对可空 Json 字段的"未设置"用 undefined 表达(与本项目 palette/voicePreset
       // 等既有 Json? 字段一致的惯用法), null 需要专门的 Prisma.JsonNull——这里没有那个必要。
       voiceOverride: voiceOverride ?? undefined,
