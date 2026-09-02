@@ -4,6 +4,7 @@ import {CARDS} from './cards';
 import {C} from './motion/lib';
 import {Ambient} from './motion/ambient';
 import {CameraRig} from './motion/camera';
+import {Captions} from './Captions';
 
 /**
  * 每镜的单调推近幅度(二十六期, 补环境运动层缺口)。
@@ -23,17 +24,26 @@ import {CameraRig} from './motion/camera';
  */
 const CAMERA_PUSH_IN = 0.045;
 
+/** 一句字幕(二十八期)。startMs/endMs 是相对全片的绝对时间, 不是相对某一镜。 */
+export type CaptionItem = {text: string; startMs: number; endMs: number};
+
 export type FilmInput = {
   shots: {shotId: string; startMs: number; endMs: number; card: keyof typeof CARDS; slots: any}[];
-  audioSrc: string | null;
+  audioSrc: string | null; // 人声, staticFile 相对路径; renderFilm 负责填入
+  bgm: {src: string; volume: number} | null; // BGM, loop 到片长; renderFilm 负责填入
+  captions: CaptionItem[]; // 逐句字幕, 缺省 []
   aspect: '16:9' | '9:16';
 };
 
 /**
- * 顶层合成(Task 4 接入卡片)。画面不再是占位的宽高数字, 而是按 shots 时间轴
- * 挑卡片、把槽位喂给对应组件 —— 版面由卡片组件保证, Film 只负责排布时间轴。
+ * 顶层合成(Task 4 接入卡片; 二十八期接人声/BGM/字幕层)。画面不再是占位的
+ * 宽高数字, 而是按 shots 时间轴挑卡片、把槽位喂给对应组件 —— 版面由卡片组件
+ * 保证, Film 只负责排布时间轴。
+ *
+ * `bgm`/`captions` 给默认值——旧调用(含既有的 ambient-layer 测试)不传这两个
+ * 字段也能跑, 不必逐个改老调用点。
  */
-export const Film: React.FC<FilmInput> = ({shots, audioSrc}) => {
+export const Film: React.FC<FilmInput> = ({shots, audioSrc, bgm = null, captions = []}) => {
   const {fps} = useVideoConfig();
   return (
     <AbsoluteFill style={{backgroundColor: C.paper}}>
@@ -59,6 +69,8 @@ export const Film: React.FC<FilmInput> = ({shots, audioSrc}) => {
       {/* 环境运动层(二十六期): 全片底噪, 保证没有一帧彻底静止。见 motion/ambient.tsx。 */}
       <Ambient />
       {audioSrc ? <Audio src={staticFile(audioSrc)} /> : null}
+      {bgm ? <Audio src={staticFile(bgm.src)} loop volume={bgm.volume} /> : null}
+      <Captions items={captions} />
     </AbsoluteFill>
   );
 };

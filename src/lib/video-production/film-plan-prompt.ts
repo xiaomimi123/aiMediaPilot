@@ -4,7 +4,7 @@ import type { ScriptAct } from '@/lib/script/six-act';
 import type { AlignedAct } from './aligner-prompt';
 
 /**
- * FilmPlan 提示词(二十七期)。
+ * FilmPlan 提示词(二十八期)。
  *
  * 与旧链 Director/Builder 的关键差异: **模型不写代码、也不写坐标**, 只做三件事——
  * 把一幕拆成几镜、每镜选一张卡、把槽位填上真话。版面与动效由 `remotion/src/cards/`

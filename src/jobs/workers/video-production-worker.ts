@@ -614,7 +614,9 @@ async function handlePptNarrationRemotion(
   await setStatus('assembling');
   const outputPath = path.join(vp.productionRoot, outputFileName);
   await renderFilm({
-    input: { shots: plan.shots as any, audioSrc: null, aspect },
+    // bgm/captions 接入是后续任务的量(人声/BGM/字幕怎么从这个 worker 产出还没定),
+    // 这里先按 FilmInput 新增的必填字段填默认值, 不改变现有行为。
+    input: { shots: plan.shots as any, audioSrc: null, bgm: null, captions: [], aspect },
     outputPath,
     durationInFrames: Math.ceil((lastMs / 1000) * fps),
     fps,

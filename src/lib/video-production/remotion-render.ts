@@ -1,3 +1,4 @@
+import fs from 'fs';
 import path from 'path';
 import { createRequire } from 'module';
 
@@ -27,9 +28,19 @@ const { selectComposition, renderMedia } = remotionRequire('@remotion/renderer')
  * 被 import 的 Film.tsx, 撞上 `Cannot find module 'remotion'` 直接失败。
  * 这本来就是一道 JSON 边界(inputProps), 真正的契约由后续任务的 zod schema 保证。
  */
+/**
+ * 一句字幕。与 `remotion/src/Film.tsx` 里的 `CaptionItem` 逐字段同形——**不
+ * import**, 理由同上(独立子项目)。也与 `ass-captions.ts` 的 `CaptionEvent`
+ * 同形不同名, 这是有意的: 两者服务不同的渲染管线(ASS 字幕滤镜 vs Remotion
+ * 组件), 刻意不复用同一个类型名, 避免调用方误以为可以互相赋值。
+ */
+export type CaptionItem = { text: string; startMs: number; endMs: number };
+
 export type FilmInput = {
   shots: unknown[];
-  audioSrc: string | null;
+  audioSrc: string | null; // 人声, staticFile 相对路径; renderFilm 负责填入
+  bgm: { src: string; volume: number } | null; // BGM, loop 到片长; renderFilm 负责填入
+  captions: CaptionItem[]; // 逐句字幕
   aspect: '16:9' | '9:16';
 };
 
@@ -118,11 +129,51 @@ export async function getBundle(): Promise<string> {
   return bundlePromise;
 }
 
+/**
+ * `remotion/public/` 是唯一 `staticFile` 认得的根——TTS 人声/BGM 却落在
+ * `productionRoot` 下(任意绝对路径), 所以每次渲染前要把这两个文件拷进
+ * `remotion/public/render-assets/`, 渲染结束(不论成败)再删掉, 不然会在
+ * public 目录里越攒越多垃圾。
+ *
+ * 文件名用 `basename(outputPath)` 派生: outputPath 本身带 vp id, 天然防
+ * 并发渲染互相覆盖, 不用自己再发明一套命名。
+ */
+const RENDER_ASSETS_DIR = path.resolve(process.cwd(), 'remotion/public/render-assets');
+
+/**
+ * 把一个绝对路径的音频文件拷进 `render-assets/`, 返回喂给 `staticFile` 的
+ * 相对路径。**拷贝失败直接抛错、不吞掉**——调用方(renderFilm)不做降级,
+ * 因为一半有声一半无声的成片比直接渲染失败更糟, 前者不容易被发现。
+ */
+function copyIntoRenderAssets(
+  srcAbsPath: string,
+  outputPath: string,
+  kind: 'voice' | 'bgm',
+): { absPath: string; relPath: string } {
+  const ext = path.extname(srcAbsPath) || '.wav';
+  const baseName = path.basename(outputPath, path.extname(outputPath));
+  const fileName = `${baseName}-${kind}${ext}`;
+  const absPath = path.join(RENDER_ASSETS_DIR, fileName);
+  fs.mkdirSync(RENDER_ASSETS_DIR, { recursive: true });
+  try {
+    fs.copyFileSync(srcAbsPath, absPath);
+  } catch (err) {
+    throw new Error(
+      `[renderFilm] 中转音频文件失败(${kind}): ${srcAbsPath} -> ${absPath}: ${(err as Error).message}`,
+    );
+  }
+  return { absPath, relPath: `render-assets/${fileName}` };
+}
+
 export async function renderFilm(opts: {
   input: FilmInput;
   outputPath: string;
   durationInFrames: number;
   fps?: number;
+  /** 人声的**绝对路径**。renderFilm 负责拷进 remotion/public 并在渲染后清理。 */
+  audioFile?: string | null;
+  /** BGM 的**绝对路径**与音量。renderFilm 负责拷进 remotion/public 并在渲染后清理。 */
+  bgmFile?: { path: string; volume: number } | null;
 }): Promise<void> {
   const problems = findBlankSlots(opts.input.shots);
   if (problems.length > 0) {
@@ -133,16 +184,39 @@ export async function renderFilm(opts: {
     );
   }
 
-  const serveUrl = await getBundle();
-  const id = opts.input.aspect === '9:16' ? 'portrait' : 'landscape';
-  const composition = await selectComposition({
-    serveUrl, id, inputProps: opts.input as unknown as Record<string, unknown>,
-  });
-  await renderMedia({
-    composition: { ...composition, durationInFrames: opts.durationInFrames, fps: opts.fps ?? 30 },
-    serveUrl,
-    codec: 'h264',
-    outputLocation: opts.outputPath,
-    inputProps: opts.input as unknown as Record<string, unknown>,
-  });
+  // 中转文件的绝对路径, 只在成功拷贝后才收进来——拷贝失败时该文件根本没
+  // 落地, finally 不需要(也不能)清理一个不存在的东西。
+  const copiedAbsPaths: string[] = [];
+  const input: FilmInput = { ...opts.input };
+
+  try {
+    if (opts.audioFile) {
+      const dest = copyIntoRenderAssets(opts.audioFile, opts.outputPath, 'voice');
+      copiedAbsPaths.push(dest.absPath);
+      input.audioSrc = dest.relPath;
+    }
+    if (opts.bgmFile) {
+      const dest = copyIntoRenderAssets(opts.bgmFile.path, opts.outputPath, 'bgm');
+      copiedAbsPaths.push(dest.absPath);
+      input.bgm = { src: dest.relPath, volume: opts.bgmFile.volume };
+    }
+
+    const serveUrl = await getBundle();
+    const id = input.aspect === '9:16' ? 'portrait' : 'landscape';
+    const composition = await selectComposition({
+      serveUrl, id, inputProps: input as unknown as Record<string, unknown>,
+    });
+    await renderMedia({
+      composition: { ...composition, durationInFrames: opts.durationInFrames, fps: opts.fps ?? 30 },
+      serveUrl,
+      codec: 'h264',
+      outputLocation: opts.outputPath,
+      inputProps: input as unknown as Record<string, unknown>,
+    });
+  } finally {
+    // 渲染失败也要清理——中转文件是渲染这一次性用的, 不是持久资产。
+    for (const absPath of copiedAbsPaths) {
+      if (fs.existsSync(absPath)) fs.unlinkSync(absPath);
+    }
+  }
 }

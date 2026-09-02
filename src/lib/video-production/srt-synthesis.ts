@@ -15,7 +15,7 @@ import type { CaptionEvent } from './ass-captions';
 /**
  * 按全角句末标点 (。！？) 切句, 标点保留在句尾; 未以标点结尾的残余文字视为切不出句子, 丢弃。
  *
- * 导出给 `sentenceCaptionEvents`(二十七期)复用——切句口径必须与
+ * 导出给 `sentenceCaptionEvents`(二十八期)复用——切句口径必须与
  * `synthesizeSrtFromSixActScript` 完全一致, 两边各写一份迟早会分叉, 所以不复制实现,
  * 直接共享这一个函数。**实现本身不改**: `synthesizeSrtFromSixActScript` 依赖它现在的
  * 行为, 改了会动旧链。
@@ -156,7 +156,7 @@ export function ttsResultsToAlignedActs(results: TtsActResult[]): AlignedAct[] {
 }
 
 /**
- * 真实幕边界 (AlignedAct) → 逐句字幕事件 (二十七期)。
+ * 真实幕边界 (AlignedAct) → 逐句字幕事件 (二十八期)。
  *
  * 比例分配算法与 `synthesizeSrtFromSixActScript` 完全一致(前 n-1 句按字符占比取整,
  * 末句吃掉四舍五入余数)——只是把"targetMs 估算窗口"换成"aligned 的真实窗口",
