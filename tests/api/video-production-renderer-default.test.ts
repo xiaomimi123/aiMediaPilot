@@ -203,10 +203,23 @@ describe('PATCH /api/v1/cockpit/video-productions/[id] —— 切换渲染方式
     expect(res.status).toBe(200);
     const data = prismaMock.videoProduction.update.mock.calls[0][0].data;
     expect(data.renderer).toBe('remotion');
-    // Json? 字段的"清空"要用 Prisma.JsonNull —— 裸 null 会被 Prisma 当成"未设置"而忽略,
+    // Json? 字段清空要用 Prisma.JsonNull —— update 输入类型不接受裸 null(TS2322),
     // 这条任务的语义要求换渲染器后旧方案必须真的被抹掉, 不是维持原样。
     expect(data.filmPlan).toEqual(Prisma.JsonNull);
     expect(data.alignedActs).toEqual(Prisma.JsonNull);
+  });
+
+  it('复审(幂等): 传的 renderer 跟当前值一样 —— 直接返回, 不清 filmPlan/alignedActs, 不该有副作用', async () => {
+    prismaMock.videoProduction.findUnique.mockResolvedValue({
+      id: 'vp1', userId: 'user1', status: 'failed', renderer: 'remotion', filmPlan: { shots: [] },
+    });
+
+    const res = await PATCH(req({ renderer: 'remotion' }), { params: { id: 'vp1' } });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.renderer).toBe('remotion');
+    expect(prismaMock.videoProduction.update).not.toHaveBeenCalled();
   });
 
   it('处理中的任务不许切换 → 400, 不调用 update', async () => {

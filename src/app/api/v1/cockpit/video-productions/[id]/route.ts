@@ -37,6 +37,11 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
  * 避免两处各写一份而漂移)。切换必须把 `filmPlan`/`alignedActs` 一并清掉:
  * 这两个字段是上一条渲染链留下的方案/对齐结果, 换链之后对新链毫无意义 ——
  * 残留下来会让 master 阶段误以为有现成方案可以直接复用, 结果是拿旧链的产物拼新链的片子。
+ *
+ * 复审补的一条(同值 PATCH): 传的 renderer 跟当前值一样时直接原样返回、什么都不清——
+ * 「什么都没变」的请求不该有副作用。没有这条防御的话, 对 failed 状态的任务重复
+ * PATCH 同一个值一次就会把上一次的 filmPlan 白白清掉, 而 UI 上现有的切换按钮永远只发
+ * 相反值、触发不到, 直接调 API 的调用方却毫无防御。
  */
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   let body: unknown;
@@ -52,12 +57,19 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return fail(`这条任务当前是「${vp.status}」, 已经在处理或已完成, 不能再切换渲染方式`, 400);
   }
 
+  if (parsed.data.renderer === vp.renderer) {
+    return ok({ id: vp.id, renderer: vp.renderer });
+  }
+
   const updated = await prisma.videoProduction.update({
     where: { id: params.id },
     data: {
       renderer: parsed.data.renderer,
-      // Json? 字段的"清空"要用 Prisma.JsonNull, 裸 null 会被当成"未设置"忽略
-      // (与 produce/route.ts voiceOverride 字段的既有惯用法一致)。
+      // Json? 字段清空传裸 null 过不了类型检查: update 输入类型是
+      // `NullableJsonNullValueInput | InputJsonValue`, 不含裸 null, tsc 直接
+      // 报 TS2322——这是编译期的约束, 不是运行时会把它当"未设置"忽略(复审用
+      // 未类型化 JS 实测过: 运行时确实会写成 NULL)。Prisma.JsonNull 才是类型层
+      // 认的"显式写入数据库 NULL"的表达方式。
       filmPlan: Prisma.JsonNull,
       alignedActs: Prisma.JsonNull,
       updatedAt: new Date().toISOString(),

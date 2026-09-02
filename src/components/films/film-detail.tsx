@@ -450,7 +450,7 @@ export function FilmDetail({ initial }: { initial: Film }) {
               : 'text-muted-foreground',
           )}
         >
-          {film.renderer === 'remotion' ? '新版渲染 (Remotion)' : '旧版渲染'}
+          {film.renderer === 'remotion' ? '新版渲染' : '旧版渲染'}
         </span>
         {canStartProduction(film.status) ? (
           <Button
