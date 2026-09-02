@@ -40,8 +40,13 @@ export type FilmInput = {
  * 宽高数字, 而是按 shots 时间轴挑卡片、把槽位喂给对应组件 —— 版面由卡片组件
  * 保证, Film 只负责排布时间轴。
  *
- * `bgm`/`captions` 给默认值——旧调用(含既有的 ambient-layer 测试)不传这两个
- * 字段也能跑, 不必逐个改老调用点。
+ * `FilmInput.bgm`/`captions` 是**必填字段**——所有调用点(worker、
+ * ambient-layer 测试)都已显式改成传 `bgm: null, captions: []`。这里的
+ * `= null`/`= []` 只是组件层面的防御性默认值(万一将来有调用方绕过类型检查
+ * 直接拿 JSON 喂进来), 不是"旧调用不用改"的免检特权。
+ *
+ * 刻意选必填而不是可选(`?`): 必填能让 tsc 在未来任何新调用点上, 强制作者
+ * 显式想清楚"这条片子要不要字幕/BGM", 而不是让静默缺省替他做了决定。
  */
 export const Film: React.FC<FilmInput> = ({shots, audioSrc, bgm = null, captions = []}) => {
   const {fps} = useVideoConfig();

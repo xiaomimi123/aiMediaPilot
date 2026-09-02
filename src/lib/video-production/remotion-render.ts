@@ -135,8 +135,14 @@ export async function getBundle(): Promise<string> {
  * `remotion/public/render-assets/`, 渲染结束(不论成败)再删掉, 不然会在
  * public 目录里越攒越多垃圾。
  *
- * 文件名用 `basename(outputPath)` 派生: outputPath 本身带 vp id, 天然防
- * 并发渲染互相覆盖, 不用自己再发明一套命名。
+ * 文件名派生自 outputPath 的**父目录名 + basename**——vp id 只出现在父目录
+ * 名(`productionRoot` 下按 vp 分的目录), `basename(outputPath)` 本身是
+ * `preview.mp4`/`master.mp4` 这种常量文件名, 不带 vp id(复审 2026-09-03
+ * 发现: 之前的注释错误地假设 outputPath 的 basename 本身带 vp id, 实际上两个
+ * 不同 vp 并发渲 master 会撞向同一个 `render-assets/master-voice.wav`, 一边
+ * 的 finally 清理还可能删掉另一边正在读的文件)。防并发靠父目录名(vp id)
+ * 参与派生 —— 当前队列 concurrency=1、单 worker 进程, 今天不会真的撞上,
+ * 这层保护是为未来把 concurrency 调大预留的。
  */
 const RENDER_ASSETS_DIR = path.resolve(process.cwd(), 'remotion/public/render-assets');
 
@@ -145,14 +151,20 @@ const RENDER_ASSETS_DIR = path.resolve(process.cwd(), 'remotion/public/render-as
  * 相对路径。**拷贝失败直接抛错、不吞掉**——调用方(renderFilm)不做降级,
  * 因为一半有声一半无声的成片比直接渲染失败更糟, 前者不容易被发现。
  */
-function copyIntoRenderAssets(
+// 导出仅供单测用: 直接验证"不同父目录 + 同名 basename → 不同中转文件名"这条
+// 防并发规则, 不用为了测个文件名派生逻辑去真的跑一次 renderMedia。
+export function copyIntoRenderAssets(
   srcAbsPath: string,
   outputPath: string,
   kind: 'voice' | 'bgm',
 ): { absPath: string; relPath: string } {
   const ext = path.extname(srcAbsPath) || '.wav';
+  // 父目录名(vp id) + basename 共同派生——见上方 RENDER_ASSETS_DIR 注释:
+  // 只用 basename(outputPath) 不足以防并发, outputFileName 在 worker 侧是
+  // 'preview.mp4'/'master.mp4' 这种常量。
+  const dirName = path.basename(path.dirname(outputPath));
   const baseName = path.basename(outputPath, path.extname(outputPath));
-  const fileName = `${baseName}-${kind}${ext}`;
+  const fileName = `${dirName}-${baseName}-${kind}${ext}`;
   const absPath = path.join(RENDER_ASSETS_DIR, fileName);
   fs.mkdirSync(RENDER_ASSETS_DIR, { recursive: true });
   try {

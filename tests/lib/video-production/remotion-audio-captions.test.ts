@@ -3,13 +3,13 @@ import path from 'path';
 import os from 'os';
 import fs from 'fs';
 import { execFileSync } from 'child_process';
-import { renderFilm } from '@/lib/video-production/remotion-render';
+import { renderFilm, copyIntoRenderAssets } from '@/lib/video-production/remotion-render';
 import { pickCurrentCaption } from '../../../remotion/src/caption-logic';
 
 /*
  * 二十八期: Remotion 合成接人声/BGM/字幕层。
  *
- * 三块各选最省成本又管用的验证方式:
+ * 四块各选最省成本又管用的验证方式:
  *   1. 中转与清理——不真渲染, 只验证 renderFilm 的文件搬运/清理副作用
  *      (拷贝失败要抛错、render-assets/ 不能有残留)。
  *   2. 真渲染一条极短样片 + 1 秒正弦波 wav, ffprobe 断言成片里真的有音频流。
@@ -24,6 +24,12 @@ import { pickCurrentCaption } from '../../../remotion/src/caption-logic';
  *      有细微差异), 要么去读 DOM(renderStill 产出的是位图, 读不到 DOM)。
  *      纯函数单测能精确覆盖区间边界(左闭右开、句间空隙、多句重叠这些真正
  *      容易出 bug 的地方), 又是毫秒级的, 不需要另起一次渲染。
+ *   4. 中转文件名的防并发派生——复审 2026-09-03 发现: worker 侧
+ *      `outputFileName` 是常量 `'preview.mp4'`/`'master.mp4'`, vp id 只在
+ *      `outputPath` 的父目录名里, 单用 `basename(outputPath)` 派生文件名
+ *      不防并发。改成父目录名(vp id)+basename 共同派生后, 用这条单测直接
+ *      锁住"两个不同父目录、同名 basename → 不同中转文件名", 不用真的跑
+ *      两个并发渲染去复现撞车。
  */
 
 describe('renderFilm: 音频文件中转与清理', () => {
@@ -133,5 +139,44 @@ describe('pickCurrentCaption: 当前句选择的纯逻辑', () => {
     expect(pickCurrentCaption(items, -1)).toBeUndefined();
     expect(pickCurrentCaption(items, 2000)).toBeUndefined();
     expect(pickCurrentCaption([], 500)).toBeUndefined();
+  });
+});
+
+describe('copyIntoRenderAssets: 中转文件名的防并发派生', () => {
+  const renderAssetsDir = path.resolve(process.cwd(), 'remotion/public/render-assets');
+  const cleanup: string[] = [];
+
+  afterEach(() => {
+    for (const p of cleanup.splice(0)) {
+      if (fs.existsSync(p)) fs.unlinkSync(p);
+    }
+  });
+
+  it('两个不同父目录(不同 vp id)、同名 basename → 派生出不同的中转文件名', () => {
+    // 模拟 worker 侧的真实场景: outputFileName 是常量 'master.mp4',
+    // vp id 只体现在 productionRoot 下的父目录名里。
+    const srcA = path.join(os.tmpdir(), `render-assets-naming-src-a-${Date.now()}.wav`);
+    const srcB = path.join(os.tmpdir(), `render-assets-naming-src-b-${Date.now()}.wav`);
+    fs.writeFileSync(srcA, 'fake-audio-a');
+    fs.writeFileSync(srcB, 'fake-audio-b');
+    cleanup.push(srcA, srcB);
+
+    const outputPathVpA = path.join(os.tmpdir(), 'vp-aaaa', 'master.mp4');
+    const outputPathVpB = path.join(os.tmpdir(), 'vp-bbbb', 'master.mp4');
+
+    const destA = copyIntoRenderAssets(srcA, outputPathVpA, 'voice');
+    const destB = copyIntoRenderAssets(srcB, outputPathVpB, 'voice');
+    cleanup.push(destA.absPath, destB.absPath);
+
+    // 核心断言: 同名 basename('master.mp4') 不应该撞向同一个中转文件——
+    // 否则并发调大后, 一个 vp 的清理会删掉另一个 vp 正在读的文件。
+    expect(destA.relPath).not.toBe(destB.relPath);
+    expect(destA.absPath).not.toBe(destB.absPath);
+    // 两个文件各自都要真的落地在 render-assets/ 下, 不是同一份被覆盖。
+    expect(fs.existsSync(destA.absPath)).toBe(true);
+    expect(fs.existsSync(destB.absPath)).toBe(true);
+    expect(fs.readFileSync(destA.absPath, 'utf8')).toBe('fake-audio-a');
+    expect(fs.readFileSync(destB.absPath, 'utf8')).toBe('fake-audio-b');
+    expect(path.dirname(destA.absPath)).toBe(renderAssetsDir);
   });
 });
