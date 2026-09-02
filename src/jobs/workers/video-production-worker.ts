@@ -61,15 +61,16 @@ import type { ScriptAct } from '@/lib/script/six-act';
 import { synthesizeVolcTts } from '@/lib/tts/volcengine';
 import { decrypt } from '@/lib/crypto';
 import { resolveTtsVoiceSelection, type VoiceSelectable } from '@/lib/video-production/voice-resolve';
-import { ttsResultsToAlignedActs, type TtsActResult } from '@/lib/video-production/srt-synthesis';
+import { ttsResultsToAlignedActs, sentenceCaptionEvents, type TtsActResult } from '@/lib/video-production/srt-synthesis';
 import type { AlignedAct } from '@/lib/video-production/aligner-prompt';
 import type { DeliveryMode } from '@/lib/cockpit/model';
 import { runPackaging } from '@/lib/video-production/packaging';
 import { buildPackagingOptions } from '@/lib/video-production/packaging-input';
-import { renderFilm } from '@/lib/video-production/remotion-render';
+import { renderFilm, type CaptionItem } from '@/lib/video-production/remotion-render';
 import { FilmPlanSchema, describeCardsForPrompt, type FilmPlan } from '@/lib/video-production/shot-plan';
-import { actWindows } from '@/lib/video-production/film-plan-prompt';
+import { actWindows, actWindowsFromAligned, type ActWindow } from '@/lib/video-production/film-plan-prompt';
 import { buildFilmPlan } from '@/lib/video-production/film-plan-builder';
+import type { CaptionEvent } from '@/lib/video-production/ass-captions';
 
 /**
  * `recompose`(二十三期): 只重新合成, 不重新生成。
@@ -570,6 +571,8 @@ async function handlePptNarrationRemotion(
   // 旧链 handlePptNarration 也是 directing → building 这个顺序, 这里保持一致,
   // 不要反过来变成 building → directing → building, 否则前端进度条会先跳后退。
   let plan: FilmPlan;
+  let captionEvents: CaptionEvent[];
+  let audioFile: string | null;
   if (mode === 'preview') {
     await setStatus('directing');
     const deepseekKey = await resolveDeepSeekApiKey(vp.userId);
@@ -578,8 +581,61 @@ async function handlePptNarrationRemotion(
     const acts = await loadActs(vp.contentId);
     if (acts.length === 0) throw new Error('取不到六幕稿, 无法编排画面');
 
-    const windows = actWindows(acts);
-    const totalMs = windows[windows.length - 1].endMs;
+    /*
+     * 真实语音时间轴(二十九期): 配了火山 TTS 就逐幕合成人声, 画面窗口与字幕都按
+     * 真实时长走(actWindowsFromAligned/sentenceCaptionEvents)——先例见
+     * handleIllustrationTts 1024 行附近(TTS 配置读取)与 1045-1049 行(逐幕合成)。
+     * 没配置就退回估算窗口(actWindows)无声出片: 字幕仍然要产, 只是拿估算窗口
+     * 构造出与 AlignedAct 同形的数据喂给同一个 sentenceCaptionEvents, 不为无声
+     * 路径另写一份比例分配逻辑(那份逻辑已经在 sentenceCaptionEvents 里, 复制一份
+     * 迟早会和真实语音那条分叉)。
+     */
+    const ttsConfig = await prisma.volcTtsConfig.findUnique({ where: { userId: vp.userId } });
+    let aligned: AlignedAct[];
+    let windows: ActWindow[];
+    if (ttsConfig) {
+      const apiKey = decrypt(ttsConfig.apiKey);
+      // 音色/资源档位优先级同 handleIllustrationTts: 本次覆盖 > 模板 voicePreset > 全局配置兜底。
+      const { voiceType, resourceId } = resolveTtsVoiceSelection({
+        voiceOverride: vp.voiceOverride as VoiceSelectable | null,
+        templateVoicePreset: (template?.voicePreset as VoiceSelectable | null) ?? null,
+        globalConfig: { voiceType: ttsConfig.voiceType, resourceId: ttsConfig.resourceId },
+      });
+
+      const ttsResults: TtsActResult[] = [];
+      for (const act of acts) {
+        // 扩展名用 .mp3: synthesizeVolcTts 实际写出的是 mp3 编码字节, 见 handleIllustrationTts 同一行注释。
+        const audioPath = path.join(vp.productionRoot, `tts-${act.act}.mp3`);
+        const { durationMs } = await synthesizeVolcTts(act.narration, audioPath, {
+          apiKey,
+          voiceType,
+          resourceId,
+        });
+        ttsResults.push({ act: act.act, audioPath, durationMs });
+      }
+      aligned = ttsResultsToAlignedActs(ttsResults);
+
+      const concatenatedAudioPath = path.join(vp.productionRoot, 'tts-audio.wav');
+      // concatAudioTracks 强制重编码为 pcm_s16le 而不是直拼 mp3: mp3 帧编码在拼接点上不是
+      // 采样点精确的(实测有几十毫秒漂移 + Non-monotonic DTS 警告), 而 alignedActs 的
+      // startMs/endMs 假设了拼接后严丝合缝——直拼会让漂移随幕数增多累积成画面渐进错位。
+      // 见 handleIllustrationTts 1162-1174 行同一段注释, 理由完全一致。
+      await concatAudioTracks({
+        audioPaths: ttsResults.map((r) => r.audioPath),
+        outputPath: concatenatedAudioPath,
+        concatListPath: path.join(vp.productionRoot, 'concat-audio-list.txt'),
+      });
+      audioFile = concatenatedAudioPath;
+      windows = actWindowsFromAligned(acts, aligned);
+    } else {
+      console.warn('[video-production] 未配置火山 TTS, 本条为无声出片');
+      windows = actWindows(acts);
+      aligned = alignedFromWindows(windows);
+      audioFile = null;
+    }
+    captionEvents = sentenceCaptionEvents(acts, aligned);
+
+    const totalMs = windows.length > 0 ? windows[windows.length - 1].endMs : 0;
 
     // `'cards'` 不能省: 默认的 `'freeform'` 会下发旧链的"条目数不少于 8 条",
     // 与 `list` 卡 items 上限 8 自相矛盾, 实测会把模型逼去编条目凑数(见 spec §6½)。
@@ -599,13 +655,45 @@ async function handlePptNarrationRemotion(
 
     await setStatus('building');
     // 落库供 master 复用 —— 与旧链把 Director 结果写进 direction.json 是同一个理由:
-    // 正式导出必须和用户看过的预览是同一份画面, 不能重新问一次模型。
-    await prisma.videoProduction.update({ where: { id: vp.id }, data: { filmPlan: plan } });
+    // 正式导出必须和用户看过的预览是同一份画面, 不能重新问一次模型。alignedActs 一并落库:
+    // master 靠它复原字幕(sentenceCaptionEvents)和判断 tts-audio.wav 是否该存在。
+    await prisma.videoProduction.update({
+      where: { id: vp.id },
+      data: {
+        filmPlan: plan,
+        alignedActs: aligned as unknown as Prisma.InputJsonValue,
+        updatedAt: new Date().toISOString(),
+      },
+    });
   } else {
     await setStatus('building');
     if (!vp.filmPlan) throw new Error('没有已保存的 FilmPlan, 请先生成预览');
     plan = FilmPlanSchema.parse(vp.filmPlan);
+
+    // master 不重新调 TTS(耗真实调用额度)——复用 preview 落盘的 tts-audio.wav 与已持久化
+    // 的 alignedActs, 与 handleIllustrationTts master 分支(1249-1265 行)同一先例。
+    if (!vp.alignedActs) throw new Error('预览未完成或已损坏，无法确认导出，请重新生成预览');
+    const aligned = vp.alignedActs as unknown as AlignedAct[];
+    const acts = await loadActs(vp.contentId);
+    captionEvents = sentenceCaptionEvents(acts, aligned);
+
+    // preview 当初是有声还是无声(是否配了火山 TTS), 只有 tts-audio.wav 是否落地能回答——
+    // 这个文件存在才传 audioFile, 不存在(当初无声出的 preview)就继续无声: master 必须
+    // 和用户看过的 preview 保持一致, 不能这时候才悄悄补上人声。
+    const ttsAudioPath = path.join(vp.productionRoot, 'tts-audio.wav');
+    try {
+      await fs.access(ttsAudioPath);
+      audioFile = ttsAudioPath;
+    } catch {
+      audioFile = null;
+    }
   }
+
+  const captions: CaptionItem[] = captionEvents.map((e) => ({
+    text: e.text,
+    startMs: e.startMs,
+    endMs: e.endMs,
+  }));
 
   const lastMs = Math.max(...plan.shots.map((s) => s.endMs));
   const fps = mode === 'master' ? 30 : 15;
@@ -614,17 +702,28 @@ async function handlePptNarrationRemotion(
   await setStatus('assembling');
   const outputPath = path.join(vp.productionRoot, outputFileName);
   await renderFilm({
-    // bgm/captions 接入是后续任务的量(人声/BGM/字幕怎么从这个 worker 产出还没定),
-    // 这里先按 FilmInput 新增的必填字段填默认值, 不改变现有行为。
-    input: { shots: plan.shots as any, audioSrc: null, bgm: null, captions: [], aspect },
+    // input.bgm 留 null: bgm 走下面的 bgmFile 参数, 由 renderFilm 自己拷进 remotion/public
+    // 并回填 input.bgm(见 remotion-render.ts renderFilm 实现), 这里不用重复填。
+    input: { shots: plan.shots as any, audioSrc: null, bgm: null, captions, aspect },
     outputPath,
     durationInFrames: Math.ceil((lastMs / 1000) * fps),
     fps,
+    audioFile,
+    bgmFile: template?.bgmPath ? { path: template.bgmPath, volume: template.bgmVolume ?? 0.15 } : null,
   });
 
   // 静止体检照旧 —— 它读的是成片 mp4, 与渲染器无关(spec §四)
   const freezeReport = await reportFreeze(outputPath, mode);
   await setStatus(readyStatus, { [outputField]: outputPath, freezeReport });
+}
+
+/**
+ * 无 TTS 配置时的降级: 把估算窗口(actWindows)映射成与 AlignedAct 同形的数据,
+ * 喂给 sentenceCaptionEvents ——字幕仍然要产, 只是时间轴用估算值, 不为这条
+ * 路径另写一份比例分配逻辑(那份逻辑已经在 sentenceCaptionEvents 里)。
+ */
+function alignedFromWindows(windows: ActWindow[]): AlignedAct[] {
+  return windows.map((w) => ({ act: w.act as ActKey, startMs: w.startMs, endMs: w.endMs }));
 }
 
 /**
