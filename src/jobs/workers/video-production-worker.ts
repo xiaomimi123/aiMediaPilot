@@ -649,6 +649,10 @@ async function handlePptNarrationRemotion(
       cardsSection: describeCardsForPrompt(),
       factsSection,
       totalMs,
+      // 显式传上限(此前没传, 走 API 默认值)。同时给 buildFilmPlan 的截断检测一个
+      // 分母——不传就检测不了。8192 远高于实测过的最长产出(27 镜/1890 completionTokens
+      // 那次), 留够余量给更长的稿子, 顶到这个数就说明真的被截断了。
+      maxTokens: 8192,
     });
     plan = built.plan;
     console.log(`[video-production] FilmPlan 产出完成 (修复 ${built.rounds} 轮, ${plan.shots.length} 镜)`);

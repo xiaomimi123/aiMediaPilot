@@ -45,6 +45,18 @@ function describeZodIssues(plan: unknown): string[] {
 }
 
 /**
+ * 输出疑似被截断时的判定阈值——`completionTokens` 逼近 `maxTokens` 到这个比例,
+ * 就认为模型是被截断的, 而不是碰巧写到这么长。
+ *
+ * 见下面 `buildFilmPlan` 的截断检测注释: 180 秒六幕稿真机复现过"修 2 轮仍不合格",
+ * 离线探针查出真正原因不是截断(见该注释), 但探针同时确认三轮
+ * `completionTokens` 都远低于任何输出上限——**没有实测到过真正的截断个案**。
+ * 这道检测是防御性的、面向"稿子更长以后"的兜底, 阈值先按经验值定, 之后如
+ * 有真实截断个案再回来校准。
+ */
+const TRUNCATION_RATIO = 0.95;
+
+/**
  * 产出 FilmPlan, 带修复循环。
  *
  * 为什么不用 `callStructured` 的 `responseSchema` 直接上 `FilmPlanSchema`:
@@ -57,17 +69,65 @@ export async function buildFilmPlan(opts: {
   cardsSection: string;
   factsSection: string;
   totalMs: number;
+  /**
+   * 传给 `callStructured` 的输出 token 上限, 同时也是截断检测的分母。
+   * 不传就不设上限(走 API 默认值), 也就不做截断检测——历史行为不变。
+   */
+  maxTokens?: number;
 }): Promise<{ plan: FilmPlan; rounds: number }> {
   const systemPrompt = FILM_PLAN.buildSystemPrompt(opts.cardsSection, opts.factsSection);
-  let userMessage = FILM_PLAN.buildUserMessage(opts.windows);
+  /*
+   * `originalUserMessage` 必须留着、每一轮都带上——**这是这次真实故障的根因**。
+   *
+   * 180 秒六幕稿真机复现: 第 0 轮模型产出的 27 镜其实完整覆盖了全部 164600 毫秒,
+   * 只挂在一条无关的 `list` 卡条目数不够上; 但第 1 轮把 `userMessage` **整个替换**
+   * 成只有 issue 文本的修复指令后, 模型看不到原始的逐幕台词和时间窗、也看不到自己
+   * 上一版写了什么——它只能凭 system prompt 里残留的只言片语"回忆"整篇内容, 于是
+   * 生生编出一份短得多的方案(10 镜, 只到 18000 毫秒); 第 2 轮同样丢了上下文, 又
+   * 编出一份更短的(7 镜, 15000 毫秒)。三轮 `completionTokens` 分别只有 1890/491/510,
+   * 离任何输出上限都很远——不是被截断, 是**每一轮修复指令都让模型在没有原文的情况下
+   * 凭空重写全篇**, 稿子越长、这种"失忆重写"和真实时长的差距就越大。
+   *
+   * 60 秒稿的历史实测(见 MAX_REPAIR_ROUNDS 的注释)之所以没暴露这个问题, 是因为
+   * 那几次要么 0 轮就过、要么 1 轮就收敛——从没有连续两轮都命中这条路径, "失忆
+   * 重写"造成的时长偏差在更短的稿子上也不那么容易触发"结尾黑屏"这条时长检查。
+   *
+   * 修法: 每一轮发给模型的 `userMessage` 都**在原始的逐幕台词/时间窗后面追加**
+   * 这一轮的修复指令, 而不是拿修复指令去顶替原始内容——模型永远看得见它该覆盖
+   * 的完整时间轴和台词, "只修这些问题、其余部分原样保留"才有东西可保留。
+   */
+  const originalUserMessage = FILM_PLAN.buildUserMessage(opts.windows);
+  let userMessage = originalUserMessage;
   let lastIssues: string[] = [];
 
   for (let round = 0; round <= MAX_REPAIR_ROUNDS; round += 1) {
-    const { result } = await opts.llm.callStructured({
+    const { result, usage } = await opts.llm.callStructured({
       systemPrompt,
       userMessage,
       responseSchema: FILM_PLAN.responseSchema,
+      maxTokens: opts.maxTokens,
     });
+
+    /*
+     * 截断检测必须在解析/校验之前做——截断产物有可能碰巧拼出合法 JSON(比如截断点
+     * 正好在数组元素边界), 混进修复循环只会白烧几轮 API 却查不出真正原因(这正是
+     * 这次故障最初怀疑、最后靠探针排除掉的那条路)。`usage` 的具体形状由 `llm`
+     * 实现决定(`FilmPlanLLM.usage` 类型是 `unknown`), 这里按鸭子类型读
+     * `completionTokens`, 读不到就跳过检测, 不假设某个具体实现。
+     */
+    if (opts.maxTokens !== undefined) {
+      const completionTokens = (usage as { completionTokens?: number } | null | undefined)
+        ?.completionTokens;
+      if (
+        typeof completionTokens === 'number' &&
+        completionTokens >= opts.maxTokens * TRUNCATION_RATIO
+      ) {
+        throw new Error(
+          `FilmPlan 输出疑似被截断: completionTokens=${completionTokens} 逼近 maxTokens=${opts.maxTokens}` +
+            '(稿件过长导致画面方案被截断, 请缩短稿件或拆分处理)。',
+        );
+      }
+    }
 
     const parsed = FilmPlanSchema.safeParse(result);
     const issues = parsed.success
@@ -79,7 +139,7 @@ export async function buildFilmPlan(opts: {
     }
 
     lastIssues = issues;
-    userMessage = [{ type: 'text', text: formatIssuesForModel(issues) }];
+    userMessage = [...originalUserMessage, { type: 'text', text: formatIssuesForModel(issues) }];
   }
 
   throw new Error(`FilmPlan 修了 ${MAX_REPAIR_ROUNDS} 轮仍不合格:\n${lastIssues.join('\n')}`);

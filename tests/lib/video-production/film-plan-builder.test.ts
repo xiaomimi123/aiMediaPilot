@@ -15,8 +15,9 @@ const gap = { shots: [
 ] };
 
 /** 按顺序吐出预设答案的假 LLM, 并记下每次收到的 user message。 */
-const fakeLLM = (responses: unknown[]) => {
+const fakeLLM = (responses: unknown[], usages: unknown[] = []) => {
   const remaining = [...responses];
+  const remainingUsages = [...usages];
   const seen: string[] = [];
   return {
     seen,
@@ -24,7 +25,7 @@ const fakeLLM = (responses: unknown[]) => {
       seen.push(opts.userMessage.map((p: any) => p.text ?? '').join('\n'));
       const next = remaining.shift();
       if (next === undefined) throw new Error('假 LLM 被多调了一次');
-      return { result: next, usage: {} };
+      return { result: next, usage: remainingUsages.shift() ?? {} };
     },
   };
 };
@@ -71,5 +72,50 @@ describe('buildFilmPlan', () => {
       buildFilmPlan({ llm: llm as any, windows, cardsSection: '卡片说明', factsSection: '', totalMs: 10000 }),
     ).rejects.toThrow(/slots\.value/);
     expect(llm.seen).toHaveLength(MAX_REPAIR_ROUNDS + 1);
+  });
+
+  it('修复轮的 userMessage 带上原始台词/时间窗, 不只是 issue 文本', async () => {
+    // 根因回归: 之前修复轮的 userMessage 整个替换成 issue 文本, 模型看不到原始
+    // 台词和时间窗, 稿子长了以后会凭空编出短得多的方案。见 buildFilmPlan 里
+    // `originalUserMessage` 的注释(180 秒六幕稿真机复现)。
+    const llm = fakeLLM([badValue, good]);
+    await buildFilmPlan({ llm: llm as any, windows, cardsSection: '卡片说明', factsSection: '', totalMs: 10000 });
+    expect(llm.seen[1]).toContain('刷到过三天赚五千吗');
+    expect(llm.seen[1]).toContain('slots.value');
+  });
+
+  it('completionTokens 逼近 maxTokens 时判定为截断, 直接抛错(不进修复循环)', async () => {
+    const llm = fakeLLM([good], [{ completionTokens: 7900 }]);
+    await expect(
+      buildFilmPlan({
+        llm: llm as any,
+        windows,
+        cardsSection: '卡片说明',
+        factsSection: '',
+        totalMs: 10000,
+        maxTokens: 8192,
+      }),
+    ).rejects.toThrow(/截断/);
+    // 只调了一次, 没有把截断产物喂进修复循环白烧轮次
+    expect(llm.seen).toHaveLength(1);
+  });
+
+  it('不传 maxTokens 就不做截断检测(历史行为不变)', async () => {
+    const llm = fakeLLM([good], [{ completionTokens: 999999 }]);
+    const r = await buildFilmPlan({ llm: llm as any, windows, cardsSection: '卡片说明', factsSection: '', totalMs: 10000 });
+    expect(r.rounds).toBe(0);
+  });
+
+  it('completionTokens 远低于 maxTokens 时不误判', async () => {
+    const llm = fakeLLM([good], [{ completionTokens: 200 }]);
+    const r = await buildFilmPlan({
+      llm: llm as any,
+      windows,
+      cardsSection: '卡片说明',
+      factsSection: '',
+      totalMs: 10000,
+      maxTokens: 8192,
+    });
+    expect(r.rounds).toBe(0);
   });
 });
