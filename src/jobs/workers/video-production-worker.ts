@@ -728,7 +728,21 @@ async function handlePptNarrationRemotion(
         concatListPath: path.join(vp.productionRoot, 'concat-audio-list.txt'),
       });
       audioFile = concatenatedAudioPath;
-      windows = actWindowsFromAligned(acts, aligned);
+      /*
+       * 过滤掉零时长窗口(二十九期终审修复)——`actWindowsFromAligned` 对完全没
+       * 讲到的幕产出的是 `startMs === endMs` 这种零长度窗口(见该函数顶部注释),
+       * 不是"整条不产生"。这类窗口原样喂给 `FILM_PLAN.buildUserMessage` 会渲染成
+       * "5000 ~ 5000 毫秒"这种不可能存在的时间窗噪声句——喂给模型只会诱导它为
+       * 一个不存在的时间段硬造一镜, 没有任何信息量。这里在传给 `buildFilmPlan`
+       * 之前就地过滤掉, 让提示词只看到真实讲到的幕。
+       *
+       * `checkFilmPlanTimingWindowed`(`film-plan-timing.ts`)里对零窗口的跳过
+       * **依然保留、不删除**——两层过滤各自的职责不同: 这里(worker/生成侧)是
+       * 为了不把噪声喂给模型, 属于"优化提示词质量"; 那边(校验侧)是防御纵深,
+       * 防的是"万一将来有别的调用路径没经过这层过滤就直接把 windows 传给
+       * checkFilmPlanTimingWindowed", 不能假设过滤永远发生在校验之前。
+       */
+      windows = actWindowsFromAligned(acts, aligned).filter((w) => w.endMs > w.startMs);
       productionNotice = null;
     } else {
       /*
@@ -1062,7 +1076,12 @@ export async function handleTalkingHeadBrollRemotion(
 
     await setStatus('building');
     if (brollOn) {
-      const windows = actWindowsFromAligned(acts, aligned);
+      // 过滤零时长窗口——理由与 handlePptNarrationRemotion 那处同一段注释一致
+      // (见上方 "过滤掉零时长窗口(二十九期终审修复)"): 不把"没讲到的幕"的
+      // 噪声时间窗喂给模型。`checkFilmPlanTimingWindowed` 对零窗口的跳过依然
+      // 保留(防御纵深), 这里过滤过的 `windows` 同时也是下面 `checkTiming`
+      // 闭包捕获的那份, 校验侧不会再遇到零窗口, 但那层跳过逻辑不因此失去意义。
+      const windows = actWindowsFromAligned(acts, aligned).filter((w) => w.endMs > w.startMs);
       // `'cards'` 不能省: 理由同 handlePptNarrationRemotion —— 默认的 'freeform'
       // 会下发旧链"条目数不少于 8 条"那套要求, 与 list 卡 items 上限 8 自相矛盾。
       const research = await loadResearch(vp.contentId);
@@ -1115,6 +1134,11 @@ export async function handleTalkingHeadBrollRemotion(
     } else {
       // brollEnabled=false: 跳过整个 FilmPlan 生成——旧链的等价物是"只出人物全屏",
       // 新链等价物是 shots 空数组, 源视频直通 + 字幕。
+      // 产品语义待用户确认(终审观察项): layout==='pip' 且 brollEnabled=false 时,
+      // shots=[] 意味着卡片轨永远不渲染——pip 版式下主画面本该是"卡片"(见上面
+      // layout==='pip' 分支注释里"卡片是主画面"那句), 这个组合下退化成纯色背景
+      // +浮窗+字幕, 不崩但"PPT 主画面"这条语义落空了。是否该在这个组合下改走
+      // cutaway 语义、或者干脆禁止这个组合, 是产品判断, 本轮不改行为。
       plan = { shots: [] };
     }
 

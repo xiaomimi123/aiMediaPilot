@@ -44,6 +44,36 @@ export function manhattan(a: [number, number, number], b: [number, number, numbe
   return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
 }
 
+/**
+ * 在一块矩形区域内扫描, 判断是否存在"足够接近目标色"的像素(二十九期终审
+ * 补 pipReserve 防撞回归用)。
+ *
+ * 为什么扫区域而不是单点采样: 字幕文字的具体渲染宽度依赖字体度量(不同机器/
+ * 字体的字形宽度有细微差异, 见 remotion-audio-captions.test.ts 顶部注释里
+ * 同样的顾虑), 只采一个像素点容易因为"字刚好没盖到那个点"而产生假阴性/假阳性。
+ * 扫一片区域找"有没有任意一点接近目标色"对字体度量的容差要宽得多——只要
+ * 文字确实落在(或确实没落在)这片区域里的某处, 结论就不会因为具体字形宽度的
+ * 几像素误差而翻转。
+ */
+export function regionContainsColor(
+  ppm: { width: number; height: number; data: Buffer },
+  xRange: [number, number],
+  yRange: [number, number],
+  target: [number, number, number],
+  threshold: number,
+): boolean {
+  const x0 = Math.max(0, Math.floor(xRange[0]));
+  const x1 = Math.min(ppm.width - 1, Math.ceil(xRange[1]));
+  const y0 = Math.max(0, Math.floor(yRange[0]));
+  const y1 = Math.min(ppm.height - 1, Math.ceil(yRange[1]));
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      if (manhattan(readPixel(ppm, x, y), target) < threshold) return true;
+    }
+  }
+  return false;
+}
+
 import { spawnSync } from 'child_process';
 
 const FFMPEG_BIN = process.env.FFMPEG_BIN || 'ffmpeg';

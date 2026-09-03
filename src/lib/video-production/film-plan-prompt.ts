@@ -57,8 +57,19 @@ export function actWindows(acts: ScriptAct[]): ActWindow[] {
  * (`actWindows`)和写稿阶段的节奏参考, 不再驱动最终画面时间轴。
  *
  * narration/title 仍取自 `acts`(六幕脚本本身的文字内容, 对齐结果里没有这些字段)。
- * `aligned` 里没有覆盖到的幕(未讲到、被跳过的幕)不产生窗口——没有配音就不该有
- * 对应的画面, 否则会出现一段无声黑屏或复用错的画面。
+ *
+ * **终审更正(与实际行为不符, 2026-09-04 复审发现)**: 这里原来写"未讲到的幕
+ * 不产生窗口", 但 `ALIGNER` 的 schema 固定要求输出六个 `AlignedAct`(对应
+ * `AlignerResponseSchema` 的 `.length(6)`)、且提示词明确要求"没讲到的幕把
+ * startMs/endMs 设成同一个值(零时长), 但仍要输出这一幕"(见
+ * `aligner-prompt.ts` 的 `ALIGNER.buildSystemPrompt`)——`aligned` 里永远是
+ * 六条记录, 不存在"某幕缺失"的情况, `alignedByAct.get(act.act)` 因此实际上
+ * 总能命中。真实行为是: 没讲到的幕**会**产生一个 `startMs === endMs` 的
+ * 零长度窗口, 不是"不产生窗口"。下游 `checkFilmPlanTimingWindowed`
+ * (`film-plan-timing.ts`)已经按这个真实行为设计——它显式跳过零长度窗口
+ * (`w.endMs <= w.startMs` 不计入覆盖率检查), 两处各自的职责是: 这里(生成层)
+ * 老老实实产出六个窗口(含零长度的), 不擅自过滤; 那边(校验层)负责识别并
+ * 豁免零长度窗口, 不把它们当"没覆盖"报错——过滤发生在校验层, 不是生成层。
  */
 export function actWindowsFromAligned(acts: ScriptAct[], aligned: AlignedAct[]): ActWindow[] {
   const alignedByAct = new Map(aligned.map((a) => [a.act, a]));
