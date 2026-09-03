@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
+import { REMOTION_READY_MODES, isRemotionReadyMode } from '@/lib/video-production/renderer';
 
 /*
  * 二十九期 Task 2: 选路矩阵源码级测试 —— mode(ppt-narration / illustration-tts /
@@ -13,12 +14,18 @@ import path from 'path';
  * mock 一遍(worker-visual-style.test.ts 那种规模), 而这里只想钉住"分流开关本身没
  * 接错"，用源码结构断言更直接、也更不容易因为无关的 mock 细节而误报。
  *
+ * 复审补: Remotion 选路开关的条件从内联的 `mode === 'ppt-narration' || mode ===
+ * 'illustration-tts'` 改成了共享常量 `isRemotionReadyMode`(与 PATCH /[id] 路由
+ * 共用, 见 renderer.ts), 源码正则锚不到"哪些 mode 在清单里"这件事本身了——这部分
+ * 改成直接调真实的 isRemotionReadyMode/REMOTION_READY_MODES 断言, 逻辑锚点(调用
+ * 哪个 handler)继续用源码正则。
+ *
  * 6 格对应关系(与 handleProduce dispatch 段的实际代码一一对应):
  *   renderer=remotion  × mode=ppt-narration      → handlePptNarrationRemotion
  *   renderer=remotion  × mode=illustration-tts   → handleIllustrationTtsRemotion
  *   renderer=remotion  × mode=talking-head-broll → 落回旧链 handleTalkingHeadBroll
- *     (Remotion 分支的 if 条件只认 ppt-narration/illustration-tts, talking-head-broll
- *      不满足条件就跳过整个 if, 走下面完全不看 vp.renderer 的旧 if/else-if 链)
+ *     (isRemotionReadyMode('talking-head-broll') === false, 跳过整个 if,
+ *      走下面完全不看 vp.renderer 的旧 if/else-if 链)
  *   renderer=legacy    × mode=ppt-narration      → handlePptNarration
  *   renderer=legacy    × mode=illustration-tts   → handleIllustrationTts
  *   renderer=legacy    × mode=talking-head-broll → handleTalkingHeadBroll
@@ -38,7 +45,7 @@ const DISPATCH = SRC.slice(DISPATCH_START, DISPATCH_END);
 
 // Remotion 选路开关的整段 if 块——从条件判断开始, 到与之配对的 return 结束。
 const REMOTION_GATE_START = DISPATCH.indexOf(
-  "if (vp.renderer === 'remotion' && (vp.mode === 'ppt-narration' || vp.mode === 'illustration-tts'))",
+  "if (vp.renderer === 'remotion' && isRemotionReadyMode(vp.mode))",
 );
 const REMOTION_GATE_END = DISPATCH.indexOf('\n      return;\n    }', REMOTION_GATE_START);
 if (REMOTION_GATE_START < 0 || REMOTION_GATE_END < 0) {
@@ -56,22 +63,24 @@ const LEGACY_CHAIN = DISPATCH.slice(LEGACY_CHAIN_START, LEGACY_CHAIN_END);
 
 describe('选路矩阵: mode × renderer 共 6 格', () => {
   it('renderer=remotion × mode=ppt-narration → handlePptNarrationRemotion', () => {
+    expect(isRemotionReadyMode('ppt-narration')).toBe(true);
     expect(REMOTION_GATE).toMatch(
       /if \(vp\.mode === 'ppt-narration'\) \{\s*await handlePptNarrationRemotion\(/,
     );
   });
 
   it('renderer=remotion × mode=illustration-tts → handleIllustrationTtsRemotion', () => {
+    // 这一断言就是变异靶子: 把 illustration-tts 从 REMOTION_READY_MODES 里
+    // 去掉, 这里直接变红——不用真的跑一遍 handleProduce 也能验证清单被改坏。
+    expect(isRemotionReadyMode('illustration-tts')).toBe(true);
     expect(REMOTION_GATE).toMatch(
       /\} else \{\s*await handleIllustrationTtsRemotion\(/,
     );
   });
 
-  it('renderer=remotion × mode=talking-head-broll → 开关条件不包含 talking-head-broll, 落回旧链', () => {
-    // 开关条件本身只认这两个 mode —— talking-head-broll 永远进不了这个 if。
-    expect(REMOTION_GATE_START).toBeGreaterThanOrEqual(0);
-    const gateCondition = DISPATCH.slice(REMOTION_GATE_START, DISPATCH.indexOf(') {', REMOTION_GATE_START));
-    expect(gateCondition).not.toMatch(/talking-head-broll/);
+  it('renderer=remotion × mode=talking-head-broll → 不在清单里, 落回旧链', () => {
+    // talking-head-broll 没有对应的 Remotion handler, 不该出现在清单里。
+    expect(isRemotionReadyMode('talking-head-broll')).toBe(false);
     // 旧链 if/else-if 完全不看 vp.renderer —— 所以 talking-head-broll 无论 renderer
     // 是什么都会走到这条旧链, 命中 handleTalkingHeadBroll。
     expect(LEGACY_CHAIN).not.toMatch(/vp\.renderer/);
@@ -102,5 +111,26 @@ describe('选路矩阵: mode × renderer 共 6 格', () => {
 
   it('未知 mode 落到 else 分支, 显式抛错而不是静默跳过', () => {
     expect(LEGACY_CHAIN).toMatch(/\} else \{\s*throw new Error\(`暂不支持的交付模式/);
+  });
+});
+
+describe('REMOTION_READY_MODES 清单本身', () => {
+  it('目前只有 ppt-narration / illustration-tts 两个 mode', () => {
+    expect([...REMOTION_READY_MODES].sort()).toEqual(['illustration-tts', 'ppt-narration']);
+  });
+
+  it('worker dispatch 与 PATCH /[id] 路由共用同一份清单(源码级断言, 防两处各写一份分叉)', () => {
+    expect(SRC).toContain("from '@/lib/video-production/renderer'");
+    expect(SRC).toMatch(/isRemotionReadyMode/);
+
+    const routeSrc = fs.readFileSync(
+      path.join(
+        process.cwd(),
+        'src/app/api/v1/cockpit/video-productions/[id]/route.ts',
+      ),
+      'utf-8',
+    );
+    expect(routeSrc).toContain("from '@/lib/video-production/renderer'");
+    expect(routeSrc).toMatch(/isRemotionReadyMode\(vp\.mode\)/);
   });
 });

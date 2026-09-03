@@ -5,6 +5,7 @@ import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { canStartProduction } from '@/lib/cockpit/production-status';
+import { isRemotionReadyMode } from '@/lib/video-production/renderer';
 
 const PatchBodySchema = z.object({
   renderer: z.enum(['remotion', 'legacy']),
@@ -62,6 +63,16 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   if (parsed.data.renderer === vp.renderer) {
     return ok({ id: vp.id, renderer: vp.renderer });
+  }
+
+  /*
+   * 复审补(二十九期 Task 2 收尾): 只有 REMOTION_READY_MODES 里的交付模式才有对应
+   * 的 Remotion handler(见 worker dispatch 里同一份清单)——切到 'remotion' 之前
+   * 必须先确认 worker 真的接得住, 否则任务会卡在没人处理的分支, 用户还看着「新版
+   * 渲染」的徽标以为在正常出片。切回 'legacy' 不受这条限制, 旧链所有 mode 都能接。
+   */
+  if (parsed.data.renderer === 'remotion' && !isRemotionReadyMode(vp.mode)) {
+    return fail('该交付方式暂不支持新版渲染', 400);
   }
 
   const updated = await prisma.videoProduction.update({

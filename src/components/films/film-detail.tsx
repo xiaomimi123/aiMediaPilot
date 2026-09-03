@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { canStartProduction } from '@/lib/cockpit/production-status';
+import { isRemotionReadyMode } from '@/lib/video-production/renderer';
 import {
   PRODUCTION_STAGES, isInFlight, stageHint, stageIndex, waitingOn,
 } from '@/lib/cockpit/production-stage';
@@ -444,6 +445,14 @@ export function FilmDetail({ initial }: { initial: Film }) {
         {/*
           渲染方式徽标 + 切换。只在任务还没开工(canStartProduction)时给切换按钮——
           处理中/已完成的任务改这个没有意义, 也回不了头(素材/中间产物已经按旧方式走了)。
+
+          复审补(二十九期 Task 2 收尾): 切换按钮还要求 mode 在 isRemotionReadyMode
+          清单里——不然会出现「标签显示新版渲染, 实际仍走旧管线出片」的误导: 之前
+          这里只按 canStartProduction 显隐, talking-head-broll 这类还没迁完
+          Remotion handler 的 mode 也能被切成 'remotion', 徽标改了但 worker
+          dispatch 接不住, 会落回旧链——标签与行为不一致。延续本文件"不可用即隐藏"
+          的既有模式: 未迁移的 mode 直接不显示切换按钮, 而不是显示了再让用户点了
+          碰壁(服务端 PATCH 路由也拦着这个组合, 这里是双保险)。
         */}
         <span
           className={cn(
@@ -455,7 +464,7 @@ export function FilmDetail({ initial }: { initial: Film }) {
         >
           {film.renderer === 'remotion' ? '新版渲染' : '旧版渲染'}
         </span>
-        {canStartProduction(film.status) ? (
+        {canStartProduction(film.status) && isRemotionReadyMode(film.mode) ? (
           <Button
             size="sm"
             variant="ghost"

@@ -70,6 +70,7 @@ import type { DeliveryMode } from '@/lib/cockpit/model';
 import { runPackaging } from '@/lib/video-production/packaging';
 import { buildPackagingOptions } from '@/lib/video-production/packaging-input';
 import { renderFilm, type CaptionItem } from '@/lib/video-production/remotion-render';
+import { isRemotionReadyMode } from '@/lib/video-production/renderer';
 import { FilmPlanSchema, describeCardsForPrompt, type FilmPlan } from '@/lib/video-production/shot-plan';
 import { actWindows, actWindowsFromAligned, type ActWindow } from '@/lib/video-production/film-plan-prompt';
 import { buildFilmPlan } from '@/lib/video-production/film-plan-builder';
@@ -1521,8 +1522,11 @@ async function handleProduce(job: Job<JobData>) {
      * 先建后拆 —— 新链路验收通过之前, 旧链路必须始终能出片。
      * 二十九期 Task 2 起 illustration-tts 也走这条分支(与 ppt-narration 共用
      * handlePptNarrationRemotion, 差异见该函数顶部的 RemotionShotPlanOptions 说明)。
+     * 是否有 Remotion handler 能接住某个 mode, 由 isRemotionReadyMode 判断——
+     * 与 PATCH /[id] 路由允许切换到 'remotion' 的判断共用同一份
+     * REMOTION_READY_MODES 清单, 见该常量顶部注释, 别各写一份导致分叉。
      */
-    if (vp.renderer === 'remotion' && (vp.mode === 'ppt-narration' || vp.mode === 'illustration-tts')) {
+    if (vp.renderer === 'remotion' && isRemotionReadyMode(vp.mode)) {
       if (vp.mode === 'ppt-narration') {
         await handlePptNarrationRemotion(vp, mode, setStatus, outputFileName, readyStatus, outputField);
       } else {
@@ -1531,9 +1535,11 @@ async function handleProduce(job: Job<JobData>) {
       // 范围限制(终审已裁决, 本轮不补): 这条分支渲完就 return, 不会走下面的文字叠加层
       // (二十三期)与成片包装段(二十期, BGM 混音/片头片尾/包装后静止复检)——那两段是
       // 针对旧渲染层的成片路径写的, 尚未对接到 Remotion 分支。显式出声而不是悄悄跳过,
-      // 是因为「静默跳过」违反本项目的原则; illustration-tts 仍默认 legacy 渲染器
-      // (Task 6 验收后才切默认值), 只有直接改库把 vp.renderer 置成 'remotion' 才会
-      // 走到这里, 所以这是休眠风险, 一旦默认值打开就会被下面这条日志立刻暴露出来。
+      // 是因为「静默跳过」违反本项目的原则; **改库不是走到这里的唯一路径**——
+      // 二十八期加的 PATCH /[id] 路由 + film-detail.tsx 的切换按钮本身就能把
+      // REMOTION_READY_MODES 里的 mode 切到 'remotion'(按钮只按 canStartProduction
+      // 显隐, 不看 mode), 用户从真实 UI 就能走到这条分支, 不需要改库。这条警告是
+      // 提醒"这两段还没接上", 不是在断言一条不会被触发的死代码路径。
       const t = vp.templateId
         ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
         : null;
