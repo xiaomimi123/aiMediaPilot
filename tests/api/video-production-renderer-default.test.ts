@@ -269,14 +269,18 @@ describe('PATCH /api/v1/cockpit/video-productions/[id] —— 切换渲染方式
   });
 
   /*
-   * 复审补(二十九期 Task 2 收尾): talking-head-broll 还没有对应的 Remotion handler
-   * (worker dispatch 里的 REMOTION_READY_MODES 不含它)——切到 'remotion' 会让任务
-   * 卡在没人接的分支, 界面却显示「新版渲染」的徽标, 对用户是可见的误导。这道关必须
-   * 挡在真正切库之前。
+   * 复审补(二十九期 Task 2 收尾): mode 不在 REMOTION_READY_MODES 里的话, 切到
+   * 'remotion' 会让任务卡在没人接的分支, 界面却显示「新版渲染」的徽标, 对用户是
+   * 可见的误导。这道关必须挡在真正切库之前。
+   *
+   * 二十九期 Task 4 起 talking-head-broll 也迁完了(REMOTION_READY_MODES 三个
+   * 交付模式都在清单里), 这两个用例改用一个真实清单之外的虚构 mode
+   * (`'unmigrated-mode'`)——只用来验证"不在清单里就挡"这条规则本身, 不依赖
+   * 某个具体 mode 永远保持未迁移状态。
    */
-  it('mode 不在 REMOTION_READY_MODES 里(talking-head-broll)切到 remotion → 400, 不更新', async () => {
+  it("mode 不在 REMOTION_READY_MODES 里('unmigrated-mode')切到 remotion → 400, 不更新", async () => {
     prismaMock.videoProduction.findUnique.mockResolvedValue({
-      id: 'vp1', userId: 'user1', status: 'queued', renderer: 'legacy', mode: 'talking-head-broll',
+      id: 'vp1', userId: 'user1', status: 'queued', renderer: 'legacy', mode: 'unmigrated-mode',
     });
 
     const res = await PATCH(req({ renderer: 'remotion' }), { params: { id: 'vp1' } });
@@ -287,9 +291,9 @@ describe('PATCH /api/v1/cockpit/video-productions/[id] —— 切换渲染方式
     expect(prismaMock.videoProduction.update).not.toHaveBeenCalled();
   });
 
-  it('talking-head-broll 切回 legacy 不受限制(只有切到 remotion 才检查清单)', async () => {
+  it('unmigrated-mode 切回 legacy 不受限制(只有切到 remotion 才检查清单)', async () => {
     prismaMock.videoProduction.findUnique.mockResolvedValue({
-      id: 'vp1', userId: 'user1', status: 'queued', renderer: 'remotion', mode: 'talking-head-broll',
+      id: 'vp1', userId: 'user1', status: 'queued', renderer: 'remotion', mode: 'unmigrated-mode',
     });
     prismaMock.videoProduction.update.mockResolvedValue({ id: 'vp1', renderer: 'legacy' });
 
@@ -302,6 +306,18 @@ describe('PATCH /api/v1/cockpit/video-productions/[id] —— 切换渲染方式
   it('illustration-tts(已迁移)切到 remotion → 不被这道新关拦, 正常更新', async () => {
     prismaMock.videoProduction.findUnique.mockResolvedValue({
       id: 'vp1', userId: 'user1', status: 'queued', renderer: 'legacy', mode: 'illustration-tts',
+    });
+    prismaMock.videoProduction.update.mockResolvedValue({ id: 'vp1', renderer: 'remotion' });
+
+    const res = await PATCH(req({ renderer: 'remotion' }), { params: { id: 'vp1' } });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.videoProduction.update).toHaveBeenCalled();
+  });
+
+  it('talking-head-broll(二十九期 Task 4 起已迁移)切到 remotion → 不被这道新关拦, 正常更新', async () => {
+    prismaMock.videoProduction.findUnique.mockResolvedValue({
+      id: 'vp1', userId: 'user1', status: 'queued', renderer: 'legacy', mode: 'talking-head-broll',
     });
     prismaMock.videoProduction.update.mockResolvedValue({ id: 'vp1', renderer: 'remotion' });
 

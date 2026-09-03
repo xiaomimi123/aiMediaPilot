@@ -72,9 +72,11 @@ import { buildPackagingOptions } from '@/lib/video-production/packaging-input';
 import { renderFilm, type CaptionItem } from '@/lib/video-production/remotion-render';
 import { isRemotionReadyMode } from '@/lib/video-production/renderer';
 import { FilmPlanSchema, describeCardsForPrompt, type FilmPlan } from '@/lib/video-production/shot-plan';
-import { actWindows, actWindowsFromAligned, type ActWindow } from '@/lib/video-production/film-plan-prompt';
+import { actWindows, actWindowsFromAligned, FILM_PLAN_BROLL, type ActWindow } from '@/lib/video-production/film-plan-prompt';
 import { buildFilmPlan } from '@/lib/video-production/film-plan-builder';
-import type { CaptionEvent } from '@/lib/video-production/ass-captions';
+import { checkBrollPlanTiming } from '@/lib/video-production/film-plan-timing';
+import { captionEventsFromTranscript, type CaptionEvent } from '@/lib/video-production/ass-captions';
+import { PIP_SCALE_MIN, PIP_SCALE_MAX } from '@/lib/video/pip-layout';
 
 /**
  * `recompose`(二十三期): 只重新合成, 不重新生成。
@@ -885,6 +887,222 @@ export async function reportFreeze(
 }
 
 /**
+ * `talking-head-broll` 交付链的 Remotion 分支(二十九期 Task 4)。
+ *
+ * **独立写, 不参数化进 `handlePptNarrationRemotion`**——虽然二十九期 Task 2 把
+ * `illustration-tts` 做成了共用同一套骨架的 options, 但那两条链(图文口播/插画
+ * 配音)本质相同: 都是"无源画面, Director/FilmPlan 凭空排布虚拟时长, 全片由
+ * 生成的分镜拼起来"。出镜链完全是另一种结构:
+ * - 时间轴锚点来自**真实 ASR 转写 + 语音对齐(ALIGNER)**, 不是 TTS 合成时长;
+ * - 音频不走独立人声轨——出镜视频原声直通(`OffthreadVideo` 自带音轨, Task 3
+ *   spike 已验证卡片覆盖段人声不断), `renderFilm` 的 `audioFile` 传 `null`;
+ * - 成片时长基准是**源视频真实时长**(ffprobe), 不是分镜时间总和——FilmPlan
+ *   的 shots 允许留空档(空档=露出出镜画面, 是功能不是缺陷), 不能像
+ *   `handlePptNarrationRemotion` 那样用 `Math.max(...shots.endMs)`;
+ * - 有 `sourceVideo`(cutaway/pip 版式 + pip 定位)这一层, 另外两条链没有;
+ * - 字幕是 ASR 逐句(`captionEventsFromTranscript`), 不是按幕整段铺的
+ *   `sentenceCaptionEvents`。
+ *
+ * 五处差异, 没有一处是"options 传参"能干净表达的开关, 硬塞进
+ * `RemotionShotPlanOptions` 只会让那个函数体同时服务两种完全不同的时间轴模型,
+ * 可读性反而更差。共用的只有零散的小片段(FilmPlan 修复循环机制、`renderFilm`
+ * 调用形状), 这些已经分别抽成 `buildFilmPlan` 的可参数化 prompt/checkTiming
+ * 与 `renderFilm` 本身——不需要再抽一层"共享骨架函数"。
+ */
+export async function handleTalkingHeadBrollRemotion(
+  vp: VideoProduction,
+  mode: 'preview' | 'master',
+  setStatus: SetStatusFn,
+  outputFileName: string,
+  readyStatus: string,
+  outputField: 'previewPath' | 'masterPath',
+): Promise<void> {
+  if (!vp.sourceVideoPath) throw new Error('尚未上传出镜视频');
+  const sourceVideoPath = vp.sourceVideoPath;
+
+  const template = await templateOf(vp.templateId);
+  // 模板可以整个关掉 B-roll(与旧链 handleTalkingHeadBroll 同一先例)——关掉时
+  // 画面就是原始出镜视频 + 字幕, 跳过整个 FilmPlan 生成(不白烧一次 LLM 调用)。
+  const brollOn = template?.brollEnabled ?? true;
+
+  let plan: FilmPlan;
+  let aligned: AlignedAct[];
+  let rawTranscript: TranscriptSegment[];
+  if (mode === 'preview') {
+    // 转写 + 语音对齐(复用现有 directing 状态值, 语义上这里是"转写+对齐",
+    // 与旧链 handleTalkingHeadBroll 同一先例)。
+    await setStatus('directing');
+    const audioPath = path.join(vp.productionRoot, 'source-audio.wav');
+    await extractAudio({ videoPath: sourceVideoPath, audioPath });
+    const whisper = new LocalWhisperClient();
+    const transcription = await whisper.transcribe(audioPath);
+    rawTranscript = transcription.segments;
+
+    // 取六幕脚本(与旧链 handleTalkingHeadBroll 同一条查找链)
+    const content = await prisma.cockpitContent.findUnique({ where: { id: vp.contentId } });
+    const draft = content?.scriptDraftId
+      ? await prisma.scriptDraft.findUnique({ where: { id: content.scriptDraftId } })
+      : null;
+    const parsed = draft ? parseDraftOutput(draft.output) : null;
+    if (!parsed?.acts || !parsed.four_dims) throw new Error('需要先生成六幕脚本');
+    const acts = parsed.acts;
+
+    const deepseekKey = await resolveDeepSeekApiKey(vp.userId);
+    if (!deepseekKey) throw new Error('未配置 DeepSeek key');
+    const alignLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-reasoner' });
+    const { result: alignedResult } = await alignLLM.callStructured({
+      systemPrompt: ALIGNER.buildSystemPrompt(),
+      userMessage: ALIGNER.buildUserMessage(transcription.segments, acts),
+      responseSchema: ALIGNER.responseSchema,
+    });
+    aligned = alignedResult.acts;
+
+    // 持久化对齐结果: master 渲染直接复用, 不重新做 ASR/对齐这类非确定性 AI 调用
+    // (与旧链 handleTalkingHeadBroll 同一先例)。
+    await prisma.videoProduction.update({
+      where: { id: vp.id },
+      data: {
+        alignedActs: aligned as unknown as Prisma.InputJsonValue,
+        rawTranscript: rawTranscript as unknown as Prisma.InputJsonValue,
+        updatedAt: new Date().toISOString(),
+      },
+    });
+
+    // FilmPlan 的时间边界: 总时长 = 源视频真实时长(ffprobe), 不是幕窗口总和——
+    // 出镜链画面全程有源视频铺底, 卡片只是间歇覆盖, 分镜不需要铺满时间轴。
+    const sourceMs = (await probeVideoDurationMs(sourceVideoPath)) ?? 0;
+
+    await setStatus('building');
+    if (brollOn) {
+      const windows = actWindowsFromAligned(acts, aligned);
+      // `'cards'` 不能省: 理由同 handlePptNarrationRemotion —— 默认的 'freeform'
+      // 会下发旧链"条目数不少于 8 条"那套要求, 与 list 卡 items 上限 8 自相矛盾。
+      const research = await loadResearch(vp.contentId);
+      const factsSection = buildFactsSection(acts, research, 'cards');
+      const filmPlanLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-chat' });
+      const built = await buildFilmPlan({
+        llm: filmPlanLLM,
+        windows,
+        cardsSection: describeCardsForPrompt(),
+        factsSection,
+        totalMs: sourceMs,
+        maxTokens: 8192,
+        // 出镜链专属: 不要求铺满(FILM_PLAN_BROLL) + 不查空档(checkBrollPlanTiming)。
+        prompt: FILM_PLAN_BROLL,
+        checkTiming: checkBrollPlanTiming,
+      });
+      console.log(`[video-production] FilmPlan 产出完成 (修复 ${built.rounds} 轮, ${built.plan.shots.length} 镜)`);
+
+      /*
+       * 分镜必须裁回素材长度之内 —— 与旧链 clampShotsToSource 同一先例(真实事故:
+       * 素材 155 秒, 分镜排到 234 秒, 尾巴 79 秒既没人声也没台词)。上面的
+       * checkBrollPlanTiming 已经在修复循环里拦过"超出源视频时长", 这里的
+       * clampShotsToSource 是渲染前的最后一道防线, 双保险不冲突。
+       */
+      const clampedShots = clampShotsToSource(built.plan.shots, sourceMs);
+      if (clampedShots.length !== built.plan.shots.length) {
+        console.warn(
+          `[video-production] FilmPlan 分镜超出素材长度(${(sourceMs / 1000).toFixed(0)}s), ` +
+          `丢掉 ${built.plan.shots.length - clampedShots.length} 个越界镜头`,
+        );
+      }
+      plan = { ...built.plan, shots: clampedShots };
+    } else {
+      // brollEnabled=false: 跳过整个 FilmPlan 生成——旧链的等价物是"只出人物全屏",
+      // 新链等价物是 shots 空数组, 源视频直通 + 字幕。
+      plan = { shots: [] };
+    }
+
+    // 落库供 master 复用——与旧链把 direction.json/alignedActs 落盘同一个理由。
+    await prisma.videoProduction.update({
+      where: { id: vp.id },
+      data: {
+        filmPlan: plan,
+        updatedAt: new Date().toISOString(),
+      },
+    });
+  } else {
+    await setStatus('building');
+    if (!vp.filmPlan) throw new Error('没有已保存的 FilmPlan, 请先生成预览');
+    /*
+     * brollEnabled=false 时 preview 落库的是 `{ shots: [] }`(见上面 preview 分支)——
+     * `FilmPlanSchema` 的 `shots` 是 `.min(1)`(图文口播/插画配音那两条链的画面必须
+     * 覆盖全片, 空分镜没有意义), 直接拿它 parse 一个空 shots 数组会在 master 复用
+     * 时炸掉。出镜链的空分镜是合法状态(画面全程有源视频铺底), 这里先认出这个特例,
+     * 不经过严格 schema 就直接采信——反正它本来就是我们自己在 preview 分支写下的,
+     * 不是模型的自由产出, 不需要严格校验。
+     */
+    const rawPlan = vp.filmPlan as { shots?: unknown[] };
+    plan = Array.isArray(rawPlan.shots) && rawPlan.shots.length === 0
+      ? { shots: [] }
+      : FilmPlanSchema.parse(vp.filmPlan);
+    if (!vp.alignedActs || !vp.rawTranscript) {
+      throw new Error('预览未完成或已损坏，无法确认导出，请重新生成预览');
+    }
+    aligned = vp.alignedActs as unknown as AlignedAct[];
+    rawTranscript = vp.rawTranscript as unknown as TranscriptSegment[];
+  }
+
+  // 字幕: ASR 逐句(captionEventsFromTranscript), 不是按幕整段铺的 sentenceCaptionEvents——
+  // 出镜链有真实逐句转写, 没道理退化成整幕粒度。
+  const captions: CaptionItem[] = captionEventsFromTranscript(rawTranscript).map((e) => ({
+    text: e.text,
+    startMs: e.startMs,
+    endMs: e.endMs,
+  }));
+
+  // layout 选择: template.talkingHeadLayout('cutaway'|'pip')。pip 参数从模板三字段取,
+  // clamp 语义搬自旧链 computePipRect(src/lib/video/pip-layout.ts): scale 夹到
+  // [PIP_SCALE_MIN, PIP_SCALE_MAX], margin 夹到 >= 0——不搬这一步, 一个越界的模板
+  // 配置(比如 scale=1.5)会直接生成一个盖住整个画面的"画中画"(Task 3 复审留的坑)。
+  const layout: 'cutaway' | 'pip' = template?.talkingHeadLayout === 'pip' ? 'pip' : 'cutaway';
+  const pip = layout === 'pip'
+    ? {
+        position: (template?.pipPosition ?? 'br') as PipPosition,
+        scale: Math.min(PIP_SCALE_MAX, Math.max(PIP_SCALE_MIN, template?.pipScale ?? 0.25)),
+        margin: Math.max(0, Math.round(template?.pipMargin ?? 40)),
+      }
+    : null;
+
+  const aspect = template?.aspect === '9:16' ? '9:16' : '16:9';
+  const fps = mode === 'master' ? 30 : 15;
+  // 成片时长基准是源视频真实时长, 不是分镜时间总和——出镜链画面全程有源视频铺底,
+  // FilmPlan 的 shots 允许留空档, 用 shots 的最大 endMs 会把没有卡片覆盖的尾段切掉。
+  const sourceMs = (await probeVideoDurationMs(sourceVideoPath)) ?? 0;
+
+  await setStatus('assembling');
+  const outputPath = path.join(vp.productionRoot, outputFileName);
+  await renderFilm({
+    input: {
+      shots: plan.shots as any,
+      // 出镜原声直通: 音频不走这个字段(见下方 audioFile: null 的注释), 留 null。
+      audioSrc: null,
+      bgm: null,
+      captions,
+      aspect,
+      // 出镜链复用 FilmPlan 卡片(与 ppt-narration 同一套卡片组件), 视觉风格固定用
+      // 'card'——这条链没有"插画"这个概念, 不读 template.visualStyle(那是旧链
+      // Builder 提示词的风格指引, 与这里的 Task 1 渲染层 token 是两个不相干的概念,
+      // 见 Task 2 报告里的命名撞车提醒)。
+      visualStyle: 'card',
+      sourceVideo: { src: '', layout, pip },
+    },
+    outputPath,
+    durationInFrames: Math.ceil((sourceMs / 1000) * fps),
+    fps,
+    // 出镜原声直通: 出镜视频铺底用 OffthreadVideo, 它自带音轨(Task 3 spike 已验证
+    // 卡片覆盖段人声不断)——不需要像 ppt-narration/illustration-tts 那样另外合成/
+    // 拼接一条独立人声轨, audioFile 显式传 null。
+    audioFile: null,
+    bgmFile: template?.bgmPath ? { path: template.bgmPath, volume: template.bgmVolume ?? 0.15 } : null,
+    sourceVideoFile: sourceVideoPath,
+  });
+
+  const freezeReport = await reportFreeze(outputPath, mode);
+  await setStatus(readyStatus, { [outputField]: outputPath, freezeReport });
+}
+
+/**
  * `talking-head-broll` 交付模式 (十九期新增) —— 真人出镜视频 + AI 生成的 B-roll
  * 挖空替换 + 真实字幕烧录。与 ppt-narration 的关键差异：
  * - 时间轴锚点来自真实 ASR 转写 + 语音对齐(ALIGNER)，不是 Director 凭空排布的虚拟时长；
@@ -1523,7 +1741,10 @@ async function handleProduce(job: Job<JobData>) {
      * 二十五期: Remotion 渲染分支。**与旧分支并存, 由 vp.renderer 选。**
      * 先建后拆 —— 新链路验收通过之前, 旧链路必须始终能出片。
      * 二十九期 Task 2 起 illustration-tts 也走这条分支(与 ppt-narration 共用
-     * handlePptNarrationRemotion, 差异见该函数顶部的 RemotionShotPlanOptions 说明)。
+     * handlePptNarrationRemotion, 差异见该函数顶部的 RemotionShotPlanOptions 说明);
+     * Task 4 起 talking-head-broll 也走这条分支, 但走的是独立的
+     * handleTalkingHeadBrollRemotion(不参数化进 handlePptNarrationRemotion——
+     * 差异远超一半, 见该函数顶部注释)。
      * 是否有 Remotion handler 能接住某个 mode, 由 isRemotionReadyMode 判断——
      * 与 PATCH /[id] 路由允许切换到 'remotion' 的判断共用同一份
      * REMOTION_READY_MODES 清单, 见该常量顶部注释, 别各写一份导致分叉。
@@ -1531,8 +1752,10 @@ async function handleProduce(job: Job<JobData>) {
     if (vp.renderer === 'remotion' && isRemotionReadyMode(vp.mode)) {
       if (vp.mode === 'ppt-narration') {
         await handlePptNarrationRemotion(vp, mode, setStatus, outputFileName, readyStatus, outputField);
-      } else {
+      } else if (vp.mode === 'illustration-tts') {
         await handleIllustrationTtsRemotion(vp, mode, setStatus, outputFileName, readyStatus, outputField);
+      } else {
+        await handleTalkingHeadBrollRemotion(vp, mode, setStatus, outputFileName, readyStatus, outputField);
       }
       // 范围限制(终审已裁决, 本轮不补): 这条分支渲完就 return, 不会走下面的文字叠加层
       // (二十三期)与成片包装段(二十期, BGM 混音/片头片尾/包装后静止复检)——那两段是

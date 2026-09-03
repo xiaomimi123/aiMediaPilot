@@ -95,8 +95,15 @@ describe('handlePptNarrationRemotion 接 TTS/真实时间窗/字幕/BGM', () => 
 describe('旧的三条分支没被顺手改动', () => {
   const oldBranches: Array<[string, string, string]> = [
     ['handlePptNarration', 'export async function handlePptNarration', 'async function handlePptNarrationRemotion'],
-    ['handleTalkingHeadBroll', 'export async function handleTalkingHeadBroll', 'export async function handleIllustrationTts'],
-    ['handleIllustrationTts', 'export async function handleIllustrationTts', 'async function handleProduce'],
+    // 标记里的 `(\n` 是必须的: 二十九期 Task 4 加了 `handleTalkingHeadBrollRemotion`,
+    // 它的函数名以 `handleTalkingHeadBroll` 为前缀——不带 `(\n` 的话 `SRC.indexOf`
+    // 会先命中前面那个新函数(它自己就调用 actWindowsFromAligned), 把这条"旧链没被
+    // 顺手改动"的断言测到错的函数体上。
+    ['handleTalkingHeadBroll', 'export async function handleTalkingHeadBroll(\n', 'export async function handleIllustrationTts'],
+    // 同上一条注释: `handleIllustrationTtsRemotion` 也是 `handleIllustrationTts` 的
+    // 前缀撞名, 且它在源码里排在旧 `handleIllustrationTts` 之前——不带 `(\n` 的话
+    // `SRC.indexOf` 会先命中 Remotion 版本(它确实调用 actWindowsFromAligned)。
+    ['handleIllustrationTts', 'export async function handleIllustrationTts(\n', 'async function handleProduce'],
   ];
 
   for (const [name, startMarker, endMarker] of oldBranches) {

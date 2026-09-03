@@ -74,8 +74,24 @@ export async function buildFilmPlan(opts: {
    * 不传就不设上限(走 API 默认值), 也就不做截断检测——历史行为不变。
    */
   maxTokens?: number;
+  /**
+   * 提示词来源(二十九期 Task 4)。默认 `FILM_PLAN`(图文口播/插画配音——铺满不留
+   * 空档)。出镜链传 `FILM_PLAN_BROLL`(不要求铺满, 见该常量顶部注释)。
+   * 两条提示词共用同一套修复循环机制(截断检测/原始台词回填/issue 措辞约定),
+   * 不为出镜链另写一份 buildFilmPlan——差异只在"这一轮该怎么校验/怎么问模型",
+   * 不在"怎么跑修复循环"。
+   */
+  prompt?: { buildSystemPrompt: (cardsSection: string, factsSection: string) => string; buildUserMessage: (windows: ActWindow[]) => ReturnType<typeof FILM_PLAN.buildUserMessage> };
+  /**
+   * 时间轴校验函数(二十九期 Task 4)。默认 `checkFilmPlanTiming`(查空档/超出
+   * 总时长/须从 0 开始)。出镜链传 `checkBrollPlanTiming`(不查空档, 见该函数
+   * 顶部注释)。
+   */
+  checkTiming?: (plan: FilmPlan, totalMs: number) => string[];
 }): Promise<{ plan: FilmPlan; rounds: number }> {
-  const systemPrompt = FILM_PLAN.buildSystemPrompt(opts.cardsSection, opts.factsSection);
+  const prompt = opts.prompt ?? FILM_PLAN;
+  const checkTiming = opts.checkTiming ?? checkFilmPlanTiming;
+  const systemPrompt = prompt.buildSystemPrompt(opts.cardsSection, opts.factsSection);
   /*
    * `originalUserMessage` 必须留着、每一轮都带上——**这是这次真实故障的根因**。
    *
@@ -96,7 +112,7 @@ export async function buildFilmPlan(opts: {
    * 这一轮的修复指令, 而不是拿修复指令去顶替原始内容——模型永远看得见它该覆盖
    * 的完整时间轴和台词, "只修这些问题、其余部分原样保留"才有东西可保留。
    */
-  const originalUserMessage = FILM_PLAN.buildUserMessage(opts.windows);
+  const originalUserMessage = prompt.buildUserMessage(opts.windows);
   let userMessage = originalUserMessage;
   let lastIssues: string[] = [];
 
@@ -131,7 +147,7 @@ export async function buildFilmPlan(opts: {
 
     const parsed = FilmPlanSchema.safeParse(result);
     const issues = parsed.success
-      ? checkFilmPlanTiming(parsed.data, opts.totalMs)
+      ? checkTiming(parsed.data, opts.totalMs)
       : describeZodIssues(result);
 
     if (issues.length === 0 && parsed.success) {

@@ -173,14 +173,13 @@ export const Film: React.FC<FilmInput> = ({
           {/*
            * pip: 出镜视频角标常驻, 必须在卡片轨之后渲染才不会被卡片整幅背景盖住。
            *
-           * TODO(Task 4 接线时处理): 这里直接用了 `sourceVideo.pip.scale`/
-           * `margin` 的原始值, 没有做旧链 `computePipRect`
-           * (`src/lib/video/pip-layout.ts`)那套 clamp(`scale` 夹到
-           * [PIP_SCALE_MIN=0.12, PIP_SCALE_MAX=0.45]、`margin` 夹到 >= 0)。
-           * 复审 2026-09-03 裁决: 本任务(Task 3)不做, 但 Task 4 从
-           * `VideoTemplate.pipPosition/pipScale/pipMargin` 接线时如果不加
-           * clamp, 一个越界的模板配置(比如 scale=1.5)会直接生成一个盖住
-           * 整个画面的"画中画", 别漏了。
+           * `sourceVideo.pip.scale`/`margin` 在这里直接使用, 不再重复 clamp——
+           * 旧链 `computePipRect`(`src/lib/video/pip-layout.ts`)那套 clamp
+           * (`scale` 夹到 [PIP_SCALE_MIN=0.12, PIP_SCALE_MAX=0.45]、`margin`
+           * 夹到 >= 0)已经在二十九期 Task 4 worker 接线处
+           * (`handleTalkingHeadBrollRemotion`, 从 `VideoTemplate.pipPosition/
+           * pipScale/pipMargin` 读值那一步)做过, 传到这里的值已经是合法范围
+           * 内的值——Film.tsx 是渲染层, 不重复做调用方已经保证过的校验。
            */}
           <div
             style={{

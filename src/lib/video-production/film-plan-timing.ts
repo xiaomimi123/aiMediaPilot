@@ -53,3 +53,41 @@ export function checkFilmPlanTiming(plan: FilmPlan, totalMs: number): string[] {
 
   return issues;
 }
+
+/** 出镜链版最短镜长(与 `film-plan-prompt.ts` 的 `FILM_PLAN_BROLL` 提示词文案里的数字一致)。 */
+const BROLL_MIN_SHOT_MS = 1200;
+
+/**
+ * `FilmPlanSchema` 拦不住的时间轴问题 —— 出镜链专属版本(二十九期 Task 4)。
+ *
+ * 与 `checkFilmPlanTiming` 的关键差异: **不查空档**。出镜链画面全程有真人出镜
+ * 视频铺底, 卡片窗口之外观众看到的是本人讲话, 空档是这条链的正常功能, 不是
+ * 缺陷——铺满校验的"空档=黑屏"前提在这里不成立(见 `FILM_PLAN_BROLL` 顶部注释)。
+ * 也不查"第一镜必须从 0 开始"——出镜链完全可能从头到尾都没有卡片。
+ *
+ * 仍然要查的两类, `FilmPlanSchema` 管不到、又真的会毁掉成片:
+ * - **超出源视频时长**: 旧链真出过事故(见 `director-prompt.ts` 的
+ *   `clampShotsToSource` 注释), 这里的 `totalMs` 必须传源视频真实时长
+ *   (ffprobe 出的毫秒数), 不是幕窗口总和。
+ * - **单镜过短**: 观众读不完。
+ *
+ * 返回的字符串会被原样喂回给模型, 措辞与 `checkFilmPlanTiming` 同一惯例:
+ * 每条只讲一个问题、只讲时间、给出具体数字。
+ */
+export function checkBrollPlanTiming(plan: FilmPlan, totalMs: number): string[] {
+  const issues: string[] = [];
+  for (const shot of plan.shots) {
+    if (shot.endMs > totalMs + TOLERANCE_MS) {
+      issues.push(
+        `镜头 ${shot.shotId} 到 ${shot.endMs} 毫秒结束, 但出镜素材只有 ${totalMs} 毫秒, 超出了素材时长。把 endMs 改成不超过 ${totalMs}。`,
+      );
+    }
+    const durationMs = shot.endMs - shot.startMs;
+    if (durationMs < BROLL_MIN_SHOT_MS) {
+      issues.push(
+        `镜头 ${shot.shotId} 只有 ${durationMs} 毫秒, 短于 ${BROLL_MIN_SHOT_MS} 毫秒的下限, 观众读不完。删掉这一镜, 或者把它延长到至少 ${BROLL_MIN_SHOT_MS} 毫秒。`,
+      );
+    }
+  }
+  return issues;
+}

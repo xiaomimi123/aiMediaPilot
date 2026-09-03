@@ -28,8 +28,12 @@ export function defaultRendererForMode(mode: string): 'remotion' | 'legacy' {
  * 与 `defaultRendererForMode` 是两件不相关的事——那个决定"新建任务默认给哪条链",
  * 这个决定"这条链有没有 Remotion 实现"; `illustration-tts` 在这份清单里但缺省
  * 仍是 legacy, 就是两者不必同步的例证。
+ *
+ * `talking-head-broll` 二十九期 Task 4 起加入(worker 侧对应
+ * `handleTalkingHeadBrollRemotion`)——加这一项会同时打开 worker 选路、PATCH
+ * 切换允许、film-detail.tsx 切换按钮显示三处, 不需要各自改。
  */
-export const REMOTION_READY_MODES = ['ppt-narration', 'illustration-tts'] as const;
+export const REMOTION_READY_MODES = ['ppt-narration', 'illustration-tts', 'talking-head-broll'] as const;
 
 export function isRemotionReadyMode(mode: string): boolean {
   return (REMOTION_READY_MODES as readonly string[]).includes(mode);

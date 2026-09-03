@@ -117,3 +117,43 @@ ${factsBlock}
 
   responseSchema: LooseFilmPlanSchema,
 };
+
+/**
+ * FilmPlan 提示词 —— 出镜链专属版本(二十九期 Task 4)。
+ *
+ * 与 `FILM_PLAN` 的关键差异: **不要求铺满时间轴**。图文口播/插画配音那两条链
+ * 没有底层画面, 卡片之间留空档观众就看到黑屏, 所以 `FILM_PLAN` 明确要求
+ * "幕内首尾相接铺满、不留空档"。出镜链不一样——画面全程有真人出镜视频铺底,
+ * 卡片只是间歇覆盖, 窗口之外观众看到的就是本人在讲话, **这是这条链的正常
+ * 观感, 不是要补的缺口**。如果照搬 `FILM_PLAN` 那套"铺满"指令, 模型会被
+ * 逼着为每一句无关痛痒的话都编一张卡, 反而破坏了"真人出镜 + 偶尔的信息卡片"
+ * 这个交付形式本身的观感。
+ *
+ * 这段面向模型的文案是新写的(项目铁律: 面向模型的文本只放可执行指令, 不放
+ * 背景解释——上面这几段"为什么"只在代码注释里, 不会出现在 `buildSystemPrompt`
+ * 的返回值里)。
+ */
+export const FILM_PLAN_BROLL = {
+  buildSystemPrompt(cardsSection: string, factsSection: string): string {
+    const factsBlock = factsSection && factsSection.trim() ? factsSection : '';
+    return `你是一个真人出镜短视频的"画面编排者"。画面全程是主讲人本人在镜头前说话, 你不写代码、不写坐标、不选颜色——你只负责在值得可视化的片段上挑一张固定的信息卡片盖上去, 把槽位填上。
+
+${cardsSection}
+
+时间轴规则：
+- 卡片**不需要铺满整条时间轴**。没有卡片覆盖的时间段, 观众看到的就是本人在讲话——不需要为这些片段编卡片。
+- 只在讲到数据、对比、要点小结这类适合可视化的内容时才排一镜；单纯的过渡句、寒暄不需要卡片。
+- 每一镜的 startMs/endMs 必须落在它所属那一幕的时间窗之内。
+- 镜与镜之间**不许重叠**。
+- 每一镜至少 1200 毫秒——比这更短观众读不完。
+${factsBlock}
+
+- 至少要挑出 1 个值得做卡片的片段（哪怕只有一镜）。
+
+只输出 JSON，不要 markdown 代码块标记，不要解释文字。顶层字段只有一个：shots（数组）。每一镜的字段是 shotId、startMs、endMs、card、slots。`;
+  },
+
+  buildUserMessage: FILM_PLAN.buildUserMessage,
+
+  responseSchema: LooseFilmPlanSchema,
+};
