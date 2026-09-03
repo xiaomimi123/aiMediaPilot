@@ -65,11 +65,15 @@ describe('缺省规则单元 —— defaultRendererForMode', () => {
   it('ppt-narration → remotion', () => {
     expect(defaultRendererForMode('ppt-narration')).toBe('remotion');
   });
-  it('talking-head-broll → legacy', () => {
-    expect(defaultRendererForMode('talking-head-broll')).toBe('legacy');
+  // 二十九期收尾: 三链全部验收后默认合流到 remotion(2026-09-04 用户逐链看片通过)。
+  it('talking-head-broll → remotion(二十九期验收后)', () => {
+    expect(defaultRendererForMode('talking-head-broll')).toBe('remotion');
   });
-  it('illustration-tts → legacy', () => {
-    expect(defaultRendererForMode('illustration-tts')).toBe('legacy');
+  it('illustration-tts → remotion(二十九期验收后)', () => {
+    expect(defaultRendererForMode('illustration-tts')).toBe('remotion');
+  });
+  it('未迁移/未知 mode 仍回落 legacy', () => {
+    expect(defaultRendererForMode('some-future-mode')).toBe('legacy');
   });
 });
 
@@ -104,7 +108,7 @@ describe('POST /api/v1/cockpit/video-productions —— renderer 缺省与显式
     expect(created.renderer).toBe('legacy');
   });
 
-  it('deliveryMode=illustration-tts, 不传 renderer → 落库 legacy(这条链还没迁)', async () => {
+  it('deliveryMode=illustration-tts, 不传 renderer → 落库 remotion(二十九期验收后)', async () => {
     prismaMock.cockpitContent.findUnique.mockResolvedValue({
       id: 'c1', userId: 'user1', scriptDraftId: 'sd1', deliveryMode: 'illustration-tts', script: {},
     });
@@ -115,7 +119,7 @@ describe('POST /api/v1/cockpit/video-productions —— renderer 缺省与显式
     expect(res.status).toBe(200);
     const created = prismaMock.videoProduction.create.mock.calls[0][0].data;
     expect(created.mode).toBe('illustration-tts');
-    expect(created.renderer).toBe('legacy');
+    expect(created.renderer).toBe('remotion');
   });
 
   it('renderer 传非法值 → 400, 不建库', async () => {
@@ -149,7 +153,7 @@ describe('POST /api/v1/video-templates/[id]/produce —— renderer 缺省与显
     expect(created.renderer).toBe('remotion');
   });
 
-  it('模板 deliveryMode=talking-head-broll, 不传 renderer → 落库 legacy', async () => {
+  it('模板 deliveryMode=talking-head-broll, 不传 renderer → 落库 remotion(二十九期验收后)', async () => {
     prismaMock.videoTemplate.findUnique.mockResolvedValue({
       id: 't1', userId: 'user1', deliveryMode: 'talking-head-broll', voicePreset: null,
     });
@@ -160,7 +164,7 @@ describe('POST /api/v1/video-templates/[id]/produce —— renderer 缺省与显
 
     expect(res.status).toBe(200);
     const created = prismaMock.videoProduction.create.mock.calls[0][0].data;
-    expect(created.renderer).toBe('legacy');
+    expect(created.renderer).toBe('remotion');
   });
 
   it('显式传 remotion —— 即便模板是 talking-head-broll, 也照用户说的来', async () => {

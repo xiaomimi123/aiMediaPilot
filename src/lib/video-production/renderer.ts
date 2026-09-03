@@ -11,7 +11,13 @@
  * `@default("legacy")` —— 万一新链出问题, 回退只改这一个函数, 不用碰 schema/迁移。
  */
 export function defaultRendererForMode(mode: string): 'remotion' | 'legacy' {
-  return mode === 'ppt-narration' ? 'remotion' : 'legacy';
+  /*
+   * 三条链均已迁完并经用户逐链验收真片(二十八期 ppt-narration 有声片;
+   * 二十九期 illustration 词高亮片 + talking-head PIP 浮窗片, 2026-09-04),
+   * 新建任务默认全部走 Remotion。与 REMOTION_READY_MODES 保持一致不是巧合
+   * 而是里程碑: 验收前两份清单刻意不同步(见下方注释), 验收后合流。
+   */
+  return isRemotionReadyMode(mode) ? 'remotion' : 'legacy';
 }
 
 /**

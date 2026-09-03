@@ -680,6 +680,19 @@ HTML+GSAP 逐帧截图管线调的, 新框架下卡片自身已有入场动效+�
 `NumberRoll` 与 `remotion/src/cards/Stat.tsx` 都改用这个共享函数, 真机验证 `32.2%` 定格帧原样渲成
 `32.2%`。
 
+### 二十九期: 三条交付链全部迁到 Remotion(2026-09-04 验收)
+
+`illustration-tts`(暖纸底插画卡面 + TTS 配音)与 `talking-head-broll`(真人出镜)也迁入
+Remotion 渲染层, 至此三条链共用同一套填槽契约与渲染管线, **新建任务默认全部走
+Remotion**(`defaultRendererForMode` 与 `REMOTION_READY_MODES` 合流), 面板可退回旧版。
+出镜链支持两种版式(模板 `talkingHeadLayout`): `cutaway` 挖空替换(卡片时段全屏卡片,
+其余时间真人全屏, 人声全程不断)与 `pip` 常驻浮窗(真人圆角小窗全程浮在右下,
+PPT 卡片主画面铺满全程 —— 两种版式的分镜语义相反, cutaway 空档=露出真人是功能,
+pip 空档=空背景是缺陷, worker 按版式选提示词与校验)。字级对齐(faster-whisper,
+`scripts/align/`)接入两条 TTS 链, 字幕当前词随语音逐字高亮; 出镜链用 ASR 逐句字幕
+(真人自由发挥无已知文本可锚, 有意不接字级对齐)。旧渲染层仍原样保留, 成建制删除
+排在三十期。
+
 ### AI 视频交付三模式 (十九期新增)
 
 一句话: 十五期的「AI 自动生成无人出镜成片」改名为 `ppt-narration`(读稿形式), 并新增两种
