@@ -559,6 +559,39 @@ export async function handlePptNarration(
  * 与旧链的关键差异: **Builder 不写 HTML, 只产 FilmPlan(选卡片 + 填槽)**;
  * 整片一次渲染, 不再有"分镜各渲各的再 concat"这一步。
  */
+/**
+ * 二十九期 Task 2: ppt-narration 与 illustration-tts 两条 Remotion 分支共用同一套
+ * TTS 幂等 + 真实窗口 + FilmPlan + 渲染骨架, 差异只有两处, 参数化成这个 options:
+ *
+ * - `visualStyle`: 传给 `renderFilm` 的 `FilmInput.visualStyle`(Task 1 新增字段,
+ *   渲染层 token 选择) —— 与 `video-template/model.ts` 的模板字段 `visualStyle`
+ *   是两个不相干的概念(那个驱动的是旧链 Builder 提示词的风格指引), 这条 Remotion
+ *   分支不读模板那个字段, 值由调用方按交付模式写死。
+ * - `onMissingTts`: 未配置火山 TTS 时的行为。ppt-narration 无声降级出片(旧行为,
+ *   不可改——下面 tests/jobs/video-production-remotion-audio-wiring.test.ts 的源码级
+ *   锚点测试盯着); illustration-tts 直接报错, 照抄旧链 `handleIllustrationTts`
+ *   (1176 行)的定义与措辞——"插画+配音"没有配音就没有意义, 无声降级那套不该出现
+ *   在这条链上。
+ *
+ * 之所以没有把这段逻辑挪去另一个函数名下、让本函数变成一个三行转发的薄包装:
+ * 上述那条源码级锚点测试(以及 video-production-film-plan-wiring.test.ts)靠
+ * SRC.indexOf 定位这个函数声明的起止边界来断言分支形状(具体是哪两个字符串见
+ * 那两个测试文件本身——这里故意不逐字引用, 避免这条注释自己被 indexOf 命中,
+ * 把锚点算错位置)——挪函数名会让那些测试的锚点失效, 而它们守住的行为(是否吞
+ * TTS 失败/master 是否重调 LLM/静止体检是否接着等)本身没有变化, 不该因为一次
+ * 纯内部重构就要求改测试。函数名保留 ppt-narration 字样是历史包袱, 但函数体
+ * 现在是两条链共用的渲染骨架。
+ */
+type RemotionShotPlanOptions = {
+  visualStyle: 'card' | 'illustration';
+  onMissingTts: 'degrade-silent' | 'throw';
+};
+
+const PPT_NARRATION_REMOTION_OPTIONS: RemotionShotPlanOptions = {
+  visualStyle: 'card',
+  onMissingTts: 'degrade-silent',
+};
+
 async function handlePptNarrationRemotion(
   vp: VideoProduction,
   mode: 'preview' | 'master',
@@ -566,6 +599,7 @@ async function handlePptNarrationRemotion(
   outputFileName: string,
   readyStatus: string,
   outputField: 'previewPath' | 'masterPath',
+  options: RemotionShotPlanOptions = PPT_NARRATION_REMOTION_OPTIONS,
 ): Promise<void> {
   const template = await templateOf(vp.templateId);
 
@@ -669,6 +703,14 @@ async function handlePptNarrationRemotion(
       windows = actWindowsFromAligned(acts, aligned);
       productionNotice = null;
     } else {
+      /*
+       * illustration-tts 不走无声降级——照抄旧链 handleIllustrationTts(1176 行)
+       * 的判断与措辞: 这条交付模式的定义就是"插画+配音", 没有配音就没有存在意义,
+       * 不该像 ppt-narration 那样退而求其次出一条无声片。
+       */
+      if (options.onMissingTts === 'throw') {
+        throw new Error('请先在设置页配置火山 TTS');
+      }
       console.warn('[video-production] 未配置火山 TTS, 本条为无声出片');
       windows = actWindows(acts);
       aligned = alignedFromWindows(windows);
@@ -751,10 +793,9 @@ async function handlePptNarrationRemotion(
   await renderFilm({
     // input.bgm 留 null: bgm 走下面的 bgmFile 参数, 由 renderFilm 自己拷进 remotion/public
     // 并回填 input.bgm(见 remotion-render.ts renderFilm 实现), 这里不用重复填。
-    // visualStyle 显式传 'card'——二十九期 Task 1 起 FilmInput 必填这个字段,
-    // 三条 worker 分支(preview/master/regenerate)都走的这同一处 renderFilm 调用,
-    // 现状四张卡都是 card 风格, illustration 风格接线是 Task 2 的事(不动 worker)。
-    input: { shots: plan.shots as any, audioSrc: null, bgm: null, captions, aspect, visualStyle: 'card' },
+    // visualStyle 由 options.visualStyle 决定(二十九期 Task 2)——ppt-narration 传 'card',
+    // illustration-tts 传 'illustration', 两条链共用这同一处 renderFilm 调用。
+    input: { shots: plan.shots as any, audioSrc: null, bgm: null, captions, aspect, visualStyle: options.visualStyle },
     outputPath,
     durationInFrames: Math.ceil((lastMs / 1000) * fps),
     fps,
@@ -765,6 +806,31 @@ async function handlePptNarrationRemotion(
   // 静止体检照旧 —— 它读的是成片 mp4, 与渲染器无关(spec §四)
   const freezeReport = await reportFreeze(outputPath, mode);
   await setStatus(readyStatus, { [outputField]: outputPath, freezeReport });
+}
+
+const ILLUSTRATION_TTS_REMOTION_OPTIONS: RemotionShotPlanOptions = {
+  visualStyle: 'illustration',
+  onMissingTts: 'throw',
+};
+
+/**
+ * illustration-tts 交付链的 Remotion 分支(二十九期 Task 2)。薄包装——真正的骨架
+ * (TTS 幂等/真实窗口/FilmPlan/渲染/静止体检)在 handlePptNarrationRemotion 里,
+ * 这里只是把两处刻意差异(visualStyle='illustration', 未配置 TTS 时报错而不是
+ * 无声降级)作为 options 传进去。导出仅供测试用(见
+ * tests/jobs/video-production-illustration-tts-remotion.test.ts)。
+ */
+export async function handleIllustrationTtsRemotion(
+  vp: VideoProduction,
+  mode: 'preview' | 'master',
+  setStatus: SetStatusFn,
+  outputFileName: string,
+  readyStatus: string,
+  outputField: 'previewPath' | 'masterPath',
+): Promise<void> {
+  return handlePptNarrationRemotion(
+    vp, mode, setStatus, outputFileName, readyStatus, outputField, ILLUSTRATION_TTS_REMOTION_OPTIONS,
+  );
 }
 
 /**
@@ -1453,15 +1519,21 @@ async function handleProduce(job: Job<JobData>) {
     /*
      * 二十五期: Remotion 渲染分支。**与旧分支并存, 由 vp.renderer 选。**
      * 先建后拆 —— 新链路验收通过之前, 旧链路必须始终能出片。
+     * 二十九期 Task 2 起 illustration-tts 也走这条分支(与 ppt-narration 共用
+     * handlePptNarrationRemotion, 差异见该函数顶部的 RemotionShotPlanOptions 说明)。
      */
-    if (vp.renderer === 'remotion' && vp.mode === 'ppt-narration') {
-      await handlePptNarrationRemotion(vp, mode, setStatus, outputFileName, readyStatus, outputField);
+    if (vp.renderer === 'remotion' && (vp.mode === 'ppt-narration' || vp.mode === 'illustration-tts')) {
+      if (vp.mode === 'ppt-narration') {
+        await handlePptNarrationRemotion(vp, mode, setStatus, outputFileName, readyStatus, outputField);
+      } else {
+        await handleIllustrationTtsRemotion(vp, mode, setStatus, outputFileName, readyStatus, outputField);
+      }
       // 范围限制(终审已裁决, 本轮不补): 这条分支渲完就 return, 不会走下面的文字叠加层
       // (二十三期)与成片包装段(二十期, BGM 混音/片头片尾/包装后静止复检)——那两段是
       // 针对旧渲染层的成片路径写的, 尚未对接到 Remotion 分支。显式出声而不是悄悄跳过,
-      // 是因为「静默跳过」违反本项目的原则; 目前没有任何 UI/API 路径能把 renderer 置成
-      // 'remotion'(终审已 grep 确认), 所以这是休眠风险, 一旦入口打开就会被下面这条日志
-      // 立刻暴露出来。
+      // 是因为「静默跳过」违反本项目的原则; illustration-tts 仍默认 legacy 渲染器
+      // (Task 6 验收后才切默认值), 只有直接改库把 vp.renderer 置成 'remotion' 才会
+      // 走到这里, 所以这是休眠风险, 一旦默认值打开就会被下面这条日志立刻暴露出来。
       const t = vp.templateId
         ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
         : null;
