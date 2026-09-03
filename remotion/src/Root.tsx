@@ -2,7 +2,10 @@ import React from 'react';
 import {Composition} from 'remotion';
 import {Film} from './Film';
 
-const DEFAULTS = {shots: [], audioSrc: null, bgm: null, captions: [], aspect: '16:9' as const};
+const DEFAULTS = {
+  shots: [], audioSrc: null, bgm: null, captions: [], aspect: '16:9' as const,
+  visualStyle: 'card' as const, // Studio 里默认预览用 card 风格
+};
 
 export const RemotionRoot: React.FC = () => (
   <>

@@ -1,9 +1,10 @@
 import React from 'react';
 import {AbsoluteFill, useVideoConfig} from 'remotion';
-import {C, FONT_CN} from '../motion/lib';
+import {FONT_CN} from '../motion/lib';
 import {Live} from '../motion/life';
 import {safeBox, scaleFont} from '../layout/grid';
 import {assertContent} from './guard';
+import {CardTheme} from '../theme';
 
 /**
  * 中性分隔件：一条对称的短线, 中间一个点。
@@ -20,19 +21,23 @@ import {assertContent} from './guard';
  * 中间一个点。线段长度、粗细、颜色左右完全对称, 没有箭头、没有指向、没有从左到
  * 右或从右到左的视觉暗示。字号按短边缩放, 横竖屏都成立。
  */
-const NeutralDivider: React.FC<{width: number; height: number}> = ({width, height}) => {
+const NeutralDivider: React.FC<{width: number; height: number; theme: CardTheme}> = ({
+  width, height, theme,
+}) => {
   const armLength = scaleFont(width, height, 40);
   const lineHeight = Math.max(2, Math.round(scaleFont(width, height, 2)));
   const dotSize = scaleFont(width, height, 10);
+  // 分隔件是结构性元素而非文案, 沿用 theme.title 这个"墨色"角色(叠加透明度) ——
+  // 不为它单独开一个 token, card/illustration 两套里它都该和标题同一色系。
   const arm = (
-    <div style={{width: armLength, height: lineHeight, background: C.ink, opacity: 0.35}} />
+    <div style={{width: armLength, height: lineHeight, background: theme.title, opacity: 0.35}} />
   );
   return (
     <div style={{display: 'flex', flexDirection: 'row', alignItems: 'center'}}>
       {arm}
       <div
         style={{
-          width: dotSize, height: dotSize, borderRadius: '50%', background: C.ink, opacity: 0.55,
+          width: dotSize, height: dotSize, borderRadius: '50%', background: theme.title, opacity: 0.55,
           margin: `0 ${scaleFont(width, height, 10)}px`,
         }}
       />
@@ -54,7 +59,8 @@ export const Contrast: React.FC<{
     rightText: string;
   };
   durationInFrames: number;
-}> = ({slots}) => {
+  theme: CardTheme;
+}> = ({slots, theme}) => {
   const {width, height} = useVideoConfig();
   const box = safeBox(width, height);
   const leftText = assertContent(slots.leftText, 'contrast.leftText');
@@ -73,13 +79,13 @@ export const Contrast: React.FC<{
         display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
       }}
     >
-      <Live seed={seed} style={{fontFamily: FONT_CN, fontSize: scaleFont(width, height, 28), color: C.blue, letterSpacing: '0.1em'}}>
+      <Live seed={seed} style={{fontFamily: FONT_CN, fontSize: scaleFont(width, height, 28), color: theme.accent, letterSpacing: '0.1em'}}>
         {label}
       </Live>
       <Live
         seed={seed + 1}
         style={{
-          fontFamily: FONT_CN, fontWeight: 900, color: C.ink, marginTop: scaleFont(width, height, 14),
+          fontFamily: FONT_CN, fontWeight: 900, color: theme.title, marginTop: scaleFont(width, height, 14),
           fontSize: scaleFont(width, height, 56), lineHeight: 1.15,
         }}
       >
@@ -106,7 +112,7 @@ export const Contrast: React.FC<{
         seed={5}
         style={{padding: `0 ${scaleFont(width, height, 24)}px`}}
       >
-        <NeutralDivider width={width} height={height} />
+        <NeutralDivider width={width} height={height} theme={theme} />
       </Live>
       {column(rightLabel, rightText, 3)}
     </AbsoluteFill>

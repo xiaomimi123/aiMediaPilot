@@ -1,20 +1,25 @@
 import React from 'react';
 import {AbsoluteFill, useVideoConfig} from 'remotion';
-import {C, FONT_CN} from '../motion/lib';
+import {FONT_CN} from '../motion/lib';
 import {Live} from '../motion/life';
 import {safeBox, scaleFont} from '../layout/grid';
 import {assertContent} from './guard';
+import {CardTheme} from '../theme';
 
 /**
  * 判断卡：大字一句判断 + 可选副句。用于开场、转折、收尾这类需要停顿的地方。
  *
  * 骨架与 Stat 同源: safeBox 定位、scaleFont 定字号、flex 纵向排布、Live 接管
  * 入场与"让位"生命周期 —— 不用绝对坐标。
+ *
+ * 颜色不再写死——一律读 `theme`(二十九期 Task 1), 由 `Film` 按 `visualStyle`
+ * 选一份 `THEMES['card' | 'illustration']` 传下来。
  */
 export const Statement: React.FC<{
   slots: {text: string; sub?: string};
   durationInFrames: number;
-}> = ({slots}) => {
+  theme: CardTheme;
+}> = ({slots, theme}) => {
   const {width, height} = useVideoConfig();
   const box = safeBox(width, height);
   const text = assertContent(slots.text, 'statement.text');
@@ -34,7 +39,7 @@ export const Statement: React.FC<{
       <Live
         seed={1}
         style={{
-          fontFamily: FONT_CN, fontWeight: 900, color: C.ink,
+          fontFamily: FONT_CN, fontWeight: 900, color: theme.title,
           fontSize: scaleFont(width, height, 72), lineHeight: 1.2,
         }}
       >
@@ -44,7 +49,7 @@ export const Statement: React.FC<{
         <Live
           seed={2}
           style={{
-            fontFamily: FONT_CN, color: C.blue, marginTop: scaleFont(width, height, 24),
+            fontFamily: FONT_CN, color: theme.accent, marginTop: scaleFont(width, height, 24),
             fontSize: scaleFont(width, height, 32), opacity: 0.85,
           }}
         >

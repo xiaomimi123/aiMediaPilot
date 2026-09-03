@@ -1,10 +1,10 @@
 import React from 'react';
 import {AbsoluteFill, Audio, Sequence, staticFile, useVideoConfig} from 'remotion';
 import {CARDS} from './cards';
-import {C} from './motion/lib';
 import {Ambient} from './motion/ambient';
 import {CameraRig} from './motion/camera';
 import {Captions} from './Captions';
+import {THEMES} from './theme';
 
 /**
  * 每镜的单调推近幅度(二十六期, 补环境运动层缺口)。
@@ -33,6 +33,13 @@ export type FilmInput = {
   bgm: {src: string; volume: number} | null; // BGM, loop 到片长; renderFilm 负责填入
   captions: CaptionItem[]; // 逐句字幕, 缺省 []
   aspect: '16:9' | '9:16';
+  /**
+   * 卡面视觉风格(二十九期 Task 1)——`'card'` 是四张卡目前的默认配色,
+   * `'illustration'` 是给 illustration-tts 迁移用的暖纸/手写感配色, 见
+   * `theme.ts`。刻意必填(不给默认值): 逼未来任何新调用点显式想清楚这条片子
+   * 该用哪套风格, 不让静默缺省替他做决定——与 `bgm`/`captions` 同一惯例。
+   */
+  visualStyle: 'card' | 'illustration';
 };
 
 /**
@@ -48,10 +55,11 @@ export type FilmInput = {
  * 刻意选必填而不是可选(`?`): 必填能让 tsc 在未来任何新调用点上, 强制作者
  * 显式想清楚"这条片子要不要字幕/BGM", 而不是让静默缺省替他做了决定。
  */
-export const Film: React.FC<FilmInput> = ({shots, audioSrc, bgm = null, captions = []}) => {
+export const Film: React.FC<FilmInput> = ({shots, audioSrc, bgm = null, captions = [], visualStyle}) => {
   const {fps} = useVideoConfig();
+  const theme = THEMES[visualStyle];
   return (
-    <AbsoluteFill style={{backgroundColor: C.paper}}>
+    <AbsoluteFill style={{backgroundColor: theme.background}}>
       {shots.map((s) => {
         const Card = CARDS[s.card];
         const from = Math.round((s.startMs / 1000) * fps);
@@ -66,7 +74,7 @@ export const Film: React.FC<FilmInput> = ({shots, audioSrc, bgm = null, captions
               ]}
               durationSec={durationSec}
             >
-              <Card slots={s.slots} durationInFrames={dur} />
+              <Card slots={s.slots} durationInFrames={dur} theme={theme} />
             </CameraRig>
           </Sequence>
         );

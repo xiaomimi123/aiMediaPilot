@@ -1,9 +1,10 @@
 import React from 'react';
 import {AbsoluteFill, useVideoConfig, useCurrentFrame, interpolate, Easing} from 'remotion';
-import {C, FONT_CN} from '../motion/lib';
+import {FONT_CN} from '../motion/lib';
 import {Live} from '../motion/life';
 import {safeBox, scaleFont} from '../layout/grid';
 import {assertContent} from './guard';
+import {CardTheme} from '../theme';
 
 /**
  * 列表卡：标题 + 条目错峰入场, 用"多"本身说明问题。
@@ -16,7 +17,8 @@ import {assertContent} from './guard';
 export const ListCard: React.FC<{
   slots: {title: string; items: string[]};
   durationInFrames: number;
-}> = ({slots}) => {
+  theme: CardTheme;
+}> = ({slots, theme}) => {
   const {width, height, fps} = useVideoConfig();
   const frame = useCurrentFrame();
   const box = safeBox(width, height);
@@ -38,7 +40,7 @@ export const ListCard: React.FC<{
         overflow: 'hidden',
       }}
     >
-      <Live seed={0} style={{fontFamily: FONT_CN, fontWeight: 900, color: C.ink, fontSize: scaleFont(width, height, 52)}}>
+      <Live seed={0} style={{fontFamily: FONT_CN, fontWeight: 900, color: theme.title, fontSize: scaleFont(width, height, 52)}}>
         {title}
       </Live>
       <div style={{display: 'flex', flexDirection: 'column', marginTop: scaleFont(width, height, 28)}}>
@@ -59,10 +61,10 @@ export const ListCard: React.FC<{
                 alignItems: 'baseline',
               }}
             >
-              <span style={{fontFamily: FONT_CN, fontWeight: 900, color: C.yellow, fontSize: scaleFont(width, height, 36), marginRight: scaleFont(width, height, 16)}}>
+              <span style={{fontFamily: FONT_CN, fontWeight: 900, color: theme.highlight, fontSize: scaleFont(width, height, 36), marginRight: scaleFont(width, height, 16)}}>
                 {String(i + 1).padStart(2, '0')}
               </span>
-              <Live seed={10 + i} style={{fontFamily: FONT_CN, color: C.ink, fontSize: scaleFont(width, height, 36)}}>
+              <Live seed={10 + i} style={{fontFamily: FONT_CN, color: theme.title, fontSize: scaleFont(width, height, 36)}}>
                 {item}
               </Live>
             </div>

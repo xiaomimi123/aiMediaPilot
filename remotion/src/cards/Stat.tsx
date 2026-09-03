@@ -1,20 +1,24 @@
 import React from 'react';
 import {AbsoluteFill, useVideoConfig, useCurrentFrame, interpolate, Easing} from 'remotion';
-import {C, FONT_CN, roundToSourceDecimals} from '../motion/lib';
+import {FONT_CN, roundToSourceDecimals} from '../motion/lib';
 import {Live} from '../motion/life';
 import {safeBox, scaleFont} from '../layout/grid';
 import {assertContent} from './guard';
+import {CardTheme} from '../theme';
 
 /**
  * 数字卡：一个数值是主角，从 0 数上去。
  *
  * 不用 motion/components.tsx 的 NumberRoll —— 那个是绝对定位(x/y 必填), 与本项目的
  * 栅格约束冲突。这里复用它的"数上去"手法, 但位置交给 flex。
+ *
+ * 颜色不再写死——一律读 `theme`(二十九期 Task 1)。
  */
 export const Stat: React.FC<{
   slots: {label: string; value: number; prefix?: string; suffix?: string; note?: string};
   durationInFrames: number;
-}> = ({slots, durationInFrames}) => {
+  theme: CardTheme;
+}> = ({slots, durationInFrames, theme}) => {
   const {width, height, fps} = useVideoConfig();
   const frame = useCurrentFrame();
   const box = safeBox(width, height);
@@ -43,15 +47,15 @@ export const Stat: React.FC<{
         overflow: 'hidden',
       }}
     >
-      <Live seed={1} style={{fontFamily: FONT_CN, fontSize: scaleFont(width, height, 34), color: C.blue, letterSpacing: '0.12em'}}>
+      <Live seed={1} style={{fontFamily: FONT_CN, fontSize: scaleFont(width, height, 34), color: theme.accent, letterSpacing: '0.12em'}}>
         {label}
       </Live>
       <Live
         seed={2}
         style={{
-          fontFamily: FONT_CN, fontWeight: 900, color: C.yellow, marginTop: scaleFont(width, height, 16),
+          fontFamily: FONT_CN, fontWeight: 900, color: theme.highlight, marginTop: scaleFont(width, height, 16),
           fontSize: scaleFont(width, height, 170), lineHeight: 1.05,
-          WebkitTextStroke: `${scaleFont(width, height, 6)}px ${C.ink}`, paintOrder: 'stroke',
+          WebkitTextStroke: `${scaleFont(width, height, 6)}px ${theme.stroke}`, paintOrder: 'stroke',
           // value 是一串不含空格的数字, 默认 word-break 不会在数字中间断行——
           // 加 overflowWrap 让极端位数的数字至少能换行, 而不是顶着 overflow:hidden
           // 被整体裁掉看不全。仍然只是兜底: 位数一旦夸张, 观感必然变差, 但不会越界。
@@ -61,7 +65,8 @@ export const Stat: React.FC<{
         {slots.prefix ?? ''}{shown}{slots.suffix ?? ''}
       </Live>
       {slots.note ? (
-        <Live seed={3} style={{fontFamily: FONT_CN, fontSize: scaleFont(width, height, 26), color: C.ink, opacity: 0.55, marginTop: scaleFont(width, height, 20)}}>
+        // theme.footnote 已含透明度(见 theme.ts), 不再需要额外叠一层 opacity。
+        <Live seed={3} style={{fontFamily: FONT_CN, fontSize: scaleFont(width, height, 26), color: theme.footnote, marginTop: scaleFont(width, height, 20)}}>
           {slots.note}
         </Live>
       ) : null}

@@ -42,6 +42,13 @@ export type FilmInput = {
   bgm: { src: string; volume: number } | null; // BGM, loop 到片长; renderFilm 负责填入
   captions: CaptionItem[]; // 逐句字幕
   aspect: '16:9' | '9:16';
+  /**
+   * 卡面视觉风格(二十九期 Task 1)——与 `remotion/src/Film.tsx` 的 `FilmInput.visualStyle`
+   * 逐字段同形，**不 import**（独立子项目，理由同上）。`'card'` 是四张卡目前的默认
+   * 配色，`'illustration'` 是给 illustration-tts 迁移用的暖纸/手写感配色，具体 token
+   * 见 `remotion/src/theme.ts`。刻意必填：逼调用点显式想清楚这条片子该用哪套风格。
+   */
+  visualStyle: 'card' | 'illustration';
 };
 
 /**

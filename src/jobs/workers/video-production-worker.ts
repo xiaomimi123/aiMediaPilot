@@ -751,7 +751,10 @@ async function handlePptNarrationRemotion(
   await renderFilm({
     // input.bgm 留 null: bgm 走下面的 bgmFile 参数, 由 renderFilm 自己拷进 remotion/public
     // 并回填 input.bgm(见 remotion-render.ts renderFilm 实现), 这里不用重复填。
-    input: { shots: plan.shots as any, audioSrc: null, bgm: null, captions, aspect },
+    // visualStyle 显式传 'card'——二十九期 Task 1 起 FilmInput 必填这个字段,
+    // 三条 worker 分支(preview/master/regenerate)都走的这同一处 renderFilm 调用,
+    // 现状四张卡都是 card 风格, illustration 风格接线是 Task 2 的事(不动 worker)。
+    input: { shots: plan.shots as any, audioSrc: null, bgm: null, captions, aspect, visualStyle: 'card' },
     outputPath,
     durationInFrames: Math.ceil((lastMs / 1000) * fps),
     fps,

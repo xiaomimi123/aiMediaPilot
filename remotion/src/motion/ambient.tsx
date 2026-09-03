@@ -72,6 +72,14 @@ export const AMBIENT = {
 } as const;
 
 /**
+ * 二十九期 Task 1 判断: 下面 `sweep`/`vignette` 的颜色**不跟 `theme.ts` 的
+ * `visualStyle` token 走**。两处都是"任意背景上都成立"的通用叠加手法而不是
+ * 品牌色: `sweep` 用 `mixBlendMode: 'screen'`(只会让画面更亮, 效果强弱取决于
+ * 背景明度而非色相, card/illustration 两套背景明度接近, 观感差异可忽略);
+ * `vignette` 是纯黑(`rgba(4,8,16,...)`)+透明度叠加, 是标准暗角做法, 对任意
+ * 背景色都成立, 不存在"与背景强耦合"的问题。若未来某个 `visualStyle` 的背景
+ * 明显更暗或更亮(以至于 screen 混合不再温和), 需要重新评估这条判断。
+ *
  * 全片环境层。画在卡片之上、`pointerEvents: none`, 不吃任何交互, 也不携带任何
  * 与内容绑定的秒数表——纯粹是"这一帧和上一段时间相比总有一点点在变"。
  *
