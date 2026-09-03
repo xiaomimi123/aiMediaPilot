@@ -34,3 +34,7 @@ logs/
 .venv/
 # 二十八期: renderFilm 渲染时中转人声/BGM 到这里、渲后即清理, 纯运行时产物
 /remotion/public/render-assets/
+
+# 二十九期 Task 5: 字级对齐脚本的 venv 与模型缓存, 不进 git
+scripts/align/.venv
+scripts/align/__pycache__

@@ -25,7 +25,21 @@ import {THEMES} from './theme';
 const CAMERA_PUSH_IN = 0.045;
 
 /** 一句字幕(二十八期)。startMs/endMs 是相对全片的绝对时间, 不是相对某一镜。 */
-export type CaptionItem = {text: string; startMs: number; endMs: number};
+export type CaptionItem = {
+  text: string;
+  startMs: number;
+  endMs: number;
+  /**
+   * 词级时间戳(二十九期 Task 5, 可选)——`words` 缺省时 `Captions.tsx` 保持
+   * 老行为(整句一起显示, 不做逐词高亮)。只有 ppt-narration/illustration-tts
+   * 两条 TTS 链会填这个字段(worker 侧字级对齐, 见
+   * `src/lib/video-production/align-captions.ts`); talking-head-broll(出镜链)
+   * 的音频是真人自由发挥、没有已知文本可锚定, 不产这份数据, 这里恒为 `undefined`。
+   * `word` 通常是单个汉字, 数字/百分比/区间/年份会合并成一个整体词(比如
+   * "1850%")——与显示文本 `text` 里的原文写法完全一致, 不是对齐用的中文读法。
+   */
+  words?: {word: string; startMs: number; endMs: number}[];
+};
 
 export type FilmInput = {
   shots: {shotId: string; startMs: number; endMs: number; card: keyof typeof CARDS; slots: any}[];
@@ -203,8 +217,10 @@ export const Film: React.FC<FilmInput> = ({
       )}
       {audioSrc ? <Audio src={staticFile(audioSrc)} /> : null}
       {bgm ? <Audio src={staticFile(bgm.src)} loop volume={bgm.volume} /> : null}
-      {/* 字幕层必须在最上层——两种版式(cutaway 的窗口内卡片 / pip 的角标)都不能盖住字幕。 */}
-      <Captions items={captions} />
+      {/* 字幕层必须在最上层——两种版式(cutaway 的窗口内卡片 / pip 的角标)都不能盖住字幕。
+          高亮色从 theme.highlight 取(二十九期 Task 5), 不写死: 跟着 visualStyle
+          走, card/illustration 两套配色各自的强调色不同。 */}
+      <Captions items={captions} highlightColor={theme.highlight} />
     </AbsoluteFill>
   );
 };

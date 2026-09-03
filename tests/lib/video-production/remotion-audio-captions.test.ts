@@ -4,7 +4,7 @@ import os from 'os';
 import fs from 'fs';
 import { execFileSync } from 'child_process';
 import { renderFilm, copyIntoRenderAssets, getBundle } from '@/lib/video-production/remotion-render';
-import { pickCurrentCaption } from '../../../remotion/src/caption-logic';
+import { pickCurrentCaption, splitCaptionIntoChunks, isWordActive } from '../../../remotion/src/caption-logic';
 
 /*
  * 二十八期: Remotion 合成接人声/BGM/字幕层。
@@ -148,6 +148,66 @@ describe('pickCurrentCaption: 当前句选择的纯逻辑', () => {
     expect(pickCurrentCaption(items, -1)).toBeUndefined();
     expect(pickCurrentCaption(items, 2000)).toBeUndefined();
     expect(pickCurrentCaption([], 500)).toBeUndefined();
+  });
+});
+
+describe('splitCaptionIntoChunks / isWordActive: 逐词高亮的纯逻辑(二十九期 Task 5)', () => {
+  it('没有 words 时原样返回整句一个 chunk(与老行为零差异)', () => {
+    expect(splitCaptionIntoChunks('调用成本1850元', undefined)).toEqual([{ text: '调用成本1850元' }]);
+    expect(splitCaptionIntoChunks('调用成本1850元', [])).toEqual([{ text: '调用成本1850元' }]);
+  });
+
+  it('按 words 顺序拆出普通文字段与词段交替的一串 chunk', () => {
+    const words = [
+      { word: '调', startMs: 0, endMs: 100 },
+      { word: '用', startMs: 100, endMs: 200 },
+      { word: '1850', startMs: 500, endMs: 900 },
+    ];
+    const chunks = splitCaptionIntoChunks('调用成本1850元', words);
+    expect(chunks).toEqual([
+      { text: '调', word: { startMs: 0, endMs: 100 } },
+      { text: '用', word: { startMs: 100, endMs: 200 } },
+      { text: '成本' },
+      { text: '1850', word: { startMs: 500, endMs: 900 } },
+      { text: '元' },
+    ]);
+  });
+
+  it('数字词条在整句里重复出现时, 顺序查找(从上一个词条结束处往后找)不会误命中前面那次', () => {
+    const words = [
+      { word: '3', startMs: 0, endMs: 100 },
+      { word: '3', startMs: 200, endMs: 300 },
+    ];
+    const chunks = splitCaptionIntoChunks('3倍还是3倍', words);
+    expect(chunks).toEqual([
+      { text: '3', word: { startMs: 0, endMs: 100 } },
+      { text: '倍还是' },
+      { text: '3', word: { startMs: 200, endMs: 300 } },
+      { text: '倍' },
+    ]);
+  });
+
+  it('词条文本在剩余原文里找不到(异常数据)时跳过, 不打断整句拼接', () => {
+    const words = [
+      { word: '调', startMs: 0, endMs: 100 },
+      { word: '不存在的词', startMs: 100, endMs: 200 },
+      { word: '本', startMs: 300, endMs: 400 },
+    ];
+    const chunks = splitCaptionIntoChunks('调用成本', words);
+    expect(chunks).toEqual([
+      { text: '调', word: { startMs: 0, endMs: 100 } },
+      { text: '用成' },
+      { text: '本', word: { startMs: 300, endMs: 400 } },
+    ]);
+  });
+
+  it('isWordActive: 左闭右开, 与 pickCurrentCaption 同惯例', () => {
+    const w = { startMs: 100, endMs: 200 };
+    expect(isWordActive(w, 100)).toBe(true);
+    expect(isWordActive(w, 199)).toBe(true);
+    expect(isWordActive(w, 200)).toBe(false);
+    expect(isWordActive(w, 50)).toBe(false);
+    expect(isWordActive(undefined, 100)).toBe(false);
   });
 });
 

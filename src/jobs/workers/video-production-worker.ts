@@ -77,6 +77,13 @@ import { buildFilmPlan } from '@/lib/video-production/film-plan-builder';
 import { checkBrollPlanTiming } from '@/lib/video-production/film-plan-timing';
 import { captionEventsFromTranscript, type CaptionEvent } from '@/lib/video-production/ass-captions';
 import { PIP_SCALE_MIN, PIP_SCALE_MAX } from '@/lib/video/pip-layout';
+import {
+  runCaptionAlignment,
+  buildWordsForEvents,
+  parseTimingPayload,
+  type CaptionWord,
+  type TimingPayload,
+} from '@/lib/video-production/align-captions';
 
 /**
  * `recompose`(二十三期): 只重新合成, 不重新生成。
@@ -613,6 +620,13 @@ async function handlePptNarrationRemotion(
   let plan: FilmPlan;
   let captionEvents: CaptionEvent[];
   let audioFile: string | null;
+  /**
+   * 字级对齐产出的逐词时间戳(二十九期 Task 5), 与 `captionEvents` 同下标对应。
+   * `undefined`(整个数组不赋值, 或数组里某一项是 `undefined`) = 这句没有词级
+   * 数据, `Captions.tsx` 照旧整句显示——对齐是增强件不是依赖件, 见
+   * `align-captions.ts` 顶部注释。
+   */
+  let wordsPerEvent: Array<CaptionWord[] | undefined> | undefined;
   if (mode === 'preview') {
     await setStatus('directing');
     const deepseekKey = await resolveDeepSeekApiKey(vp.userId);
@@ -745,6 +759,39 @@ async function handlePptNarrationRemotion(
     console.log(`[video-production] FilmPlan 产出完成 (修复 ${built.rounds} 轮, ${plan.shots.length} 镜)`);
 
     await setStatus('building');
+
+    /*
+     * 字级对齐(二十九期 Task 5): 只在真的有配音音频时才跑——没配置 TTS 的
+     * 无声出片(audioFile === null)没有语音可对, 谈不上对齐, 直接跳过。
+     * 对齐是增强件不是依赖件: `runCaptionAlignment` 内部把 venv 缺失/超时
+     * (120s)/崩溃/输出解析失败全部吞掉、`console.warn`, 这里拿到的 timing
+     * 可能是 null, `buildWordsForEvents` 对 null 的处理就是整体退回逐句
+     * 字幕——不额外加一层 try/catch。
+     */
+    if (audioFile) {
+      const alignStartedAt = Date.now();
+      const timing = await runCaptionAlignment({
+        audioPath: audioFile,
+        events: captionEvents,
+        productionRoot: vp.productionRoot,
+      });
+      const alignMs = Date.now() - alignStartedAt;
+      const { wordsPerEvent: aligned2, quality } = buildWordsForEvents(captionEvents, timing);
+      wordsPerEvent = aligned2;
+      console.log(
+        `[video-production] 字级对齐耗时 ${alignMs}ms, 共 ${quality.totalSentences} 句, ` +
+          `match<0.90 的句子 ${quality.lowMatchCount} 句${timing ? '' : '(未对齐成功, 已退回逐句字幕)'}`,
+      );
+      // 质量关(只报不拦): 低质量句子超过三分之一才提醒用户——个别句子对不齐
+      // 不影响整体观感, 值不得用户为此重新生成一遍; productionNotice 目前
+      // 一定是 null(走到这个分支说明 TTS 成功, 上面没有设过"无声成片"提醒),
+      // `??` 只是防御性写法, 不代表真的会有别的值需要保留。
+      if (quality.totalSentences > 0 && quality.lowMatchCount / quality.totalSentences > 1 / 3) {
+        productionNotice =
+          productionNotice ?? '本条字幕对齐质量偏低：个别句子的逐词高亮时间可能不准确。';
+      }
+    }
+
     // 落库供 master 复用 —— 与旧链把 Director 结果写进 direction.json 是同一个理由:
     // 正式导出必须和用户看过的预览是同一份画面, 不能重新问一次模型。alignedActs 一并落库:
     // master 靠它复原字幕(sentenceCaptionEvents)和判断 tts-audio.wav 是否该存在。
@@ -779,12 +826,31 @@ async function handlePptNarrationRemotion(
     } catch {
       audioFile = null;
     }
+
+    // master 不重新跑对齐(耗时的子进程 + ASR 推理, 与不重新调 TTS 同一先例)——
+    // 直接复用 preview 落盘的 timing.json。文件缺失(比如 preview 当初没有
+    // audioFile、或跑在这个功能上线之前)就整体退回逐句字幕, 不是错误。
+    if (audioFile) {
+      let timing: TimingPayload | null = null;
+      try {
+        timing = parseTimingPayload(await fs.readFile(path.join(vp.productionRoot, 'timing.json'), 'utf-8'));
+      } catch {
+        timing = null;
+      }
+      const { wordsPerEvent: aligned2, quality } = buildWordsForEvents(captionEvents, timing);
+      wordsPerEvent = aligned2;
+      console.log(
+        `[video-production] master 复用已持久化的对齐结果: 共 ${quality.totalSentences} 句, ` +
+          `match<0.90 的句子 ${quality.lowMatchCount} 句${timing ? '' : '(未找到 timing.json, 已退回逐句字幕)'}`,
+      );
+    }
   }
 
-  const captions: CaptionItem[] = captionEvents.map((e) => ({
+  const captions: CaptionItem[] = captionEvents.map((e, i) => ({
     text: e.text,
     startMs: e.startMs,
     endMs: e.endMs,
+    ...(wordsPerEvent?.[i] ? { words: wordsPerEvent[i] } : {}),
   }));
 
   const lastMs = Math.max(...plan.shots.map((s) => s.endMs));
@@ -1045,6 +1111,14 @@ export async function handleTalkingHeadBrollRemotion(
 
   // 字幕: ASR 逐句(captionEventsFromTranscript), 不是按幕整段铺的 sentenceCaptionEvents——
   // 出镜链有真实逐句转写, 没道理退化成整幕粒度。
+  //
+  // **不接字级对齐(二十九期 Task 5)。** ppt-narration/illustration-tts 两条
+  // TTS 链能对齐, 是因为文本是已知的(六幕稿, 逐字确定); 这条出镜链的音频是
+  // 真人自由发挥的录音, 没有已知文本可当参照——ASR 转写本身已经是"猜"出来的,
+  // 拿转写文本回头去对自己转写出来的语音, 等于自己验自己, 对不齐反而会
+  // 制造一份看起来很精确、实际没有验证过的假数据。况且 ASR
+  // (`aligner-prompt.ts`)已经给出了逐句真实时间戳, 句级粒度已经够用, 字级
+  // 对齐在这条链上收益低、只多一次子进程调用的失败面。`words` 恒为 `undefined`。
   const captions: CaptionItem[] = captionEventsFromTranscript(rawTranscript).map((e) => ({
     text: e.text,
     startMs: e.startMs,

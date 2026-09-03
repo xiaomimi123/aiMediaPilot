@@ -34,7 +34,19 @@ const { selectComposition, renderMedia } = remotionRequire('@remotion/renderer')
  * 同形不同名, 这是有意的: 两者服务不同的渲染管线(ASS 字幕滤镜 vs Remotion
  * 组件), 刻意不复用同一个类型名, 避免调用方误以为可以互相赋值。
  */
-export type CaptionItem = { text: string; startMs: number; endMs: number };
+export type CaptionItem = {
+  text: string;
+  startMs: number;
+  endMs: number;
+  /**
+   * 词级时间戳(二十九期 Task 5, 可选)——与 `remotion/src/Film.tsx` 的
+   * `CaptionItem.words` 逐字段同形, **不 import**(独立子项目, 理由同上)。
+   * 只有 ppt-narration/illustration-tts 两条 TTS 链会填(见
+   * `src/lib/video-production/align-captions.ts`); talking-head-broll 不填,
+   * 恒为 `undefined`(真人出镜音频没有已知文本可锚定, 字级对齐收益低)。
+   */
+  words?: { word: string; startMs: number; endMs: number }[];
+};
 
 export type FilmInput = {
   shots: unknown[];
