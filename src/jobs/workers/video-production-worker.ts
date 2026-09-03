@@ -690,6 +690,17 @@ async function handlePptNarrationRemotion(
         }
       }
       if (!canReuse || !existingManifest) {
+        /*
+         * 不变量: **timing.json 的生存期不得长于它对应的 tts-audio.wav**。
+         * 复审发现的窄窗口静默错配(2026-09-03): 换音色触发重合成的这一次 preview 里,
+         * 若字级对齐恰好失败(venv 缺/超时/崩溃), runCaptionAlignment 返回 null、不写
+         * timing.json —— 磁盘上残留的是**旧音色**的对齐结果。它在文本层与新 narration
+         * 完全一致, 能骗过 buildWordsForEvents 的全部检查; 用户若不再跑 preview 直接出
+         * master, 就是新音频配旧时间戳。与 bundle public 快照是同构的坑(缓存失效条件
+         * 与其依赖不对称)。所以判定"需要重新合成"的同时先删旧 timing: 这次对齐成功会写
+         * 新的, 失败则 master 干净地退回逐句字幕, 绝不拿旧 timing 配新音频。
+         */
+        await fs.rm(path.join(vp.productionRoot, 'timing.json'), { force: true });
         for (const act of acts) {
           // 扩展名用 .mp3: synthesizeVolcTts 实际写出的是 mp3 编码字节, 见 handleIllustrationTts 同一行注释。
           const audioPath = path.join(vp.productionRoot, `tts-${act.act}.mp3`);

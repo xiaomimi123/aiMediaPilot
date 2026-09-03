@@ -130,3 +130,25 @@ describe('先建后拆: 旧渲染层一个文件都没删', () => {
     });
   }
 });
+
+/*
+ * timing.json 生存期不变量(二十九期 Task 5 复审): **timing.json 不得比它对应的
+ * tts-audio.wav 活得久**。TTS 判定需要重新合成时必须先删旧 timing —— 否则
+ * "换音色 + 对齐恰好失败"的组合会让 master 拿新音频配旧时间戳(文本层完全一致,
+ * 骗过 buildWordsForEvents 的全部检查), 与 bundle public 快照同构的静默错配。
+ */
+describe('timing.json 生存期不得长于 tts-audio.wav', () => {
+  it('TTS 重新合成分支先删旧 timing.json', () => {
+    const src = fs.readFileSync(
+      path.join(process.cwd(), 'src/jobs/workers/video-production-worker.ts'),
+      'utf-8',
+    );
+    // 锚结构: 重合成分支(!canReuse)体内, synthesizeVolcTts 之前有对 timing.json 的 rm
+    const branch = src.slice(src.indexOf('if (!canReuse || !existingManifest) {'));
+    const rmPos = branch.indexOf("fs.rm(path.join(vp.productionRoot, 'timing.json')");
+    const ttsPos = branch.indexOf('synthesizeVolcTts');
+    expect(rmPos).toBeGreaterThan(-1);
+    expect(ttsPos).toBeGreaterThan(-1);
+    expect(rmPos).toBeLessThan(ttsPos);
+  });
+});

@@ -76,6 +76,19 @@ export function parseTimingPayload(raw: string): TimingPayload | null {
 const CJK_RE = /[㐀-䶿一-鿿]/;
 const LATIN_RE = /[A-Za-z0-9]/;
 
+/**
+ * 判断字符类别前先做 NFKC 归一化 —— 与 timestamps_cpu.py 的
+ * `unicodedata.normalize("NFKC", ch)` 保持一致。
+ *
+ * 复审实测(2026-09-03): 缺这一步时, 全角字符(如 "３")在 JS 侧两个正则都不匹配、
+ * 被当标点跳过且**不消费词条**, 而 python 侧把它归一成 "3" 当 LATIN 消费了一个 ——
+ * 两侧游标从此错开, 该句后面**每个字都错拿前一个字的时间戳**, 静默的系统性一位
+ * 错位。所以这里的归一化不是防御性代码, 是与 python 侧的**行为契约**。
+ */
+const normalizeChar = (ch: string): string => ch.normalize('NFKC');
+const isLatin = (ch: string): boolean => LATIN_RE.test(normalizeChar(ch));
+const isCjk = (ch: string): boolean => CJK_RE.test(normalizeChar(ch));
+
 interface CharTime {
   startMs: number;
   endMs: number;
@@ -97,11 +110,11 @@ function mapWordsToHanziChars(hanziText: string, words: TimingWordRaw[]): Array<
   let i = 0;
   while (i < hanziText.length) {
     const ch = hanziText[i];
-    if (LATIN_RE.test(ch)) {
+    if (isLatin(ch)) {
       // 拉丁/数字连续段在 python 侧被合并成一个 word——这里同样找出这一段
       // 的长度, 整段消费同一个 word 条目。
       let j = i;
-      while (j < hanziText.length && LATIN_RE.test(hanziText[j])) j += 1;
+      while (j < hanziText.length && isLatin(hanziText[j])) j += 1;
       const w = words[wordCursor];
       if (w) {
         const startMs = w.start * 1000;
@@ -112,7 +125,7 @@ function mapWordsToHanziChars(hanziText: string, words: TimingWordRaw[]): Array<
       i = j;
       continue;
     }
-    if (CJK_RE.test(ch)) {
+    if (isCjk(ch)) {
       const w = words[wordCursor];
       if (w) {
         result[i] = { startMs: w.start * 1000, endMs: w.end * 1000 };

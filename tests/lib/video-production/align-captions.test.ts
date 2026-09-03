@@ -71,6 +71,37 @@ describe('mapSegmentsToWords', () => {
   });
 });
 
+/*
+ * NFKC 归一化回归(复审实测出的错位 bug)。
+ *
+ * python 侧对每个字符先 normalize("NFKC") 再判类别, 全角 "３" 被当 LATIN 消费一个
+ * 词条; JS 侧若不做同样归一化, "３" 两个正则都不匹配、跳过且不消费词条 —— 游标
+ * 从此错开, 该句后面每个字都错拿前一个字的时间戳(静默的系统性一位错位)。
+ * 这条测试模拟 python 侧的消费顺序, 断言全角字符之后的汉字拿到**自己**的时间戳。
+ */
+describe('mapWordsToHanziChars 的 NFKC 归一化(经 buildWordsForEvents)', () => {
+  it('全角数字被当 LATIN 消费一个词条, 其后汉字时间戳不错位', () => {
+    const text = '价格３块钱';
+    const fwEvents: CaptionEvent[] = [{ startMs: 0, endMs: 1000, text }];
+    // numberToHanzi 不转全角(它只认 ASCII 数字), 参照文本 === 原文 —— 这正是
+    // 触发场景: python 侧按 NFKC 后的类别消费, "价/格"(CJK)、"３"(LATIN)、
+    // "块/钱"(CJK) 共 5 个词条, 逐个 100ms。
+    const { hanzi } = numberToHanzi(text);
+    expect(hanzi).toBe(text); // 前提自检: 全角数字不经过 numberToHanzi 转换
+    // 用 0.25s 步长避开二进制浮点误差(0.1*3*1000 = 300.00000000000006 会让精确断言挂掉)
+    const words = [0, 1, 2, 3, 4].map((i) => ({ text: '', start: i * 0.25, end: (i + 1) * 0.25 }));
+    const timing: TimingPayload = {
+      sr: 16000, total: 1,
+      sentences: [{ i: 0, text: hanzi, start: 0, end: 0.5, match: 1, ok: true, words }],
+    };
+    const result = buildWordsForEvents(fwEvents, timing);
+    const out = result.wordsPerEvent[0]!;
+    // "块" 是第 4 个词条(750~1000ms) —— 若 JS 侧跳过 "３" 不消费, 它会错拿 500~750ms
+    expect(out.find((w) => w.word === '块')).toEqual({ word: '块', startMs: 750, endMs: 1000 });
+    expect(out.find((w) => w.word === '钱')).toEqual({ word: '钱', startMs: 1000, endMs: 1250 });
+  });
+});
+
 describe('buildWordsForEvents', () => {
   const events: CaptionEvent[] = [{ startMs: 0, endMs: 1000, text: '调用成本3000元。' }];
 
