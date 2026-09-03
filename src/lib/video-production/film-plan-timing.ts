@@ -19,38 +19,113 @@ const TOLERANCE_MS = 33;
  * 返回的字符串会被**原样喂回给模型**, 所以措辞是契约的一部分: 每条只讲一个问题、
  * 只讲时间、给出具体数字, 不提卡片类型(提了模型会跑去改卡片而不是改时间)。
  */
-export function checkFilmPlanTiming(plan: FilmPlan, totalMs: number): string[] {
-  const shots = [...plan.shots].sort((a, b) => a.startMs - b.startMs);
-  if (shots.length === 0) return ['分镜是空的, 至少要有一镜。'];
+/**
+ * 铺满校验的公共内核——检查一批镜头在 `[startMs, endMs)` 这段区间内是否
+ * 首尾相接、无缝覆盖。`checkFilmPlanTiming`(整片铺满)与
+ * `checkFilmPlanTimingWindowed`(窗口版, 见下方)共用这份逻辑, 差异只在
+ * "要铺满的是哪一段区间"——前者是全片(0 到 totalMs), 后者是每一幕自己的
+ * 时间窗。抽出来是二十九期 Task 6 返工时做的, 抽取前后对 `checkFilmPlanTiming`
+ * 的输出**逐字节不变**(`startMs` 原来硬编码的字面量 `0` 换成了同值的参数,
+ * 拼出来的文案完全一致), 现有测试不用动。
+ */
+function checkCoverage(shots: FilmPlan['shots'], startMs: number, endMs: number, emptyMessage: string): string[] {
+  const sorted = [...shots].sort((a, b) => a.startMs - b.startMs);
+  if (sorted.length === 0) return [emptyMessage];
 
   const issues: string[] = [];
 
-  if (shots[0].startMs > TOLERANCE_MS) {
-    issues.push(`第一镜从 ${shots[0].startMs} 毫秒才开始, 片头会有一段黑屏。第一镜必须从 0 开始。`);
+  if (sorted[0].startMs > startMs + TOLERANCE_MS) {
+    issues.push(`第一镜从 ${sorted[0].startMs} 毫秒才开始, 片头会有一段黑屏。第一镜必须从 ${startMs} 开始。`);
   }
 
-  for (let i = 1; i < shots.length; i += 1) {
-    const gap = shots[i].startMs - shots[i - 1].endMs;
+  for (let i = 1; i < sorted.length; i += 1) {
+    const gap = sorted[i].startMs - sorted[i - 1].endMs;
     if (gap > TOLERANCE_MS) {
       issues.push(
-        `${shots[i - 1].endMs} 毫秒到 ${shots[i].startMs} 毫秒之间有 ${gap} 毫秒没有任何画面(黑屏)。` +
-          `把前一镜的 endMs 延到 ${shots[i].startMs}, 或者把后一镜的 startMs 提到 ${shots[i - 1].endMs}。`,
+        `${sorted[i - 1].endMs} 毫秒到 ${sorted[i].startMs} 毫秒之间有 ${gap} 毫秒没有任何画面(黑屏)。` +
+          `把前一镜的 endMs 延到 ${sorted[i].startMs}, 或者把后一镜的 startMs 提到 ${sorted[i - 1].endMs}。`,
       );
     }
   }
 
-  const lastMs = shots[shots.length - 1].endMs;
-  if (lastMs > totalMs + TOLERANCE_MS) {
+  const lastMs = sorted[sorted.length - 1].endMs;
+  if (lastMs > endMs + TOLERANCE_MS) {
     issues.push(
-      `最后一镜到 ${lastMs} 毫秒, 但内容只有 ${totalMs} 毫秒。超出的部分是没有台词的画面, 把最后一镜的 endMs 改成 ${totalMs}。`,
+      `最后一镜到 ${lastMs} 毫秒, 但内容只有 ${endMs} 毫秒。超出的部分是没有台词的画面, 把最后一镜的 endMs 改成 ${endMs}。`,
     );
   }
-  if (lastMs < totalMs - TOLERANCE_MS) {
+  if (lastMs < endMs - TOLERANCE_MS) {
     issues.push(
-      `最后一镜到 ${lastMs} 毫秒就结束了, 但内容有 ${totalMs} 毫秒, 结尾会有一段黑屏。把最后一镜的 endMs 改成 ${totalMs}。`,
+      `最后一镜到 ${lastMs} 毫秒就结束了, 但内容有 ${endMs} 毫秒, 结尾会有一段黑屏。把最后一镜的 endMs 改成 ${endMs}。`,
     );
   }
 
+  return issues;
+}
+
+export function checkFilmPlanTiming(plan: FilmPlan, totalMs: number): string[] {
+  return checkCoverage(plan.shots, 0, totalMs, '分镜是空的, 至少要有一镜。');
+}
+
+/**
+ * `checkFilmPlanTiming` 的窗口版 —— pip 出镜链专属(二十九期 Task 6 用户验收返工)。
+ *
+ * 背景: pip 版式("人物小窗常驻 + PPT 卡片当主画面")用的是主链提示词
+ * `FILM_PLAN`("幕内首尾相接铺满、不留空档"), 因为真人已经缩进小窗、主画面的
+ * 空档不再是"露出真人"而是"空背景", 语义上等同 `checkFilmPlanTiming` 要拦的
+ * 黑屏。但出镜链的时间窗来自真实语音对齐(`actWindowsFromAligned`) ——
+ * **没讲到的幕不产生窗口**(该函数顶部注释), 幕与幕之间可能天然留有空隙;
+ * 这段空隙不是缺陷(pip 下真人小窗全程可见, 空隙时段观众看到的是"人物讲话、
+ * 无卡片", 这正是本次返工要的常驻浮层效果), 不该被当成黑屏喂回模型。
+ *
+ * 裁决(见 progress.md Ruling-4): 不是简单地把 `checkFilmPlanTiming` 的
+ * `totalMs` 换成"首窗 start 到末窗 end"这一个数——那样只能修好首尾两处,
+ * 修不好**中间**两个不相邻窗口之间的天然间隙(模型改不出一个"跨越无声区间"
+ * 的镜头, 那种间隙仍会被当黑屏报错)。这里改成按窗口分组校验: 每一幕的时间
+ * 窗各自套用 `checkCoverage`(幕内必须铺满, 一镜都没有也算问题——`FILM_PLAN`
+ * 的系统提示词本就要求"把每一幕拆成 1~4 镜, 不要一幕只给一镜"), 幕与幕之间
+ * 的间隙从一开始就不在任何一个窗口的检查范围内, 天然被放过, 不需要额外的
+ * "允许间隙"白名单逻辑。落在两个窗口之间的多余镜头(如果模型自己加了)既不
+ * 违反任何一个窗口的铺满要求, 也不会被这里报错——"允许 shots 与窗口对齐"。
+ *
+ * 签名与 `checkFilmPlanTiming` 不同(多一个 `windows` 参数、没有 `totalMs`),
+ * 所以是独立的导出函数, 不是重载——调用点(worker)按 layout 选一个来用。
+ */
+export function checkFilmPlanTimingWindowed(
+  plan: FilmPlan,
+  windows: { startMs: number; endMs: number }[],
+): string[] {
+  // 零时长窗口(没讲到的幕)不算"有效窗口", 见下方循环体内的过滤注释——
+  // 这里提前判断一次是为了在"一幕都没讲到"这种全零长度的极端情况下给出
+  // 明确提示, 而不是静默返回空数组让人以为"全部通过"。
+  if (windows.every((w) => w.endMs <= w.startMs)) {
+    return ['一个有效的幕时间窗都没有, 至少要有一幕讲到内容。'];
+  }
+
+  const issues: string[] = [];
+  for (const w of windows) {
+    /*
+     * 零时长幕跳过, 不当成"没覆盖"报错——`actWindowsFromAligned` 对完全没
+     * 讲到的幕产出的就是 `startMs === endMs` 这种零长度窗口(该函数顶部注释:
+     * "没有覆盖到的幕不产生窗口"里"不产生"的实际实现是"产生一个零长度的",
+     * 不是从数组里整条去掉)。零长度窗口天然无法覆盖(区间长度为 0), 不跳过
+     * 的话真机第一次跑就会对着六幕脚本里没讲到的每一幕各报一条假警告
+     * (2026-09-04 复现: 6 幕稿只讲了 1 幕, 另外 5 幕全部误报)。
+     */
+    if (w.endMs <= w.startMs) continue;
+    // 按"起点落在这一幕窗口内"分组——与 `FILM_PLAN` 提示词对模型的要求
+    // ("每一镜的 startMs/endMs 必须落在它所属那一幕的时间窗之内")一致,
+    // 不做起点、终点分别归属的复杂判断。
+    const shotsInWindow = plan.shots.filter((s) => s.startMs >= w.startMs && s.startMs < w.endMs);
+    issues.push(
+      ...checkCoverage(
+        shotsInWindow,
+        w.startMs,
+        w.endMs,
+        `${w.startMs} 毫秒到 ${w.endMs} 毫秒这一幕没有任何镜头覆盖, 观众会看到空背景。`,
+      ),
+    );
+  }
   return issues;
 }
 

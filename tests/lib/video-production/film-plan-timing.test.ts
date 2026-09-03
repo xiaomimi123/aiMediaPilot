@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { checkFilmPlanTiming, checkBrollPlanTiming } from '@/lib/video-production/film-plan-timing';
+import { checkFilmPlanTiming, checkBrollPlanTiming, checkFilmPlanTimingWindowed } from '@/lib/video-production/film-plan-timing';
 import type { FilmPlan } from '@/lib/video-production/shot-plan';
 
 const shot = (id: string, startMs: number, endMs: number) => ({
@@ -207,5 +207,73 @@ describe('checkBrollPlanTiming', () => {
       expect(text).toContain('合并');
       expect(text).not.toContain('statement');
     });
+  });
+});
+
+describe('checkFilmPlanTimingWindowed', () => {
+  it('每一幕内部首尾相接铺满、幕间天然空隙不报 —— pip 真人小窗全程可见, 空隙不是黑屏', () => {
+    const windows = [
+      { startMs: 0, endMs: 5000 },
+      // 幕间空隙 5000~8000: 没讲到的幕不产生窗口, 这段是真人露出, 不该报错。
+      { startMs: 8000, endMs: 12000 },
+    ];
+    const issues = checkFilmPlanTimingWindowed(
+      plan(shot('a', 0, 5000), shot('b', 8000, 12000)),
+      windows,
+    );
+    expect(issues).toEqual([]);
+  });
+
+  it('幕内部有空档时报出来(与整片铺满同一套措辞)', () => {
+    const windows = [{ startMs: 0, endMs: 10000 }];
+    const issues = checkFilmPlanTimingWindowed(
+      plan(shot('a', 0, 4000), shot('b', 5000, 10000)),
+      windows,
+    );
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toContain('4000');
+    expect(issues[0]).toContain('5000');
+  });
+
+  it('某一幕完全没有镜头覆盖时报出来 —— 主画面不能有一幕是空背景', () => {
+    const windows = [
+      { startMs: 0, endMs: 5000 },
+      { startMs: 8000, endMs: 12000 },
+    ];
+    const issues = checkFilmPlanTimingWindowed(plan(shot('a', 0, 5000)), windows);
+    expect(issues.some((i) => i.includes('8000') && i.includes('12000'))).toBe(true);
+  });
+
+  it('幕的起点不必是 0 —— 首幕从非零时刻起讲话是合法的', () => {
+    const windows = [{ startMs: 3000, endMs: 8000 }];
+    expect(checkFilmPlanTimingWindowed(plan(shot('a', 3000, 8000)), windows)).toEqual([]);
+  });
+
+  it('落在两个窗口之间的多余镜头不报错 —— 允许 shots 与窗口对齐, 不强求恰好一一对应', () => {
+    const windows = [
+      { startMs: 0, endMs: 5000 },
+      { startMs: 8000, endMs: 12000 },
+    ];
+    // b 落在两个窗口的间隙里(5000~8000), 不属于任何一个窗口的分组, 不应报错。
+    const issues = checkFilmPlanTimingWindowed(
+      plan(shot('a', 0, 5000), shot('b', 6000, 7000), shot('c', 8000, 12000)),
+      windows,
+    );
+    expect(issues).toEqual([]);
+  });
+
+  it('没有任何窗口时报出来(不该悄悄放行)', () => {
+    expect(checkFilmPlanTimingWindowed(plan(shot('a', 0, 1000)), [])).toEqual([
+      '一个有效的幕时间窗都没有, 至少要有一幕讲到内容。',
+    ]);
+  });
+
+  it('问题描述里不夹带卡片类型名', () => {
+    const windows = [{ startMs: 0, endMs: 10000 }];
+    const issues = checkFilmPlanTimingWindowed(
+      plan(shot('a', 0, 4000), shot('b', 5000, 10000)),
+      windows,
+    );
+    expect(issues.join('')).not.toContain('statement');
   });
 });

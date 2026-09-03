@@ -72,9 +72,9 @@ import { buildPackagingOptions } from '@/lib/video-production/packaging-input';
 import { renderFilm, type CaptionItem } from '@/lib/video-production/remotion-render';
 import { isRemotionReadyMode } from '@/lib/video-production/renderer';
 import { FilmPlanSchema, describeCardsForPrompt, type FilmPlan } from '@/lib/video-production/shot-plan';
-import { actWindows, actWindowsFromAligned, FILM_PLAN_BROLL, type ActWindow } from '@/lib/video-production/film-plan-prompt';
+import { actWindows, actWindowsFromAligned, FILM_PLAN, FILM_PLAN_BROLL, type ActWindow } from '@/lib/video-production/film-plan-prompt';
 import { buildFilmPlan } from '@/lib/video-production/film-plan-builder';
-import { checkBrollPlanTiming } from '@/lib/video-production/film-plan-timing';
+import { checkBrollPlanTiming, checkFilmPlanTimingWindowed } from '@/lib/video-production/film-plan-timing';
 import { captionEventsFromTranscript, type CaptionEvent } from '@/lib/video-production/ass-captions';
 import { PIP_SCALE_MIN, PIP_SCALE_MAX } from '@/lib/video/pip-layout';
 import {
@@ -1002,6 +1002,17 @@ export async function handleTalkingHeadBrollRemotion(
   // 画面就是原始出镜视频 + 字幕, 跳过整个 FilmPlan 生成(不白烧一次 LLM 调用)。
   const brollOn = template?.brollEnabled ?? true;
 
+  /*
+   * layout 选择: template.talkingHeadLayout('cutaway'|'pip')。**提到这里
+   * (原先在函数靠后位置计算)是因为二十九期 Task 6 用户验收返工——FilmPlan
+   * 生成这一步(下面 `if (brollOn)` 分支)现在要按 layout 分流选提示词/校验
+   * (cutaway 用 FILM_PLAN_BROLL/checkBrollPlanTiming 的"不必铺满"语义不变;
+   * pip 用 FILM_PLAN/checkFilmPlanTimingWindowed 的"铺满"语义, 见下方分流处
+   * 的注释和 `checkFilmPlanTimingWindowed` 顶部注释), 所以要在生成之前就
+   * 知道 layout。
+   */
+  const layout: 'cutaway' | 'pip' = template?.talkingHeadLayout === 'pip' ? 'pip' : 'cutaway';
+
   let plan: FilmPlan;
   let aligned: AlignedAct[];
   let rawTranscript: TranscriptSegment[];
@@ -1064,9 +1075,26 @@ export async function handleTalkingHeadBrollRemotion(
         factsSection,
         totalMs: sourceMs,
         maxTokens: 8192,
-        // 出镜链专属: 不要求铺满(FILM_PLAN_BROLL) + 不查空档(checkBrollPlanTiming)。
-        prompt: FILM_PLAN_BROLL,
-        checkTiming: checkBrollPlanTiming,
+        /*
+         * 按 layout 分流提示词/校验(二十九期 Task 6 用户验收返工, 见函数顶部
+         * layout 注释)：
+         * - `cutaway`: 真人全程铺底、卡片间歇覆盖——空档=露出真人, 是正常功能,
+         *   维持 Task 4 定的"不必铺满"语义不变(FILM_PLAN_BROLL/checkBrollPlanTiming)。
+         * - `pip`: 真人缩进常驻小窗, 卡片是**主画面**——空档不再是"露出真人"
+         *   而是空背景, 等同 ppt-narration/illustration-tts 两条 TTS 链要拦的
+         *   黑屏, 复用它们的铺满语义(FILM_PLAN)。但校验不能直接套
+         *   `checkFilmPlanTiming`(要求 0~totalMs 一整段无缝, 会被"没讲到的幕
+         *   不产生窗口"造成的天然空隙误报, 见该函数与
+         *   `checkFilmPlanTimingWindowed` 顶部注释), 改用窗口版
+         *   `checkFilmPlanTimingWindowed`——按每一幕自己的时间窗分别校验铺满,
+         *   幕间天然空隙不检查。`checkTiming` 的第二个参数(`totalMs`)在这个
+         *   闭包里没有用到, 因为窗口本身已经带了每一幕的边界, 用外层
+         *   `windows`(闭包捕获)而不是传入的 `totalMs`。
+         */
+        prompt: layout === 'pip' ? FILM_PLAN : FILM_PLAN_BROLL,
+        checkTiming: layout === 'pip'
+          ? (p: FilmPlan) => checkFilmPlanTimingWindowed(p, windows)
+          : checkBrollPlanTiming,
       });
       console.log(`[video-production] FilmPlan 产出完成 (修复 ${built.rounds} 轮, ${built.plan.shots.length} 镜)`);
 
@@ -1136,16 +1164,19 @@ export async function handleTalkingHeadBrollRemotion(
     endMs: e.endMs,
   }));
 
-  // layout 选择: template.talkingHeadLayout('cutaway'|'pip')。pip 参数从模板三字段取,
-  // clamp 语义搬自旧链 computePipRect(src/lib/video/pip-layout.ts): scale 夹到
+  // pip 参数从模板三字段取(layout 已在函数靠前处算好, 见上方注释), clamp 语义
+  // 搬自旧链 computePipRect(src/lib/video/pip-layout.ts): scale 夹到
   // [PIP_SCALE_MIN, PIP_SCALE_MAX], margin 夹到 >= 0——不搬这一步, 一个越界的模板
   // 配置(比如 scale=1.5)会直接生成一个盖住整个画面的"画中画"(Task 3 复审留的坑)。
-  const layout: 'cutaway' | 'pip' = template?.talkingHeadLayout === 'pip' ? 'pip' : 'cutaway';
   const pip = layout === 'pip'
     ? {
         position: (template?.pipPosition ?? 'br') as PipPosition,
         scale: Math.min(PIP_SCALE_MAX, Math.max(PIP_SCALE_MIN, template?.pipScale ?? 0.25)),
         margin: Math.max(0, Math.round(template?.pipMargin ?? 40)),
+        // 形状(二十九期 Task 6 用户验收返工)——模板没有对应字段, 写死
+        // 'rounded'(圆角矩形先行, 用户说圆/方都可以)。`Film.tsx` 的 'circle'
+        // 分支已经实现好, 等模板加了形状字段, 这里换成读模板配置即可。
+        shape: 'rounded' as const,
       }
     : null;
 

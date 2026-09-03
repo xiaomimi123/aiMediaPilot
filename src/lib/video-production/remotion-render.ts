@@ -70,7 +70,22 @@ export type FilmInput = {
   sourceVideo: {
     src: string;
     layout: 'cutaway' | 'pip';
-    pip: { position: 'tl' | 'tr' | 'bl' | 'br'; scale: number; margin: number } | null;
+    pip: {
+      position: 'tl' | 'tr' | 'bl' | 'br';
+      scale: number;
+      margin: number;
+      /**
+       * 小窗形状(二十九期 Task 6 用户验收返工, 可选)——模板目前没有对应字段
+       * (`VideoTemplate` 只有 `pipPosition/pipScale/pipMargin` 三个), 故意不为
+       * 这个字段新加 schema, 只在 `FilmInput` 类型上开一个可选口子。worker
+       * 暂时写死传 `'rounded'`(用户反馈圆/方都能接受, 圆角矩形先行落地);
+       * 缺省(`undefined`)时 `Film.tsx` 也按 `'rounded'` 处理。`'circle'` 的
+       * 渲染逻辑已经在 `Film.tsx` 一并实现好(borderRadius 50% + 宽高相等取
+       * 正方形裁切), 只是暂时没有输入通路——将来模板加了形状字段, 把 worker
+       * 这里的写死值换成读模板配置即可直接用, 不用再碰 `Film.tsx`。
+       */
+      shape?: 'rounded' | 'circle';
+    } | null;
   } | null;
 };
 

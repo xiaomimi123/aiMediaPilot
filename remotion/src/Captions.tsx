@@ -23,11 +23,33 @@ import type {CaptionItem} from './Film';
 const CAPTION_BOX_HEIGHT_BASE = 120;
 const CAPTION_FONT_SIZE_BASE = 44;
 
-export const Captions: React.FC<{items: CaptionItem[]; highlightColor?: string}> = ({
+export const Captions: React.FC<{
+  items: CaptionItem[];
+  highlightColor?: string;
+  /**
+   * pip 常驻小窗对字幕安全区的挤占(二十九期 Task 6 用户验收返工, 可选)。
+   *
+   * 背景: pip 版式真机验证(155 秒真实出镜素材, 竖屏 1080x1920 源视频铺进
+   * 16:9 合成)量出小窗高度能到合成高度的 79%——`Film.tsx` 的 pip 小窗只按
+   * 宽度定比例、高度跟源视频宽高比走(与旧链 `computePipRect` 同一先例, 见
+   * 该函数注释), 竖屏素材配横屏合成时小窗天生会很"高"。贴底锚定(`bl`/`br`)
+   * 的小窗和字幕共享同一条"贴底"基准线, 只要小窗高度超过字幕框自身的高度
+   * (`CAPTION_BOX_HEIGHT_BASE`, 通常远小于 79%)就会在水平方向压到字幕。
+   *
+   * 这里(渲染层)不知道出镜素材的真实宽高比(故意不做 ffprobe, 见
+   * `Film.tsx` 的 `FilmInput.sourceVideo` 顶部注释), 没法精确算出小窗实际
+   * 像素高度去做"数值上刚好避开"的判断——保守起见: 只要小窗是贴底锚定
+   * (`side` 有值), 就无条件让出这一侧的横向空间, 不去猜它到底有多高。
+   * 顶部锚定(`tl`/`tr`)的小窗离字幕这条底边通常还有很大余量, `Film.tsx`
+   * 调用点不传这个 prop, 这里保持老行为不变。
+   */
+  pipReserve?: {side: 'left' | 'right'; width: number};
+}> = ({
   items,
   // 默认值只是防御性兜底(理论上所有调用点都会显式传 theme.highlight),
   // 与四张卡片组件的"必填但仍给防御性默认值"同一惯例(见 Film.tsx 顶部注释)。
   highlightColor = '#f2c744',
+  pipReserve,
 }) => {
   const frame = useCurrentFrame();
   const {fps, width, height} = useVideoConfig();
@@ -39,12 +61,26 @@ export const Captions: React.FC<{items: CaptionItem[]; highlightColor?: string}>
   const captionBoxHeight = scaleFont(width, height, CAPTION_BOX_HEIGHT_BASE);
   const chunks = splitCaptionIntoChunks(current.text, current.words);
 
+  // 没有 pipReserve 时 left/boxWidth 与老行为逐字节一致(box.left/box.innerWidth)。
+  let left = box.left;
+  let boxWidth = box.innerWidth;
+  if (pipReserve) {
+    if (pipReserve.side === 'right') {
+      const newRight = Math.max(left, box.left + box.innerWidth - pipReserve.width);
+      boxWidth = Math.max(0, newRight - left);
+    } else {
+      const newLeft = Math.min(box.left + box.innerWidth, box.left + pipReserve.width);
+      boxWidth = Math.max(0, box.left + box.innerWidth - newLeft);
+      left = newLeft;
+    }
+  }
+
   return (
     <div
       style={{
         position: 'absolute',
-        left: box.left,
-        width: box.innerWidth,
+        left,
+        width: boxWidth,
         // 贴着底部安全区上沿: box.bottom 之下是平台 UI 遮挡带(见 grid.ts 顶部
         // 注释), 字幕框自身再留出 captionBoxHeight, 保证文字本身不会探进去。
         top: height - box.bottom - captionBoxHeight,

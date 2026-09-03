@@ -58,9 +58,20 @@ const ALIGNED_RESULT = {
     i === 0 ? { act, startMs: 0, endMs: 5000 } : { act, startMs: 5000, endMs: 5000 }
   )),
 };
-// FilmPlan: 一镜, 落在 [1000,3000) —— 满足 sourceMs=10000 的边界与 1200ms 下限。
+// FilmPlan(cutaway): 一镜, 落在 [1000,3000) —— 满足 sourceMs=10000 的边界与 1200ms
+// 下限, cutaway 的 checkBrollPlanTiming 不要求铺满, 单镜不覆盖整个窗口没问题。
 const FILM_PLAN_RESULT = {
   shots: [{ shotId: 's1', startMs: 1000, endMs: 3000, card: 'statement', slots: { text: '关键数据' } }],
+};
+/*
+ * FilmPlan(pip, 二十九期 Task 6 用户验收返工): pip 下真人缩进小窗、卡片是主
+ * 画面, 走 `checkFilmPlanTimingWindowed` 的铺满语义——`ALIGNED_RESULT` 只有
+ * hook 一幕讲到(窗口 [0,5000)), 这一镜必须首尾相接铺满这整个窗口, 不能像
+ * cutaway 那样留半截空档(`FILM_PLAN_RESULT` 的 [1000,3000) 在 pip 语义下会
+ * 被判定"没铺满"报错回模型, 所以要单独一份铺满整个窗口的 fixture)。
+ */
+const FILM_PLAN_RESULT_PIP = {
+  shots: [{ shotId: 's1', startMs: 0, endMs: 5000, card: 'statement', slots: { text: '关键数据' } }],
 };
 
 // `vi.mock` 工厂是提升(hoist)到文件顶部执行的, 工厂体内引用的变量必须用 `vi.hoisted`
@@ -121,7 +132,17 @@ beforeEach(() => {
     if (opts.systemPrompt.includes('语音对齐器')) {
       return { result: ALIGNED_RESULT, usage: {} };
     }
-    return { result: FILM_PLAN_RESULT, usage: { completionTokens: 100 } };
+    /*
+     * FilmPlan 两条提示词文案不同(二十九期 Task 6 用户验收返工——worker 按
+     * layout 分流): `FILM_PLAN_BROLL` 开头是"你是一个真人出镜短视频的…"
+     * (cutaway), `FILM_PLAN` 开头是"你是一个知识类短视频的…"(pip)。按这个
+     * 关键词分流返回对应语义的 fixture, 不是瞎猜——两套提示词文本本身就在
+     * `film-plan-prompt.ts` 里, 关键词摘自那里。
+     */
+    if (opts.systemPrompt.includes('真人出镜短视频')) {
+      return { result: FILM_PLAN_RESULT, usage: { completionTokens: 100 } };
+    }
+    return { result: FILM_PLAN_RESULT_PIP, usage: { completionTokens: 100 } };
   });
 });
 
@@ -238,8 +259,34 @@ describe('handleTalkingHeadBrollRemotion(preview) — pip 版式的 clamp', () =
 
     const call = renderFilmMock.mock.calls[0][0];
     expect(call.input.sourceVideo).toEqual({
-      src: '', layout: 'pip', pip: { position: 'tl', scale: 0.45, margin: 0 },
+      src: '', layout: 'pip', pip: { position: 'tl', scale: 0.45, margin: 0, shape: 'rounded' },
     });
+  });
+
+  it('pip 走 FILM_PLAN(铺满语义)的提示词, 不是 FILM_PLAN_BROLL(二十九期 Task 6 用户验收返工)', async () => {
+    prismaMock.videoTemplate.findUnique.mockResolvedValue({
+      id: 't1', brollEnabled: true, talkingHeadLayout: 'pip',
+      pipPosition: 'br', pipScale: 0.25, pipMargin: 40, aspect: '16:9', bgmPath: null,
+    });
+    const vp = makeVp({ templateId: 't1' });
+    await handleTalkingHeadBrollRemotion(vp, 'preview', setStatus, 'preview.mp4', 'preview_ready', 'previewPath');
+
+    // 第二次 callStructured 调用是 FilmPlan("画面编排者")那一次——pip 下必须
+    // 走 FILM_PLAN 的措辞("知识类短视频"), 不能是 FILM_PLAN_BROLL 的措辞
+    // ("真人出镜短视频")。这条锚住"worker 按 layout 选提示词"这条接线,
+    // 不是靠上面的 fixture 覆盖间接验证。
+    const filmPlanCall = callStructuredMock.mock.calls[1][0];
+    expect(filmPlanCall.systemPrompt).toContain('知识类短视频');
+    expect(filmPlanCall.systemPrompt).not.toContain('真人出镜短视频');
+  });
+
+  it('cutaway(默认) 仍走 FILM_PLAN_BROLL 的提示词, layout 分流没有误伤旧行为', async () => {
+    const vp = makeVp();
+    await handleTalkingHeadBrollRemotion(vp, 'preview', setStatus, 'preview.mp4', 'preview_ready', 'previewPath');
+
+    const filmPlanCall = callStructuredMock.mock.calls[1][0];
+    expect(filmPlanCall.systemPrompt).toContain('真人出镜短视频');
+    expect(filmPlanCall.systemPrompt).not.toContain('知识类短视频');
   });
 
   it('合法范围内的值原样传递, 不被 clamp 误改', async () => {
@@ -251,7 +298,7 @@ describe('handleTalkingHeadBrollRemotion(preview) — pip 版式的 clamp', () =
     await handleTalkingHeadBrollRemotion(vp, 'preview', setStatus, 'preview.mp4', 'preview_ready', 'previewPath');
 
     const call = renderFilmMock.mock.calls[0][0];
-    expect(call.input.sourceVideo.pip).toEqual({ position: 'br', scale: 0.3, margin: 20 });
+    expect(call.input.sourceVideo.pip).toEqual({ position: 'br', scale: 0.3, margin: 20, shape: 'rounded' });
   });
 });
 
