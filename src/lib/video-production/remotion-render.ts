@@ -148,26 +148,42 @@ export async function getBundle(): Promise<string> {
 }
 
 /**
- * `remotion/public/` 是唯一 `staticFile` 认得的根——TTS 人声/BGM 却落在
- * `productionRoot` 下(任意绝对路径), 所以每次渲染前要把这两个文件拷进
- * `remotion/public/render-assets/`, 渲染结束(不论成败)再删掉, 不然会在
- * public 目录里越攒越多垃圾。
+ * `renderAssetsDir` **必须是 `getBundle()` 返回的 bundle 输出目录下的
+ * `public/render-assets/`, 不能是源码里的 `remotion/public/render-assets/`**。
  *
- * 文件名派生自 outputPath 的**父目录名 + basename**——vp id 只出现在父目录
- * 名(`productionRoot` 下按 vp 分的目录), `basename(outputPath)` 本身是
- * `preview.mp4`/`master.mp4` 这种常量文件名, 不带 vp id(复审 2026-09-03
- * 发现: 之前的注释错误地假设 outputPath 的 basename 本身带 vp id, 实际上两个
- * 不同 vp 并发渲 master 会撞向同一个 `render-assets/master-voice.wav`, 一边
- * 的 finally 清理还可能删掉另一边正在读的文件)。防并发靠父目录名(vp id)
- * 参与派生 —— 当前队列 concurrency=1、单 worker 进程, 今天不会真的撞上,
- * 这层保护是为未来把 concurrency 调大预留的。
+ * 复审 2026-09-03 实测揪出的坑(比最初以为的"新文件 404"更严重, 是**静默
+ * 错配**): `@remotion/bundler` 的 `bundle()`(`@remotion/bundler/dist/bundle.js`
+ * 的 `copyDir({src: <remotion>/public, dest: <outDir>/public})`)只在被调用的
+ * 那一刻把 `remotion/public/` 拷一次快照进 webpack 输出目录, 之后不会再同步。
+ * `renderMedia`/`selectComposition` 的静态服务器(serve-handler)是"实时读盘",
+ * 但读的是**那份快照目录**, 不是源码里的 `remotion/public/`。`getBundle()`
+ * 按进程缓存(下面 `bundlePromise`), 只有触发第一次 `bundle()` 调用的那次渲染
+ * 才会让"写入源码 public 目录"和"静态服务器实际读的目录"重合——之后同一进程
+ * 里任何新拷贝的动态资源(人声/BGM/出镜视频)写进源码 `remotion/public/
+ * render-assets/` 都不会被看见。
+ *
+ * 实测复现过两种失败形态:
+ * 1. 派生出**不同**文件名 → 静态服务器 404(找不到这个新文件)。
+ * 2. 派生出**相同**文件名、内容被覆盖(比如同一条流水线复用输出路径)→
+ *    静态服务器读到的是快照里那份**陈旧内容**, 没有任何报错, 成片音频/画面
+ *    悄悄对不上——这比 404 更危险, 因为看起来渲染成功了。
+ *
+ * 修法: 不写源码 `remotion/public/`, 改写**`getBundle()` 返回的那个目录**
+ * 自己的 `public/render-assets/` 子目录——静态服务器实时读盘读的正是这里,
+ * 写哪读哪从此是同一个目录, 404 和错配一起解决。`bundle()` 缓存策略不动
+ * (仍然只 bundle 一次, 0.8s 成本继续省), 因为问题根源是"写错了目录", 不是
+ * "bundle 该不该缓存"。
  */
-const RENDER_ASSETS_DIR = path.resolve(process.cwd(), 'remotion/public/render-assets');
+function renderAssetsDirFor(bundleOutDir: string): string {
+  return path.join(bundleOutDir, 'public', 'render-assets');
+}
 
 /**
- * 把一个绝对路径的音频文件拷进 `render-assets/`, 返回喂给 `staticFile` 的
- * 相对路径。**拷贝失败直接抛错、不吞掉**——调用方(renderFilm)不做降级,
- * 因为一半有声一半无声的成片比直接渲染失败更糟, 前者不容易被发现。
+ * 把一个绝对路径的音频/视频文件拷进 `renderAssetsDir`(调用方必须传入
+ * `getBundle()` 输出目录下的 `public/render-assets/`, 见上方
+ * `renderAssetsDirFor` 注释), 返回喂给 `staticFile` 的相对路径。**拷贝失败
+ * 直接抛错、不吞掉**——调用方(renderFilm)不做降级, 因为一半有声一半无声的
+ * 成片比直接渲染失败更糟, 前者不容易被发现。
  */
 // 导出仅供单测用: 直接验证"不同父目录 + 同名 basename → 不同中转文件名"这条
 // 防并发规则, 不用为了测个文件名派生逻辑去真的跑一次 renderMedia。
@@ -175,16 +191,17 @@ export function copyIntoRenderAssets(
   srcAbsPath: string,
   outputPath: string,
   kind: 'voice' | 'bgm' | 'video',
+  renderAssetsDir: string,
 ): { absPath: string; relPath: string } {
   const ext = path.extname(srcAbsPath) || '.wav';
-  // 父目录名(vp id) + basename 共同派生——见上方 RENDER_ASSETS_DIR 注释:
-  // 只用 basename(outputPath) 不足以防并发, outputFileName 在 worker 侧是
-  // 'preview.mp4'/'master.mp4' 这种常量。
+  // 父目录名(vp id) + basename 共同派生——只用 basename(outputPath) 不足以
+  // 防并发, outputFileName 在 worker 侧是 'preview.mp4'/'master.mp4' 这种常量,
+  // vp id 只出现在 outputPath 的父目录名里(复审 2026-09-03 发现, 见 git log)。
   const dirName = path.basename(path.dirname(outputPath));
   const baseName = path.basename(outputPath, path.extname(outputPath));
   const fileName = `${dirName}-${baseName}-${kind}${ext}`;
-  const absPath = path.join(RENDER_ASSETS_DIR, fileName);
-  fs.mkdirSync(RENDER_ASSETS_DIR, { recursive: true });
+  const absPath = path.join(renderAssetsDir, fileName);
+  fs.mkdirSync(renderAssetsDir, { recursive: true });
   // 出镜视频文件通常比人声/BGM 大出两个数量级(spike: 358MB vs 几 MB) ——
   // spike 在本机 APFS 同卷下实测 0.5s 内(clonefile), 但换机器/换卷(比如跨卷
   // 挂载、非 APFS 文件系统)未必, 这里量出来打日志留痕, 而不是假设永远够快。
@@ -213,13 +230,13 @@ export async function renderFilm(opts: {
   outputPath: string;
   durationInFrames: number;
   fps?: number;
-  /** 人声的**绝对路径**。renderFilm 负责拷进 remotion/public 并在渲染后清理。 */
+  /** 人声的**绝对路径**。renderFilm 负责拷进 bundle 输出目录的 public 并在渲染后清理。 */
   audioFile?: string | null;
-  /** BGM 的**绝对路径**与音量。renderFilm 负责拷进 remotion/public 并在渲染后清理。 */
+  /** BGM 的**绝对路径**与音量。renderFilm 负责拷进 bundle 输出目录的 public 并在渲染后清理。 */
   bgmFile?: { path: string; volume: number } | null;
   /**
-   * 出镜视频的**绝对路径**(二十九期 Task 3)。renderFilm 负责拷进
-   * remotion/public 并在渲染后清理，与 `audioFile`/`bgmFile` 同一惯例。
+   * 出镜视频的**绝对路径**(二十九期 Task 3)。renderFilm 负责拷进 bundle
+   * 输出目录的 public 并在渲染后清理，与 `audioFile`/`bgmFile` 同一惯例。
    * 只负责搬文件——`opts.input.sourceVideo` 里的 `layout`/`pip` 由调用方
    * (Task 4 的 worker)决定, 这里不判断、不改写。
    */
@@ -239,14 +256,22 @@ export async function renderFilm(opts: {
   const copiedAbsPaths: string[] = [];
   const input: FilmInput = { ...opts.input };
 
+  // **必须先拿到 bundle 输出目录, 再拷动态资产**——见 `renderAssetsDirFor`
+  // 顶部注释: 静态服务器实时读盘读的是这个目录下的 `public/render-assets/`,
+  // 不是源码里的 `remotion/public/render-assets/`。`getBundle()` 本身仍然
+  // 按进程缓存(第二次调用直接返回缓存值, 不会重新 bundle), 这里提前调用
+  // 不产生额外成本, 只是把"拷贝目标目录"和"bundle 输出目录"绑死。
+  const bundleOutDir = await getBundle();
+  const renderAssetsDir = renderAssetsDirFor(bundleOutDir);
+
   try {
     if (opts.audioFile) {
-      const dest = copyIntoRenderAssets(opts.audioFile, opts.outputPath, 'voice');
+      const dest = copyIntoRenderAssets(opts.audioFile, opts.outputPath, 'voice', renderAssetsDir);
       copiedAbsPaths.push(dest.absPath);
       input.audioSrc = dest.relPath;
     }
     if (opts.bgmFile) {
-      const dest = copyIntoRenderAssets(opts.bgmFile.path, opts.outputPath, 'bgm');
+      const dest = copyIntoRenderAssets(opts.bgmFile.path, opts.outputPath, 'bgm', renderAssetsDir);
       copiedAbsPaths.push(dest.absPath);
       input.bgm = { src: dest.relPath, volume: opts.bgmFile.volume };
     }
@@ -260,12 +285,12 @@ export async function renderFilm(opts: {
           '[renderFilm] 传了 sourceVideoFile 但 input.sourceVideo 是 null——调用方必须同时给出 layout/pip。',
         );
       }
-      const dest = copyIntoRenderAssets(opts.sourceVideoFile, opts.outputPath, 'video');
+      const dest = copyIntoRenderAssets(opts.sourceVideoFile, opts.outputPath, 'video', renderAssetsDir);
       copiedAbsPaths.push(dest.absPath);
       input.sourceVideo = { ...input.sourceVideo, src: dest.relPath };
     }
 
-    const serveUrl = await getBundle();
+    const serveUrl = bundleOutDir;
     const id = input.aspect === '9:16' ? 'portrait' : 'landscape';
     const composition = await selectComposition({
       serveUrl, id, inputProps: input as unknown as Record<string, unknown>,

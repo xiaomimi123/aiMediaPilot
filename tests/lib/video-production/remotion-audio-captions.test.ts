@@ -3,7 +3,7 @@ import path from 'path';
 import os from 'os';
 import fs from 'fs';
 import { execFileSync } from 'child_process';
-import { renderFilm, copyIntoRenderAssets } from '@/lib/video-production/remotion-render';
+import { renderFilm, copyIntoRenderAssets, getBundle } from '@/lib/video-production/remotion-render';
 import { pickCurrentCaption } from '../../../remotion/src/caption-logic';
 
 /*
@@ -33,9 +33,12 @@ import { pickCurrentCaption } from '../../../remotion/src/caption-logic';
  */
 
 describe('renderFilm: 音频文件中转与清理', () => {
-  const renderAssetsDir = path.resolve(process.cwd(), 'remotion/public/render-assets');
-
   it('audioFile 指向不存在的路径 → 抛错, 且 render-assets/ 无残留文件', async () => {
+    // renderAssetsDir 现在是 bundle 输出目录下的 public/render-assets(见
+    // remotion-render.ts 的 renderAssetsDirFor 注释), 不是源码 remotion/public/——
+    // getBundle() 按进程缓存, 这里调用不会重新触发一次真实 bundle。
+    const bundleOutDir = await getBundle();
+    const renderAssetsDir = path.join(bundleOutDir, 'public', 'render-assets');
     const missingAudio = path.join(os.tmpdir(), `does-not-exist-${Date.now()}.wav`);
     const outputPath = path.join(os.tmpdir(), `remotion-audio-test-missing-${Date.now()}.mp4`);
     const before = fs.existsSync(renderAssetsDir) ? fs.readdirSync(renderAssetsDir) : [];
@@ -66,7 +69,6 @@ describe('renderFilm: 音频文件中转与清理', () => {
 });
 
 describe('renderFilm: 真渲染一条带人声的样片', () => {
-  const renderAssetsDir = path.resolve(process.cwd(), 'remotion/public/render-assets');
   const tmpWav = path.join(os.tmpdir(), `remotion-audio-test-tone-${Date.now()}.wav`);
   const outputPath = path.join(os.tmpdir(), `remotion-audio-test-output-${Date.now()}.mp4`);
 
@@ -114,7 +116,10 @@ describe('renderFilm: 真渲染一条带人声的样片', () => {
       ]).toString().trim();
       expect(probeOut).toBe('audio');
 
-      // 中转文件应该已经在 renderFilm 的 finally 里被删掉。
+      // 中转文件应该已经在 renderFilm 的 finally 里被删掉。renderAssetsDir 是
+      // bundle 输出目录下的 public/render-assets(与上面拷贝目标同一处)。
+      const bundleOutDir = await getBundle();
+      const renderAssetsDir = path.join(bundleOutDir, 'public', 'render-assets');
       const remaining = fs.existsSync(renderAssetsDir) ? fs.readdirSync(renderAssetsDir) : [];
       const leaked = remaining.filter((f) => f.includes(path.basename(outputPath, '.mp4')));
       expect(leaked).toEqual([]);
@@ -147,7 +152,9 @@ describe('pickCurrentCaption: 当前句选择的纯逻辑', () => {
 });
 
 describe('copyIntoRenderAssets: 中转文件名的防并发派生', () => {
-  const renderAssetsDir = path.resolve(process.cwd(), 'remotion/public/render-assets');
+  // 这条测试只验证文件名派生规则, 不牵扯 bundle/renderMedia——随便一个临时目录
+  // 就够当 renderAssetsDir 用, 不需要真的调用 getBundle()。
+  const renderAssetsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'render-assets-naming-'));
   const cleanup: string[] = [];
 
   afterEach(() => {
@@ -168,8 +175,8 @@ describe('copyIntoRenderAssets: 中转文件名的防并发派生', () => {
     const outputPathVpA = path.join(os.tmpdir(), 'vp-aaaa', 'master.mp4');
     const outputPathVpB = path.join(os.tmpdir(), 'vp-bbbb', 'master.mp4');
 
-    const destA = copyIntoRenderAssets(srcA, outputPathVpA, 'voice');
-    const destB = copyIntoRenderAssets(srcB, outputPathVpB, 'voice');
+    const destA = copyIntoRenderAssets(srcA, outputPathVpA, 'voice', renderAssetsDir);
+    const destB = copyIntoRenderAssets(srcB, outputPathVpB, 'voice', renderAssetsDir);
     cleanup.push(destA.absPath, destB.absPath);
 
     // 核心断言: 同名 basename('master.mp4') 不应该撞向同一个中转文件——
