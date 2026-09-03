@@ -56,7 +56,16 @@ ${styleBlock}${factsBlock}${assetBlock}
   responseSchema: DirectorResponseSchema,
 };
 
-/** 裁完短于这个就没意义了。 */
+/**
+ * 裁完短于这个就没意义了。
+ *
+ * 与 `film-plan-timing.ts` 的 `BROLL_MIN_SHOT_MS`(=1200, `checkBrollPlanTiming`
+ * 在 FilmPlan 修复循环里用)不是同一件事、数值也故意不同, 别当成对不上的 bug
+ * 误改成一致: 这里是**裁剪之后**"短于此就整镜丢弃"的硬下限, `BROLL_MIN_SHOT_MS`
+ * 是**裁剪之前**"引导模型别排太短的镜"的软标准, 前者故意比后者松(1000 < 1200)——
+ * 一镜从 FilmPlan 产出时的 1200ms 被这个函数按素材时长夹小到比如 1050ms 是正常的
+ * "因裁剪而缩短、但仍然可用", 如果两个阈值相等, 这种镜头会在这里被误杀。
+ */
 const MIN_SHOT_MS = 1000;
 
 /**
