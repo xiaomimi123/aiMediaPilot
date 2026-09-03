@@ -33,7 +33,7 @@ describe('环境运动层: 静止占比回归', () => {
 
       try {
         await renderFilm({
-          input: { shots: shots as any, audioSrc: null, bgm: null, captions: [], aspect: '16:9', visualStyle: 'card' },
+          input: { shots: shots as any, audioSrc: null, bgm: null, captions: [], aspect: '16:9', visualStyle: 'card', sourceVideo: null },
           outputPath,
           durationInFrames,
           fps,

@@ -1,5 +1,5 @@
 import React from 'react';
-import {AbsoluteFill, Audio, Sequence, staticFile, useVideoConfig} from 'remotion';
+import {AbsoluteFill, Audio, OffthreadVideo, Sequence, staticFile, useVideoConfig} from 'remotion';
 import {CARDS} from './cards';
 import {Ambient} from './motion/ambient';
 import {CameraRig} from './motion/camera';
@@ -40,6 +40,54 @@ export type FilmInput = {
    * 该用哪套风格, 不让静默缺省替他做决定——与 `bgm`/`captions` 同一惯例。
    */
   visualStyle: 'card' | 'illustration';
+  /**
+   * 出镜视频层(二十九期 Task 3)——真人出镜视频铺底, 卡片按分镜时间窗覆盖
+   * (挖空替换的原生实现)。与 `bgm`/`captions`/`visualStyle` 同一惯例:
+   * 刻意必填(不给默认值), 逼调用点显式传 `null` 而不是静默缺省。
+   *
+   * `layout`:
+   * - `'cutaway'`: 顺序挖空——出镜视频全程铺底, shots 时间窗内卡片整幅盖上
+   *   把人像替换掉, 窗口外露出出镜画面。对应旧链 `compositeCutawayVideo`
+   *   不传 `pip` 的分支(`src/lib/video/ffmpeg.ts`)。
+   * - `'pip'`: 画中画——卡片轨照旧全程运行(含 Ambient/字幕), 出镜视频缩成
+   *   角标常驻叠在卡片之上。对应旧链 `compositeCutawayVideo` 传 `pip` 的分支。
+   *
+   * `pip` 字段仅 `layout==='pip'` 时必填, 语义与 `VideoTemplate.pipPosition/
+   * pipScale/pipMargin`(`prisma/schema.prisma`)逐字段对齐: `position` 取值
+   * `'tl'|'tr'|'bl'|'br'`(与 `src/lib/video/pip-layout.ts` 的 `PipPosition`
+   * 同形, 独立子项目不 import, 理由同 `CaptionItem`), `scale` 是小窗宽度占
+   * 画面宽度的比例, `margin` 是离边缘的像素距离。
+   */
+  sourceVideo: {
+    src: string; // staticFile 相对路径, renderFilm 负责填入
+    layout: 'cutaway' | 'pip';
+    pip: {position: 'tl' | 'tr' | 'bl' | 'br'; scale: number; margin: number} | null;
+  } | null;
+};
+
+/**
+ * 出镜视频画幅适配(对齐旧链行为)。
+ *
+ * 旧链 `compositeCutawayVideo`(`src/lib/video/ffmpeg.ts:317` 附近)把尺寸不一致的
+ * B-roll 片段对齐进源视频画幅时, 用的是
+ * `scale=W:H:force_original_aspect_ratio=decrease,pad=W:H:...:color=black`——
+ * 即"等比缩放到能装进目标框、多出的空间用黑边填充", **不裁切**。这里是反过来的
+ * 场景(出镜视频要装进合成画幅), 但同一条取舍成立: 竖屏合成配横屏出镜素材时,
+ * 用 `cover` 会裁掉画面两侧(旧链从未这么做过), 所以选 `objectFit: 'contain'` +
+ * 父容器黑底, 复现旧链"留黑边不裁切"的观感, 不引入新的裁剪行为。
+ */
+const CUTAWAY_VIDEO_STYLE: React.CSSProperties = {
+  width: '100%',
+  height: '100%',
+  objectFit: 'contain',
+};
+
+/** 画中画角标定位(二十三期 `computePipRect` 的 Remotion 等价物)。 */
+const PIP_POSITION_STYLE: Record<'tl' | 'tr' | 'bl' | 'br', (margin: number) => React.CSSProperties> = {
+  tl: (m) => ({top: m, left: m}),
+  tr: (m) => ({top: m, right: m}),
+  bl: (m) => ({bottom: m, left: m}),
+  br: (m) => ({bottom: m, right: m}),
 };
 
 /**
@@ -55,11 +103,21 @@ export type FilmInput = {
  * 刻意选必填而不是可选(`?`): 必填能让 tsc 在未来任何新调用点上, 强制作者
  * 显式想清楚"这条片子要不要字幕/BGM", 而不是让静默缺省替他做了决定。
  */
-export const Film: React.FC<FilmInput> = ({shots, audioSrc, bgm = null, captions = [], visualStyle}) => {
-  const {fps} = useVideoConfig();
+export const Film: React.FC<FilmInput> = ({
+  shots,
+  audioSrc,
+  bgm = null,
+  captions = [],
+  visualStyle,
+  sourceVideo = null,
+}) => {
+  const {fps, width, height} = useVideoConfig();
   const theme = THEMES[visualStyle];
-  return (
-    <AbsoluteFill style={{backgroundColor: theme.background}}>
+  const isCutaway = sourceVideo?.layout === 'cutaway';
+  const isPip = sourceVideo?.layout === 'pip';
+
+  const cardsTrack = (
+    <>
       {shots.map((s) => {
         const Card = CARDS[s.card];
         const from = Math.round((s.startMs / 1000) * fps);
@@ -67,6 +125,19 @@ export const Film: React.FC<FilmInput> = ({shots, audioSrc, bgm = null, captions
         const durationSec = dur / fps;
         return (
           <Sequence key={s.shotId} from={from} durationInFrames={dur}>
+            {isCutaway ? (
+              /*
+               * cutaway 专属: 各卡片组件(Statement/Stat/...)自身没有不透明
+               * 背景——平时靠 Film 顶层 AbsoluteFill 的全局背景色垫底"看起来
+               * 不透明"。但 cutaway 下顶层背景已经让位给出镜视频(见上方
+               * `isCutaway ? '#000' : theme.background'`), 如果不额外垫一层,
+               * 卡片文字之外的区域会露出下面的视频——"卡片全幅盖住视频"就
+               * 不成立了。这里在每个 Sequence 窗口内单独补一块 `theme.background`
+               * 的不透明底, 只在窗口时长内存在, 窗口外(Sequence 未挂载)视频
+               * 照常可见。
+               */
+              <AbsoluteFill style={{backgroundColor: theme.background}} />
+            ) : null}
             <CameraRig
               path={[
                 {t: 0, scale: 1},
@@ -81,8 +152,48 @@ export const Film: React.FC<FilmInput> = ({shots, audioSrc, bgm = null, captions
       })}
       {/* 环境运动层(二十六期): 全片底噪, 保证没有一帧彻底静止。见 motion/ambient.tsx。 */}
       <Ambient />
+    </>
+  );
+
+  return (
+    <AbsoluteFill style={{backgroundColor: isCutaway ? '#000' : theme.background}}>
+      {isCutaway ? (
+        <>
+          {/*
+           * cutaway: 出镜视频**不套 Sequence**, 全程挂载——spike 已验证不透明
+           * div 覆盖画面不会卸载 OffthreadVideo, 音轨全程连续(人声不断)。放在
+           * cardsTrack 之前, 让卡片在自己的时间窗内用整幅不透明背景盖住它。
+           */}
+          <OffthreadVideo src={staticFile(sourceVideo!.src)} style={CUTAWAY_VIDEO_STYLE} />
+          {cardsTrack}
+        </>
+      ) : isPip ? (
+        <>
+          {cardsTrack}
+          {/* pip: 出镜视频角标常驻, 必须在卡片轨之后渲染才不会被卡片整幅背景盖住。 */}
+          <div
+            style={{
+              position: 'absolute',
+              ...PIP_POSITION_STYLE[sourceVideo!.pip!.position](sourceVideo!.pip!.margin),
+              width: Math.round(width * sourceVideo!.pip!.scale),
+              // 高度故意不写死: `OffthreadVideo` 渲染时底层是按抽帧结果尺寸铺开的
+              // <img>, 只给 width、height 留 'auto' 会让浏览器按视频真实宽高比
+              // 反算高度——这就是不需要提前 ffprobe 出镜素材尺寸也能等比缩放
+              // (不拉伸变形)的做法, 等价于旧链 `computePipRect` 按源视频宽高比
+              // 算 rect 高度这一条(`src/lib/video/pip-layout.ts`)。
+              height: 'auto',
+              overflow: 'hidden',
+            }}
+          >
+            <OffthreadVideo src={staticFile(sourceVideo!.src)} style={{width: '100%', height: 'auto', objectFit: 'contain', display: 'block'}} />
+          </div>
+        </>
+      ) : (
+        cardsTrack
+      )}
       {audioSrc ? <Audio src={staticFile(audioSrc)} /> : null}
       {bgm ? <Audio src={staticFile(bgm.src)} loop volume={bgm.volume} /> : null}
+      {/* 字幕层必须在最上层——两种版式(cutaway 的窗口内卡片 / pip 的角标)都不能盖住字幕。 */}
       <Captions items={captions} />
     </AbsoluteFill>
   );

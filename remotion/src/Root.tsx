@@ -5,6 +5,7 @@ import {Film} from './Film';
 const DEFAULTS = {
   shots: [], audioSrc: null, bgm: null, captions: [], aspect: '16:9' as const,
   visualStyle: 'card' as const, // Studio 里默认预览用 card 风格
+  sourceVideo: null, // 出镜视频层(二十九期 Task 3)——必填字段, Studio 预览默认不带出镜视频
 };
 
 export const RemotionRoot: React.FC = () => (

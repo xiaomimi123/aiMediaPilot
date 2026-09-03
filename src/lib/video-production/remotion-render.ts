@@ -49,6 +49,17 @@ export type FilmInput = {
    * 见 `remotion/src/theme.ts`。刻意必填：逼调用点显式想清楚这条片子该用哪套风格。
    */
   visualStyle: 'card' | 'illustration';
+  /**
+   * 出镜视频层(二十九期 Task 3)——与 `remotion/src/Film.tsx` 的
+   * `FilmInput.sourceVideo` 逐字段同形，**不 import**（独立子项目，理由同上）。
+   * `renderFilm` 负责把 `sourceVideoFile`(绝对路径)拷进 `render-assets/` 并
+   * 填入这里的 `src`(相对路径)。
+   */
+  sourceVideo: {
+    src: string;
+    layout: 'cutaway' | 'pip';
+    pip: { position: 'tl' | 'tr' | 'bl' | 'br'; scale: number; margin: number } | null;
+  } | null;
 };
 
 /**
@@ -163,7 +174,7 @@ const RENDER_ASSETS_DIR = path.resolve(process.cwd(), 'remotion/public/render-as
 export function copyIntoRenderAssets(
   srcAbsPath: string,
   outputPath: string,
-  kind: 'voice' | 'bgm',
+  kind: 'voice' | 'bgm' | 'video',
 ): { absPath: string; relPath: string } {
   const ext = path.extname(srcAbsPath) || '.wav';
   // 父目录名(vp id) + basename 共同派生——见上方 RENDER_ASSETS_DIR 注释:
@@ -174,11 +185,24 @@ export function copyIntoRenderAssets(
   const fileName = `${dirName}-${baseName}-${kind}${ext}`;
   const absPath = path.join(RENDER_ASSETS_DIR, fileName);
   fs.mkdirSync(RENDER_ASSETS_DIR, { recursive: true });
+  // 出镜视频文件通常比人声/BGM 大出两个数量级(spike: 358MB vs 几 MB) ——
+  // spike 在本机 APFS 同卷下实测 0.5s 内(clonefile), 但换机器/换卷(比如跨卷
+  // 挂载、非 APFS 文件系统)未必, 这里量出来打日志留痕, 而不是假设永远够快。
+  const t0 = kind === 'video' ? Date.now() : null;
   try {
     fs.copyFileSync(srcAbsPath, absPath);
   } catch (err) {
     throw new Error(
-      `[renderFilm] 中转音频文件失败(${kind}): ${srcAbsPath} -> ${absPath}: ${(err as Error).message}`,
+      `[renderFilm] 中转${kind === 'video' ? '出镜视频' : '音频'}文件失败(${kind}): ${srcAbsPath} -> ${absPath}: ${(err as Error).message}`,
+    );
+  }
+  if (t0 !== null) {
+    const elapsedMs = Date.now() - t0;
+    const sizeBytes = fs.statSync(absPath).size;
+    // eslint-disable-next-line no-console -- 有意打日志: 大文件拷贝耗时是运维需要看到的信号,
+    // 不是调试噪音, 见上方注释。
+    console.log(
+      `[renderFilm] 出镜视频中转拷贝耗时 ${elapsedMs}ms(${(sizeBytes / 1024 / 1024).toFixed(1)}MB): ${srcAbsPath} -> ${absPath}`,
     );
   }
   return { absPath, relPath: `render-assets/${fileName}` };
@@ -193,6 +217,13 @@ export async function renderFilm(opts: {
   audioFile?: string | null;
   /** BGM 的**绝对路径**与音量。renderFilm 负责拷进 remotion/public 并在渲染后清理。 */
   bgmFile?: { path: string; volume: number } | null;
+  /**
+   * 出镜视频的**绝对路径**(二十九期 Task 3)。renderFilm 负责拷进
+   * remotion/public 并在渲染后清理，与 `audioFile`/`bgmFile` 同一惯例。
+   * 只负责搬文件——`opts.input.sourceVideo` 里的 `layout`/`pip` 由调用方
+   * (Task 4 的 worker)决定, 这里不判断、不改写。
+   */
+  sourceVideoFile?: string | null;
 }): Promise<void> {
   const problems = findBlankSlots(opts.input.shots);
   if (problems.length > 0) {
@@ -218,6 +249,20 @@ export async function renderFilm(opts: {
       const dest = copyIntoRenderAssets(opts.bgmFile.path, opts.outputPath, 'bgm');
       copiedAbsPaths.push(dest.absPath);
       input.bgm = { src: dest.relPath, volume: opts.bgmFile.volume };
+    }
+    if (opts.sourceVideoFile) {
+      // `opts.input.sourceVideo` 里的 layout/pip 是调用方(worker)已经决定好的,
+      // 这里只管把文件搬进 public 并把 src 换成相对路径——沿用 audioFile/bgmFile
+      // 的分工。调用方传了 sourceVideoFile 却没在 input.sourceVideo 里带上
+      // layout/pip 是调用点的 bug, 直接抛错而不是静默兜底成某种默认版式。
+      if (!input.sourceVideo) {
+        throw new Error(
+          '[renderFilm] 传了 sourceVideoFile 但 input.sourceVideo 是 null——调用方必须同时给出 layout/pip。',
+        );
+      }
+      const dest = copyIntoRenderAssets(opts.sourceVideoFile, opts.outputPath, 'video');
+      copiedAbsPaths.push(dest.absPath);
+      input.sourceVideo = { ...input.sourceVideo, src: dest.relPath };
     }
 
     const serveUrl = await getBundle();

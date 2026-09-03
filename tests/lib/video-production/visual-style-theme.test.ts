@@ -81,6 +81,7 @@ async function renderCornerPixel(
       captions: [],
       aspect: '16:9',
       visualStyle,
+      sourceVideo: null,
     },
     outputPath: mp4Path,
     durationInFrames: fps, // 1 秒, 够抽 0.2s 处的帧

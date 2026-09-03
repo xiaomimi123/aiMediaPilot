@@ -796,7 +796,9 @@ async function handlePptNarrationRemotion(
     // 并回填 input.bgm(见 remotion-render.ts renderFilm 实现), 这里不用重复填。
     // visualStyle 由 options.visualStyle 决定(二十九期 Task 2)——ppt-narration 传 'card',
     // illustration-tts 传 'illustration', 两条链共用这同一处 renderFilm 调用。
-    input: { shots: plan.shots as any, audioSrc: null, bgm: null, captions, aspect, visualStyle: options.visualStyle },
+    // sourceVideo 留 null: 出镜视频层接入 worker 是二十九期 Task 4 的范围,
+    // 本任务(Task 3)只做 Remotion 侧与 renderFilm 管道——必填字段先显式传 null。
+    input: { shots: plan.shots as any, audioSrc: null, bgm: null, captions, aspect, visualStyle: options.visualStyle, sourceVideo: null },
     outputPath,
     durationInFrames: Math.ceil((lastMs / 1000) * fps),
     fps,
