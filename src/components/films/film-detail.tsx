@@ -9,6 +9,7 @@ import {
 } from '@/lib/cockpit/production-stage';
 import { cn } from '@/lib/utils';
 import { FilmLayoutEditor } from './film-layout-editor';
+import { FilmPlanWorkbench } from './film-plan-workbench';
 import type { SceneLayout } from '@/lib/video/scene-layout';
 import type { FreezeReport } from '@/lib/video/freeze-check';
 
@@ -339,6 +340,18 @@ export function FilmDetail({ initial }: { initial: Film }) {
         时间线整宽在下), 页面本身保持单列。
       */}
       <div className="mb-6 flex flex-col gap-6">
+        {/*
+          剪辑台(三十一期 Task 4)——只在 `plan_ready` 出现。这是任务停下来主动等人
+          调整分镜的那一刻; preview_ready/done 等其它状态没有对应的展示需求(后续要
+          复用这块界面再说, 本期只服务这一个状态)。
+        */}
+        {film.status === 'plan_ready' ? (
+          <FilmPlanWorkbench
+            productionId={film.id}
+            onStatusChange={(status) => setFilm((f) => ({ ...f, status }))}
+          />
+        ) : null}
+
         {film.hasPreview || film.hasMaster ? (
           <section>
             <h2 className="text-base font-semibold">
