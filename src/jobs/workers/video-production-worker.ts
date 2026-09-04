@@ -49,7 +49,7 @@ import { isRemotionReadyMode } from '@/lib/video-production/renderer';
 import { FilmPlanSchema, describeCardsForPrompt, type FilmPlan } from '@/lib/video-production/shot-plan';
 import { actWindows, actWindowsFromAligned, FILM_PLAN, FILM_PLAN_BROLL, type ActWindow } from '@/lib/video-production/film-plan-prompt';
 import { buildFilmPlan } from '@/lib/video-production/film-plan-builder';
-import { checkBrollPlanTiming, checkFilmPlanTimingWindowed } from '@/lib/video-production/film-plan-timing';
+import { timingCheckerFor } from '@/lib/video-production/film-plan-timing';
 import { captionEventsFromTranscript, type CaptionEvent } from '@/lib/video-production/caption-events';
 import { PIP_SCALE_MIN, PIP_SCALE_MAX } from '@/lib/video/pip-layout';
 import {
@@ -802,11 +802,13 @@ export async function handleTalkingHeadBrollRemotion(
          *   幕间天然空隙不检查。`checkTiming` 的第二个参数(`totalMs`)在这个
          *   闭包里没有用到, 因为窗口本身已经带了每一幕的边界, 用外层
          *   `windows`(闭包捕获)而不是传入的 `totalMs`。
+         *
+         * 三十一期 Task 2: 这条三元选择抽成了共享函数 `timingCheckerFor`
+         * (`film-plan-timing.ts`), 剪辑台的 FilmPlan PUT 路由与这里共用同一份——
+         * 选择规则与之前逐字一致, 只是不再各写一份三元判断。
          */
         prompt: layout === 'pip' ? FILM_PLAN : FILM_PLAN_BROLL,
-        checkTiming: layout === 'pip'
-          ? (p: FilmPlan) => checkFilmPlanTimingWindowed(p, windows)
-          : checkBrollPlanTiming,
+        checkTiming: timingCheckerFor(vp.mode, layout, windows),
       });
       console.log(`[video-production] FilmPlan 产出完成 (修复 ${built.rounds} 轮, ${built.plan.shots.length} 镜)`);
 

@@ -181,6 +181,38 @@ const BROLL_MIN_GAP_MS = 1000;
  * 返回的字符串会被原样喂回给模型, 措辞与 `checkFilmPlanTiming` 同一惯例:
  * 每条只讲一个问题、只讲时间、给出具体数字。
  */
+/**
+ * 按 mode/layout 选一个时间轴校验器(三十一期 Task 2)。
+ *
+ * 这是 worker(`video-production-worker.ts` 的 `handleTalkingHeadBrollRemotion`)
+ * 里原本内联写的那个三元选择的抽出版, 现在剪辑台 FilmPlan 读写 API
+ * (`film-plan/route.ts`)与 worker 共用同一份——两处各写一份三元迟早分叉
+ * (这个项目在 `REMOTION_READY_MODES` 上验证过共享常量的价值, 同一教训适用于
+ * 共享逻辑, 不止共享常量)。
+ *
+ * 选择规则与 worker 现状逐字一致:
+ * - `mode !== 'talking-head-broll'`(ppt-narration/illustration-tts): 铺满语义,
+ *   `checkFilmPlanTiming`(整片 0~totalMs 无缝)。
+ * - `mode === 'talking-head-broll'` 且 `layout === 'cutaway'`: 不必铺满语义,
+ *   `checkBrollPlanTiming`(真人全程铺底, 空档是功能不是缺陷)。
+ * - `mode === 'talking-head-broll'` 且 `layout === 'pip'`: 复用铺满语义但按
+ *   每一幕自己的时间窗分别校验, `checkFilmPlanTimingWindowed`(卡片是主画面,
+ *   幕间天然空隙不检查)——`windows` 闭包捕获, 返回的函数忽略传入的
+ *   `totalMs` 参数(与 worker 原写法一致: 窗口本身已经带了每一幕边界)。
+ *
+ * `windows` 只在最后一支(pip)真正被用到; 其余两支忽略它——调用方仍需显式传,
+ * 不做可选参数, 避免漏传时安静地退回错误行为。
+ */
+export function timingCheckerFor(
+  mode: string,
+  layout: 'cutaway' | 'pip',
+  windows: { startMs: number; endMs: number }[],
+): (plan: FilmPlan, totalMs: number) => string[] {
+  if (mode !== 'talking-head-broll') return checkFilmPlanTiming;
+  if (layout === 'pip') return (p: FilmPlan) => checkFilmPlanTimingWindowed(p, windows);
+  return checkBrollPlanTiming;
+}
+
 export function checkBrollPlanTiming(plan: FilmPlan, totalMs: number): string[] {
   const shots = [...plan.shots].sort((a, b) => a.startMs - b.startMs);
   const issues: string[] = [];
