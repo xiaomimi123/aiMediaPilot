@@ -140,7 +140,7 @@ TTS 出音频 → timestamps_cpu.py 做字级对齐 → timing.json → 存进 p
 | 现有关 | 处置 | 理由 |
 | --- | --- | --- |
 | 整片静止（`freeze-check.ts`） | **保留，零改动** | 它读的是成片 mp4，与渲染器无关 |
-| 空屏 / 空壳色块（`frame-density` / `frame-detail`） | **改为 `renderStill` 抽帧 + 现有像素判据** | 判据本身有效，只是取帧方式换了 |
+| 空屏 / 空壳色块（`frame-density` / `frame-detail`） | **改为 `renderStill` 抽帧；空壳判据（`judgeHollowCard`/`judgeFrameDensity`）真机验证后停用，只留真空屏判据（`judgeBlankStill`）** | 三十期真机回归实测：ppt-narration 25/26 镜、illustration 15/16 镜误报「空壳色块」，出镜链 0/20 通过，人工核实误报帧全部是正常卡面。根因是这两个判据按"模型自由写 HTML 铺大色块刷分"的旧时代标定，与填槽架构（版面由 `remotion/src/cards/*.tsx` 组件保证，大量留白+少量文字是设计而非偷懒）错配。三十一期改为只保留「真空屏」判据（只认渲染管线本身坏掉、帧里没有任何细节的情形），停用判据函数保留在 `still-check.ts` 里不删，见该文件顶部与 `judgeBlankStill` 标定注释 |
 | 版面 / 文字被裁 / 元素遮挡 | **大部分退役** | 这些是"模型自由排版"的产物；填槽架构下版面由组件保证，剩余风险由组件自己的单测覆盖 |
 | — | **新增：字级对齐质量关** | `match < 0.90` 的句子计数与位置，只报不拦 |
 | — | **新增：音效轨能量验证**（video-talkcraft 三重验收之一） | 本期可选，排在后面 |
@@ -169,6 +169,8 @@ TTS 出音频 → timestamps_cpu.py 做字级对齐 → timing.json → 存进 p
 4. **验收通过后**，一次性成建制删除旧渲染层（`shot-renderer.ts` / `ambient-rig.ts` / `shot-chrome.ts` / `frame-density|detail|layout|overlap.ts` / `preview-html.ts` / ffmpeg 的 `compositeCutawayVideo`、`concatClips` 出片路径、ASS 烧字幕）
 
 删除必须是一次干净的删除，不是边建边拆——中途出问题时要能立刻退回旧链路出片。
+
+**已完成（2026-09-04，三十期）**：三条交付链验收通过并合流到 Remotion 后，`d15321d`（预备提交，挪出新链仍用的两个符号）→ `c48348b`（主删除提交，一次性删除 22 个源文件 + 模板试做台 + 相关测试）→ `265c258`（收尾提交，测试反向断言 + 文档 + 依赖卸载）三个 commit 完成本条删除。删除后真机三链回归（`.superpowers/sdd/2026-09-03-healthcheck-and-teardown/task-4-report.md`）确认渲染路径完好；`git revert c48348b` 可整体恢复旧链（详见 Task 3 报告）。
 
 ## 六又二分之一、接线时必须做的一件事（二十六期留给下一份计划——已接线）
 

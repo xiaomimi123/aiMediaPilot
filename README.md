@@ -578,162 +578,90 @@ key/顺序不被打乱)与六幕版 `scope:'all'`(整稿改稿, 校验幕数固�
 describe 块, 3 条用例)。E2E 过程中产生的测试用 `ScriptDraft`(生成稿 1 条 + 旧稿克隆 1 条)与
 对应 `StyleSample`(1 条)已清理; 用户真实存在的旧三段式草稿全程只读, 内容与创建时间未变。
 
-### 二十五期: Remotion 渲染层(第一批, 设计见 `docs/superpowers/specs/2026-08-31-remotion-migration-design.md`)
+### Remotion 渲染层(二十五~三十期, 2026-08-31~09-04, 设计见 `docs/superpowers/specs/2026-08-31-remotion-migration-design.md`)
 
-**为什么迁**: 自建管线(HTML + GSAP 暂停态时间线 + Playwright 逐帧截图 + ffmpeg 拼接)有三个改不动的问题。
-①**合成发生在画面之外** —— 画面与视频是两套东西, 最后靠 ffmpeg 拼(`compositeCutawayVideo` 挖空替换 +
-ASS 烧字幕), 二十三、二十四期踩的一串坑(`handleRecompose` 绕过静止复检、预览里没有字幕)根子都在这里;
-Remotion 里视频是合成的一等公民, 这一整类问题消失。②**没有组合模型** —— 我们的"时间线"是一条裸的
-GSAP timeline, 没有 track/clip/lane 的概念, 轨道冲突、片段重叠这类结构问题既查不出也描述不了。
-③**调试循环不可用** —— 改一版要"改代码 → 渲 7 分钟 → 抽帧读图", 反复调动效在这个循环下做不了。
+**为什么换掉自建管线**: 旧管线(HTML+GSAP 暂停态时间线 + Playwright 逐帧截图 + ffmpeg
+拼接/包装)有三个改不动的问题——**合成发生在画面之外**(视频与画面是两套东西, 最后靠
+ffmpeg 挖空替换+烧字幕拼出来, 一串历史 bug 根子都在这)、**没有组合模型**(自建"时间线"
+是一条裸的 GSAP timeline, 没有 track/clip/lane 概念, 轨道冲突查不出也描述不了)、
+**调试循环不可用**(改一版要"改代码→渲 7 分钟→抽帧读图")。二十五期起改用 Remotion
+(新增 `remotion/` 独立子项目, 自带 `package.json`/`node_modules`, 不并入主项目依赖图),
+三十期三条链全部验收通过并合流后, 成建制删除旧管线(`shot-renderer.ts`/`ambient-rig.ts`/
+`shot-chrome.ts`/`packaging.ts` 等 22 个文件 + 模板试做台 + `playwright-core`/
+`rebrowser-patches` 依赖, 详见 Task 3 报告)。
 
-**核心决定: Builder 不再写代码, 改为填槽。** 每一镜从固定的卡片类型(`statement`/`stat`/`contrast`/`list`)
-里选一个, 只填它的槽位(文字/数字), 不接触坐标、样式、动效参数——画面由预先写好的 Remotion 组件渲染。
-三条实测证据缺一不可: ①**规则本身写的就是 PPT** —— 二十四期实测确认版面骨架下发了、模型也照做了,
-产出仍是幻灯片, 因为只要画面由模型的审美决定, 画质上限就是模型的审美, 填槽把画质上限交给我们写的组件。
-②**零件库不会自己正确, 模型更不会** —— 验货时开发者本人亲手填坐标仍然撞出元素重叠, `NumberRoll`
-把 `1850%` 渲成 `+1,850%`(千分位写死), 版面约束和格式化必须由系统兜住。③**模型写 TSX 的可靠性是未知数**,
-而填槽不需要赌它, 把模型的职责压缩到它确实擅长的部分: 理解内容、选择表达形式、填文字。
+**核心决定: Builder 不写代码, 只填槽。** 每一镜从固定卡片类型(`statement`/`stat`/
+`contrast`/`list`, `remotion/src/cards/`)里选一个, 只填文字/数字槽位, 不碰坐标/样式/
+动效参数——画面由预先写好的组件渲染, 版面约束与格式化由组件兜底(如 `NumberRoll` 取整
+精度跟随源值小数位, 而不是模型自己拼字符串)。`shot-plan.ts` 的 `FilmPlanSchema`(zod
+`.strict()`)拒绝分镜时间轴重叠。`contrast` 卡原设计要模型在 `arrow`/`versus`/`plus`
+三个连接符里选一个, 三轮真机实测(3 条真实六幕稿 × 3 遍)正确率卡在 61%~70%, 且错误
+在三值间零和搬运(收紧规则让一个值变准, 错误整批迁到另一个值上)——判定为无法靠提示词
+工程解决, 拍板去掉这道选择, 改渲染一条无方向性的中性分隔件。
 
-**落地**: 新增 `remotion/` 子项目(自带 `package.json`/`tsconfig`/独立 `node_modules`, 需单独
-`cd remotion && npm install`, 不并入主项目依赖图——Remotion 拖着 React 19 与自己的渲染器, 并入会让
-Next.js 构建把它们一起打进去)。`src/motion/`(相机/环境/转场/数字滚动等, 搬自
-[video-talkcraft](https://github.com/Vincentwei1021/video-talkcraft), 已获书面商用授权, `LICENSE-video-talkcraft`
-随目录同放)、`src/cards/`(`Statement`/`Stat`/`Contrast`/`ListCard` 四张卡 + `index.ts` 的 `CardType`
-注册表 + `guard.ts`)、`src/layout/grid.ts`(栅格 + 具名区域, 卡片不接受任意坐标)。主项目侧新增
-`src/lib/video-production/shot-plan.ts` 的 `FilmPlanSchema`(zod `.strict()`, 拒绝分镜时间轴重叠)与
-`remotion-render.ts` 的 `renderFilm()`(bundle 缓存复用 + 渲染前对空槽位做预检, 一发现问题立刻 `throw`,
-不会有一个字节进 bundle/render 流程)。
+**三条交付链全部迁完**(2026-09-04 验收): `ppt-narration`(图文口播)/`illustration-tts`
+(插画配音)/`talking-head-broll`(真人出镜)共用同一套填槽契约与渲染管线, 新建任务默认
+全部走 Remotion(`defaultRendererForMode`/`REMOTION_READY_MODES` 合流)。出镜链支持两种
+版式(模板 `talkingHeadLayout`): `cutaway` 挖空替换(卡片时段全屏卡片, 其余时间真人全屏,
+人声全程不断)与 `pip` 常驻浮窗(真人圆角小窗全程浮在右下, 卡片主画面铺满全程)——两种
+版式的分镜语义相反(cutaway 空档=露出真人是功能, pip 空档=空背景是缺陷), worker 按版式
+选提示词与校验。
 
-**实测数字**: bundle 一次 0.8 秒且可在同进程内复用(第二次调用直接返回缓存, 毫秒级); 同一条 64 秒内容
-渲染耗时 36~48 秒(自建管线同等内容约 7 分钟); 横屏 `1920x1080` / 竖屏 `1080x1920` 是同一套代码只改
-画幅参数(运动系统全部用 `useVideoConfig`, 无写死宽高), 字号数值在两种画幅下完全一致。
+**字级对齐**(faster-whisper, `scripts/align/`)接入 `ppt-narration`/`illustration-tts`
+两条 TTS 链, 字幕当前词随语音逐字高亮; 出镜链用 ASR 逐句字幕(真人自由发挥无已知文本可锚,
+有意不接字级对齐)。**环境运动层**(`remotion/src/motion/ambient.tsx` 的 `Ambient` 组件
++ 每镜一层 `CameraRig`)补上了 Remotion 侧一度零引用的动效缺口——端到端出片实测静止占比
+一度达 71%, 补上呼吸 vignette+对角扫光+逐镜缓慢推近后压到 0%(参数在新框架下重新
+A/B 出来, 未照搬旧 `ambient-rig.ts` 的数字)。
 
-**旧链路仍然完好**: `VideoProduction` 新增 `renderer` 字段(`@default("legacy")`)与 `filmPlan Json?`。
-worker 里 `renderer === 'remotion' && mode === 'ppt-narration'` 时走新增的 `handlePptNarrationRemotion`
-分支(整片一次渲染, 渲后接现有的 `reportFreeze` 静止体检); 不满足条件时走原有分支, 旧渲染层
-`shot-renderer.ts`/`ambient-rig.ts`/`shot-chrome.ts`/`frame-overlap.ts` 等**一行未改、一个未删**——
-本期只验通了 `ppt-narration` 一条链。**现状(二十八期更新)**: Builder 产 `FilmPlan` 已接线
-(`buildFactsSection(acts, research, 'cards')`), 端到端真机验收已跑通(`handlePptNarrationRemotion`
-真调 `buildFilmPlan` + 真渲染 + 真跑静止体检), 不再是"filmPlan 全程手填"。真机实测: 一条六幕稿
-16 镜 FilmPlan 0 轮修复产出, 卡片分布 `statement=11, stat=3, contrast=2, list=0`, 静止占比 0%,
-成片 60.05s、1080×1920。人工抽帧核对 `stat` 数字出处与画面值逐位一致、文字不裁切/不越安全区两条
-稳定通过; `contrast` 连接符判定(`arrow`/`versus`/`plus` 三选一)在三条真实稿反复实测里正确率始终
-卡在 61%~70% 区间且错误在三个取值间零和搬运, 已判定为无法用提示词工程解决, 拍板去掉这道选择,
-`contrast` 改渲染中性分隔件(见下面对应小节)。其余两条交付链(`talking-head-broll`/`illustration-tts`)
-的迁移仍是后续计划的范围。
+**体检**(只报不拦, spec §四): 整片静止体检(`reportFreeze`, 读渲染完的 mp4, 与渲染器
+无关)照旧; 逐镜画面体检从 DOM 探针改为 `renderStill` 真实抽帧(三十期 Task 1,
+`still-check.ts`)——每镜只抽窗口中点一帧(`renderStill` 是真渲染, 成本比截图高得多,
+实测单帧 ~0.6s)。**这是这套判据第一次真的跑在 Remotion 产物上**——真机回归（三十期
+Task 4）发现 `statement`(标题/陈述)卡型那种"渐变 vignette 背景 + 少量文字"的设计,
+大比例触发"空壳色块"误报（渐变区域被算作非背景"内容", 而实际文字只占很小细节比例）,
+三条真实预览里 `ppt-narration`/`illustration-tts` 两条分别 25/26、15/16 镜报了这个问题,
+出镜链(有视频背景)0/20 通过, 人工抽帧确认画面本身排版正常、不是空屏。
 
-**已知缺口(二十六期已补上, 见下)**: Remotion 侧曾经没有对应旧管线 `ambient-rig.ts`
-的环境运动层——`motion/camera.tsx`/`motion/env.tsx` 搬入后一度零引用, 端到端出片实测静止占比
-71%(9.9s / 14.06s), 详见设计文档「七、风险」。
+**三十一期已修复**: 根因不是"待校准", 而是判据本身与填槽架构错配——`judgeFrameDensity`/
+`judgeHollowCard` 是按"模型自由写 HTML 铺大色块刷分"这种缺陷标定的, 填槽架构下版面由
+`remotion/src/cards/*.tsx` 组件保证, 大量留白+少量文字是我们自己设计的卡面, 不是模型
+偷懒。这两个判据**停用**(函数保留在 `still-check.ts` 里不删, 注释写明停用原因+真机
+误报数据), Remotion 链的 still 体检只留「真空屏」判据 `judgeBlankStill`——只认渲染
+管线本身坏掉、帧里没有任何文字/图形细节的情形, 不再管留白多少。阈值标定(取
+`renderShotStill` 真实抽帧实测): 正样本(四种卡正常内容, 含一个字的极端稀疏卡面)细节
+占比最低 0.118%, 负样本(取帧落在 shot 时间窗之外, 真空屏)稳定为 0.000%, 阈值取正样本
+最低值的 1/3 定为 0.03%。真机复验: 重跑 `e92a12a4-1bf`(ppt-narration), 逐镜体检 0 误报。
 
-### 二十六期: Remotion 环境运动层(设计见 `docs/superpowers/specs/2026-08-31-remotion-migration-design.md` §七)
+**`renderer` 字段历史**: `VideoProduction.renderer`(`@default("legacy")`)二十五期引入
+用于新旧渲染并存过渡, 二十九期起新建任务默认 `remotion`, 三十期删除旧渲染层后
+`RendererSchema` 收紧为只接受 `'remotion'`(拒绝任何显式写回 `'legacy'` 的请求),
+`handleProduce` 对历史 `renderer='legacy'` 任务直接抛错(「旧渲染已下线，请把这条任务的
+renderer 切换到 remotion 后重试」写进 `errorMessage`, 不再有旧 handler 可回落), 成片
+详情页展示一行说明文字 + 单向的「切换到新版渲染」动作, 不再提供切回旧版的选项; 历史上
+已渲染完成的 legacy 产物仍可下载/查看。
 
-**补的是上面那道缺口。** 新增 `remotion/src/motion/ambient.tsx` 的 `Ambient` 组件(呼吸 vignette +
-对角扫光), 接进 `Film.tsx` 顶层; 同时给每一镜套一层 `CameraRig`(`camera.tsx`, 之前也是零引用),
-做逐镜归一化的缓慢单调推近。**不是把 `motion/env.tsx` 的 `Environment` 参数化**——那个组件里的
-`ACTS`/`EXPOSURE_HITS`/`TRANSITION_FLASHES` 是 video-talkcraft 那条片子按秒数写死的戏剧节拍,
-我们的 `filmPlan` 由 Builder 按内容动态生成、镜数镜长都不固定, 硬套一张写死秒数表只会在我们的内容
-上出现节拍错位, 所以另写了一个不含任何内容相关节拍、只用 `useVideoConfig` 自适应画幅的干净实现。
+**产品能力变化**(随旧渲染层一并处置, 如实记录当前状态而非历史描述): **BGM** 在合成内
+原生支持(模板 `bgmPath`/`bgmVolume`, `renderFilm` 直接混流), 不受影响; **文字叠加层**
+(出片后自动提关键词叠字幕)与**片头/片尾拼接**目前**不支持**——它们对 Remotion 分支
+本就是死路径(旧 handler 删除前, Remotion 分支渲完就 `return`, 从未真正执行到这两段
+代码), 已随旧渲染层一并下线, 待 Remotion 原生重做(未排期); 模板编辑器里
+`textOverlayEnabled`/`introPath`/`outroPath`/`visualTone`/`shotPaceSec`/`builderModel`
+这些只被旧链消费的字段控件本身还在, 已标「暂不支持（旧渲染已下线）」——填了也不再生效。
 
-**参数是在新框架里重新 A/B 出来的, 没有照搬 `ambient-rig.ts` 的数字**(那套频率/幅度是针对旧
-HTML+GSAP 逐帧截图管线调的, 新框架下卡片自身已有入场动效+数字滚动+`Live` 的 idle 抖动, 底噪构成
-不是一回事)。用 Task 5 那条 14 秒三镜 filmPlan 反复渲染 + `freezedetect` 实测, 关键发现:
-**决定成败的是频率, 不是"单调 vs yoyo"这个分类本身**——呼吸(vignette 明暗)周期拉到 2.6s 会在
-正弦折返点留 0.8~1.7 秒静止段(复现了 `ambient-rig.ts` 头部注释记的结论), 但把周期压到 1.7s、
-振幅仍然很浅(0.04), 折返点"导数趋零"的窗口本身就撑不满 `freezedetect` 0.8 秒的判定下限, 单独
-这一项就把静止压到 0%; 仍然叠加了一条对角扫光(单调项, 1.5s 周期)与逐镜相机推近作为双保险, 防止
-真实 `filmPlan`(镜长动态)撞上呼吸的相位盲区——这条样片本身没撞上最坏相位, 但不能把鲁棒性押在
-一次样片的运气上。**14 秒样片的静止占比: 71% → 0%。** 完整 A/B 表格(基线/纯单调/纯 yoyo/两者
-叠加/最终配置各自的静止秒数)、抽帧观感判断见
-`.superpowers/sdd/2026-08-31-remotion-foundation/ambient-layer-report.md`；回归测试见
-`tests/lib/video-production/ambient-layer.test.ts`(真渲染 14 秒样片 + 真跑 `freezedetect`, 断言
-落回 `MAX_FREEZE_RATIO` 以内, 防止以后改参数悄悄退步)。
+**已知遗留**(如实记录, 本期不修): `handleRecompose`(只重新合成、不重新生成)仍读旧渲染层
+逐镜落盘的 `shotDir(...)/clip.mp4` 路径约定——`renderer='remotion'` 的出镜链任务如果
+触发 recompose 会读不到该文件而失败, 这是删除旧渲染层**之前**就已存在的缺口, 不因本次
+删除而产生或加重。
 
-### 二十七期: Builder 接线产 FilmPlan(计划见 `docs/superpowers/plans/2026-08-31-builder-film-plan.md`)
-
-**接上二十五期留的缺口**: 之前 `vp.filmPlan` 全程手填, 没有任何生产路径真正调用模型产出它。这期把
-`handlePptNarrationRemotion` 接通 `buildFilmPlan`(新增 `film-plan-prompt.ts`/`film-plan-builder.ts`),
-真调 LLM 产出 `ShotPlan[]` 并落库。关键接线点: `buildFactsSection(acts, research, 'cards')` 必须显式传
-第三个参数, 否则默认的 `'freeform'` 会同时下发"条目数不少于 8 条"与 `list` 卡 8 条上限两条自相矛盾
-的指令, 二十六期实测证实这正是 `list` 注水的根因; `tests/jobs/video-production-film-plan-wiring.test.ts`
-直接断言生产分支源码里出现这个调用模式, 传错/漏传都会变红。另修了 `shotId` 类型宽松化(真机实测模型把
-它当"第几镜"填成数字, 修复循环两轮教不会, 按"格式化必须由系统兜住"的原则加 `z.preprocess` 兜底转字符串)。
-
-### 二十八期: `contrast` 连接符——三轮实测推翻原设计, 改渲染中性分隔件
-
-**背景**: `contrast` 卡原设计里, 模型要在 `arrow`(变成)/`versus`(二选一)/`plus`(同时成立)三个连接符
-里选一个。三轮真机实测(3 条真实六幕稿 × 3 遍, 每轮约 20 处 `contrast`)测出总正确率 64.7% / 70% /
-61.1%, 在 n≈20 上彼此都落在噪声区间内, 且每轮现象一致: 收紧规则让某个取值变准, 错误就整批迁移到
-另一个取值上——零和搬运, 不是判断力在提升。选错连接符等于画面断言了一个原文没有的因果或取舍关系,
-比不断言更糟。
-
-**处置**: 拍板去掉 `connector` 这道选择。`src/lib/video-production/shot-plan.ts` 的 `SLOTS.contrast`
-不再要求 `connector` 字段(加了 `z.preprocess` 兜底历史落库数据里的旧字段, 老 `filmPlan` 仍能在 master
-渲染时解析成功); `remotion/src/cards/Contrast.tsx` 改渲染一条左右对称、无方向性的线+点中性分隔件,
-不再断言具体是哪种关系。详细的三轮数据与判断依据记在
-`docs/superpowers/specs/2026-08-31-remotion-migration-design.md` §六又四分之三。
-
-**顺带修复**: `NumberRoll`/`Stat` 卡的取整精度 bug——非整数 `stat.value`(如 `32.2%`)末帧定格前会被
-`Math.round` 抹掉小数位, 画面值与 facts 台账不再逐位一致。新增 `roundToSourceDecimals(value, source)`
-(`remotion/src/motion/lib.tsx`), 取整精度跟随源值的小数位数, `remotion/src/motion/components.tsx` 的
-`NumberRoll` 与 `remotion/src/cards/Stat.tsx` 都改用这个共享函数, 真机验证 `32.2%` 定格帧原样渲成
-`32.2%`。
-
-### 二十九期: 三条交付链全部迁到 Remotion(2026-09-04 验收)
-
-`illustration-tts`(暖纸底插画卡面 + TTS 配音)与 `talking-head-broll`(真人出镜)也迁入
-Remotion 渲染层, 至此三条链共用同一套填槽契约与渲染管线, **新建任务默认全部走
-Remotion**(`defaultRendererForMode` 与 `REMOTION_READY_MODES` 合流), 面板可退回旧版。
-出镜链支持两种版式(模板 `talkingHeadLayout`): `cutaway` 挖空替换(卡片时段全屏卡片,
-其余时间真人全屏, 人声全程不断)与 `pip` 常驻浮窗(真人圆角小窗全程浮在右下,
-PPT 卡片主画面铺满全程 —— 两种版式的分镜语义相反, cutaway 空档=露出真人是功能,
-pip 空档=空背景是缺陷, worker 按版式选提示词与校验)。字级对齐(faster-whisper,
-`scripts/align/`)接入两条 TTS 链, 字幕当前词随语音逐字高亮; 出镜链用 ASR 逐句字幕
-(真人自由发挥无已知文本可锚, 有意不接字级对齐)。旧渲染层仍原样保留, 成建制删除
-排在三十期。
-
-### 三十期: 成建制删除旧渲染层(2026-09-04)
-
-三条交付模式全部验收通过并合流到 Remotion 之后, 旧渲染层(HTML+Chromium 逐帧截图 +
-ffmpeg 拼接/包装, 二十九期段落写的"仍原样保留")不再是任何用户可达路径的唯一实现,
-本期一次性删除:
-
-- `src/lib/video-production/` 22 个旧渲染层文件(`shot-renderer.ts`/`ambient-rig.ts`/
-  `shot-chrome.ts`/`preview-html.ts`/`shot-html-guard.ts`/`style-guard.ts`/
-  `attempt-score.ts`/`frame-density.ts`/`frame-detail.ts`/`frame-layout.ts`/
-  `frame-overlap.ts`/`builder-prompt.ts`/`packaging.ts`/`packaging-input.ts`/
-  `caption-safe-zone.ts`/`overlay-plan.ts`/`asset-manifest.ts`/`director-prompt.ts`/
-  `ass-captions.ts`)与 `src/lib/llm/prompts/overlay-plan.ts`。`clampShotsToSource`
-  (新链仍用)挪到 `shot-clamp.ts`; `CaptionEvent`/`captionEventsFromTranscript`
-  (新链仍用)挪到 `caption-events.ts`。
-- **模板试做台**(`/templates/[id]/studio` 页面 + 两条 API 路由 + `studio.tsx` 组件)
-  整批下线——HTML 分镜实时预览是旧渲染层的专属能力, 对 Remotion 产物不适用。
-- **内容真实素材机制**(`ContentAsset` 上传路由 + `asset-manifest.ts`)一并删除——
-  只服务旧链 Builder 提示词, 没有任何前端入口, 是彻底的孤儿功能; `prisma.ContentAsset`
-  表本身不动(历史数据)。
-- **文字叠加层与成片包装段作为产品能力一并下线**: 出片后自动提关键词叠字幕、
-  BGM 混音、接片头片尾这几项能力不再存在——它们对 Remotion 分支本就是死路径
-  (旧 handler 删除前, `handleProduce` 里 Remotion 分支渲完就 `return`, 从未真正
-  执行到这两段代码)。模板编辑器里 `textOverlayEnabled`/`bgmPath`/`introPath`/
-  `outroPath`/`visualTone`/`shotPaceSec`/`builderModel` 这些只被旧链消费的字段
-  控件本身还在, 但标了"暂不支持（旧渲染已下线）"的提示——**填了也不再生效**。
-- **legacy 渲染不能再被派发**: `handleProduce` 对 `renderer !== 'remotion'` 的任务
-  直接抛错(写进 `errorMessage`, 引导用户切换渲染方式), 不再有旧 handler 可回落;
-  三处创建/切换渲染方式的路由(`RendererSchema`)收紧为只接受 `'remotion'`, 拒绝任何
-  显式写入 `'legacy'` 的请求。**成片详情页的渲染方式不再是一个来回切换的开关**——
-  历史上仍是 `renderer='legacy'` 的任务(prisma 字段 `@default("legacy")`, 历史数据
-  不删, 已渲染完成的产物仍可下载/查看)展示一行说明文字 + 单向的「切换到新版渲染」
-  动作, 不再提供切回旧版的选项。
-- `playwright-core`/`rebrowser-patches` 两个 devDependency 一并卸载(唯一消费者
-  `shot-renderer.ts` 已删除)。
-
-已知遗留缺口(不因本次删除而产生, 如实记录): `handleRecompose`(只重新合成、不重新
-生成)仍读旧渲染层逐镜落盘的 `shotDir(...)/clip.mp4` 路径约定——`renderer='remotion'`
-的出镜链任务如果触发 recompose 会读不到该文件而失败, 这是删除旧渲染层**之前**就已
-存在的缺口, 本期不修。
 
 ### AI 视频交付三模式 (十九期新增)
+
+> **三十期更新**: 三条模式本身(`ppt-narration`/`talking-head-broll`/`illustration-tts`)
+> 仍是当前产品的三条交付链, 未变——变的是底层渲染实现。本节「用法」里描述的
+> Director/Builder 出 HTML+GSAP、Chromium 逐帧截图、ffmpeg 挖空替换/`burnCaptions`
+> 烧录等实现细节已随旧渲染层删除, 现全部走 Remotion 填槽渲染(见上文「Remotion 渲染层」
+> 小节), 保留本节作为三种模式命名与产品形态的历史由来。
 
 一句话: 十五期的「AI 自动生成无人出镜成片」改名为 `ppt-narration`(读稿形式), 并新增两种
 交付方式——`talking-head-broll`(真人出镜 + AI B-roll 挖空替换 + 真实字幕烧录)与
@@ -802,6 +730,13 @@ ffmpeg 拼接/包装, 二十九期段落写的"仍原样保留")不再是任何�
   `illustration-tts` 生成会在 directing 阶段直接失败并提示去设置页配置, 不会静默跳过配音。
 
 ### 视频模板板块 (二十期新增)
+
+> **三十期更新**: 本节「包装三件套」描述的样式化字幕(`.ass`)/BGM 混音/片头片尾拼接
+> 是旧渲染层(ffmpeg 包装段)的能力, 对 Remotion 产物**本就是死路径**——三条链迁到
+> Remotion 后, 渲完直接返回, 从未真正执行到这一段。旧渲染层删除后现状: **BGM 在
+> 合成内原生支持**(模板 `bgmPath`/`bgmVolume`, 不受影响); **样式化字幕/片头片尾
+> 暂不支持**, 待 Remotion 原生重做(未排期)。模板编辑器对应字段控件仍在, 已标
+> 「暂不支持（旧渲染已下线）」。
 
 一句话: 十九期的三种 AI 交付模式(读稿/口播/插画)每次生成都要重新配一遍参数; 二十期新增侧栏
 「模板」板块, 把交付模式+视觉风格、配音音色预设、写稿提示、字幕/BGM/片头片尾包装样式固化为
@@ -1313,6 +1248,15 @@ worker (`src/jobs/workers/teardown-worker.ts`) 的两个细节:
 - **`systemSummary` 只读**: 它由 `/api/v1/persona/summary` 依据其余字段重算, 给一个会被悄悄覆盖的输入框是在骗人。
 - **候选关键词是分诊队列, 不是标签墙**: 真机上这里堆了 269 条没人处理的候选词 (卫星数据、基因表达、国债风险…), 而在用的只有 2 个 —— 「选题栏为什么有英文内容」的根因就在这。摊平展示等于没展示, 所以分页 + 一键取舍, 并在堆积时直说该调低每日上限。
 
+> **三十期更新**: 以下到「时间线编辑台」为止的二十三期系列小节, 描述的都是旧渲染层
+> (ffmpeg 直接合成: `.ass` 字幕烧录/`pip-layout.ts`/`scene-compose.ts`/`timeline.ts`
+> 等)围绕真人出镜链条做的版面编辑台与叠加层能力。这些文件本身**未被三十期删除**
+> (`src/lib/video/` 下若干文件仍在仓库里), 但三十期起新建任务默认走 Remotion 且
+> legacy 渲染已不能再被派发(见「Remotion 渲染层」小节)——只有历史上 `renderer=
+> 'legacy'` 的任务才可能摸到这条链路, 而这些任务现在连重跑都会被显式拒绝。换句话说,
+> 本节描述的版面编辑台/逐场景 ffmpeg 合成/文字叠加层对**当前**产品事实上已冻结,
+> 保留这几节作为历史记录, 待 Remotion 原生重做前不代表可用能力。
+
 ### 字幕字号的一个真 bug (二十三期)
 
 真机第一条成片的字幕是**每个字约 250px 高、左右都溢出画面的巨字**, 完全没法用。
@@ -1471,6 +1415,11 @@ worker (`src/jobs/workers/teardown-worker.ts`) 的两个细节:
 模板决定用它出片时的画面结构、字幕样式、音频与生成参数。二十期把后端整套建齐了 (GET/PUT/DELETE、`duplicate`、`productions`、`assets`、`produce`), 但前端只留了一个只读列表 —— 卡片点不进去, 所有配置只能靠直接改数据库。详情页补上了这一段。
 
 可改的: 名称/说明/交付方式、画面 (视觉风格、明暗、切镜节奏、章节进度条)、字幕 (烧不烧 + 字体/字号/颜色/描边/底边距)、音频与片头片尾 (自己上传, 系统不提供曲库) + BGM 音量、写稿与生成 (联网研究开关、Builder 模型、语气/开场提示/额外要求)。底部还列了用这个模板出过的片。
+
+> **三十期更新**: 旧渲染层删除后, 上面这些控件里 `builderModel`/`shotPaceSec`/
+> `visualTone`/`textOverlayEnabled`/`introPath`/`outroPath` 已**暂不生效（旧渲染已
+> 下线）**——控件还在(不删是为了不丢历史模板里已填的值), 但 Remotion 渲染管线不消费
+> 它们; `bgmPath`/`bgmVolume` 不受影响, 仍在合成内原生生效。
 
 两个约束写在代码注释里, 这里记结论:
 
@@ -1664,7 +1613,7 @@ AI 视频生成(现全部走 Remotion 渲染层, 见 §3「AI 视频交付三模
 
 ```bash
 npm run typecheck    # tsc --noEmit
-npm test             # vitest, 1620 tests across 130 files (含 Cockpit 纯逻辑层原版测试; 其中 1 个文件是真实连 Postgres 的集成测试, 需先 docker compose up -d postgres; 无人出镜 AI 自动成片相关文件里有 1 个是真实跑 headless Chromium 截帧+ffmpeg 编码的集成测试, 无网络调用, 不需要 DeepSeek key)
+npm test             # vitest, 见下方「验证」小节的最新一次全量跑通数字(含 Cockpit 纯逻辑层原版测试; 其中 1 个文件是真实连 Postgres 的集成测试, 需先 docker compose up -d postgres; 三十期起旧渲染层的 headless Chromium 截帧+ffmpeg 编码集成测试已随旧渲染层一并删除, AI 视频生成相关测试改为对 Remotion 渲染管线的纯函数/接线断言)
 npm test -- <filter> # 跑某个 file
 ```
 
@@ -1752,7 +1701,7 @@ src/
 │   ├── radar/                     # 四期新增: search.ts(SearchProvider 抽象 + Tavily 实现) / config.ts(RadarConfig 读写+加解密) / scoring.ts(titleFingerprint/clusterByTopic/composeHeat/applyTimeDecay 纯函数) / run.ts(runRadarScan 管线主体)
 │   ├── script/                    # 五期新增: research.ts(runResearch 两阶段生成的阶段一, 雷达种子+Tavily+素材框合并→DeepSeek 提炼简报) / style.ts(getStyleContext 风格上下文切换 + depositStyleSample 定稿沉淀)
 │   ├── image/                     # 七期新增: provider.ts(ImageProvider 抽象 + GptImageProvider, 直连 api.openai.com, b64_json 返回)
-│   ├── video-production/          # 十五期新增: srt-synthesis.ts(六幕脚本→SRT 纯函数) / director-prompt.ts + builder-prompt.ts(DeepSeek 导演/构建者两阶段 prompt+schema) / shot-renderer.ts(headless Chromium 逐帧截图→ffmpeg 编码单镜头 clip) / assets/gsap.min.js(构建者产出的 HTML 固定引入的本地 GSAP 资产); 十九期新增: aligner-prompt.ts(真人出镜录音 → 六幕时间戳对齐的 DeepSeek prompt+schema); 二十期新增: ass-captions.ts(.ass 样式化字幕生成器, 三种模式时间轴来源转换) / packaging.ts(字幕→BGM→片头片尾三步包装编排) / packaging-input.ts(三种模式字幕时间轴来源分岔选取) / voice-resolve.ts(插画配音模式的音色优先级链: 临时覆盖→模板预设→全局配置)
+│   ├── video-production/          # 三十期删除旧渲染层后现状(HTML+Chromium+ffmpeg 那一套已整批删除): srt-synthesis.ts(六幕脚本→SRT 纯函数) / shot-plan.ts(FilmPlanSchema, Builder 填槽契约) / film-plan-prompt.ts + film-plan-builder.ts(Builder 产 FilmPlan 的 prompt+修复循环) / film-plan-timing.ts(分镜时间窗校验) / remotion-render.ts(renderFilm/renderShotStill, 调用独立子项目 remotion/) / still-check.ts(逐镜画面体检判据, 原样迁自已删除的 frame-density.ts/frame-detail.ts) / align-captions.ts(字级对齐接线) / aligner-prompt.ts(真人出镜录音→六幕时间戳对齐的 DeepSeek prompt+schema) / caption-events.ts + shot-clamp.ts(从旧渲染层挪出、新链仍用的两个符号) / voice-resolve.ts(插画配音模式的音色优先级链: 临时覆盖→模板预设→全局配置) / tts-manifest.ts(TTS 幂等清单) / facts-guard.ts / renderer.ts(renderer 字段与模式路由)
 │   ├── video-template/            # 二十期新增: model.ts(`VideoTemplateConfig`/`CaptionStyle` 类型+zod schema+3 个内置预设定义) / store.ts(模板素材目录 `templateAssetDir`+首访播种 `seedPresetsIfEmpty`+id 生成)
 │   ├── tts/                       # 十九期新增: volcengine.ts(火山引擎/豆包语音 TTS 客户端封装, X-Api-Key 单 Key 鉴权 + resourceId 资源档位 + SSE 分行 JSON 响应拼接 mp3)
 │   ├── llm/                       # DeepSeekTextLLM + OpenAIVisionLLM + prompts/ (四期新增 radar-read.ts; 五期新增 research-brief.ts / script-write-douyin.ts / script-refine.ts; 七期新增 image-plan.ts / resolve-image-key.ts(gpt-image key 解析, 无 .env 回退))
