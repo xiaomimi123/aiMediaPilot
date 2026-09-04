@@ -348,5 +348,22 @@ describe('PATCH /api/v1/cockpit/video-productions/[id] —— 切换渲染方式
     const data = prismaMock.videoProduction.update.mock.calls[0][0].data;
     expect(data.renderer).toBe('remotion');
     expect(data.filmPlan).toEqual(Prisma.JsonNull);
+    // plan_ready 切换后必须退回 queued: 方案刚被清空, 留着 plan_ready 会造出
+    // "无方案的待确认" —— /render 能入队但 worker 读不到 filmPlan 落 failed。
+    expect(data.status).toBe('queued');
+  });
+
+  it('非 plan_ready 状态(如 failed)切换渲染器不动 status', async () => {
+    prismaMock.videoProduction.findUnique.mockResolvedValue({
+      id: 'vp2', userId: 'user1', status: 'failed', renderer: 'legacy', mode: 'ppt-narration',
+      filmPlan: null,
+    });
+    prismaMock.videoProduction.update.mockResolvedValue({ id: 'vp2', renderer: 'remotion' });
+
+    const res = await PATCH(req({ renderer: 'remotion' }), { params: { id: 'vp2' } });
+
+    expect(res.status).toBe(200);
+    const data = prismaMock.videoProduction.update.mock.calls[0][0].data;
+    expect(data.status).toBeUndefined();
   });
 });

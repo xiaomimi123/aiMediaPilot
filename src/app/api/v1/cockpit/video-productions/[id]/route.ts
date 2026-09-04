@@ -101,6 +101,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       // 同一批"上一条渲染链留下的方案"——无声降级提醒也是上一次 preview 的判断结果,
       // 换链之后没有意义, 一并清掉(String? 字段裸 null 就够, 不需要 Prisma.JsonNull)。
       productionNotice: null,
+      /*
+       * plan_ready 的任务切换渲染器后必须退回 queued(三十一期 Task 1 复审):
+       * 上面刚把 filmPlan 清空, 留着 plan_ready 会造出"无方案的待确认"状态 ——
+       * 此时 /render 能过前置校验入队, worker 却因读不到 filmPlan 落 failed,
+       * 一次无意义的 queued→failed 往返 + 一条让用户困惑的报错。
+       * 退回 queued 让它走正常的重新生成路径。其它状态(queued/failed/...)不动。
+       */
+      ...(vp.status === 'plan_ready' ? { status: 'queued' } : {}),
       updatedAt: new Date().toISOString(),
     },
   });
