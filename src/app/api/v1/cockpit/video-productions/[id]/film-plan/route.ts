@@ -88,6 +88,18 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   const aspect = template?.aspect === '9:16' ? '9:16' : '16:9';
   const totalMs = await computeTotalMs(vp);
 
+  /*
+   * layout(三十一期 Task 4 复审补): 与 PUT 里现成的推导逻辑逐字一致
+   * (`template?.talkingHeadLayout === 'pip' ? 'pip' : 'cutaway'`)——只对
+   * `talking-head-broll` 有意义, 剪辑台前端要靠它区分"按幕窗口铺满校验(pip)"
+   * 与"独立拖柄 + 间隙提示(cutaway)"这两套完全不同的时间窗交互。非出镜链下发
+   * `null`: 那两条链不存在 pip/cutaway 之分, `null` 比硬塞一个 'cutaway' 更
+   * 诚实(不是"这条链是 cutaway", 是"这个字段对它没有意义")。
+   */
+  const layout: 'cutaway' | 'pip' | null = vp.mode === 'talking-head-broll'
+    ? (template?.talkingHeadLayout === 'pip' ? 'pip' : 'cutaway')
+    : null;
+
   return ok({
     id: vp.id,
     filmPlan: vp.filmPlan,
@@ -97,6 +109,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     visualStyle: visualStyleForMode(vp.mode),
     aspect,
     totalMs,
+    layout,
   });
 }
 

@@ -4,7 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { CARD_TYPES, type CardType } from '@/lib/video-production/shot-plan';
+import { CARD_TYPES, type CardType, type FilmPlan } from '@/lib/video-production/shot-plan';
+import {
+  checkFilmPlanTimingWindowed, BROLL_MIN_SHOT_MS, BROLL_MIN_GAP_MS,
+} from '@/lib/video-production/film-plan-timing';
 
 /**
  * 剪辑台(三十一期 Task 4)。
@@ -23,6 +26,16 @@ import { CARD_TYPES, type CardType } from '@/lib/video-production/shot-plan';
  * 顶部大段注释:「时间线要宽度、画布要高度, 这两个诉求正交」)。这里同一结论
  * 复用: 缩略图条要宽度(横向滚动), 编辑抽屉要能放下动态字段表单, 两者叠放
  * 比并排更稳, 不用再验一次。
+ *
+ * **pip 分流(复审补, 三十一期 Task 4 一轮修复)**: `talking-head-broll` 下有两种
+ * 版式, 时间窗语义完全不同——cutaway(真人全程铺底, 卡片窗口之外是正常露脸,
+ * 空档合法) vs pip(真人缩进小窗常驻, 卡片是主画面, 按**每一幕的时间窗**分别
+ * 铺满、幕与幕之间的天然间隙才不算问题)。首版没有 `layout` 字段, 对两种版式
+ * 一视同仁按 cutaway 处理——这是真实风险(pip 用户会被 cutaway 的"间隙<1s"提示
+ * 误导, 也看不到"这一幕没铺满"的真正问题)。GET 现在下发 `layout`, 前端按它
+ * 分流: 两种版式的拖柄都保持独立(不像非出镜链那样联动边界), 但 pip 额外套用
+ * `checkFilmPlanTimingWindowed`(与服务端窗口校验**同一个函数**, 而不是照抄一份
+ * 等价逻辑——这条判定规则只应该存在一处, 否则前端提示和服务端拒绝迟早对不上)。
  */
 
 /** 分镜的本地编辑态形状——刻意不用 `shot-plan.ts` 导出的 zod 推断类型
@@ -46,6 +59,11 @@ interface FilmPlanMeta {
   visualStyle: 'card' | 'illustration';
   aspect: '16:9' | '9:16';
   totalMs: number;
+  /** talking-head-broll 专属, 其余两条链为 null——见组件顶部"pip 分流"说明。 */
+  layout: 'cutaway' | 'pip' | null;
+  /** 幕边界原样透传, pip 窗口校验按它分组——形状与服务端 `AlignedAct` 一致,
+   * 这里不为了一份只读一次的数据额外定一份严格类型。 */
+  alignedActs: unknown;
 }
 
 const CARD_LABELS: Record<CardType, string> = {
@@ -53,22 +71,38 @@ const CARD_LABELS: Record<CardType, string> = {
 };
 
 /**
- * 字数/条数上限——与 `src/lib/video-production/shot-plan.ts` 内 `SLOTS` 保持
- * 一致。该文件的 `SLOTS` 是模块私有常量(未导出), 这里按同一份契约手抄一份;
- * **改任何一处上限都要同步改这里**, 否则前端红字提示与服务端 400 的实际
- * 拒绝阈值会悄悄分岔。
+ * 字数上下限——与 `src/lib/video-production/shot-plan.ts` 内 `SLOTS` 保持一致
+ * (`min`=必填字段的下限, 均为 1; 可选字段 `min`=0)。该文件的 `SLOTS` 是模块私有
+ * 常量(未导出), 这里按同一份契约手抄一份; **改任何一处上下限都要同步改这里**,
+ * 否则前端红字提示与服务端 400 的实际拒绝阈值会悄悄分岔。
  */
 const SLOT_LIMITS = {
-  statement: { text: 24, sub: 20 },
-  stat: { label: 16, prefix: 6, suffix: 6, note: 24 },
-  contrast: { leftLabel: 12, leftText: 16, rightLabel: 12, rightText: 16 },
-  list: { title: 16, item: 20, minItems: 3, maxItems: 8 },
+  statement: { text: { min: 1, max: 24 }, sub: { min: 0, max: 20 } },
+  stat: {
+    label: { min: 1, max: 16 },
+    prefix: { min: 0, max: 6 },
+    suffix: { min: 0, max: 6 },
+    note: { min: 0, max: 24 },
+  },
+  contrast: {
+    leftLabel: { min: 1, max: 12 },
+    leftText: { min: 1, max: 16 },
+    rightLabel: { min: 1, max: 12 },
+    rightText: { min: 1, max: 16 },
+  },
+  list: {
+    title: { min: 1, max: 16 },
+    item: { min: 1, max: 20 },
+    minItems: 3,
+    maxItems: 8,
+  },
 } as const;
 
-/** 出镜链间隙下限(毫秒)——与 `film-plan-timing.ts` 的 `BROLL_MIN_GAP_MS` 一致。
- * 同样是手抄的服务端阈值, 理由同上; 这里只用它做"保存前提醒", 真正把关的是
- * 服务端 `checkBrollPlanTiming`。 */
-const BROLL_MIN_GAP_MS = 1000;
+/** 相邻联动/独立拖柄共用的镜长软下限——与 `film-plan-timing.ts` 导出的
+ * `BROLL_MIN_SHOT_MS`(=1200ms)是**同一个常量**(那里已导出, 直接 import, 不再
+ * 手抄一份数值)。用途: 联动改边界时 clamp, 不让非法值(负时长/短于下限)在
+ * 输入层就产生, 而不是等保存才被服务端 400。 */
+const MIN_SHOT_MS = BROLL_MIN_SHOT_MS;
 
 function blankSlots(card: CardType): Record<string, unknown> {
   switch (card) {
@@ -93,44 +127,38 @@ function slotHasContent(card: CardType, slots: Record<string, unknown>): boolean
 }
 
 /**
- * 超字数的槽位字段——用于即时红字。**上限即 schema 上限**, 不是另定一套更松的
- * 前端提示阈值, 否则会出现"前端说能存、点保存却被服务端拒"的落差。
+ * 某一镜必填字段里还空着的——保存前本地检查用(复审补)。**只查必填(`min`>0)**,
+ * 不查超长(超长在 `TextField`/条目输入框里已经即时红字, 不必在保存前再拦一次)。
+ * 返回字段名(如 `leftLabel`/`items[2]`), 由调用方拼成"第 N 镜 · 字段：必填"。
  */
-function overflowFields(card: CardType, slots: Record<string, unknown>): string[] {
-  const s = (k: string) => (typeof slots[k] === 'string' ? (slots[k] as string) : '');
-  const out: string[] = [];
-  if (card === 'statement') {
-    if (s('text').length > SLOT_LIMITS.statement.text) out.push(`text（${SLOT_LIMITS.statement.text} 字）`);
-    if (s('sub').length > SLOT_LIMITS.statement.sub) out.push(`sub（${SLOT_LIMITS.statement.sub} 字）`);
-  } else if (card === 'stat') {
-    if (s('label').length > SLOT_LIMITS.stat.label) out.push(`label（${SLOT_LIMITS.stat.label} 字）`);
-    if (s('prefix').length > SLOT_LIMITS.stat.prefix) out.push(`prefix（${SLOT_LIMITS.stat.prefix} 字）`);
-    if (s('suffix').length > SLOT_LIMITS.stat.suffix) out.push(`suffix（${SLOT_LIMITS.stat.suffix} 字）`);
-    if (s('note').length > SLOT_LIMITS.stat.note) out.push(`note（${SLOT_LIMITS.stat.note} 字）`);
-  } else if (card === 'contrast') {
-    if (s('leftLabel').length > SLOT_LIMITS.contrast.leftLabel) out.push(`leftLabel（${SLOT_LIMITS.contrast.leftLabel} 字）`);
-    if (s('leftText').length > SLOT_LIMITS.contrast.leftText) out.push(`leftText（${SLOT_LIMITS.contrast.leftText} 字）`);
-    if (s('rightLabel').length > SLOT_LIMITS.contrast.rightLabel) out.push(`rightLabel（${SLOT_LIMITS.contrast.rightLabel} 字）`);
-    if (s('rightText').length > SLOT_LIMITS.contrast.rightText) out.push(`rightText（${SLOT_LIMITS.contrast.rightText} 字）`);
-  } else if (card === 'list') {
-    if (s('title').length > SLOT_LIMITS.list.title) out.push(`title（${SLOT_LIMITS.list.title} 字）`);
+function missingFieldsOfShot(shot: LocalShot): string[] {
+  const slots = shot.slots;
+  const str = (k: string) => (typeof slots[k] === 'string' ? (slots[k] as string) : '');
+  const missing: string[] = [];
+  if (shot.card === 'statement') {
+    if (str('text').length < SLOT_LIMITS.statement.text.min) missing.push('text');
+  } else if (shot.card === 'stat') {
+    if (str('label').length < SLOT_LIMITS.stat.label.min) missing.push('label');
+  } else if (shot.card === 'contrast') {
+    (['leftLabel', 'leftText', 'rightLabel', 'rightText'] as const).forEach((k) => {
+      if (str(k).length < SLOT_LIMITS.contrast[k].min) missing.push(k);
+    });
+  } else if (shot.card === 'list') {
+    if (str('title').length < SLOT_LIMITS.list.title.min) missing.push('title');
     const items = Array.isArray(slots.items) ? (slots.items as string[]) : [];
     items.forEach((it, i) => {
-      if (typeof it === 'string' && it.length > SLOT_LIMITS.list.item) {
-        out.push(`items[${i}]（${SLOT_LIMITS.list.item} 字）`);
-      }
+      if (typeof it !== 'string' || it.length < SLOT_LIMITS.list.item.min) missing.push(`items[${i}]`);
     });
-    if (items.length < SLOT_LIMITS.list.minItems) out.push(`items（至少 ${SLOT_LIMITS.list.minItems} 条）`);
-    if (items.length > SLOT_LIMITS.list.maxItems) out.push(`items（最多 ${SLOT_LIMITS.list.maxItems} 条）`);
   }
-  return out;
+  return missing;
 }
 
 /**
  * zod 结构错误(如 `shots.0.slots.value: Expected number, received string`)转
  * 成人话——服务端与模型修复循环共用的是同一套原文, 面向剪辑台用户还需要一层
- * 轻量转译(Task 2 复审遗留)。**只覆盖两类高频消息**(数字类型错、未知字段),
- * 其余原样展示——不是要重写 zod 全部报错文案, 是让最常见的两类不再是英文。
+ * 轻量转译(Task 2 复审遗留)。**只覆盖三类高频消息**(数字类型错、未知字段、
+ * 必填字符串为空), 其余原样展示——不是要重写 zod 全部报错文案, 是让最常见的
+ * 几类不再是英文。
  *
  * 时间轴错误(`film-plan-timing.ts` 产出)本来就是中文整句, 不匹配下面的
  * `shots\.(\d+)` 前缀, 原样返回。
@@ -145,6 +173,7 @@ function translateError(raw: string): string {
   let translated = msg;
   if (/^Expected number/.test(msg)) translated = '需要填数字';
   else if (/^Unrecognized key/i.test(msg)) translated = '含未知字段';
+  else if (/^String must contain at least 1 character/.test(msg)) translated = '必填';
   const label = lastField ? `${shotLabel} · ${lastField}` : shotLabel;
   return `${label}：${translated}`;
 }
@@ -195,7 +224,14 @@ export function FilmPlanWorkbench({
         }
         if (cancelled) return;
         const d = body.data;
-        setMeta({ mode: d.mode, visualStyle: d.visualStyle, aspect: d.aspect, totalMs: d.totalMs });
+        setMeta({
+          mode: d.mode,
+          visualStyle: d.visualStyle,
+          aspect: d.aspect,
+          totalMs: d.totalMs,
+          layout: d.layout === 'pip' || d.layout === 'cutaway' ? d.layout : null,
+          alignedActs: d.alignedActs,
+        });
         const p = (d.filmPlan ?? { shots: [] }) as LocalPlan;
         setPlan(p);
         setSavedPlan(p);
@@ -216,27 +252,36 @@ export function FilmPlanWorkbench({
     [plan, savedPlan],
   );
 
-  // 出镜链(talking-head-broll)是"真人全程铺底"的例外语义——镜间空档合法, 拖柄
-  // 互相独立、不联动; 其余两条链要求整片铺满, 相邻镜头共享同一条边界。
-  // GET 目前不下发 layout(pip/cutaway), 这里对两种 layout 一视同仁按 cutaway
-  // 处理——已知的简化, 见任务报告。
+  // 出镜链(talking-head-broll)两种版式(cutaway/pip)拖柄都互相独立、不联动——
+  // 差异只在"要不要额外套用窗口铺满校验"(见下面 pipWindowWarnings), 不影响
+  // 拖柄是否联动这件事。其余两条链要求整片铺满, 相邻镜头共享同一条边界。
   const isBroll = meta?.mode === 'talking-head-broll';
 
   function updateStart(idx: number, sec: number) {
-    const ms = secToMs(sec);
     setPlan((prev) => {
       if (!prev) return prev;
       const shots = [...prev.shots];
+      let ms = secToMs(sec);
+      // 防止本镜被拖成负时长/短于软下限
+      ms = Math.min(ms, shots[idx].endMs - MIN_SHOT_MS);
+      if (!isBroll && idx > 0) {
+        // 联动会把这个值同时写成上一镜的 endMs——同样不能把上一镜挤短于软下限
+        ms = Math.max(ms, shots[idx - 1].startMs + MIN_SHOT_MS);
+      }
       shots[idx] = { ...shots[idx], startMs: ms };
       if (!isBroll && idx > 0) shots[idx - 1] = { ...shots[idx - 1], endMs: ms };
       return { ...prev, shots };
     });
   }
   function updateEnd(idx: number, sec: number) {
-    const ms = secToMs(sec);
     setPlan((prev) => {
       if (!prev) return prev;
       const shots = [...prev.shots];
+      let ms = secToMs(sec);
+      ms = Math.max(ms, shots[idx].startMs + MIN_SHOT_MS);
+      if (!isBroll && idx < shots.length - 1) {
+        ms = Math.min(ms, shots[idx + 1].endMs - MIN_SHOT_MS);
+      }
       shots[idx] = { ...shots[idx], endMs: ms };
       if (!isBroll && idx < shots.length - 1) shots[idx + 1] = { ...shots[idx + 1], startMs: ms };
       return { ...prev, shots };
@@ -272,10 +317,11 @@ export function FilmPlanWorkbench({
     setPendingCardSwitch(null);
   }
 
-  // 出镜链的间隙即时提示——复用后端 `checkBrollPlanTiming` 的判定规则(间隙要么
-  // 是 0, 要么至少 1 秒), 别让用户保存了才发现。
+  // cutaway 的间隙即时提示——复用后端 `checkBrollPlanTiming` 的判定规则(间隙要么
+  // 是 0, 要么至少 1 秒), 别让用户保存了才发现。**只对 cutaway 生效**——pip 的
+  // 时间窗语义是"按幕铺满", 不是"间隙够不够长", 套错规则会在 pip 上误导用户。
   const gapWarnings = useMemo(() => {
-    if (!plan || !isBroll) return [];
+    if (!plan || meta?.layout !== 'cutaway') return [];
     const sorted = [...plan.shots].sort((a, b) => a.startMs - b.startMs);
     const warnings: string[] = [];
     for (let i = 1; i < sorted.length; i += 1) {
@@ -288,14 +334,49 @@ export function FilmPlanWorkbench({
       }
     }
     return warnings;
-  }, [plan, isBroll]);
+  }, [plan, meta]);
+
+  /**
+   * pip 的按幕窗口铺满提示——**直接复用服务端 `checkFilmPlanTimingWindowed`**,
+   * 不是照它的逻辑另写一份。`windows` 的推导(过滤零时长幕、取 startMs/endMs)
+   * 与 `film-plan/route.ts` 的 `nonZeroAlignedWindows` 是同一件事, 这里数据源
+   * 是 GET 已经原样透传的 `alignedActs`, 直接在组件内联过滤——只是取字段, 没有
+   * 值得抽成共享函数的判定逻辑(真正的判定逻辑都在 `checkFilmPlanTimingWindowed`
+   * 里, 已经共享)。
+   */
+  const pipWindowWarnings = useMemo(() => {
+    if (!plan || meta?.layout !== 'pip') return [];
+    const raw = Array.isArray(meta.alignedActs)
+      ? (meta.alignedActs as { startMs?: unknown; endMs?: unknown }[])
+      : [];
+    const windows = raw
+      .filter((w): w is { startMs: number; endMs: number } => (
+        typeof w.startMs === 'number' && typeof w.endMs === 'number' && w.endMs > w.startMs
+      ))
+      .map((w) => ({ startMs: w.startMs, endMs: w.endMs }));
+    return checkFilmPlanTimingWindowed(plan as unknown as FilmPlan, windows);
+  }, [plan, meta]);
 
   async function save() {
     if (!plan) return;
-    setBusy('save');
-    setPutErrors([]);
     setConflictMsg('');
     setSaveNote('');
+
+    // 保存前本地先查必填(复审补)——空着的字段就地提示, 不发请求。**不禁用
+    // 保存按钮**(禁用会让用户找不到为什么点不动), 点了才检查、检查不过才拦。
+    const localIssues: string[] = [];
+    plan.shots.forEach((shot, idx) => {
+      missingFieldsOfShot(shot).forEach((field) => {
+        localIssues.push(`第 ${idx + 1} 镜 · ${field}：必填`);
+      });
+    });
+    if (localIssues.length > 0) {
+      setPutErrors(localIssues);
+      return;
+    }
+
+    setBusy('save');
+    setPutErrors([]);
     try {
       const res = await fetch(`/api/v1/cockpit/video-productions/${productionId}/film-plan`, {
         method: 'PUT',
@@ -316,7 +397,9 @@ export function FilmPlanWorkbench({
       setPlan(saved);
       setSavedPlan(saved);
       // 缩略图接口按内容哈希缓存, 方案变了但 URL 不变——用保存计数器给 img src
-      // 加查询参数破缓存, 否则保存后卡面看起来"没变"。
+      // 加查询参数破缓存, 否则保存后卡面看起来"没变"。**只在真正保存成功时才
+      // 自增**——409/400 都提前 return, 不会走到这里; 缩略图内容并没有变,
+      // 破缓存反而会让用户看见一次不必要的重新请求。
       setSaveCounter((c) => c + 1);
       setSaveNote('已保存，缩略图已刷新。');
       router.refresh();
@@ -494,6 +577,11 @@ export function FilmPlanWorkbench({
                 总时长锁定为 {(meta.totalMs / 1000).toFixed(1)}s——相邻两镜共用一条边界, 拖一边另一边跟着动,
                 天然铺满不留空档。
               </span>
+            ) : meta.layout === 'pip' ? (
+              <span className="text-muted-foreground">
+                卡片是主画面, 真人缩进小窗常驻——拖柄互相独立, 但每一幕的时间窗内仍要铺满
+                (幕与幕之间的天然间隙不算问题, 见下方提示)。
+              </span>
             ) : (
               <span className="text-muted-foreground">
                 出镜画面全程有真人铺底, 镜间可以留空档(≥1 秒)——拖柄互相独立。
@@ -506,6 +594,20 @@ export function FilmPlanWorkbench({
       {gapWarnings.length > 0 ? (
         <div className="mt-3 rounded border border-destructive/50 bg-destructive/5 p-2 text-xs text-destructive">
           {gapWarnings.map((w) => <p key={w}>{w}</p>)}
+        </div>
+      ) : null}
+
+      {/*
+        pip 窗口提示用比错误红更缓和的语气(muted/secondary)——这条设计系统没有
+        单独的"警告"色阶(见 `film-plan-workbench.tsx` 引入前对 tailwind 配置/
+        globals.css 的检查, 没有 warning/amber token), 与其新引入一个只此一处
+        用的裸颜色, 不如借用已有的 secondary 语气 + 文字上明说"提示"二字区分于
+        上面的红色错误块。
+      */}
+      {pipWindowWarnings.length > 0 ? (
+        <div className="mt-3 rounded border border-border bg-secondary/60 p-2 text-xs text-foreground">
+          <p className="font-medium">提示——以下幕的时间窗没有铺满：</p>
+          {pipWindowWarnings.map((w) => <p key={w}>{w}</p>)}
         </div>
       ) : null}
 
@@ -562,20 +664,27 @@ export function FilmPlanWorkbench({
  * 卸载重挂——受控输入框的 DOM 节点因此在每次输入后都被换成新节点。真机上不
  * 影响正确性(下一帧还是能读到对的值), 但测试里持有的是旧节点引用, 断言读到
  * 的永远是换字之前那一份 `className`, 看起来像"红字没生效"。提到顶层、把
- * `overflow`/`value` 都作为 props 传入, 组件类型跨渲染保持稳定, 输入框 DOM
+ * `min`/`max`/`value` 都作为 props 传入, 组件类型跨渲染保持稳定, 输入框 DOM
  * 节点也保持稳定。
+ *
+ * **必填/超长两种红字合并进同一个组件(复审补)**: `min > 0` 且当前值比它短 ——
+ * 显示「必填」; 否则按原来的"已用字数/上限"显示, 超过上限时同样标红。两者
+ * 共享同一套视觉(红框 + 红字), 不需要在调用点各算一遍。
  */
 function TextField({
-  field, label, limit, value, bad, optional, onChange,
+  field, label, min, max, value, optional, onChange,
 }: {
   field: string;
   label: string;
-  limit: number;
+  min: number;
+  max: number;
   value: string;
-  bad: boolean;
   optional?: boolean;
   onChange: (field: string, value: string) => void;
 }) {
+  const missing = min > 0 && value.length < min;
+  const overflow = value.length > max;
+  const bad = missing || overflow;
   return (
     <label className="flex flex-col gap-1 text-xs">
       {label}{optional ? '（可选）' : ''}
@@ -585,7 +694,7 @@ function TextField({
         className={cn('rounded border bg-card px-2 py-1', bad ? 'border-destructive' : 'border-input')}
       />
       <span className={cn(bad ? 'text-destructive' : 'text-muted-foreground')}>
-        {`${value.length}/${limit}`}
+        {missing ? '必填' : `${value.length}/${max}`}
       </span>
     </label>
   );
@@ -599,23 +708,21 @@ function SlotFields({
   slots: Record<string, unknown>;
   onChange: (key: string, value: unknown) => void;
 }) {
-  const overflow = overflowFields(card, slots);
-  const isBad = (field: string) => overflow.some((o) => o.startsWith(`${field}（`));
   const str = (k: string) => (typeof slots[k] === 'string' ? (slots[k] as string) : '');
   const num = (k: string) => (typeof slots[k] === 'number' ? (slots[k] as number) : 0);
 
   if (card === 'statement') {
     return (
       <>
-        <TextField field="text" label="text" limit={SLOT_LIMITS.statement.text} value={str('text')} bad={isBad('text')} onChange={onChange} />
-        <TextField field="sub" label="sub" limit={SLOT_LIMITS.statement.sub} value={str('sub')} bad={isBad('sub')} optional onChange={onChange} />
+        <TextField field="text" label="text" min={SLOT_LIMITS.statement.text.min} max={SLOT_LIMITS.statement.text.max} value={str('text')} onChange={onChange} />
+        <TextField field="sub" label="sub" min={SLOT_LIMITS.statement.sub.min} max={SLOT_LIMITS.statement.sub.max} value={str('sub')} optional onChange={onChange} />
       </>
     );
   }
   if (card === 'stat') {
     return (
       <>
-        <TextField field="label" label="label" limit={SLOT_LIMITS.stat.label} value={str('label')} bad={isBad('label')} onChange={onChange} />
+        <TextField field="label" label="label" min={SLOT_LIMITS.stat.label.min} max={SLOT_LIMITS.stat.label.max} value={str('label')} onChange={onChange} />
         <label className="flex flex-col gap-1 text-xs">
           value（裸数字）
           <input
@@ -628,19 +735,19 @@ function SlotFields({
             className="rounded border border-input bg-card px-2 py-1"
           />
         </label>
-        <TextField field="prefix" label="prefix" limit={SLOT_LIMITS.stat.prefix} value={str('prefix')} bad={isBad('prefix')} optional onChange={onChange} />
-        <TextField field="suffix" label="suffix" limit={SLOT_LIMITS.stat.suffix} value={str('suffix')} bad={isBad('suffix')} optional onChange={onChange} />
-        <TextField field="note" label="note" limit={SLOT_LIMITS.stat.note} value={str('note')} bad={isBad('note')} optional onChange={onChange} />
+        <TextField field="prefix" label="prefix" min={SLOT_LIMITS.stat.prefix.min} max={SLOT_LIMITS.stat.prefix.max} value={str('prefix')} optional onChange={onChange} />
+        <TextField field="suffix" label="suffix" min={SLOT_LIMITS.stat.suffix.min} max={SLOT_LIMITS.stat.suffix.max} value={str('suffix')} optional onChange={onChange} />
+        <TextField field="note" label="note" min={SLOT_LIMITS.stat.note.min} max={SLOT_LIMITS.stat.note.max} value={str('note')} optional onChange={onChange} />
       </>
     );
   }
   if (card === 'contrast') {
     return (
       <>
-        <TextField field="leftLabel" label="leftLabel" limit={SLOT_LIMITS.contrast.leftLabel} value={str('leftLabel')} bad={isBad('leftLabel')} onChange={onChange} />
-        <TextField field="leftText" label="leftText" limit={SLOT_LIMITS.contrast.leftText} value={str('leftText')} bad={isBad('leftText')} onChange={onChange} />
-        <TextField field="rightLabel" label="rightLabel" limit={SLOT_LIMITS.contrast.rightLabel} value={str('rightLabel')} bad={isBad('rightLabel')} onChange={onChange} />
-        <TextField field="rightText" label="rightText" limit={SLOT_LIMITS.contrast.rightText} value={str('rightText')} bad={isBad('rightText')} onChange={onChange} />
+        <TextField field="leftLabel" label="leftLabel" min={SLOT_LIMITS.contrast.leftLabel.min} max={SLOT_LIMITS.contrast.leftLabel.max} value={str('leftLabel')} onChange={onChange} />
+        <TextField field="leftText" label="leftText" min={SLOT_LIMITS.contrast.leftText.min} max={SLOT_LIMITS.contrast.leftText.max} value={str('leftText')} onChange={onChange} />
+        <TextField field="rightLabel" label="rightLabel" min={SLOT_LIMITS.contrast.rightLabel.min} max={SLOT_LIMITS.contrast.rightLabel.max} value={str('rightLabel')} onChange={onChange} />
+        <TextField field="rightText" label="rightText" min={SLOT_LIMITS.contrast.rightText.min} max={SLOT_LIMITS.contrast.rightText.max} value={str('rightText')} onChange={onChange} />
       </>
     );
   }
@@ -648,11 +755,13 @@ function SlotFields({
   const items = Array.isArray(slots.items) ? (slots.items as string[]) : [];
   return (
     <>
-      <TextField field="title" label="title" limit={SLOT_LIMITS.list.title} value={str('title')} bad={isBad('title')} onChange={onChange} />
+      <TextField field="title" label="title" min={SLOT_LIMITS.list.title.min} max={SLOT_LIMITS.list.title.max} value={str('title')} onChange={onChange} />
       <div className="flex flex-col gap-1 text-xs sm:col-span-2">
         {`条目（${SLOT_LIMITS.list.minItems}~${SLOT_LIMITS.list.maxItems} 条）`}
         {items.map((it, i) => {
-          const bad = it.length > SLOT_LIMITS.list.item;
+          const missing = it.length < SLOT_LIMITS.list.item.min;
+          const overflow = it.length > SLOT_LIMITS.list.item.max;
+          const bad = missing || overflow;
           return (
             <div key={i} className="flex items-center gap-2">
               <input
@@ -664,7 +773,9 @@ function SlotFields({
                 }}
                 className={cn('flex-1 rounded border bg-card px-2 py-1', bad ? 'border-destructive' : 'border-input')}
               />
-              <span className={cn(bad ? 'text-destructive' : 'text-muted-foreground')}>{`${it.length}/${SLOT_LIMITS.list.item}`}</span>
+              <span className={cn(bad ? 'text-destructive' : 'text-muted-foreground')}>
+                {missing ? '必填' : `${it.length}/${SLOT_LIMITS.list.item.max}`}
+              </span>
               <Button
                 size="sm"
                 variant="ghost"

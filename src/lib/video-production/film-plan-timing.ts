@@ -27,8 +27,13 @@ const TOLERANCE_MS = 33;
  * 时间窗。抽出来是二十九期 Task 6 返工时做的, 抽取前后对 `checkFilmPlanTiming`
  * 的输出**逐字节不变**(`startMs` 原来硬编码的字面量 `0` 换成了同值的参数,
  * 拼出来的文案完全一致), 现有测试不用动。
+ *
+ * **导出给前端剪辑台共享(三十一期 Task 4 复审)**: pip 版式的"按幕窗口铺满"校验
+ * 前端要做实时提示, 与服务端 `checkFilmPlanTimingWindowed` 是同一条判定规则——
+ * 拆开各写一份措辞迟早分岔(这个项目已经在其它地方吃过这个教训), 所以前端直接
+ * import 这个纯函数, 不手抄一份等价逻辑。
  */
-function checkCoverage(shots: FilmPlan['shots'], startMs: number, endMs: number, emptyMessage: string): string[] {
+export function checkCoverage(shots: FilmPlan['shots'], startMs: number, endMs: number, emptyMessage: string): string[] {
   const sorted = [...shots].sort((a, b) => a.startMs - b.startMs);
   if (sorted.length === 0) return [emptyMessage];
 
@@ -146,7 +151,7 @@ export function checkFilmPlanTimingWindowed(
  * `checkBrollPlanTiming` 这一关根本看不到裁剪后的结果、拦不住。留出的这
  * 200ms 缓冲就是防这个的, 不是随手取的两个数。
  */
-const BROLL_MIN_SHOT_MS = 1200;
+export const BROLL_MIN_SHOT_MS = 1200;
 
 /**
  * 镜间最小间隔——复审补(二十九期 Task 4 复审): "不查空档"的裁决只对**大空档**
@@ -158,7 +163,7 @@ const BROLL_MIN_SHOT_MS = 1200;
  * 闪烁感——与 `BROLL_MIN_SHOT_MS`(镜头本身至少多长)是同一数量级的"最短可读
  * 时长"判断, 只是这次判断的对象是镜头之间的间隙而不是镜头本身。
  */
-const BROLL_MIN_GAP_MS = 1000;
+export const BROLL_MIN_GAP_MS = 1000;
 
 /**
  * `FilmPlanSchema` 拦不住的时间轴问题 —— 出镜链专属版本(二十九期 Task 4)。

@@ -60,6 +60,35 @@ describe('GET /api/v1/cockpit/video-productions/[id]/film-plan', () => {
     expect(body.data.alignedActs).toHaveLength(2);
     // 零时长窗口被过滤, 总时长取最后一个非零窗口的 endMs
     expect(body.data.totalMs).toBe(5000);
+    // layout 只对 talking-head-broll 有意义——illustration-tts 下发 null,
+    // 即便模板恰好写着 talkingHeadLayout(对它没有意义的字段)。
+    expect(body.data.layout).toBeNull();
+  });
+
+  it('talking-head-broll + 模板 talkingHeadLayout=pip → layout: pip', async () => {
+    prismaMock.videoProduction.findUnique.mockResolvedValue({
+      id: 'vp1', userId: 'user1', mode: 'talking-head-broll', templateId: 't1', sourceVideoPath: 's.mov',
+      filmPlan: { shots: [statementShot('s1', 0, 5000)] },
+      alignedActs: [{ act: 'hook', startMs: 0, endMs: 5000 }],
+    });
+    prismaMock.videoTemplate.findUnique.mockResolvedValue({ id: 't1', aspect: '9:16', talkingHeadLayout: 'pip' });
+
+    const res = await GET(new Request('http://x'), { params: { id: 'vp1' } });
+    const body = await res.json();
+    expect(body.data.layout).toBe('pip');
+  });
+
+  it('talking-head-broll + 模板未设置/cutaway → layout: cutaway', async () => {
+    prismaMock.videoProduction.findUnique.mockResolvedValue({
+      id: 'vp1', userId: 'user1', mode: 'talking-head-broll', templateId: 't1', sourceVideoPath: 's.mov',
+      filmPlan: { shots: [statementShot('s1', 0, 5000)] },
+      alignedActs: [{ act: 'hook', startMs: 0, endMs: 5000 }],
+    });
+    prismaMock.videoTemplate.findUnique.mockResolvedValue({ id: 't1', aspect: '9:16', talkingHeadLayout: 'cutaway' });
+
+    const res = await GET(new Request('http://x'), { params: { id: 'vp1' } });
+    const body = await res.json();
+    expect(body.data.layout).toBe('cutaway');
   });
 
   it('不存在或不是自己的任务 → 404', async () => {

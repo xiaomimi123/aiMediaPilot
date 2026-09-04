@@ -176,4 +176,132 @@ describe('FilmPlanWorkbench', () => {
     fireEvent.click(screen.getByText('重新生成分镜'));
     expect(screen.getAllByText((_, el) => el?.textContent?.includes('覆盖') ?? false).length).toBeGreaterThan(0);
   });
+
+  it('非出镜链: 首镜起点被禁用、末镜终点被禁用(总时长锁定/联动铺满)', async () => {
+    render(<FilmPlanWorkbench productionId="f1" onStatusChange={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('film-plan-workbench')).not.toBeNull());
+    // 默认选中第 1 镜(索引 0, 首镜)——起点禁用, 终点不禁用
+    expect((screen.getByLabelText('起始（秒）') as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText('结束（秒）') as HTMLInputElement).disabled).toBe(false);
+
+    // 切到第 2 镜(索引 1, 末镜)——终点禁用, 起点不禁用
+    fireEvent.click(screen.getByText('2 · 数据'));
+    expect((screen.getByLabelText('起始（秒）') as HTMLInputElement).disabled).toBe(false);
+    expect((screen.getByLabelText('结束（秒）') as HTMLInputElement).disabled).toBe(true);
+  });
+
+  it('必填字段为空时保存前本地拦截, 不发 PUT 请求', async () => {
+    render(<FilmPlanWorkbench productionId="f1" onStatusChange={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('film-plan-workbench')).not.toBeNull());
+    const textInput = screen.getByDisplayValue('开场') as HTMLInputElement;
+    fireEvent.change(textInput, { target: { value: '' } });
+    expect(screen.getByText('必填')).not.toBeNull();
+
+    const callsBefore = fetchMock.mock.calls.length;
+    fireEvent.click(screen.getByText('保存修改'));
+    expect(screen.getAllByText((_, el) => el?.textContent?.includes('第 1 镜 · text：必填') ?? false).length)
+      .toBeGreaterThan(0);
+    // 没有发出新的 fetch(本地拦截, 没有真的打 PUT)
+    expect(fetchMock.mock.calls.length).toBe(callsBefore);
+  });
+});
+
+const brollCutawayPlanGetBody = {
+  success: true,
+  data: {
+    id: 'f1',
+    filmPlan: {
+      shots: [
+        { shotId: 'b1', startMs: 0, endMs: 2000, card: 'statement', slots: { text: '开场白' } },
+        { shotId: 'b2', startMs: 5000, endMs: 8000, card: 'statement', slots: { text: '结尾' } },
+      ],
+    },
+    alignedActs: [],
+    mode: 'talking-head-broll',
+    visualStyle: 'card',
+    aspect: '16:9',
+    totalMs: 20000,
+    layout: 'cutaway',
+  },
+};
+
+const pipPlanGetBody = {
+  success: true,
+  data: {
+    id: 'f1',
+    filmPlan: {
+      // 这一幕窗口是 0~5000ms, 这一镜只到 2000ms——幕内没铺满
+      shots: [{ shotId: 'p1', startMs: 0, endMs: 2000, card: 'statement', slots: { text: '只讲一半' } }],
+    },
+    alignedActs: [{ act: 'hook', startMs: 0, endMs: 5000 }],
+    mode: 'talking-head-broll',
+    visualStyle: 'card',
+    aspect: '9:16',
+    totalMs: 5000,
+    layout: 'pip',
+  },
+};
+
+describe('FilmPlanWorkbench —— talking-head-broll 的 layout 分流(cutaway/pip)', () => {
+  it('cutaway: 首尾镜的起止点都不禁用(拖柄独立, 不联动)', async () => {
+    mockFetchSequence([() => brollCutawayPlanGetBody]);
+    render(<FilmPlanWorkbench productionId="f1" onStatusChange={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('film-plan-workbench')).not.toBeNull());
+    expect((screen.getByLabelText('起始（秒）') as HTMLInputElement).disabled).toBe(false);
+    expect((screen.getByLabelText('结束（秒）') as HTMLInputElement).disabled).toBe(false);
+    fireEvent.click(screen.getByText('2 · 陈述'));
+    expect((screen.getByLabelText('起始（秒）') as HTMLInputElement).disabled).toBe(false);
+    expect((screen.getByLabelText('结束（秒）') as HTMLInputElement).disabled).toBe(false);
+  });
+
+  it('pip: 幕窗口没铺满时出现提示(直接复用服务端 checkFilmPlanTimingWindowed)', async () => {
+    mockFetchSequence([() => pipPlanGetBody]);
+    render(<FilmPlanWorkbench productionId="f1" onStatusChange={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('film-plan-workbench')).not.toBeNull());
+    expect(screen.getByText('提示——以下幕的时间窗没有铺满：')).not.toBeNull();
+  });
+
+  it('cutaway 不出 pip 的幕窗口提示(即便实际上也没铺满全片)', async () => {
+    mockFetchSequence([() => brollCutawayPlanGetBody]);
+    render(<FilmPlanWorkbench productionId="f1" onStatusChange={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('film-plan-workbench')).not.toBeNull());
+    expect(screen.queryByText('提示——以下幕的时间窗没有铺满：')).toBeNull();
+  });
+});
+
+describe('FilmPlanWorkbench —— 保存计数器只在成功时自增', () => {
+  it('409 冲突: 缩略图 ?v= 不自增', async () => {
+    let putCount = 0;
+    fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      if ((init as RequestInit | undefined)?.method === 'PUT') {
+        putCount += 1;
+        return { ok: false, status: 409, json: async () => ({ success: false, message: '请刷新后重试' }) } as unknown as Response;
+      }
+      return { ok: true, status: 200, json: async () => filmPlanGetBody } as unknown as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<FilmPlanWorkbench productionId="f1" onStatusChange={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('film-plan-workbench')).not.toBeNull());
+    expect((screen.getAllByAltText('第 1 镜')[0] as HTMLImageElement).src).toContain('?v=0');
+
+    const textInput = screen.getByDisplayValue('开场') as HTMLInputElement;
+    fireEvent.change(textInput, { target: { value: '改过的开场' } });
+    fireEvent.click(screen.getByText('保存修改'));
+    await waitFor(() => expect(putCount).toBe(1));
+    expect((screen.getAllByAltText('第 1 镜')[0] as HTMLImageElement).src).toContain('?v=0');
+  });
+
+  it('保存成功: 缩略图 ?v= 自增', async () => {
+    mockFetchSequence([
+      () => filmPlanGetBody,
+      () => ({ success: true, data: { id: 'f1', filmPlan: filmPlanGetBody.data.filmPlan } }),
+    ]);
+    render(<FilmPlanWorkbench productionId="f1" onStatusChange={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('film-plan-workbench')).not.toBeNull());
+    const textInput = screen.getByDisplayValue('开场') as HTMLInputElement;
+    fireEvent.change(textInput, { target: { value: '改过的开场' } });
+    fireEvent.click(screen.getByText('保存修改'));
+    await waitFor(() => expect((screen.getAllByAltText('第 1 镜')[0] as HTMLImageElement).src).toContain('?v=1'));
+  });
 });
