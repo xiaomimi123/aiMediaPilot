@@ -92,41 +92,32 @@ describe('handlePptNarrationRemotion 接 TTS/真实时间窗/字幕/BGM', () => 
   });
 });
 
-describe('旧的三条分支没被顺手改动', () => {
-  const oldBranches: Array<[string, string, string]> = [
-    ['handlePptNarration', 'export async function handlePptNarration', 'async function handlePptNarrationRemotion'],
-    // 标记里的 `(\n` 是必须的: 二十九期 Task 4 加了 `handleTalkingHeadBrollRemotion`,
-    // 它的函数名以 `handleTalkingHeadBroll` 为前缀——不带 `(\n` 的话 `SRC.indexOf`
-    // 会先命中前面那个新函数(它自己就调用 actWindowsFromAligned), 把这条"旧链没被
-    // 顺手改动"的断言测到错的函数体上。
-    ['handleTalkingHeadBroll', 'export async function handleTalkingHeadBroll(\n', 'export async function handleIllustrationTts'],
-    // 同上一条注释: `handleIllustrationTtsRemotion` 也是 `handleIllustrationTts` 的
-    // 前缀撞名, 且它在源码里排在旧 `handleIllustrationTts` 之前——不带 `(\n` 的话
-    // `SRC.indexOf` 会先命中 Remotion 版本(它确实调用 actWindowsFromAligned)。
-    ['handleIllustrationTts', 'export async function handleIllustrationTts(\n', 'async function handleProduce'],
-  ];
-
-  for (const [name, startMarker, endMarker] of oldBranches) {
-    it(`${name} 函数体不含 actWindowsFromAligned`, () => {
-      const start = SRC.indexOf(startMarker);
-      const end = SRC.indexOf(endMarker, start);
-      expect(start, `找不到 ${startMarker}`).toBeGreaterThanOrEqual(0);
-      expect(end, `找不到 ${endMarker}`).toBeGreaterThan(start);
-      const slice = SRC.slice(start, end);
-      expect(slice).not.toMatch(/actWindowsFromAligned\(/);
+// 三十期 Task 3: 旧的三条分支(handlePptNarration/handleTalkingHeadBroll/
+// handleIllustrationTts, 均不带 Remotion 后缀)已随旧渲染层整体删除——原来
+// "旧分支没被顺手改动"的断言(靠源码切片找旧函数体, 断言其中不含
+// actWindowsFromAligned)失去了断言对象, 反向改写为"旧分支不再存在于源码里"。
+describe('旧的三条分支已随旧渲染层删除', () => {
+  for (const name of ['handlePptNarration', 'handleTalkingHeadBroll', 'handleIllustrationTts']) {
+    it(`源码里不再出现 ${name}(不含 Remotion 变体)`, () => {
+      // \b 本身就不会在 "${name}Remotion" 内部匹配出 "${name}"(二者之间没有
+      // 单词边界), 不需要额外的否定前瞻。
+      const re = new RegExp(`\\b${name}\\b`);
+      expect(SRC).not.toMatch(re);
     });
   }
 });
 
-describe('先建后拆: 旧渲染层一个文件都没删', () => {
+// 三十期 Task 3 反向断言: 旧渲染层已成建制删除, 原来"一个文件都没删"的
+// 先建后拆断言反过来锁"一个都不剩"。
+describe('旧渲染层已成建制删除', () => {
   for (const f of [
     'src/lib/video-production/shot-renderer.ts',
     'src/lib/video-production/ambient-rig.ts',
     'src/lib/video-production/shot-chrome.ts',
     'src/lib/video-production/frame-overlap.ts',
   ]) {
-    it(`${f} 还在`, () => {
-      expect(fs.existsSync(path.join(process.cwd(), f))).toBe(true);
+    it(`${f} 已被删除`, () => {
+      expect(fs.existsSync(path.join(process.cwd(), f))).toBe(false);
     });
   }
 });

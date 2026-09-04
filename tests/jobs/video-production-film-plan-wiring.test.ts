@@ -45,15 +45,17 @@ describe('handlePptNarrationRemotion 接上 FilmPlan 生成', () => {
   });
 });
 
-describe('先建后拆: 旧渲染层一个文件都没删', () => {
+// 三十期 Task 3 反向断言: 旧渲染层已成建制删除(先建后拆的"拆"阶段),
+// 原来"一个都没删"的先建后拆断言反过来锁"一个都不剩"。
+describe('旧渲染层已成建制删除', () => {
   for (const f of [
     'src/lib/video-production/shot-renderer.ts',
     'src/lib/video-production/ambient-rig.ts',
     'src/lib/video-production/shot-chrome.ts',
     'src/lib/video-production/frame-overlap.ts',
   ]) {
-    it(`${f} 还在`, () => {
-      expect(fs.existsSync(path.join(process.cwd(), f))).toBe(true);
+    it(`${f} 已被删除`, () => {
+      expect(fs.existsSync(path.join(process.cwd(), f))).toBe(false);
     });
   }
 });

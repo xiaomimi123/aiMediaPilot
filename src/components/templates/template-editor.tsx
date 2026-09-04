@@ -221,14 +221,14 @@ export function TemplateEditor({
             options={[{ v: 'card' as const, label: '卡片' }, { v: 'illustration' as const, label: '插画' }]}
           />
         </Row>
-        <Row label="明暗">
+        <Row label="明暗" hint="暂不支持（旧渲染已下线）：Remotion 渲染链目前不读这个字段。">
           <Choice
             value={cfg.visualTone}
             onChange={(v) => set('visualTone', v)}
             options={[{ v: 'light' as const, label: '亮底' }, { v: 'dark' as const, label: '暗底' }]}
           />
         </Row>
-        <Row label="切镜节奏" hint="留空 = 不约束。低于 1 秒就不是切镜是闪频了。">
+        <Row label="切镜节奏" hint="暂不支持（旧渲染已下线）：新链的镜头时长由分镜时间轴独立决定，不读这个字段。留空 = 不约束。低于 1 秒就不是切镜是闪频了。">
           <input
             type="number"
             min={1}
@@ -261,7 +261,7 @@ export function TemplateEditor({
       >
         <Row
           label="文字叠加"
-          hint="出片后自动从口播里提关键词，按「关键词 ↓ 关键词」叠在画面上。会多花一次 LLM。"
+          hint="暂不支持（旧渲染已下线）：Remotion 产物上不会出现这一层，这个开关目前不生效。出片后自动从口播里提关键词，按「关键词 ↓ 关键词」叠在画面上。会多花一次 LLM。"
         >
           <Choice
             value={cfg.textOverlayEnabled ? 'on' : 'off'}
@@ -363,7 +363,7 @@ export function TemplateEditor({
         ) : null}
       </Section>
 
-      <Section title="音频与片头片尾" hint="素材全部自己上传，系统不提供曲库。">
+      <Section title="音频与片头片尾" hint="暂不支持（旧渲染已下线）：成片包装段（BGM 混音/接片头片尾）随旧渲染层一起下线，Remotion 产物不会应用这里的配置。素材全部自己上传，系统不提供曲库。">
         {ASSET_KINDS.map((a) => {
           const current = cfg[a.field] as string | null;
           return (
@@ -425,7 +425,7 @@ export function TemplateEditor({
             options={[{ v: 'on' as const, label: '开' }, { v: 'off' as const, label: '关' }]}
           />
         </Row>
-        <Row label="Builder 模型" hint="排版吃推理能力，画面糊的时候先换这个。">
+        <Row label="Builder 模型" hint="暂不支持（旧渲染已下线）：新链的 Builder 用固定的模型选择逻辑，不读这个字段。排版吃推理能力，画面糊的时候先换这个。">
           <Choice
             value={cfg.builderModel}
             onChange={(v) => set('builderModel', v)}

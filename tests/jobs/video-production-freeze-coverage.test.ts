@@ -49,7 +49,12 @@ describe('静止复检的覆盖面', () => {
     const 落成片的 = calls.filter(
       (c) => /previewPath|masterPath|\[outputField\]/.test(c),
     );
-    expect(落成片的.length).toBeGreaterThan(3);
+    // 三十期 Task 3: 旧渲染层(三条旧 handler + 文字叠加层 + 成片包装段)删除后,
+    // 产出新成片并落库的出口从 4 处收窄到 3 处: handlePptNarrationRemotion(共
+    // ppt-narration/illustration-tts 两条链复用同一处调用)、
+    // handleTalkingHeadBrollRemotion、handleRecompose——原阈值(>3, 对应删除前
+    // 4 处出口)已不成立, 反映现状收紧为 >2, 继续守住"每处都带 freezeReport"。
+    expect(落成片的.length).toBeGreaterThan(2);
 
     const 漏检的 = 落成片的.filter((c) => !c.includes('freezeReport'));
     // 报出完整调用文本, 免得只说"有一处漏了"却不说是哪一处

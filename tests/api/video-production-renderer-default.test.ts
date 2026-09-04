@@ -92,7 +92,10 @@ describe('POST /api/v1/cockpit/video-productions —— renderer 缺省与显式
     expect(created.renderer).toBe('remotion');
   });
 
-  it('显式传 legacy —— 即便 mode 是 ppt-narration, 也要按用户说的来, 不被缺省规则覆盖', async () => {
+  // 三十期 Task 3: 旧渲染已下线, 显式传 'legacy' 不再是"按用户说的来"——
+  // RendererSchema 收紧为 z.literal('remotion'), 任何非法值(含历史上合法的
+  // 'legacy')一律 400, 不建库。
+  it('显式传 legacy → 400, 旧渲染已下线, 不建库', async () => {
     prismaMock.cockpitContent.findUnique.mockResolvedValue({
       id: 'c1', userId: 'user1', scriptDraftId: 'sd1', deliveryMode: 'douyin', script: {},
     });
@@ -102,10 +105,8 @@ describe('POST /api/v1/cockpit/video-productions —— renderer 缺省与显式
       jsonReq('http://t/api/v1/cockpit/video-productions', { contentId: 'c1', renderer: 'legacy' }),
     );
 
-    expect(res.status).toBe(200);
-    const created = prismaMock.videoProduction.create.mock.calls[0][0].data;
-    expect(created.mode).toBe('ppt-narration');
-    expect(created.renderer).toBe('legacy');
+    expect(res.status).toBe(400);
+    expect(prismaMock.videoProduction.create).not.toHaveBeenCalled();
   });
 
   it('deliveryMode=illustration-tts, 不传 renderer → 落库 remotion(二十九期验收后)', async () => {
@@ -295,16 +296,15 @@ describe('PATCH /api/v1/cockpit/video-productions/[id] —— 切换渲染方式
     expect(prismaMock.videoProduction.update).not.toHaveBeenCalled();
   });
 
-  it('unmigrated-mode 切回 legacy 不受限制(只有切到 remotion 才检查清单)', async () => {
-    prismaMock.videoProduction.findUnique.mockResolvedValue({
-      id: 'vp1', userId: 'user1', status: 'queued', renderer: 'remotion', mode: 'unmigrated-mode',
-    });
-    prismaMock.videoProduction.update.mockResolvedValue({ id: 'vp1', renderer: 'legacy' });
-
+  // 三十期 Task 3: PATCH 只接受 renderer='remotion', 拒绝任何写回 'legacy' 的
+  // 请求(即便当前 renderer 已经是 remotion, 试图切"回" legacy 也不例外)——
+  // 这不是"切换渲染方式"应该支持的方向, 旧渲染已下线。
+  it("PATCH renderer='legacy' → 400, 不查库也不更新(旧渲染已下线, 不再是合法方向)", async () => {
     const res = await PATCH(req({ renderer: 'legacy' }), { params: { id: 'vp1' } });
 
-    expect(res.status).toBe(200);
-    expect(prismaMock.videoProduction.update).toHaveBeenCalled();
+    expect(res.status).toBe(400);
+    expect(prismaMock.videoProduction.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.videoProduction.update).not.toHaveBeenCalled();
   });
 
   it('illustration-tts(已迁移)切到 remotion → 不被这道新关拦, 正常更新', async () => {

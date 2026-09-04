@@ -693,6 +693,46 @@ pip 空档=空背景是缺陷, worker 按版式选提示词与校验)。字级�
 (真人自由发挥无已知文本可锚, 有意不接字级对齐)。旧渲染层仍原样保留, 成建制删除
 排在三十期。
 
+### 三十期: 成建制删除旧渲染层(2026-09-04)
+
+三条交付模式全部验收通过并合流到 Remotion 之后, 旧渲染层(HTML+Chromium 逐帧截图 +
+ffmpeg 拼接/包装, 二十九期段落写的"仍原样保留")不再是任何用户可达路径的唯一实现,
+本期一次性删除:
+
+- `src/lib/video-production/` 22 个旧渲染层文件(`shot-renderer.ts`/`ambient-rig.ts`/
+  `shot-chrome.ts`/`preview-html.ts`/`shot-html-guard.ts`/`style-guard.ts`/
+  `attempt-score.ts`/`frame-density.ts`/`frame-detail.ts`/`frame-layout.ts`/
+  `frame-overlap.ts`/`builder-prompt.ts`/`packaging.ts`/`packaging-input.ts`/
+  `caption-safe-zone.ts`/`overlay-plan.ts`/`asset-manifest.ts`/`director-prompt.ts`/
+  `ass-captions.ts`)与 `src/lib/llm/prompts/overlay-plan.ts`。`clampShotsToSource`
+  (新链仍用)挪到 `shot-clamp.ts`; `CaptionEvent`/`captionEventsFromTranscript`
+  (新链仍用)挪到 `caption-events.ts`。
+- **模板试做台**(`/templates/[id]/studio` 页面 + 两条 API 路由 + `studio.tsx` 组件)
+  整批下线——HTML 分镜实时预览是旧渲染层的专属能力, 对 Remotion 产物不适用。
+- **内容真实素材机制**(`ContentAsset` 上传路由 + `asset-manifest.ts`)一并删除——
+  只服务旧链 Builder 提示词, 没有任何前端入口, 是彻底的孤儿功能; `prisma.ContentAsset`
+  表本身不动(历史数据)。
+- **文字叠加层与成片包装段作为产品能力一并下线**: 出片后自动提关键词叠字幕、
+  BGM 混音、接片头片尾这几项能力不再存在——它们对 Remotion 分支本就是死路径
+  (旧 handler 删除前, `handleProduce` 里 Remotion 分支渲完就 `return`, 从未真正
+  执行到这两段代码)。模板编辑器里 `textOverlayEnabled`/`bgmPath`/`introPath`/
+  `outroPath`/`visualTone`/`shotPaceSec`/`builderModel` 这些只被旧链消费的字段
+  控件本身还在, 但标了"暂不支持（旧渲染已下线）"的提示——**填了也不再生效**。
+- **legacy 渲染不能再被派发**: `handleProduce` 对 `renderer !== 'remotion'` 的任务
+  直接抛错(写进 `errorMessage`, 引导用户切换渲染方式), 不再有旧 handler 可回落;
+  三处创建/切换渲染方式的路由(`RendererSchema`)收紧为只接受 `'remotion'`, 拒绝任何
+  显式写入 `'legacy'` 的请求。**成片详情页的渲染方式不再是一个来回切换的开关**——
+  历史上仍是 `renderer='legacy'` 的任务(prisma 字段 `@default("legacy")`, 历史数据
+  不删, 已渲染完成的产物仍可下载/查看)展示一行说明文字 + 单向的「切换到新版渲染」
+  动作, 不再提供切回旧版的选项。
+- `playwright-core`/`rebrowser-patches` 两个 devDependency 一并卸载(唯一消费者
+  `shot-renderer.ts` 已删除)。
+
+已知遗留缺口(不因本次删除而产生, 如实记录): `handleRecompose`(只重新合成、不重新
+生成)仍读旧渲染层逐镜落盘的 `shotDir(...)/clip.mp4` 路径约定——`renderer='remotion'`
+的出镜链任务如果触发 recompose 会读不到该文件而失败, 这是删除旧渲染层**之前**就已
+存在的缺口, 本期不修。
+
 ### AI 视频交付三模式 (十九期新增)
 
 一句话: 十五期的「AI 自动生成无人出镜成片」改名为 `ppt-narration`(读稿形式), 并新增两种
@@ -948,7 +988,14 @@ tab 均可正常切换与拖拽改期; 平台 tab 切换后「新建内容」与
 选题页的素材编辑区 (间距收紧) 不显拥挤; 内容数据分析·目标 tab 的少量 token 取整误差肉眼
 不可察。全程未发现真实 bug, 无代码改动。
 
-### 无人出镜 AI 自动成片 (十五期新增)
+### 无人出镜 AI 自动成片 (十五期新增, **本节描述的渲染管线三十期已成建制删除**)
+
+> **三十期更新**: 本节描述的 headless Chromium 逐帧截图 + ffmpeg 拼接/包装管线
+> (`shot-renderer.ts`/`ambient-rig.ts`/`shot-chrome.ts` 等 22 个文件、模板试做台、
+> 文字叠加层、成片包装段)已随旧渲染层整体删除, 三条交付模式现全部走 Remotion
+> 渲染层(见下文「三十期」小节与「AI 视频交付三模式」小节)。本节保留作为历史记录,
+> 其中描述的「Playwright Chromium 依赖」「模板试做台」「文字叠加/BGM混音/片头片尾」
+> 等能力**已不存在于当前代码里**。
 
 一句话: 六幕脚本(十三期)定稿后, 内容详情页(十四期)脚本 tab 新增「交付方式」选择——选
 「AI 自动生成无人出镜成片」后, 「录制」步骤跳过、「剪辑」步骤换成生成成片面板, 点「开始
@@ -1392,7 +1439,9 @@ worker (`src/jobs/workers/teardown-worker.ts`) 的两个细节:
 
 真机走查: 拖到 0:07.7 → 第 3 块自动高亮 → 状态栏切成「人物全屏」→ 版面按钮与说明同步 → 画布变成整块口播框 → 字幕换成这一刻该出的那句。
 
-### 模板试做台 (`/templates/[id]/studio`)
+### 模板试做台 (`/templates/[id]/studio`)——**三十期已删除**
+
+> 本节整节描述的路由/页面/组件已随旧渲染层删除, 保留作历史记录, 当前代码里不存在。
 
 模板页原本只能改配置, 改完不知道效果 —— 要看效果得发起一次完整出片, **三分多钟**。那个节奏下没人会去调模板。
 
@@ -1595,10 +1644,11 @@ npm run dev          # http://localhost:3000
 npm run worker:dev   # BullMQ workers (analyze / retro / auto-sync / radar 四期新增 / video-production 十五期新增)
 ```
 
-无人出镜 AI 自动成片 (十五期, 见 §3「无人出镜 AI 自动成片」小节) 除上面两步外还需要:
-本机执行过 `npx playwright install chromium` (headless 截帧用) 和一个可用的 `ffmpeg`/
-`ffprobe` (`brew install ffmpeg`); DeepSeek key 同五期抖音逐字稿复用「AI 服务配置」卡/
-`.env` 里的 `DEEPSEEK_API_KEY`, 不需要额外配置项。
+AI 视频生成(现全部走 Remotion 渲染层, 见 §3「AI 视频交付三模式」小节) 除上面两步外
+还需要一个可用的 `ffmpeg`/`ffprobe` (`brew install ffmpeg`); DeepSeek key 同五期抖音
+逐字稿复用「AI 服务配置」卡/`.env` 里的 `DEEPSEEK_API_KEY`, 不需要额外配置项。**三十期
+起不再需要 Playwright Chromium**——旧渲染层(HTML+Chromium 逐帧截图)已成建制删除,
+`playwright-core`/`rebrowser-patches` 两个依赖也已从 `package.json` 卸载。
 
 雷达功能额外需要: Tavily API key (在设置视图「雷达配置」卡里填, 见 §3「热点雷达」小节; 去 [tavily.com](https://tavily.com) 免费注册即得, 免费档每月 1000 次检索通常够用) + 一个可用的 DeepSeek key (阅读评分复用「AI 服务配置」卡——优先读该卡里配置的 key, 未配置时回退 `.env` 里的 `DEEPSEEK_API_KEY`)。 两者任一缺失时「立即扫描」会明确报错 (未配置 Tavily/未启用 → 400；无可用 DeepSeek key → 503), 每日自动扫描会静默跳过该轮 (不报错, 见 `runRadarScan` 注释)。
 

@@ -4,33 +4,21 @@ import path from 'path';
 import { REMOTION_READY_MODES, isRemotionReadyMode } from '@/lib/video-production/renderer';
 
 /*
- * 二十九期 Task 2: 选路矩阵源码级测试 —— mode(ppt-narration / illustration-tts /
- * talking-head-broll) × renderer(legacy / remotion) 共 6 格, 逐格断言 handleProduce
- * 会走哪个 handler。
+ * 三十期 Task 3: 旧渲染层(handlePptNarration/handleTalkingHeadBroll/
+ * handleIllustrationTts 三条旧 handler)整体删除后, 选路矩阵从"6 格"收窄成
+ * "3 格 + 一条 legacy 拒绝规则"——不再有 renderer=legacy 时落回旧 handler 这条路,
+ * 任何非 'remotion' 的 renderer 都在选路最前面被直接拒绝, 不进入 mode 分流。
  *
- * 为什么是源码级(字符串/正则锚点), 不是真跑一遍 handleProduce: handleProduce 本身
- * 没有导出, 而且它内部还牵扯 BullMQ Job 类型、文字叠加层、成片包装段等一大堆和
- * "选哪个 handler" 无关的逻辑——要跑通整条链路需要把 LLM/TTS/ffmpeg/Chromium 全部
- * mock 一遍(worker-visual-style.test.ts 那种规模), 而这里只想钉住"分流开关本身没
- * 接错"，用源码结构断言更直接、也更不容易因为无关的 mock 细节而误报。
+ * 为什么继续用源码级(字符串/正则锚点)断言, 不真跑一遍 handleProduce: 理由与
+ * 删除前一致(见 git 历史), handleProduce 本身没有导出, 牵扯 BullMQ Job 类型等
+ * 大量与"选哪个 handler"无关的逻辑。
  *
- * 复审补: Remotion 选路开关的条件从内联的 `mode === 'ppt-narration' || mode ===
- * 'illustration-tts'` 改成了共享常量 `isRemotionReadyMode`(与 PATCH /[id] 路由
- * 共用, 见 renderer.ts), 源码正则锚不到"哪些 mode 在清单里"这件事本身了——这部分
- * 改成直接调真实的 isRemotionReadyMode/REMOTION_READY_MODES 断言, 逻辑锚点(调用
- * 哪个 handler)继续用源码正则。
- *
- * 二十九期 Task 4 补: talking-head-broll 也接上了 Remotion handler
- * (`handleTalkingHeadBrollRemotion`), Remotion 选路开关内部从"两选一"变成
- * "三选一"(`if/else if/else`), 下面 6 格里的这一格从"落回旧链"改成"走新 handler"。
- *
- * 6 格对应关系(与 handleProduce dispatch 段的实际代码一一对应):
- *   renderer=remotion  × mode=ppt-narration      → handlePptNarrationRemotion
- *   renderer=remotion  × mode=illustration-tts   → handleIllustrationTtsRemotion
- *   renderer=remotion  × mode=talking-head-broll → handleTalkingHeadBrollRemotion
- *   renderer=legacy    × mode=ppt-narration      → handlePptNarration
- *   renderer=legacy    × mode=illustration-tts   → handleIllustrationTts
- *   renderer=legacy    × mode=talking-head-broll → handleTalkingHeadBroll
+ * 3 格对应关系(与 handleProduce dispatch 段的实际代码一一对应):
+ *   renderer=remotion × mode=ppt-narration      → handlePptNarrationRemotion
+ *   renderer=remotion × mode=illustration-tts   → handleIllustrationTtsRemotion
+ *   renderer=remotion × mode=talking-head-broll → handleTalkingHeadBrollRemotion
+ *   renderer≠remotion(含历史 legacy 值/任何非法值) × 任意 mode → 直接抛错,
+ *   不再派发到任何 handler。
  */
 
 const SRC = fs.readFileSync(
@@ -45,79 +33,70 @@ if (DISPATCH_START < 0 || DISPATCH_END < 0 || DISPATCH_END <= DISPATCH_START) {
 }
 const DISPATCH = SRC.slice(DISPATCH_START, DISPATCH_END);
 
-// Remotion 选路开关的整段 if 块——从条件判断开始, 到与之配对的 return 结束。
-const REMOTION_GATE_START = DISPATCH.indexOf(
-  "if (vp.renderer === 'remotion' && isRemotionReadyMode(vp.mode))",
-);
-const REMOTION_GATE_END = DISPATCH.indexOf('\n      return;\n    }', REMOTION_GATE_START);
-if (REMOTION_GATE_START < 0 || REMOTION_GATE_END < 0) {
-  throw new Error('测试锚点失效: 找不到 Remotion 选路开关的 if 边界');
+// legacy 拒绝规则——必须在 mode 分流之前, 覆盖任何非 'remotion' 的 renderer 值。
+const LEGACY_REJECT_START = DISPATCH.indexOf("if (vp.renderer !== 'remotion')");
+if (LEGACY_REJECT_START < 0) {
+  throw new Error('测试锚点失效: 找不到 legacy 拒绝规则');
 }
-const REMOTION_GATE = DISPATCH.slice(REMOTION_GATE_START, REMOTION_GATE_END);
 
-// 旧链 if/else-if 链——从 Remotion 开关结束后到文字叠加层开始之前。
-const LEGACY_CHAIN_START = REMOTION_GATE_END;
-const LEGACY_CHAIN_END = DISPATCH.indexOf('文字叠加层', LEGACY_CHAIN_START);
-if (LEGACY_CHAIN_END < 0) {
-  throw new Error('测试锚点失效: 找不到旧链 if/else-if 到文字叠加层之间的边界');
+// mode 分流——从 isRemotionReadyMode 校验开始到函数体结束(catch 之前)。
+const MODE_GATE_START = DISPATCH.indexOf('if (!isRemotionReadyMode(vp.mode))', LEGACY_REJECT_START);
+const MODE_GATE_END = DISPATCH.indexOf('} catch (err) {');
+if (MODE_GATE_START < 0 || MODE_GATE_END < 0 || MODE_GATE_END <= MODE_GATE_START) {
+  throw new Error('测试锚点失效: 找不到 mode 分流的边界');
 }
-const LEGACY_CHAIN = DISPATCH.slice(LEGACY_CHAIN_START, LEGACY_CHAIN_END);
+const MODE_GATE = DISPATCH.slice(MODE_GATE_START, MODE_GATE_END);
 
-describe('选路矩阵: mode × renderer 共 6 格', () => {
-  it('renderer=remotion × mode=ppt-narration → handlePptNarrationRemotion', () => {
+describe('选路矩阵: renderer!==remotion 直接拒绝, 不再有旧链可派发', () => {
+  it('legacy 拒绝规则排在 mode 分流之前——历史 legacy 任务不会被派发到任何 handler', () => {
+    expect(LEGACY_REJECT_START).toBeLessThan(MODE_GATE_START);
+    expect(DISPATCH.slice(LEGACY_REJECT_START, MODE_GATE_START)).toMatch(
+      /throw new Error\('旧渲染已下线，请把这条任务的 renderer 切换到 remotion 后重试'\);/,
+    );
+  });
+
+  it('未知 mode(不在 REMOTION_READY_MODES 里)显式抛错, 不静默派发', () => {
+    expect(MODE_GATE).toMatch(
+      /if \(!isRemotionReadyMode\(vp\.mode\)\) \{\s*throw new Error\(`暂不支持的交付模式/,
+    );
+  });
+
+  it('mode=ppt-narration → handlePptNarrationRemotion', () => {
     expect(isRemotionReadyMode('ppt-narration')).toBe(true);
-    expect(REMOTION_GATE).toMatch(
+    expect(MODE_GATE).toMatch(
       /if \(vp\.mode === 'ppt-narration'\) \{\s*await handlePptNarrationRemotion\(/,
     );
   });
 
-  it('renderer=remotion × mode=illustration-tts → handleIllustrationTtsRemotion', () => {
+  it('mode=illustration-tts → handleIllustrationTtsRemotion', () => {
     // 这一断言就是变异靶子: 把 illustration-tts 从 REMOTION_READY_MODES 里
     // 去掉, 这里直接变红——不用真的跑一遍 handleProduce 也能验证清单被改坏。
     expect(isRemotionReadyMode('illustration-tts')).toBe(true);
-    expect(REMOTION_GATE).toMatch(
+    expect(MODE_GATE).toMatch(
       /\} else if \(vp\.mode === 'illustration-tts'\) \{\s*await handleIllustrationTtsRemotion\(/,
     );
   });
 
-  it('renderer=remotion × mode=talking-head-broll → handleTalkingHeadBrollRemotion(二十九期 Task 4 起接上)', () => {
+  it('mode=talking-head-broll → handleTalkingHeadBrollRemotion', () => {
     // 这一断言同样是变异靶子: 把 talking-head-broll 从 REMOTION_READY_MODES 里
     // 去掉, 这里直接变红。
     expect(isRemotionReadyMode('talking-head-broll')).toBe(true);
-    expect(REMOTION_GATE).toMatch(
+    expect(MODE_GATE).toMatch(
       /\} else \{\s*await handleTalkingHeadBrollRemotion\(/,
     );
   });
 
-  it('renderer=legacy(或任意非 remotion 值) × mode=ppt-narration → handlePptNarration', () => {
-    expect(LEGACY_CHAIN).toMatch(
-      /\} else if \(vp\.mode === 'ppt-narration'\) \{\s*await handlePptNarration\(/,
-    );
-  });
-
-  it('renderer=legacy × mode=illustration-tts → handleIllustrationTts(旧链, 非 Remotion 版)', () => {
-    expect(LEGACY_CHAIN).toMatch(
-      /\} else if \(vp\.mode === 'illustration-tts'\) \{\s*await handleIllustrationTts\(/,
-    );
-    // 防止误配成 Remotion 版——旧链这一格必须调用不带 Remotion 后缀的旧函数。
-    expect(LEGACY_CHAIN).not.toMatch(/handleIllustrationTtsRemotion/);
-  });
-
-  it('renderer=legacy × mode=talking-head-broll → handleTalkingHeadBroll(旧链, 非 Remotion 版)', () => {
-    expect(LEGACY_CHAIN).toMatch(
-      /if \(vp\.mode === 'talking-head-broll'\) \{\s*await handleTalkingHeadBroll\(/,
-    );
-    // 防止误配成 Remotion 版——旧链这一格必须调用不带 Remotion 后缀的旧函数。
-    expect(LEGACY_CHAIN).not.toMatch(/handleTalkingHeadBrollRemotion/);
-  });
-
-  it('未知 mode 落到 else 分支, 显式抛错而不是静默跳过', () => {
-    expect(LEGACY_CHAIN).toMatch(/\} else \{\s*throw new Error\(`暂不支持的交付模式/);
+  it('源码里不再出现不带 Remotion 后缀的旧 handler 调用', () => {
+    // \b 本身就不会在 "handlePptNarrationRemotion" 内部匹配出 "handlePptNarration"
+    // (二者之间没有单词边界), 不需要额外的否定前瞻。
+    expect(MODE_GATE).not.toMatch(/\bhandlePptNarration\b/);
+    expect(MODE_GATE).not.toMatch(/\bhandleIllustrationTts\b/);
+    expect(MODE_GATE).not.toMatch(/\bhandleTalkingHeadBroll\b/);
   });
 });
 
 describe('REMOTION_READY_MODES 清单本身', () => {
-  it('三个交付模式都在清单里(二十九期 Task 4 起 talking-head-broll 加入)', () => {
+  it('三个交付模式都在清单里', () => {
     expect([...REMOTION_READY_MODES].sort()).toEqual([
       'illustration-tts', 'ppt-narration', 'talking-head-broll',
     ]);
