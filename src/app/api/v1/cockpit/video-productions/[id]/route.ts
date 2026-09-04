@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
-import { canStartProduction } from '@/lib/cockpit/production-status';
+import { canSwitchRenderer } from '@/lib/cockpit/production-status';
 import { isRemotionReadyMode } from '@/lib/video-production/renderer';
 
 /**
@@ -43,8 +43,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 /**
  * 切换渲染器(任务四)——面板上「新版渲染/旧版渲染」的切换走这里。
  *
- * 只在任务还没开工时允许切(`canStartProduction`, 与开始制作按钮共用同一条判断,
- * 避免两处各写一份而漂移)。切换必须把 `filmPlan`/`alignedActs` 一并清掉:
+ * 只在任务还没开工(或分镜待确认)时允许切(`canSwitchRenderer`, 三十一期 Task 1
+ * 从 `canStartProduction` 拆出——见该函数顶部注释)。切换必须把 `filmPlan`/`alignedActs` 一并清掉:
  * 这两个字段是上一条渲染链留下的方案/对齐结果, 换链之后对新链毫无意义 ——
  * 残留下来会让 master 阶段误以为有现成方案可以直接复用, 结果是拿旧链的产物拼新链的片子。
  *
@@ -63,7 +63,13 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const vp = await prisma.videoProduction.findUnique({ where: { id: params.id } });
   if (!vp || vp.userId !== user.id) return fail('不存在', 404);
 
-  if (!canStartProduction(vp.status)) {
+  /*
+   * 三十一期(生成前剪辑台) Task 1: 这里改用 `canSwitchRenderer`, 不是
+   * `canStartProduction`——`plan_ready`(分镜待确认)也允许切换渲染器: 此时
+   * plan 反正清空重来, 切换语义天然自洽; 但它不该被放进「开始制作」的清单里
+   * (start=重新产 plan 会覆盖用户已调整的方案, 见 production-status.ts 顶部注释)。
+   */
+  if (!canSwitchRenderer(vp.status)) {
     return fail(`这条任务当前是「${vp.status}」, 已经在处理或已完成, 不能再切换渲染方式`, 400);
   }
 

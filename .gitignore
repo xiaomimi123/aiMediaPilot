@@ -17,7 +17,10 @@ prisma/migrations/dev.db*
 uploads/
 vendor/
 # 十九期: AI 视频生成产物 (VIDEO_PRODUCTION_ROOT 默认值), 与 uploads/ 同类, 纯本机运行时产物
-video-productions/
+# 三十一期 Task 1 修复: 原来没锚定到仓库根, 会误伤同名的源码目录
+# src/app/api/v1/cockpit/video-productions/——新增的 [id]/render/route.ts 曾因此
+# 被 git 悄悄忽略、看不出没提交。加前导 '/' 只匹配仓库根的运行时产物目录。
+/video-productions/
 # 二十一期: 内容真实素材上传(CONTENT_ASSET_ROOT 默认值), 同为本机运行时产物
 /content-assets/
 # 二十期: 模板素材 (VIDEO_TEMPLATE_ROOT 默认值), 与 video-productions/

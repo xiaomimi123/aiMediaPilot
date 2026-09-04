@@ -25,6 +25,9 @@ const LABEL: Record<string, string> = {
   queued: '排队中', source_uploaded: '视频已上传', directing: '构思分镜中', building: '搭建画面中',
   assembling: '拼接预览中', preview_ready: '预览就绪', approved: '已确认', rendering: '渲染中',
   packaging: '包装中', done: '已完成', failed: '生成失败',
+  // 三十一期(生成前剪辑台) Task 1: reviewBeforeRender 开着时, 产完分镜先停在这里
+  // 等用户逐镜确认, 不是在跑也不是失败。
+  plan_ready: '分镜待确认',
 };
 
 /**

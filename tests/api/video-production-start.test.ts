@@ -135,4 +135,14 @@ describe('POST video-productions/[id]/start', () => {
     expect(data.status).toBe('queued');
     expect(data.errorMessage).toBeNull();
   });
+
+  // 三十一期(生成前剪辑台) Task 1: plan_ready(分镜待确认)不许走 /start——start 的
+  // 语义是"重新产 plan", 会覆盖用户在剪辑台里对方案做的调整, 必须走 Task 4 的显式
+  // 确认对话框(继续渲染打 /render 路由), 不能通过这个入口直接触发。
+  it('plan_ready 状态不许 /start —— 会覆盖用户已调整的方案, 必须走 /render 确认', async () => {
+    prismaMock.videoProduction.findUnique.mockResolvedValue({ ...VP, status: 'plan_ready' });
+    const res = await POST(req(), { params: { id: 'vp1' } });
+    expect(res.status).toBe(400);
+    expect(queueMock.add).not.toHaveBeenCalled();
+  });
 });

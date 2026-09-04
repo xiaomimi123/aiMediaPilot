@@ -67,7 +67,18 @@ import {
  * 版面立刻变成孤儿, 而且白烧几分钟的 LLM 和逐帧截图。改版面只影响合成那一步,
  * 分镜和 B-roll 片段原样复用, 几秒钟就完。
  */
-type JobData = { videoProductionId: string; mode: 'preview' | 'master' | 'recompose' };
+/**
+ * `skipPlanGeneration`(三十一期 Task 1): render 路由("确认分镜, 继续渲染")传的标记。
+ * 只在 `mode: 'preview'` 时有意义——worker 读到它就跳过 TTS/ASR/对齐/buildFilmPlan/
+ * 落库整段, 直接复用上一次已经落盘的 filmPlan/alignedActs 进入渲染段(与三条 handler
+ * 各自的 master 分支共用同一条"跳过 AI、复用落库产物"的代码路径, 不第三次复制)。
+ * 不传 = 老行为(旧任务/`/start` 路由零迁移)。
+ */
+type JobData = {
+  videoProductionId: string;
+  mode: 'preview' | 'master' | 'recompose';
+  skipPlanGeneration?: boolean;
+};
 
 /** setStatus 的类型：内层各 delivery-mode handler 共用同一个闭包实例，不重复实现落库逻辑。 */
 type SetStatusFn = (status: string, extra?: Record<string, unknown>) => Promise<unknown>;
@@ -160,7 +171,15 @@ const PPT_NARRATION_REMOTION_OPTIONS: RemotionShotPlanOptions = {
   onMissingTts: 'degrade-silent',
 };
 
-async function handlePptNarrationRemotion(
+/**
+ * 导出仅供测试用(三十一期 Task 1, 与 `handleIllustrationTtsRemotion`/
+ * `handleTalkingHeadBrollRemotion` 同一先例)——单测要真跑一遍"生成 plan → 因
+ * `reviewBeforeRender` 停在 plan_ready"这条路径, 之前只有薄包装
+ * `handleIllustrationTtsRemotion` 导出、本体不导出, 但那条链默认无 TTS 配置时
+ * 直接抛错(`onMissingTts: 'throw'`), 走不到落库+暂停这一步, 不适合拿来测暂停
+ * 逻辑; ppt-narration 无配置时是无声降级(不抛错), 是测这条暂停路径最直接的入口。
+ */
+export async function handlePptNarrationRemotion(
   vp: VideoProduction,
   mode: 'preview' | 'master',
   setStatus: SetStatusFn,
@@ -168,6 +187,7 @@ async function handlePptNarrationRemotion(
   readyStatus: string,
   outputField: 'previewPath' | 'masterPath',
   options: RemotionShotPlanOptions = PPT_NARRATION_REMOTION_OPTIONS,
+  skipPlanGeneration = false,
 ): Promise<void> {
   const template = await templateOf(vp.templateId);
 
@@ -185,7 +205,9 @@ async function handlePptNarrationRemotion(
    * `align-captions.ts` 顶部注释。
    */
   let wordsPerEvent: Array<CaptionWord[] | undefined> | undefined;
-  if (mode === 'preview') {
+  // `skipPlanGeneration`(三十一期 Task 1): 确认分镜后续跑, 跳过整段生成, 走下面
+  // `else` 分支(与 master 复用同一条"读库里已落盘的 filmPlan/alignedActs"路径)。
+  if (mode === 'preview' && !skipPlanGeneration) {
     await setStatus('directing');
     const deepseekKey = await resolveDeepSeekApiKey(vp.userId);
     if (!deepseekKey) throw new Error('未配置 DeepSeek key');
@@ -387,6 +409,19 @@ async function handlePptNarrationRemotion(
         updatedAt: new Date().toISOString(),
       },
     });
+
+    /*
+     * 生成前剪辑台的暂停点(三十一期 Task 1): TTS/ASR/对齐/FilmPlan 全部已经跑完
+     * 并落盘(就在上面这次 update 里), 剩下的只是渲染——`reviewBeforeRender` 开着
+     * 时先停在这里等用户逐镜调整方案, 不白白渲一遍用户可能还要改的画面。
+     * 用户确认后走 `/render` 路由, 带 `skipPlanGeneration: true` 回来, 命中的是
+     * 上面 `if` 的 `!skipPlanGeneration` 条件为 false, 直接进下面的 `else`
+     * (复用落盘产物), 不会再问一次模型。
+     */
+    if (vp.reviewBeforeRender) {
+      await setStatus('plan_ready');
+      return;
+    }
   } else {
     await setStatus('building');
     if (!vp.filmPlan) throw new Error('没有已保存的 FilmPlan, 请先生成预览');
@@ -410,9 +445,11 @@ async function handlePptNarrationRemotion(
       audioFile = null;
     }
 
-    // master 不重新跑对齐(耗时的子进程 + ASR 推理, 与不重新调 TTS 同一先例)——
-    // 直接复用 preview 落盘的 timing.json。文件缺失(比如 preview 当初没有
-    // audioFile、或跑在这个功能上线之前)就整体退回逐句字幕, 不是错误。
+    // 这个分支不重新跑对齐(耗时的子进程 + ASR 推理, 与不重新调 TTS 同一先例)——
+    // 直接复用上一次落盘的 timing.json。文件缺失(比如当初没有 audioFile、或跑在
+    // 这个功能上线之前)就整体退回逐句字幕, 不是错误。
+    // 走到这里的不只是 master——三十一期 Task 1 起, `skipPlanGeneration` 的
+    // preview 确认渲染也复用同一条路径(见函数顶部注释), 日志措辞不再单指 master。
     if (audioFile) {
       let timing: TimingPayload | null = null;
       try {
@@ -423,7 +460,7 @@ async function handlePptNarrationRemotion(
       const { wordsPerEvent: aligned2, quality } = buildWordsForEvents(captionEvents, timing);
       wordsPerEvent = aligned2;
       console.log(
-        `[video-production] master 复用已持久化的对齐结果: 共 ${quality.totalSentences} 句, ` +
+        `[video-production] 复用已持久化的对齐结果: 共 ${quality.totalSentences} 句, ` +
           `match<0.90 的句子 ${quality.lowMatchCount} 句${timing ? '' : '(未找到 timing.json, 已退回逐句字幕)'}`,
       );
     }
@@ -491,9 +528,11 @@ export async function handleIllustrationTtsRemotion(
   outputFileName: string,
   readyStatus: string,
   outputField: 'previewPath' | 'masterPath',
+  skipPlanGeneration = false,
 ): Promise<void> {
   return handlePptNarrationRemotion(
     vp, mode, setStatus, outputFileName, readyStatus, outputField, ILLUSTRATION_TTS_REMOTION_OPTIONS,
+    skipPlanGeneration,
   );
 }
 
@@ -658,6 +697,7 @@ export async function handleTalkingHeadBrollRemotion(
   outputFileName: string,
   readyStatus: string,
   outputField: 'previewPath' | 'masterPath',
+  skipPlanGeneration = false,
 ): Promise<void> {
   if (!vp.sourceVideoPath) throw new Error('尚未上传出镜视频');
   const sourceVideoPath = vp.sourceVideoPath;
@@ -681,7 +721,9 @@ export async function handleTalkingHeadBrollRemotion(
   let plan: FilmPlan;
   let aligned: AlignedAct[];
   let rawTranscript: TranscriptSegment[];
-  if (mode === 'preview') {
+  // `skipPlanGeneration`(三十一期 Task 1): 与 handlePptNarrationRemotion 同一先例,
+  // 见该函数内对应注释。
+  if (mode === 'preview' && !skipPlanGeneration) {
     // 转写 + 语音对齐(复用现有 directing 状态值, 语义上这里是"转写+对齐",
     // 与旧渲染层(已删除)同一先例)。
     await setStatus('directing');
@@ -801,6 +843,13 @@ export async function handleTalkingHeadBrollRemotion(
         updatedAt: new Date().toISOString(),
       },
     });
+
+    // 生成前剪辑台的暂停点(三十一期 Task 1)——理由与 handlePptNarrationRemotion
+    // 同一处注释一致: ASR/对齐/FilmPlan 都已落盘, 停的只是渲染。
+    if (vp.reviewBeforeRender) {
+      await setStatus('plan_ready');
+      return;
+    }
   } else {
     await setStatus('building');
     if (!vp.filmPlan) throw new Error('没有已保存的 FilmPlan, 请先生成预览');
@@ -908,7 +957,7 @@ export async function handleTalkingHeadBrollRemotion(
 }
 
 async function handleProduce(job: Job<JobData>) {
-  const { videoProductionId, mode } = job.data;
+  const { videoProductionId, mode, skipPlanGeneration } = job.data;
 
   const setStatus: SetStatusFn = (status, extra = {}) =>
     prisma.videoProduction.update({
@@ -964,11 +1013,18 @@ async function handleProduce(job: Job<JobData>) {
       throw new Error(`暂不支持的交付模式: ${vp.mode}`);
     }
     if (vp.mode === 'ppt-narration') {
-      await handlePptNarrationRemotion(vp, mode, setStatus, outputFileName, readyStatus, outputField);
+      await handlePptNarrationRemotion(
+        vp, mode, setStatus, outputFileName, readyStatus, outputField,
+        PPT_NARRATION_REMOTION_OPTIONS, skipPlanGeneration === true,
+      );
     } else if (vp.mode === 'illustration-tts') {
-      await handleIllustrationTtsRemotion(vp, mode, setStatus, outputFileName, readyStatus, outputField);
+      await handleIllustrationTtsRemotion(
+        vp, mode, setStatus, outputFileName, readyStatus, outputField, skipPlanGeneration === true,
+      );
     } else {
-      await handleTalkingHeadBrollRemotion(vp, mode, setStatus, outputFileName, readyStatus, outputField);
+      await handleTalkingHeadBrollRemotion(
+        vp, mode, setStatus, outputFileName, readyStatus, outputField, skipPlanGeneration === true,
+      );
     }
   } catch (err) {
     await setStatus('failed', { errorMessage: err instanceof Error ? err.message : String(err) });

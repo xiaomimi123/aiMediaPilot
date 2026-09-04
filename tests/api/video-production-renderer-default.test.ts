@@ -4,8 +4,9 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
  * 任务四: renderer 入口 —— API 默认值与面板切换。
  *
  * 覆盖两条创建路由的缺省规则(mode === 'ppt-narration' → 'remotion', 其它 → 'legacy',
- * 显式传值优先)与 `[id]/route.ts` 新增的 PATCH 切换(只在 canStartProduction 时允许,
- * 且必须同时清空 filmPlan/alignedActs)。
+ * 显式传值优先)与 `[id]/route.ts` 新增的 PATCH 切换(三十一期 Task 1 起改用
+ * canSwitchRenderer——在 canStartProduction 基础上多放行 plan_ready, 见
+ * production-status.ts 顶部注释; 且必须同时清空 filmPlan/alignedActs)。
  */
 
 vi.mock('@/lib/user', () => ({ getOrCreateDefaultUser: vi.fn(async () => ({ id: 'user1' })) }));
@@ -329,5 +330,23 @@ describe('PATCH /api/v1/cockpit/video-productions/[id] —— 切换渲染方式
 
     expect(res.status).toBe(200);
     expect(prismaMock.videoProduction.update).toHaveBeenCalled();
+  });
+
+  // 三十一期(生成前剪辑台) Task 1: plan_ready(分镜待确认)不在 STARTABLE_PRODUCTION_STATUS
+  // 里(不能"开始制作"——那会覆盖用户已调整的方案), 但 canSwitchRenderer 单独放行它,
+  // 因为切换渲染器本身就会清空 filmPlan/alignedActs, 语义天然自洽。
+  it('plan_ready 状态下允许切换渲染器 —— 与 canStartProduction 的清单区分开', async () => {
+    prismaMock.videoProduction.findUnique.mockResolvedValue({
+      id: 'vp1', userId: 'user1', status: 'plan_ready', renderer: 'legacy', mode: 'ppt-narration',
+      filmPlan: { shots: [{ shotId: 's1' }] },
+    });
+    prismaMock.videoProduction.update.mockResolvedValue({ id: 'vp1', renderer: 'remotion' });
+
+    const res = await PATCH(req({ renderer: 'remotion' }), { params: { id: 'vp1' } });
+
+    expect(res.status).toBe(200);
+    const data = prismaMock.videoProduction.update.mock.calls[0][0].data;
+    expect(data.renderer).toBe('remotion');
+    expect(data.filmPlan).toEqual(Prisma.JsonNull);
   });
 });

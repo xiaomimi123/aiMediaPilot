@@ -13,6 +13,8 @@ import { defaultRendererForMode } from '@/lib/video-production/renderer';
 // 三十期 Task 3: 旧渲染已下线, 新建任务只接受显式 renderer='remotion'
 // (不传时走 defaultRendererForMode 的默认值); 'legacy' 一律拒绝。
 const RendererSchema = z.literal('remotion');
+// 三十一期(生成前剪辑台) Task 1: 生成前暂停点的开关, 创建路由可选传入。
+const ReviewBeforeRenderSchema = z.boolean();
 
 /**
  * 触发一次成片生成 (十八期 T8) — 六幕脚本 → SRT → 落一条 VideoProduction
@@ -29,7 +31,7 @@ const RendererSchema = z.literal('remotion');
  * 加载复用同一份逻辑) 解出 acts/four_dims。
  */
 export async function POST(req: Request) {
-  let body: { contentId?: unknown; renderer?: unknown };
+  let body: { contentId?: unknown; renderer?: unknown; reviewBeforeRender?: unknown };
   try { body = await req.json(); } catch { return fail('请求体不是合法 JSON', 400); }
   if (typeof body.contentId !== 'string' || !body.contentId) return fail('缺少 contentId', 400);
   const contentId = body.contentId;
@@ -39,6 +41,17 @@ export async function POST(req: Request) {
     const parsedRenderer = RendererSchema.safeParse(body.renderer);
     if (!parsedRenderer.success) return fail('旧渲染已下线，请使用新版渲染', 400);
     requestedRenderer = parsedRenderer.data;
+  }
+
+  // 三十一期(生成前剪辑台) Task 1: 生成前的暂停点开关, 可选——不传就吃 schema 默认值
+  // true(缺省"渲染前先看一眼分镜")。不在这里显式兜底默认值, 是为了让 create 的
+  // data 对象里不出现这个字段时, 交给 Prisma 的 @default(true) 去填, 单一处定义
+  // 默认值, 不在路由这里重复一份容易漂移的常量。
+  let requestedReviewBeforeRender: boolean | undefined;
+  if (body.reviewBeforeRender !== undefined) {
+    const parsedReview = ReviewBeforeRenderSchema.safeParse(body.reviewBeforeRender);
+    if (!parsedReview.success) return fail('reviewBeforeRender 必须是布尔值', 400);
+    requestedReviewBeforeRender = parsedReview.data;
   }
 
   try {
@@ -82,6 +95,9 @@ export async function POST(req: Request) {
         status: 'queued',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        // 不传时不写这个键, 交给 schema 的 @default(true) 兜底——理由见上面
+        // requestedReviewBeforeRender 赋值处的注释。
+        ...(requestedReviewBeforeRender !== undefined ? { reviewBeforeRender: requestedReviewBeforeRender } : {}),
       },
     });
     // talking-head-broll 需要先在「录制」步骤上传出镜视频 (upload-source 路由),

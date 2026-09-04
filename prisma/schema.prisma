@@ -368,6 +368,11 @@ model VideoProduction {
   /// errorMessage 会让用户把正常出片当报错。有声路径/legacy 路径保持 null,
   /// 不要用一句无关提醒污染没有降级的任务。
   productionNotice String?
+  /// 三十一期(生成前剪辑台) Task 1: 产完 FilmPlan 是否先停一步等用户确认, 而不是
+  /// 直接渲染。默认开 —— "渲染前先看一眼分镜"是剪辑台的主形态; 关掉则行为与三十期
+  /// 一致(产完直接渲, 老任务/未来显式关闭的任务零迁移)。只在 mode==='preview' 生效,
+  /// master(正式渲染)从不因为这个开关停下 —— master 本来就要求先有 preview。
+  reviewBeforeRender Boolean @default(true)
   user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, contentId])

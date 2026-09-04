@@ -23,7 +23,11 @@ export const PRODUCTION_STAGES = [
 
 export type StageKey = (typeof PRODUCTION_STAGES)[number]['key'];
 
-/** 状态 → 它落在哪一阶段。source_uploaded 归排队, approved 归正式渲染。 */
+/** 状态 → 它落在哪一阶段。source_uploaded 归排队, approved 归正式渲染。
+ * `plan_ready`(三十一期 Task 1, 分镜待确认)不在这份映射里——它是渲染前的暂停点,
+ * 归到哪个阶段是生成前剪辑台整体的进度条设计, 属于 Task 4(界面)的范围; 这里只保证
+ * `stageIndex` 对它不崩(命中不了映射就走下面 `if (!stage) return -1;` 那条兜底,
+ * 与 `failed`/未知状态同一处理)。 */
 const STATUS_TO_STAGE: Record<string, StageKey> = {
   queued: 'queued',
   source_uploaded: 'queued',
@@ -54,7 +58,9 @@ export type WaitingOn = 'you' | 'machine' | 'nobody';
  */
 export function waitingOn(status: string): WaitingOn {
   if (status === 'done') return 'nobody';
-  if (status === 'preview_ready' || status === 'failed') return 'you';
+  // plan_ready(三十一期 Task 1, 分镜待确认): 与 preview_ready 同一语义——等用户
+  // 看过、点一下才会继续, 不是在跑。
+  if (status === 'preview_ready' || status === 'failed' || status === 'plan_ready') return 'you';
   if (status === 'queued' || status === 'source_uploaded') return 'you';
   return 'machine';
 }
@@ -76,6 +82,8 @@ export function stageHint(status: string): string {
       return 'AI 正在搭建画面。这一步最慢。';
     case 'assembling':
       return '正在拼接预览片。';
+    case 'plan_ready':
+      return '分镜待确认：先在剪辑台里逐镜调整方案，确认后再继续渲染。';
     case 'preview_ready':
       return '预览好了，等你看过之后确认导出——在那之前它会一直停在这儿。';
     case 'approved':

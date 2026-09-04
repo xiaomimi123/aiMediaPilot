@@ -185,6 +185,54 @@ describe('POST /api/v1/cockpit/video-productions', () => {
     expect(res.status).toBe(400);
     expect(prismaMock.cockpitContent.findUnique).not.toHaveBeenCalled();
   });
+
+  // 三十一期(生成前剪辑台) Task 1: reviewBeforeRender 开关, 可选传入。
+  describe('reviewBeforeRender —— 生成前暂停点开关', () => {
+    beforeEach(() => {
+      prismaMock.cockpitContent.findUnique.mockResolvedValue({
+        id: 'c1', userId: 'user1', scriptDraftId: 'sd1', script: {},
+      });
+      prismaMock.scriptDraft.findUnique.mockResolvedValue({
+        id: 'sd1',
+        output: { script: { acts: SIX_ACT_SCRIPT.acts }, four_dims: SIX_ACT_SCRIPT.four_dims },
+      });
+      prismaMock.videoProduction.create.mockResolvedValue({ id: 'vp1', status: 'queued' });
+      queueMock.add.mockResolvedValue({ id: 'job-1' });
+    });
+
+    it('不传 → 不写这个键, 交给 schema 的 @default(true) 兜底, 不在路由这里重复一份默认值', async () => {
+      const res = await POST(req('http://t/api/v1/cockpit/video-productions', { contentId: 'c1' }));
+      expect(res.status).toBe(200);
+      const data = prismaMock.videoProduction.create.mock.calls[0][0].data;
+      expect('reviewBeforeRender' in data).toBe(false);
+    });
+
+    it('显式传 false → 落库 false(关掉暂停点, 行为与三十期一致直达 preview_ready)', async () => {
+      const res = await POST(
+        req('http://t/api/v1/cockpit/video-productions', { contentId: 'c1', reviewBeforeRender: false }),
+      );
+      expect(res.status).toBe(200);
+      const data = prismaMock.videoProduction.create.mock.calls[0][0].data;
+      expect(data.reviewBeforeRender).toBe(false);
+    });
+
+    it('显式传 true → 落库 true', async () => {
+      const res = await POST(
+        req('http://t/api/v1/cockpit/video-productions', { contentId: 'c1', reviewBeforeRender: true }),
+      );
+      expect(res.status).toBe(200);
+      const data = prismaMock.videoProduction.create.mock.calls[0][0].data;
+      expect(data.reviewBeforeRender).toBe(true);
+    });
+
+    it('传非布尔值 → 400, 不建库', async () => {
+      const res = await POST(
+        req('http://t/api/v1/cockpit/video-productions', { contentId: 'c1', reviewBeforeRender: 'yes' }),
+      );
+      expect(res.status).toBe(400);
+      expect(prismaMock.videoProduction.create).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('GET /api/v1/cockpit/video-productions/[id]', () => {
