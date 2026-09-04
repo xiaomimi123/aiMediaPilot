@@ -10,7 +10,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 vi.mock('@/lib/user', () => ({ getOrCreateDefaultUser: vi.fn(async () => ({ id: 'user1' })) }));
 
 const prismaMock = vi.hoisted(() => ({
-  videoProduction: { findUnique: vi.fn(), update: vi.fn() },
+  videoProduction: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
   videoTemplate: { findUnique: vi.fn() },
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
@@ -34,6 +34,8 @@ beforeEach(() => {
   probeVideoDurationMsMock.mockResolvedValue(20000);
   prismaMock.videoTemplate.findUnique.mockResolvedValue(null);
   prismaMock.videoProduction.update.mockImplementation(async ({ data }: any) => ({ id: 'vp1', ...data }));
+  // 条件更新默认命中(count:1); 竞态用例单独覆盖成 count:0
+  prismaMock.videoProduction.updateMany.mockResolvedValue({ count: 1 });
 });
 
 describe('GET /api/v1/cockpit/video-productions/[id]/film-plan', () => {
@@ -93,8 +95,8 @@ describe('PUT /api/v1/cockpit/video-productions/[id]/film-plan —— ppt-narrat
     const res = await PUT(putReq({ plan }), { params: { id: 'vp1' } });
 
     expect(res.status).toBe(200);
-    expect(prismaMock.videoProduction.update).toHaveBeenCalledTimes(1);
-    const data = prismaMock.videoProduction.update.mock.calls[0][0].data;
+    expect(prismaMock.videoProduction.updateMany).toHaveBeenCalledTimes(1);
+    const data = prismaMock.videoProduction.updateMany.mock.calls[0][0].data;
     expect(data.filmPlan).toEqual(plan);
   });
 
@@ -166,7 +168,7 @@ describe('PUT —— talking-head-broll 按 layout 选对校验器', () => {
     const res = await PUT(putReq({ plan }), { params: { id: 'vp1' } });
 
     expect(res.status).toBe(200);
-    expect(prismaMock.videoProduction.update).toHaveBeenCalledTimes(1);
+    expect(prismaMock.videoProduction.updateMany).toHaveBeenCalledTimes(1);
   });
 
   it('pip: windowed 校验生效 —— 幕内 1000ms 空档在 cutaway 语义下会放行, 在 pip 语义下必须报错', async () => {
@@ -191,5 +193,26 @@ describe('PUT —— talking-head-broll 按 layout 选对校验器', () => {
     const body = await res.json();
     expect(body.errors.some((e: string) => e.includes('毫秒'))).toBe(true);
     expect(prismaMock.videoProduction.update).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * 乐观并发(三十一期 Task 2 复审补): plan_ready 校验只在读的那一刻成立。
+ * 切换渲染器可能在"读后写前"把任务退回 queued —— 条件更新 count 为 0 时必须 409,
+ * 不能 200(编辑被无声丢弃比报错糟)。
+ */
+describe('PUT —— 读写之间状态变化的竞态', () => {
+  it('updateMany 未命中(状态已变) → 409, 不返回成功', async () => {
+    prismaMock.videoProduction.findUnique.mockResolvedValue({
+      id: 'vp1', userId: 'user1', status: 'plan_ready', mode: 'ppt-narration',
+      alignedActs: [{ act: 'hook', startMs: 0, endMs: 10000 }], templateId: null,
+    });
+    prismaMock.videoProduction.updateMany.mockResolvedValue({ count: 0 });
+
+    const res = await PUT(
+      putReq({ plan: { shots: [{ shotId: 's1', startMs: 0, endMs: 10000, card: 'statement', slots: { text: '一句话' } }] } }),
+      { params: { id: 'vp1' } },
+    );
+    expect(res.status).toBe(409);
   });
 });

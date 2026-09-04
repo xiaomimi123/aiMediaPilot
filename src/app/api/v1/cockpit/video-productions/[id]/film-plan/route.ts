@@ -165,13 +165,23 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     return fail('分镜方案时间轴校验未通过', 400, { errors: issues });
   }
 
-  await prisma.videoProduction.update({
-    where: { id: params.id },
+  /*
+   * 条件更新而不是无条件 update(三十一期 Task 2 复审): 前面的 plan_ready 校验只在
+   * 读的那一刻成立 —— 若切换渲染器恰好在"读之后、写之前"把任务退回 queued 并清掉
+   * alignedActs, 无条件写会把一份基于已作废 windows 校验通过的方案回写进去, 且用户
+   * 收到 200(编辑被无声丢弃比报错糟)。updateMany 带 status 条件 = 乐观并发控制:
+   * count 为 0 说明状态在读写之间变了, 明说重试。
+   */
+  const written = await prisma.videoProduction.updateMany({
+    where: { id: params.id, status: 'plan_ready' },
     data: {
       filmPlan: plan as unknown as Prisma.InputJsonValue,
       updatedAt: new Date().toISOString(),
     },
   });
+  if (written.count === 0) {
+    return fail('任务状态刚刚变化(可能切换了渲染器或已开始处理), 请刷新后重试', 409);
+  }
 
   // Task 3 的 still 缓存在此失效——本任务(Task 2)只留挂点, 不实现。方案改了,
   // 卡面预览多半也变了, Task 3 落地后应在这次 update 之后让该任务的卡面缓存
