@@ -48,7 +48,7 @@ if (MODE_GATE_START < 0 || MODE_GATE_END < 0 || MODE_GATE_END <= MODE_GATE_START
 const MODE_GATE = DISPATCH.slice(MODE_GATE_START, MODE_GATE_END);
 
 describe('选路矩阵: renderer!==remotion 直接拒绝, 不再有旧链可派发', () => {
-  it('legacy 拒绝规则排在 mode 分流之前——历史 legacy 任务不会被派发到任何 handler', () => {
+  it('legacy 拒绝规则排在三条渲染分支之前(recompose 除外——它不走渲染路, 有意放行, 见 worker 注释)', () => {
     expect(LEGACY_REJECT_START).toBeLessThan(MODE_GATE_START);
     expect(DISPATCH.slice(LEGACY_REJECT_START, MODE_GATE_START)).toMatch(
       /throw new Error\('旧渲染已下线，请把这条任务的 renderer 切换到 remotion 后重试'\);/,

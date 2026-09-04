@@ -932,7 +932,14 @@ async function handleProduce(job: Job<JobData>) {
     // 各交付模式的具体流程封装成独立函数——ppt-narration、talking-head-broll 与
     // illustration-tts 互不干扰，照此形状新增分支不需要改动这两个函数。
     if (mode === 'recompose') {
-      // 只重新合成 —— 分镜和 B-roll 原样复用, 见 handleRecompose 的说明
+      /*
+       * 只重新合成 —— 分镜和 B-roll 原样复用, 见 handleRecompose 的说明。
+       *
+       * **有意放在 legacy 拒绝守卫之前**(三十期终审确认): recompose 不走渲染路,
+       * 只把当年已经渲好的分镜产物重新拼排版, 它用的合成机制独立于已删的旧渲染层,
+       * 对历史 legacy 任务功能完好。「旧渲染已下线」下线的是渲染路, 不是用户对
+       * 历史产物的编辑权 —— 拒掉这里是无谓剥夺能力。
+       */
       await handleRecompose(vp, setStatus);
       return;
     }

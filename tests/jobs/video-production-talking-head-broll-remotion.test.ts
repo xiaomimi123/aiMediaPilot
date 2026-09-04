@@ -97,8 +97,7 @@ vi.mock('@/lib/llm/deepseek', () => ({
 vi.mock('@/lib/video/ffmpeg', () => ({
   extractAudio: extractAudioMock,
   probeVideoDurationMs: probeVideoDurationMsMock,
-  concatClips: vi.fn(), concatAudioTracks: vi.fn(), compositeCutawayVideo: vi.fn(),
-  burnCaptions: vi.fn(), probeVideoDimensions: vi.fn(), probeVideo: vi.fn(), muxAudioTrack: vi.fn(),
+  concatAudioTracks: vi.fn(), probeVideoDimensions: vi.fn(), probeVideo: vi.fn(),
 }));
 vi.mock('@/lib/video-production/remotion-render', () => ({ renderFilm: renderFilmMock }));
 
