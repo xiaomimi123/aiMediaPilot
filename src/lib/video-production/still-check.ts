@@ -320,15 +320,85 @@ export function analysisSizeFor(width: number, height: number): { width: number;
 }
 
 /**
- * 单帧综合判定 —— 密度关 + 空壳关一起过(与旧链 worker 里对每个取样帧做的事等价,
- * 只是这里只有一帧, 不需要 `judgeShotDensity` 那层"多数帧决定"的聚合)。
+ * 停用说明(三十一期, 真机误报体检)。
+ *
+ * `judgeFrameDensity`/`judgeHollowCard` 是"模型自由写 HTML"时代的判据——抓的是
+ * 模型偷懒写出的空壳大色块。三十期把画面体检从 DOM 探针换成 `renderStill` 抽帧
+ * 之后接上真实产线, 三十期真机回归暴露: 填槽架构下**大量留白 + 少量文字本来就是
+ * 我们自己设计的卡面**(vignette 渐变被 `judgeFrameDensity` 当成有效"内容"占了
+ * 40%+ 面积, 文字本身只占其中几个百分点的细节)——真机数据:
+ *
+ *   ppt-narration 25/26 镜误报「空壳色块」、illustration 15/16 镜误报、
+ *   出镜链(有视频背景)0/20 通过 —— 人工核实误报帧全部是正常卡面, 不是真的空。
+ *
+ * 根因: 这两个判据是按"模型写 HTML 铺大色块刷分"这种缺陷标定的, 与填槽架构(卡面
+ * 版式由 `remotion/src/cards/*.tsx` 组件保证, 不是模型现写)完全错配 —— 组件本来
+ * 就会让 vignette/背景渐变占大部分面积, 这在旧判据眼里长得和"空壳大色块"一样。
+ *
+ * 裁决: Remotion 链的 still 体检只留「真空屏」判据(见下方 `judgeBlankStill`),
+ * 停用这两个。**函数保留在这个文件里, 不删除**——先停后删, 删除是以后的事;
+ * 保留是为了留一条"万一以后真的需要抓模型自由写版面"的路径(比如将来加一条自由
+ * 排版的产线), 但**任何调用方现在都不应该再调它们** —— `judgeStillFrame`/
+ * `judgeStillPng` 已经改用 `judgeBlankStill`, worker 侧 `reportStillHealth` 同步改。
+ */
+
+/**
+ * 真空屏判据(三十一期, 取代上面两个停用的判据)。
+ *
+ * 填槽架构下 renderStill 体检的正当职责收窄为: 组件已经保证了版面(留白多少是
+ * 设计选择), 体检只兜「渲染管线本身坏了、这一帧根本没渲出任何东西」这一种病 ——
+ * 判据只看 `measureFrameDetail` 的细节占比, 不再看 `measureFrameDensity` 的
+ * 内容占比(那个数被 vignette 渐变污染, 已经不可信, 见上方停用说明)。
+ *
+ * **标定数据**(2026-09-04, 真实尺寸下、经 `analysisSizeFor` 缩到 171 长边——
+ * 与本文件其它判据同一取样尺度):
+ *
+ * 正样本(不该报——`renderShotStill` 各卡正常槽位内容, 取时间窗中点一帧):
+ *   card=card    statement(长句) 3.022% / stat 3.158% / contrast 1.895% / list 2.644%
+ *   card=illustration  statement(长句) 与上面同数量级(风格只换配色, 不影响判据)
+ *   **极端稀疏卡面**(与真机误报最像的情形——一个字的 statement, 大留白 + 单字):
+ *     card=card 风格 0.124% / card=illustration 风格 0.118%
+ *   —— 全部正样本里最低的是 0.118%(illustration 风格单字卡)。
+ *
+ * 负样本(该报——`renderShotStill` 在 shot 时间窗**之外**抽帧: `Film.tsx` 里卡片
+ * 套在 `<Sequence from={} durationInFrames={}>` 里, 时间窗外该 Sequence 根本
+ * 不挂载, 画面上只剩全局背景色 + `<Ambient/>` 环境运动层, 没有任何卡片渲染):
+ *   card=card 风格两次不同 atMs 都是 0.000% / card=illustration 风格同样 0.000%
+ *   —— 真空屏与"渲出了任何东西"之间是 0 与非 0 的区别, 稳定复现、没有量的模糊地带。
+ *
+ * 阈值取最低正样本(0.118%)的 1/3 ≈ 0.039%, 留出余量, 定为 **0.03%**
+ * (`MIN_BLANK_DETAIL_RATIO = 0.0003`)——比负样本的 0 高得多, 比正样本的最低值
+ * 低得多, 两边都留了充足余量。
+ */
+const MIN_BLANK_DETAIL_RATIO = 0.0003;
+
+export interface BlankJudgement {
+  ok: boolean;
+  reason?: string;
+}
+
+export function judgeBlankStill(detail: FrameDetail): BlankJudgement {
+  if (detail.detailRatio < MIN_BLANK_DETAIL_RATIO) {
+    return {
+      ok: false,
+      reason:
+        `疑似空白帧: 细节占比只有 ${(detail.detailRatio * 100).toFixed(3)}%, ` +
+        `低于真空屏阈值 ${(MIN_BLANK_DETAIL_RATIO * 100).toFixed(2)}%(见 judgeBlankStill 标定注释)。` +
+        ` 这基本是一张什么都没渲出来的空屏 —— 大概率是渲染管线本身出了问题(比如取帧落在了` +
+        ` 时间窗之外、卡片没挂载), 不是卡面本身留白多。请检查这一镜的渲染是否正常。`,
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * 单帧综合判定 —— 三十一期起只剩真空屏关(见 `judgeBlankStill` 标定注释与上方
+ * 停用说明), 密度关/空壳关已停用, 不再参与判定。
  *
  * 只报不拦(spec §四): 调用方(worker)拿到 `ok:false` 只打日志, 不重渲染、不阻塞出片。
  */
-export function judgeStillFrame(density: FrameDensity, detail: FrameDetail): DensityJudgement {
-  const densityJudgement = judgeFrameDensity(density, detail.detailRatio);
-  if (!densityJudgement.ok) return densityJudgement;
-  return judgeHollowCard({ contentRatio: density.contentRatio, detailRatio: detail.detailRatio });
+export function judgeStillFrame(detail: FrameDetail): DensityJudgement {
+  return judgeBlankStill(detail);
 }
 
 /**
@@ -356,8 +426,12 @@ export async function extractStillRgb(
 
 /**
  * 一步到位: 给一张 `renderShotStill` 输出的 PNG(与它的合成分辨率), 解码 + 量 +判定。
- * worker 只需要调这一个函数, 不用自己拼 `extractStillRgb`/`measureFrameDensity`/
- * `measureFrameDetail`/`judgeStillFrame` 四步。
+ * worker 只需要调这一个函数, 不用自己拼 `extractStillRgb`/`measureFrameDetail`/
+ * `judgeStillFrame` 三步。
+ *
+ * 三十一期起不再调 `measureFrameDensity` —— 那个数只喂给已停用的
+ * `judgeFrameDensity`/`judgeHollowCard`, 见上方停用说明; 真空屏判据只需要
+ * `measureFrameDetail`。
  */
 export async function judgeStillPng(
   pngPath: string,
@@ -365,7 +439,6 @@ export async function judgeStillPng(
   frameHeight: number,
 ): Promise<DensityJudgement> {
   const { rgb, width, height } = await extractStillRgb(pngPath, frameWidth, frameHeight);
-  const density = measureFrameDensity(rgb, width, height);
   const detail = measureFrameDetail(rgb, width, height);
-  return judgeStillFrame(density, detail);
+  return judgeStillFrame(detail);
 }

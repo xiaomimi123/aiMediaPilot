@@ -549,13 +549,21 @@ type StillCheckShot = { shotId: string; startMs: number; endMs: number };
 
 /**
  * 逐镜画面体检 —— `renderStill` 抽帧版(三十期 Task 1), 只报不拦, 与整片静止体检
- * (`reportFreeze`)同一策略、同一段日志风格; spec §四处置表: 空屏/空壳色块判据
- * 保留、取帧方式换成 `renderStill`。
+ * (`reportFreeze`)同一策略、同一段日志风格。
+ *
+ * spec §四这条处置表原写的是"空屏/空壳色块判据保留、取帧方式换成 renderStill"——
+ * 三十期真机回归推翻了"空壳色块判据保留"这半条: ppt-narration 25/26 镜、
+ * illustration 15/16 镜误报, 出镜链 0/20 通过, 人工核实全是正常卡面。根因是
+ * `judgeHollowCard`/`judgeFrameDensity` 按"模型自由写 HTML 铺大色块刷分"标定,
+ * 与填槽架构(版面由 `remotion/src/cards/*.tsx` 组件保证)错配——大量留白 + 少量
+ * 文字是我们自己设计的卡面, 不是空壳。三十一期把这两个判据停用(保留在
+ * `still-check.ts` 里不删, 不再被这里调用), 只留"真空屏"判据
+ * (`judgeBlankStill`, 见该文件标定注释), 见下方 `judgeStillPng` 调用。
  *
  * **每镜只抽窗口中点一帧**, 不像旧 DOM 探针那样一镜多点取样多数表决 ——
  * `renderStill` 是真渲染, 成本比 Playwright 截图高得多(单帧实测 ~0.6s, 17 镜
- * 约 10s, 结论写在任务报告里); 单帧够用: 空屏/空壳这两类缺陷在整段时间窗内
- * 通常是持续性的, 不是偶发在某一帧, 中点足够代表整镜。
+ * 约 10s, 结论写在任务报告里); 单帧够用: 空屏这类缺陷在整段时间窗内通常是
+ * 持续性的, 不是偶发在某一帧, 中点足够代表整镜。
  *
  * cutaway 版式: 传入的 `shots` 本来就只覆盖"真的有卡片"的时间窗(窗口外是出镜
  * 真人画面, 没有卡片) —— 直接遍历这份数组就是"只查窗口内", 不需要额外过滤。

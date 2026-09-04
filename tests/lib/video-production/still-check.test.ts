@@ -9,6 +9,14 @@ import { judgeStillPng } from '@/lib/video-production/still-check';
  * 三十期 Task 1: 画面体检从 DOM 探针换成 `renderStill` 抽帧, 判据函数原样从
  * `frame-density.ts`/`frame-detail.ts` 搬到 `still-check.ts`(见该文件顶部注释)。
  *
+ * 三十一期: 三十期真机回归暴露 `judgeFrameDensity`/`judgeHollowCard` 在填槽架构下
+ * 大面积误报(ppt-narration 25/26 镜、illustration 15/16 镜、出镜链 0/20 通过,
+ * 人工核实全是正常卡面) —— 这两个判据是按"模型自由写 HTML 铺大色块刷分"标定的,
+ * 与"版面由卡片组件保证、大量留白是设计"的填槽架构错配。判据停用(留在
+ * `still-check.ts` 里不删), `judgeStillPng` 改用只认「真空屏」的 `judgeBlankStill`
+ * (标定数据见该函数顶部注释)。下面测试对应改写: 四种卡各一条正常内容都不应该报,
+ * 只有真的什么都没渲出来的空屏才应该报。
+ *
  * 真渲染理由同 `remotion-source-video.test.ts`: "抽出来的帧到底有没有内容"这类
  * 问题只有真的跑一遍 `renderStill` 才作数, 不能靠猜像素。
  */
@@ -26,83 +34,124 @@ const baseInput = (): FilmInput => ({
   sourceVideo: null,
 });
 
-describe('renderShotStill + judgeStillPng: 低密度卡片会被报出', () => {
+async function renderAndJudge(input: FilmInput, atMs: number, label: string) {
+  const outputPath = path.join(os.tmpdir(), `still-check-${label}-${Date.now()}.png`);
+  await renderShotStill({ input, shotIndex: 0, atMs, outputPath });
+  try {
+    expect(fs.existsSync(outputPath)).toBe(true);
+    return await judgeStillPng(outputPath, FRAME_WIDTH, FRAME_HEIGHT);
+  } finally {
+    if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+  }
+}
+
+describe('renderShotStill + judgeStillPng: 真空屏判据(三十一期)', () => {
   it(
-    '一个字的 statement 卡 —— 判据应报"太空"或"内容过于集中"',
+    '真空屏(取帧落在 shot 时间窗之外, Sequence 未挂载) —— 判据应报"疑似空白帧"',
     async () => {
-      const outputPath = path.join(os.tmpdir(), `still-check-low-density-${Date.now()}.png`);
       const input: FilmInput = {
         ...baseInput(),
-        shots: [{ shotId: 'a', startMs: 0, endMs: 2000, card: 'statement', slots: { text: '一' } }],
+        shots: [{ shotId: 'a', startMs: 0, endMs: 1000, card: 'statement', slots: { text: '这一镜的时间窗在前面' } }],
       };
-      const t0 = Date.now();
-      await renderShotStill({ input, shotIndex: 0, atMs: 1000, outputPath });
-      const elapsedMs = Date.now() - t0;
-      // eslint-disable-next-line no-console -- 有意打日志: 单帧 renderStill 耗时是
-      // 决定"是否需要抽样"这条判断的实测依据, 见 remotion-render.ts renderShotStill 注释。
-      console.log(`[still-check.test] 单帧 renderStill 耗时 ${elapsedMs}ms`);
-
-      try {
-        expect(fs.existsSync(outputPath)).toBe(true);
-        const judgement = await judgeStillPng(outputPath, FRAME_WIDTH, FRAME_HEIGHT);
-        expect(judgement.ok).toBe(false);
-        expect(judgement.reason).toBeTruthy();
-      } finally {
-        if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-      }
+      // atMs=5000 远超 shot 的 endMs=1000, 卡片的 Sequence 早已卸载, 画面上只剩
+      // 全局背景 + Ambient 环境运动层 —— 这是标定注释里"负样本"那条的复现。
+      const judgement = await renderAndJudge(input, 5000, 'blank');
+      expect(judgement.ok).toBe(false);
+      expect(judgement.reason).toBeTruthy();
     },
     60_000,
   );
 
   it(
-    '正常信息卡(list, 多条目铺开) —— 判据不应报',
+    '正常 statement 卡(长句, 铺开排版) —— 判据不应报',
     async () => {
-      const outputPath = path.join(os.tmpdir(), `still-check-normal-${Date.now()}.png`);
+      const input: FilmInput = {
+        ...baseInput(),
+        shots: [{ shotId: 'a', startMs: 0, endMs: 3000, card: 'statement', slots: { text: '这是一句正常的陈述文案' } }],
+      };
+      const judgement = await renderAndJudge(input, 1500, 'statement');
+      expect(judgement.ok).toBe(true);
+    },
+    60_000,
+  );
+
+  it(
+    '正常 stat 卡 —— 判据不应报',
+    async () => {
+      const input: FilmInput = {
+        ...baseInput(),
+        shots: [{ shotId: 'a', startMs: 0, endMs: 3000, card: 'stat', slots: { label: '播放量增长', value: 320, suffix: '%' } }],
+      };
+      const judgement = await renderAndJudge(input, 1500, 'stat');
+      expect(judgement.ok).toBe(true);
+    },
+    60_000,
+  );
+
+  it(
+    '正常 contrast 卡 —— 判据不应报',
+    async () => {
       const input: FilmInput = {
         ...baseInput(),
         shots: [
           {
             shotId: 'a',
             startMs: 0,
-            endMs: 2000,
+            endMs: 3000,
+            card: 'contrast',
+            slots: { leftLabel: '以前', leftText: '手动剪辑', rightLabel: '现在', rightText: 'AI 自动生成' },
+          },
+        ],
+      };
+      const judgement = await renderAndJudge(input, 1500, 'contrast');
+      expect(judgement.ok).toBe(true);
+    },
+    60_000,
+  );
+
+  it(
+    '正常 list 卡(多条目铺开) —— 判据不应报',
+    async () => {
+      const input: FilmInput = {
+        ...baseInput(),
+        shots: [
+          {
+            shotId: 'a',
+            startMs: 0,
+            endMs: 3000,
             card: 'list',
             slots: {
-              title: '三十期做了什么',
-              items: [
-                '画面体检从 DOM 探针换成 renderStill 抽帧',
-                '判据函数原样搬到 still-check.ts, 只报不拦',
-                '旧渲染层文件本身暂不动, 留给 Task 3 一并删除',
-                '每镜中点抽一帧, 与静止体检同一策略',
-              ],
+              title: '三十一期做了什么',
+              items: ['修体检误报', '标定新阈值', '真机复验'],
             },
           },
         ],
       };
-      await renderShotStill({ input, shotIndex: 0, atMs: 1000, outputPath });
+      const judgement = await renderAndJudge(input, 1500, 'list');
+      expect(judgement.ok).toBe(true);
+    },
+    60_000,
+  );
 
-      try {
-        expect(fs.existsSync(outputPath)).toBe(true);
-        const judgement = await judgeStillPng(outputPath, FRAME_WIDTH, FRAME_HEIGHT);
-        expect(judgement.ok).toBe(true);
-      } finally {
-        if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-      }
+  it(
+    '极端稀疏卡面(一个字的 statement, 大留白+单字) —— 判据不应报(这是三十期真机误报的具体形态)',
+    async () => {
+      const input: FilmInput = {
+        ...baseInput(),
+        shots: [{ shotId: 'a', startMs: 0, endMs: 2000, card: 'statement', slots: { text: '一' } }],
+      };
+      const judgement = await renderAndJudge(input, 1000, 'sparse');
+      expect(judgement.ok).toBe(true);
     },
     60_000,
   );
 
   /*
-   * 照例变异(任务原文要求): 先试着把 `MIN_CONTENT_RATIO`/`MIN_CELLS_USED` 改成
-   * 0(相当于关掉密度判据), 重跑第一条测试 —— **没有翻红**。打印 judgement 一看
-   * 才发现: 一个字的 statement(72px 大字号)渲出来的实际是"一大块留白里嵌一个
-   * 字", `contentRatio` 42% 早已过了 `judgeFrameDensity` 的 1% 门槛(不算"空屏"),
-   * 真正拦下它的是 `judgeHollowCard`(色块占 42%, 细节只有 0.1%, 比值远低于
-   * `HOLLOW_MIN_RATIO`)——这张卡片报的是"大色块刷分"而不是"画面太空", 判据函数
-   * 用对了, 是我最初以为的失败模式猜错了。
-   *
-   * 改把 `HOLLOW_MIN_RATIO` 从 0.15 临时改成 0(相当于关掉空壳判据), 重跑:
-   * `judgement.ok` 变成 `true`, `expect(judgement.ok).toBe(false)` 如期翻红——
-   * 证明这条测试确实钉住了 `judgeHollowCard` 这条判据, 不是恒真断言。验证完已把
-   * `HOLLOW_MIN_RATIO` 改回 0.15。
+   * 照例变异(任务原文要求): 把 `still-check.ts` 里的 `MIN_BLANK_DETAIL_RATIO`
+   * 从 0.0003 临时改成 0.005(即真机标定注释里"最低正样本的 1/3"往上调到接近
+   * 最低正样本本身)——重跑"极端稀疏卡面"这条(细节占比实测 0.118%~0.124%,
+   * 低于 0.5%): `judgement.ok` 变成 `false`, 上面的 `expect(judgement.ok).toBe(true)`
+   * 如期翻红。证明这条测试确实钉住了 `MIN_BLANK_DETAIL_RATIO` 这个阈值, 不是
+   * 恒真断言。验证完已把 `MIN_BLANK_DETAIL_RATIO` 改回 0.0003。
    */
 });
