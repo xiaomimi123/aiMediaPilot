@@ -18,7 +18,7 @@ const remotionRequire: (specifier: string) => any = createRequire(
   path.resolve(process.cwd(), 'remotion/package.json'),
 );
 const { bundle } = remotionRequire('@remotion/bundler');
-const { selectComposition, renderMedia } = remotionRequire('@remotion/renderer');
+const { selectComposition, renderMedia, renderStill } = remotionRequire('@remotion/renderer');
 
 /**
  * 传给 Remotion 合成的 inputProps。
@@ -334,5 +334,74 @@ export async function renderFilm(opts: {
     for (const absPath of copiedAbsPaths) {
       if (fs.existsSync(absPath)) fs.unlinkSync(absPath);
     }
+  }
+}
+
+/**
+ * 单帧抽帧(三十期 Task 1) —— 画面体检从 DOM 探针换成 `renderStill`,
+ * 供 `still-check.ts` 的像素判据使用。**复用 `getBundle()` 的进程内缓存**,
+ * 不为每次抽帧重新 bundle(与 `renderFilm` 同一先例, 见上方 `getBundle` 注释)。
+ *
+ * `shotIndex` 只是调用方(worker)用来在批量抽帧时区分帧序/落盘文件名的标签,
+ * 这里不参与渲染逻辑——渲染只认 `atMs` 换算出来的帧号。
+ *
+ * `sourceVideoFile` 对齐 `renderFilm` 的 `sourceVideoFile` 惯例: `Film.tsx`
+ * 只要 `input.sourceVideo` 非 null 就会挂载 `OffthreadVideo`(不论是否落在
+ * 某个 shot 的时间窗内, 见 `Film.tsx` cutaway/pip 分支), 抽帧同样需要这个
+ * 文件真实存在于 `renderAssetsDir`, 否则渲染会因为找不到源文件而失败——
+ * 复审 2026-09-03 那个"资产必须写进 bundle 输出目录"的坑同样适用于这里,
+ * 复用同一个 `copyIntoRenderAssets`/`renderAssetsDirFor`。
+ *
+ * `fps` 必须和调用方最终渲染成片用的 fps 一致(worker 里 preview=15/master=30)——
+ * 帧号是 `atMs`/`fps` 换算出来的, fps 不一致会让抽帧对不上分镜真实展示的那一帧。
+ * `Root.tsx` 里注册的默认 `durationInFrames` 是 300(10 秒), 分镜时间轴通常远超
+ * 这个值, 这里必须像 `renderFilm` 那样覆盖 `composition.durationInFrames`,
+ * 否则请求的帧号会落在 Remotion 认定的"合法范围"之外而报错。
+ */
+export async function renderShotStill(opts: {
+  input: FilmInput;
+  /** 仅供调用方区分帧序/落盘命名, 见函数顶部注释。 */
+  shotIndex: number;
+  atMs: number;
+  outputPath: string;
+  /** 与最终成片一致的 fps(默认 30, 与 Root.tsx 里 composition 的默认值同值)。 */
+  fps?: number;
+  /** 出镜视频的绝对路径——cutaway/pip 需要, 其余两条链传 null/省略。 */
+  sourceVideoFile?: string | null;
+}): Promise<void> {
+  const bundleOutDir = await getBundle();
+  const renderAssetsDir = renderAssetsDirFor(bundleOutDir);
+  const input: FilmInput = { ...opts.input };
+  let copiedAbsPath: string | null = null;
+
+  try {
+    if (opts.sourceVideoFile) {
+      if (!input.sourceVideo) {
+        throw new Error(
+          '[renderShotStill] 传了 sourceVideoFile 但 input.sourceVideo 是 null——调用方必须同时给出 layout/pip。',
+        );
+      }
+      const dest = copyIntoRenderAssets(opts.sourceVideoFile, opts.outputPath, 'video', renderAssetsDir);
+      copiedAbsPath = dest.absPath;
+      input.sourceVideo = { ...input.sourceVideo, src: dest.relPath };
+    }
+
+    const serveUrl = bundleOutDir;
+    const id = input.aspect === '9:16' ? 'portrait' : 'landscape';
+    const fps = opts.fps ?? 30;
+    const composition = await selectComposition({
+      serveUrl, id, inputProps: input as unknown as Record<string, unknown>,
+    });
+    const frame = Math.max(0, Math.round((opts.atMs / 1000) * fps));
+    await renderStill({
+      composition: { ...composition, durationInFrames: Math.max(composition.durationInFrames, frame + 1), fps },
+      serveUrl,
+      output: opts.outputPath,
+      frame,
+      inputProps: input as unknown as Record<string, unknown>,
+    });
+  } finally {
+    // 与 renderFilm 同一先例: 中转文件只服务这一次抽帧, 渲染完(不论成败)都清理。
+    if (copiedAbsPath && fs.existsSync(copiedAbsPath)) fs.unlinkSync(copiedAbsPath);
   }
 }

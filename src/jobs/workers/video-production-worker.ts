@@ -69,7 +69,8 @@ import type { AlignedAct } from '@/lib/video-production/aligner-prompt';
 import type { DeliveryMode } from '@/lib/cockpit/model';
 import { runPackaging } from '@/lib/video-production/packaging';
 import { buildPackagingOptions } from '@/lib/video-production/packaging-input';
-import { renderFilm, type CaptionItem } from '@/lib/video-production/remotion-render';
+import { renderFilm, renderShotStill, type CaptionItem, type FilmInput } from '@/lib/video-production/remotion-render';
+import { judgeStillPng } from '@/lib/video-production/still-check';
 import { isRemotionReadyMode } from '@/lib/video-production/renderer';
 import { FilmPlanSchema, describeCardsForPrompt, type FilmPlan } from '@/lib/video-production/shot-plan';
 import { actWindows, actWindowsFromAligned, FILM_PLAN, FILM_PLAN_BROLL, type ActWindow } from '@/lib/video-production/film-plan-prompt';
@@ -901,6 +902,16 @@ async function handlePptNarrationRemotion(
 
   // 静止体检照旧 —— 它读的是成片 mp4, 与渲染器无关(spec §四)
   const freezeReport = await reportFreeze(outputPath, mode);
+
+  // 逐镜画面体检(renderStill 版, 三十期 Task 1)——只报不拦, 见 reportStillHealth 顶部注释。
+  await reportStillHealth({
+    shots: plan.shots as StillCheckShot[],
+    input: { shots: [], audioSrc: null, bgm: null, captions, aspect, visualStyle: options.visualStyle, sourceVideo: null },
+    fps,
+    workDir: path.join(vp.productionRoot, `still-check-${mode}`),
+    kind: mode,
+  });
+
   await setStatus(readyStatus, { [outputField]: outputPath, freezeReport });
 }
 
@@ -975,6 +986,81 @@ export async function reportFreeze(
     console.warn(`[video-production] 静止体检跑失败 (${videoPath}):`, e);
     return null;
   }
+}
+
+type StillCheckShot = { shotId: string; startMs: number; endMs: number };
+
+/**
+ * 逐镜画面体检 —— `renderStill` 抽帧版(三十期 Task 1), 只报不拦, 与整片静止体检
+ * (`reportFreeze`)同一策略、同一段日志风格; spec §四处置表: 空屏/空壳色块判据
+ * 保留、取帧方式换成 `renderStill`。
+ *
+ * **每镜只抽窗口中点一帧**, 不像旧 DOM 探针那样一镜多点取样多数表决 ——
+ * `renderStill` 是真渲染, 成本比 Playwright 截图高得多(单帧实测 ~0.6s, 17 镜
+ * 约 10s, 结论写在任务报告里); 单帧够用: 空屏/空壳这两类缺陷在整段时间窗内
+ * 通常是持续性的, 不是偶发在某一帧, 中点足够代表整镜。
+ *
+ * cutaway 版式: 传入的 `shots` 本来就只覆盖"真的有卡片"的时间窗(窗口外是出镜
+ * 真人画面, 没有卡片) —— 直接遍历这份数组就是"只查窗口内", 不需要额外过滤。
+ * pip 版式同样遍历 `shots`(卡片是主画面, 全程都要检), 两种版式共用同一份实现。
+ */
+async function reportStillHealth(opts: {
+  shots: StillCheckShot[];
+  /** 完整 `FilmInput`(除 `shots` 外的字段, 每镜共用) —— 每次抽帧时按 `shots:[shot]`
+   * 单独喂给 `renderShotStill`, 见函数体内注释。 */
+  input: FilmInput;
+  fps: number;
+  /** 出镜视频绝对路径(cutaway/pip 用), 其余两条链传 null。 */
+  sourceVideoFile?: string | null;
+  /** 抽帧 PNG 的落盘目录, 体检完(不论成败)整个删掉——不是持久产物。 */
+  workDir: string;
+  kind: 'preview' | 'master';
+}): Promise<void> {
+  if (opts.shots.length === 0) return;
+  const { width, height } = frameOfAspect(opts.input.aspect);
+  let reportedCount = 0;
+  const t0 = Date.now();
+  try {
+    await fs.mkdir(opts.workDir, { recursive: true });
+    for (let i = 0; i < opts.shots.length; i += 1) {
+      const shot = opts.shots[i];
+      const atMs = Math.round((shot.startMs + shot.endMs) / 2);
+      const pngPath = path.join(opts.workDir, `shot-${i}.png`);
+      try {
+        // 只塞这一镜: Sequence 的 from/durationInFrames 由 shot 自己的
+        // startMs/endMs 算出绝对帧号, 不依赖数组里其它镜是否在场。
+        const shotInput: FilmInput = { ...opts.input, shots: [shot as unknown] };
+        await renderShotStill({
+          input: shotInput,
+          shotIndex: i,
+          atMs,
+          outputPath: pngPath,
+          fps: opts.fps,
+          sourceVideoFile: opts.sourceVideoFile,
+        });
+        const judgement = await judgeStillPng(pngPath, width, height);
+        if (!judgement.ok) {
+          reportedCount += 1;
+          console.warn(
+            `[video-production] 画面体检(renderStill)不通过 [${opts.kind}] 镜 ${shot.shotId}` +
+            `(t=${(atMs / 1000).toFixed(1)}s): ${judgement.reason}`,
+          );
+        }
+      } catch (e) {
+        // 单镜抽帧/判定失败不该拖垮整条出片流程 —— 这是观测, 不是产物。
+        console.warn(`[video-production] 画面体检(renderStill)跑失败 [${opts.kind}] 镜 ${shot.shotId}:`, e);
+      } finally {
+        await fs.rm(pngPath, { force: true });
+      }
+    }
+  } finally {
+    await fs.rm(opts.workDir, { recursive: true, force: true });
+  }
+  const elapsedMs = Date.now() - t0;
+  console.log(
+    `[video-production] 画面体检(renderStill)完成 [${opts.kind}]: ${opts.shots.length} 镜, ` +
+    `${reportedCount} 镜不通过, 耗时 ${elapsedMs}ms`,
+  );
 }
 
 /**
@@ -1239,6 +1325,20 @@ export async function handleTalkingHeadBrollRemotion(
   });
 
   const freezeReport = await reportFreeze(outputPath, mode);
+
+  // 逐镜画面体检(renderStill 版, 三十期 Task 1)——只报不拦。cutaway/pip 都遍历
+  // 同一份 plan.shots(cutaway 本来就只覆盖有卡片的窗口, pip 全程有卡片), 见
+  // reportStillHealth 顶部注释。brollEnabled=false 时 plan.shots=[], 函数内部
+  // 直接返回, 不会白跑一次抽帧。
+  await reportStillHealth({
+    shots: plan.shots as StillCheckShot[],
+    input: { shots: [], audioSrc: null, bgm: null, captions, aspect, visualStyle: 'card', sourceVideo: { src: '', layout, pip } },
+    fps,
+    sourceVideoFile: sourceVideoPath,
+    workDir: path.join(vp.productionRoot, `still-check-${mode}`),
+    kind: mode,
+  });
+
   await setStatus(readyStatus, { [outputField]: outputPath, freezeReport });
 }
 
