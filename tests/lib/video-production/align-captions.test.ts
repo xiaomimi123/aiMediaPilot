@@ -6,7 +6,7 @@ import {
   type TimingPayload,
 } from '@/lib/video-production/align-captions';
 import { numberToHanzi } from '@/lib/tts/number-to-hanzi';
-import type { CaptionEvent } from '@/lib/video-production/ass-captions';
+import type { CaptionEvent } from '@/lib/video-production/caption-events';
 
 describe('parseTimingPayload', () => {
   it('解析合法的 timing.json', () => {

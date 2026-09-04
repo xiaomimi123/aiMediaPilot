@@ -3,11 +3,10 @@ import type { AlignedAct } from '@/lib/video-production/aligner-prompt';
 import type { TranscriptSegment } from '@/lib/llm/whisper';
 import { CaptionStyleSchema, type CaptionStyle } from '@/lib/video-template/model';
 import {
-  captionEventsFromTranscript,
   captionEventsFromAlignedActs,
   captionEventsFromSrt,
-  type CaptionEvent,
 } from '@/lib/video-production/ass-captions';
+import { captionEventsFromTranscript, type CaptionEvent } from '@/lib/video-production/caption-events';
 import type { PackagingOptions } from '@/lib/video-production/packaging';
 
 export type VideoTemplateRecord = {

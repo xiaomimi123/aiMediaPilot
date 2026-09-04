@@ -13,7 +13,7 @@ const TOLERANCE_MS = 33;
  * 毁掉成片:
  * - **空档**: 两镜之间有缝, 观众看到的就是黑屏。
  * - **超出片长**: 旧链真出过 —— 素材 155 秒、分镜排到 234 秒, 尾巴上 79 秒既没人声
- *   也没台词(见 `director-prompt.ts` 的 `clampShotsToSource` 注释)。
+ *   也没台词(见 `shot-clamp.ts` 的 `clampShotsToSource` 注释)。
  * - **不从 0 起**: 片头一段黑屏。
  *
  * 返回的字符串会被**原样喂回给模型**, 所以措辞是契约的一部分: 每条只讲一个问题、
@@ -132,11 +132,11 @@ export function checkFilmPlanTimingWindowed(
 /**
  * 出镜链版最短镜长(与 `film-plan-prompt.ts` 的 `FILM_PLAN_BROLL` 提示词文案里的数字一致)。
  *
- * 与 `director-prompt.ts` 的 `MIN_SHOT_MS`(=1000, `clampShotsToSource` 渲染前
+ * 与 `shot-clamp.ts` 的 `MIN_SHOT_MS`(=1000, `clampShotsToSource` 渲染前
  * 裁剪用)不是同一件事、数值也故意不同, 别当成对不上的 bug 误改成一致:
  * - 这里(`BROLL_MIN_SHOT_MS`=1200)是 FilmPlan 修复循环里"引导模型别排太短的镜"
  *   的**软标准**, 在渲染之前、素材还没被 `clampShotsToSource` 裁过。
- * - `director-prompt.ts` 的 `MIN_SHOT_MS`(=1000)是裁剪**之后**"短于此就整镜丢弃"
+ * - `shot-clamp.ts` 的 `MIN_SHOT_MS`(=1000)是裁剪**之后**"短于此就整镜丢弃"
  *   的**硬下限**。
  *
  * 前者故意比后者严(1200 > 1000): FilmPlan 产出的镜头到了 `clampShotsToSource`
@@ -169,7 +169,7 @@ const BROLL_MIN_GAP_MS = 1000;
  * 顶部注释)。也不查"第一镜必须从 0 开始"——出镜链完全可能从头到尾都没有卡片。
  *
  * 仍然要查的三类, `FilmPlanSchema` 管不到、又真的会毁掉成片:
- * - **超出源视频时长**: 旧链真出过事故(见 `director-prompt.ts` 的
+ * - **超出源视频时长**: 旧链真出过事故(见 `shot-clamp.ts` 的
  *   `clampShotsToSource` 注释), 这里的 `totalMs` 必须传源视频真实时长
  *   (ffprobe 出的毫秒数), 不是幕窗口总和。
  * - **单镜过短**: 观众读不完。

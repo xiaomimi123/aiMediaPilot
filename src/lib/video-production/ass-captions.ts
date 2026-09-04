@@ -1,13 +1,10 @@
 import type { CaptionStyle } from '@/lib/video-template/model';
 import { clampCaptionMargin } from './caption-safe-zone';
 import type { AlignedAct } from '@/lib/video-production/aligner-prompt';
-import type { TranscriptSegment } from '@/lib/llm/whisper';
+import type { CaptionEvent } from './caption-events';
 
-export interface CaptionEvent {
-  startMs: number;
-  endMs: number;
-  text: string;
-}
+// `CaptionEvent` 类型与 `captionEventsFromTranscript` 三十期 Task 3 挪到
+// `caption-events.ts`(新链仍用, 本文件其余导出只服务旧渲染层的 ASS 烧录)。
 
 /**
  * `#RRGGBB` → ASS 的 `&HAABBGGRR`。ASS 颜色是 **BGR 逆序**且带 alpha 前缀
@@ -89,21 +86,6 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`
   });
 
   return `${header}\n${dialogues.join('\n')}\n`;
-}
-
-/**
- * 真人出镜模式的字幕事件源 —— ASR 转写的真实原话(不是脚本台词, 用户实际念的可能
- * 与稿子有出入)。TranscriptSegment 的 startSec/endSec 单位是**秒**
- * (与 srt-synthesis.ts 的 buildCaptionSrtFromTranscript 同源, 见该文件 116 行用法)。
- */
-export function captionEventsFromTranscript(segments: TranscriptSegment[]): CaptionEvent[] {
-  return segments
-    .map((s) => ({
-      startMs: Math.round(s.startSec * 1000),
-      endMs: Math.round(s.endSec * 1000),
-      text: s.text.trim(),
-    }))
-    .filter((e) => e.text.length > 0);
 }
 
 /**

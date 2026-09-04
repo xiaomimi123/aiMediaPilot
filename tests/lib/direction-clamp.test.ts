@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { clampShotsToSource } from '@/lib/video-production/director-prompt';
+import { clampShotsToSource } from '@/lib/video-production/shot-clamp';
 
 const shots = (spans: [number, number][]) =>
   spans.map(([a, b], i) => ({ shotId: `s${i + 1}`, startMs: a, endMs: b, claim: '', visualJob: '', beats: [] }));

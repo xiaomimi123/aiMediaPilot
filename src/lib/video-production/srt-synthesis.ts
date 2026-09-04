@@ -1,7 +1,7 @@
 import type { ActKey, ScriptAct } from '@/lib/script/six-act';
 import type { AlignedAct } from './aligner-prompt';
 import type { TranscriptSegment } from '@/lib/llm/whisper';
-import type { CaptionEvent } from './ass-captions';
+import type { CaptionEvent } from './caption-events';
 
 /**
  * 六幕脚本 → SRT 合成纯函数 (十三期任务二)。

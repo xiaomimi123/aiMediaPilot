@@ -1,7 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { burnCaptions, mixBgm, attachIntroOutro, probeVideoDimensions } from '@/lib/video/ffmpeg';
-import { buildAssCaptions, type CaptionEvent } from '@/lib/video-production/ass-captions';
+import { buildAssCaptions } from '@/lib/video-production/ass-captions';
+import type { CaptionEvent } from '@/lib/video-production/caption-events';
 import type { CaptionStyle } from '@/lib/video-template/model';
 
 export interface PackagingOptions {

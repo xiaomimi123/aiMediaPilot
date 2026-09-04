@@ -4,7 +4,7 @@ import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
 import { numberToHanzi, type HanziSegment } from '@/lib/tts/number-to-hanzi';
-import type { CaptionEvent } from './ass-captions';
+import type { CaptionEvent } from './caption-events';
 
 /**
  * 字级对齐进管线(二十九期 Task 5)。

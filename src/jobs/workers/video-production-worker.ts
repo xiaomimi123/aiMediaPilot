@@ -7,7 +7,8 @@ import { redis } from '@/lib/redis';
 import { QUEUES } from '@/jobs/queue';
 import { DeepSeekTextLLM } from '@/lib/llm/deepseek';
 import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
-import { DIRECTOR, clampShotsToSource, type DirectorResponse } from '@/lib/video-production/director-prompt';
+import { DIRECTOR, type DirectorResponse } from '@/lib/video-production/director-prompt';
+import { clampShotsToSource } from '@/lib/video-production/shot-clamp';
 import { BUILDER } from '@/lib/video-production/builder-prompt';
 import { ALIGNER } from '@/lib/video-production/aligner-prompt';
 import { renderShotToClip } from '@/lib/video-production/shot-renderer';
@@ -76,7 +77,7 @@ import { FilmPlanSchema, describeCardsForPrompt, type FilmPlan } from '@/lib/vid
 import { actWindows, actWindowsFromAligned, FILM_PLAN, FILM_PLAN_BROLL, type ActWindow } from '@/lib/video-production/film-plan-prompt';
 import { buildFilmPlan } from '@/lib/video-production/film-plan-builder';
 import { checkBrollPlanTiming, checkFilmPlanTimingWindowed } from '@/lib/video-production/film-plan-timing';
-import { captionEventsFromTranscript, type CaptionEvent } from '@/lib/video-production/ass-captions';
+import { captionEventsFromTranscript, type CaptionEvent } from '@/lib/video-production/caption-events';
 import { PIP_SCALE_MIN, PIP_SCALE_MAX } from '@/lib/video/pip-layout';
 import {
   runCaptionAlignment,
