@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { canStartProduction } from '@/lib/cockpit/production-status';
-import { isRemotionReadyMode } from '@/lib/video-production/renderer';
 import {
   PRODUCTION_STAGES, isInFlight, stageHint, stageIndex, waitingOn,
 } from '@/lib/cockpit/production-stage';
@@ -194,28 +193,29 @@ export function FilmDetail({ initial }: { initial: Film }) {
   }
 
   /**
-   * 切换渲染方式(「新版渲染」/「旧版渲染」)。只在还没开工时才会被调用——按钮本身
-   * 就只在 `canStartProduction` 时渲染, 这里不重复判断。
+   * 切换渲染方式——三十期 Task 3 起只剩「切到 remotion」这一个方向。旧渲染已
+   * 下线, PATCH 路由拒绝任何 → 'legacy' 的写入(见该路由 RendererSchema), 这里
+   * 只保留一次性的单向迁移动作, 不再是一个来回切换的开关。
    *
    * 切换会把服务端的 filmPlan/alignedActs 一并清空, 界面上没有对应展示, 不用额外处理;
    * 但状态得整条刷新(不只是改 renderer 一个字段), 万一以后加了依赖这两个字段的展示,
    * 别悄悄留着一份看起来还有效的旧数据。
    */
-  async function switchRenderer(next: 'remotion' | 'legacy') {
+  async function switchToRemotion() {
     setBusy('renderer');
     setError('');
     try {
       const res = await fetch(`/api/v1/cockpit/video-productions/${film.id}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ renderer: next }),
+        body: JSON.stringify({ renderer: 'remotion' }),
       });
       const body = await res.json();
       if (!res.ok || !body?.success) {
         setError(body?.message ?? '切换失败');
         return;
       }
-      setFilm((f) => ({ ...f, renderer: body.data?.renderer ?? next }));
+      setFilm((f) => ({ ...f, renderer: body.data?.renderer ?? 'remotion' }));
       router.refresh();
     } catch {
       setError('切换失败，请检查网络');
@@ -443,16 +443,12 @@ export function FilmDetail({ initial }: { initial: Film }) {
         ) : null}
 
         {/*
-          渲染方式徽标 + 切换。只在任务还没开工(canStartProduction)时给切换按钮——
-          处理中/已完成的任务改这个没有意义, 也回不了头(素材/中间产物已经按旧方式走了)。
-
-          复审补(二十九期 Task 2 收尾): 切换按钮还要求 mode 在 isRemotionReadyMode
-          清单里——不然会出现「标签显示新版渲染, 实际仍走旧管线出片」的误导: 之前
-          这里只按 canStartProduction 显隐, talking-head-broll 这类还没迁完
-          Remotion handler 的 mode 也能被切成 'remotion', 徽标改了但 worker
-          dispatch 接不住, 会落回旧链——标签与行为不一致。延续本文件"不可用即隐藏"
-          的既有模式: 未迁移的 mode 直接不显示切换按钮, 而不是显示了再让用户点了
-          碰壁(服务端 PATCH 路由也拦着这个组合, 这里是双保险)。
+          渲染方式徽标。三十期 Task 3: 旧渲染已下线, 不再有"新旧来回切换"这回事——
+          film.renderer === 'remotion' 的任务只展示徽标; 历史上仍是 'legacy' 的
+          任务(渲染已下线前生成, prisma 字段 @default("legacy"), 历史数据不删)
+          展示一行说明文字 + 一个单向的"切换到新版渲染"动作(只在还没开工时提供,
+          处理中/已完成的任务改这个没有意义, 也回不了头)。切换本身仍走 PATCH,
+          PATCH 只接受 → 'remotion', 拒绝任何写回 'legacy' 的请求。
         */}
         <span
           className={cn(
@@ -462,21 +458,26 @@ export function FilmDetail({ initial }: { initial: Film }) {
               : 'text-muted-foreground',
           )}
         >
-          {film.renderer === 'remotion' ? '新版渲染' : '旧版渲染'}
+          {film.renderer === 'remotion' ? '新版渲染' : '旧版渲染(已下线)'}
         </span>
-        {canStartProduction(film.status) && isRemotionReadyMode(film.mode) ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={busy !== ''}
-            onClick={() => void switchRenderer(film.renderer === 'remotion' ? 'legacy' : 'remotion')}
-          >
-            {busy === 'renderer'
-              ? '切换中…'
-              : film.renderer === 'remotion'
-                ? '切换到旧版渲染'
-                : '切换到新版渲染'}
-          </Button>
+        {film.renderer !== 'remotion' ? (
+          <span className="text-xs text-muted-foreground">
+            这条历史任务用旧渲染生成，旧渲染已下线，无法重新生成
+            {canStartProduction(film.status) ? (
+              <>
+                {'。'}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="ml-1 h-auto p-0 text-xs underline"
+                  disabled={busy !== ''}
+                  onClick={() => void switchToRemotion()}
+                >
+                  {busy === 'renderer' ? '切换中…' : '切换到新版渲染'}
+                </Button>
+              </>
+            ) : null}
+          </span>
         ) : null}
 
         {/*

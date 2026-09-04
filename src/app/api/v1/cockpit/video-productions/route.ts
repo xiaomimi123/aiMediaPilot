@@ -10,7 +10,9 @@ import { synthesizeSrtFromSixActScript } from '@/lib/video-production/srt-synthe
 import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
 import { defaultRendererForMode } from '@/lib/video-production/renderer';
 
-const RendererSchema = z.enum(['remotion', 'legacy']);
+// 三十期 Task 3: 旧渲染已下线, 新建任务只接受显式 renderer='remotion'
+// (不传时走 defaultRendererForMode 的默认值); 'legacy' 一律拒绝。
+const RendererSchema = z.literal('remotion');
 
 /**
  * 触发一次成片生成 (十八期 T8) — 六幕脚本 → SRT → 落一条 VideoProduction
@@ -32,10 +34,10 @@ export async function POST(req: Request) {
   if (typeof body.contentId !== 'string' || !body.contentId) return fail('缺少 contentId', 400);
   const contentId = body.contentId;
 
-  let requestedRenderer: 'remotion' | 'legacy' | undefined;
+  let requestedRenderer: 'remotion' | undefined;
   if (body.renderer !== undefined) {
     const parsedRenderer = RendererSchema.safeParse(body.renderer);
-    if (!parsedRenderer.success) return fail('renderer 只能是 remotion 或 legacy', 400);
+    if (!parsedRenderer.success) return fail('旧渲染已下线，请使用新版渲染', 400);
     requestedRenderer = parsedRenderer.data;
   }
 

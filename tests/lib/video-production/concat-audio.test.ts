@@ -4,7 +4,7 @@ import path from 'path';
 import os from 'os';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { concatAudioTracks, concatClips, probeVideo } from '@/lib/video/ffmpeg';
+import { concatAudioTracks, probeVideo } from '@/lib/video/ffmpeg';
 
 const execFileAsync = promisify(execFile);
 const FFMPEG_BIN = process.env.FFMPEG_BIN || 'ffmpeg';
@@ -68,23 +68,8 @@ describe('concatAudioTracks', () => {
     },
     60_000,
   );
-
-  it(
-    '对照组：旧的 concatClips(-c copy) 拼接同样 3 段 mp3 会产生可测量的时长漂移(证明修复前的 bug 确实存在)',
-    async () => {
-      const outputPath = path.join(workDir, 'concatenated-copy.mp3');
-      await concatClips({
-        clipPaths: [clipA, clipB, clipC],
-        outputPath,
-        concatListPath: path.join(workDir, 'concat-list-copy.txt'),
-      });
-
-      const probeResult = await probeVideo(outputPath);
-      const expectedSec = durASec + durBSec + durCSec;
-      // 不断言具体漂移量(依赖 ffmpeg 版本/环境), 只断言这条路径确实无法保证 <10ms 的精度——
-      // 用来对照证明 concatAudioTracks 的重编码路径是必要的, 而不是画蛇添足。
-      expect(Math.abs(probeResult.durationSec - expectedSec)).toBeGreaterThan(0.01);
-    },
-    60_000,
-  );
+  // 三十期 Task 3: 原"对照组"用例(旧的 concatClips(-c copy) 拼接同样 3 段 mp3
+  // 产生可测量的时长漂移, 用来证明修复前的 bug 确实存在)随 concatClips 一起删——
+  // 它测的是旧函数, concatAudioTracks 的重编码路径本身是否精确已经由上面这条
+  // 用例锁住, 不需要一个对照旧函数行为的用例继续存在。
 });

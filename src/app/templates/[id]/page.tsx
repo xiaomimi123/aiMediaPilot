@@ -68,13 +68,8 @@ export default async function TemplateDetailPage(props: { params: Promise<{ id: 
       description="改完点保存。这套配置决定用它出片时的画面结构、字幕和音频。"
       actions={
         <div className="flex items-center gap-3">
-          {/* 试做台是这一页的出口: 配置改完总要看效果, 而完整出片要三分多钟 */}
-          <Link
-            href={`/templates/${id}/studio`}
-            className="rounded-md border border-foreground px-3 py-1.5 text-xs font-medium hover:bg-secondary"
-          >
-            试做效果 →
-          </Link>
+          {/* 试做台(HTML 分镜实时预览)随旧渲染层一起下线(三十期 Task 3)——
+              Remotion 产物没有等价的轻量试做机制, 改效果直接走正式预览/正式渲染。 */}
           <Link
             href="/templates"
             className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"

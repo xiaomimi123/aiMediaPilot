@@ -7,8 +7,14 @@ import { prisma } from '@/lib/prisma';
 import { canStartProduction } from '@/lib/cockpit/production-status';
 import { isRemotionReadyMode } from '@/lib/video-production/renderer';
 
+/**
+ * 三十期 Task 3: 旧渲染层已下线, `renderer` 只接受 `'remotion'`——历史遗留的
+ * `'legacy'` 值(prisma 字段 `@default("legacy")`, 历史数据不删)只能读, 不能写:
+ * 任何试图把 renderer 切回/切成 'legacy' 的 PATCH 请求在这里就被拒绝, 不会等到
+ * worker dispatch 那里才报错。
+ */
 const PatchBodySchema = z.object({
-  renderer: z.enum(['remotion', 'legacy']),
+  renderer: z.literal('remotion'),
 }).strict();
 
 /**
@@ -51,7 +57,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   let body: unknown;
   try { body = await req.json(); } catch { return fail('请求体不是合法 JSON', 400); }
   const parsed = PatchBodySchema.safeParse(body);
-  if (!parsed.success) return fail('renderer 只能是 remotion 或 legacy', 400);
+  if (!parsed.success) return fail('旧渲染已下线，请使用新版渲染', 400);
 
   const user = await getOrCreateDefaultUser();
   const vp = await prisma.videoProduction.findUnique({ where: { id: params.id } });

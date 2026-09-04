@@ -13,7 +13,9 @@ import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
 import { bumpCockpitRev } from '@/lib/cockpit/server-store';
 import { defaultRendererForMode } from '@/lib/video-production/renderer';
 
-const RendererSchema = z.enum(['remotion', 'legacy']);
+// 三十期 Task 3: 旧渲染已下线, 新建任务只接受显式 renderer='remotion'
+// (不传时走 defaultRendererForMode 的默认值); 'legacy' 一律拒绝。
+const RendererSchema = z.literal('remotion');
 
 /**
  * 模板页发起出片(二十期)。两种入口:
@@ -23,9 +25,8 @@ const RendererSchema = z.enum(['remotion', 'legacy']);
  *
  * 修复(收到 review 反馈后): `ScriptDraft.output` 落库/读取**必须**统一走
  * `parseDraftOutput`(`draft-restore.ts`)认的嵌套形状 `{ script: { acts }, four_dims, ... }`
- * —— 这不只是本路由自己的读取约定, 更是 `video-production-worker.ts` 里
- * `handleTalkingHeadBroll`/`handleIllustrationTts`/`loadNarrations` 三处消费同一份
- * `ScriptDraft.output` 时唯一认的判别入口。上一版把 script 分支写成扁平
+ * —— 这不只是本路由自己的读取约定, 更是 `video-production-worker.ts` 里多处消费
+ * 同一份 `ScriptDraft.output` 时唯一认的判别入口。上一版把 script 分支写成扁平
  * `{ acts, four_dims }`(没有 `script` 包装层), worker 侧 `parseDraftOutput` 解不出
  * `acts`, 会导致「粘贴新写」「灵感出稿」两条来源在真人出镜/插画配音两种模式下
  * 直接抛错「需要先生成六幕脚本」, 字幕烧录也会因 `loadNarrations` 拿到 `{}` 丢台词。
@@ -46,10 +47,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   };
   try { body = await req.json(); } catch { return fail('请求体不是合法 JSON', 400); }
 
-  let requestedRenderer: 'remotion' | 'legacy' | undefined;
+  let requestedRenderer: 'remotion' | undefined;
   if (body.renderer !== undefined) {
     const parsedRenderer = RendererSchema.safeParse(body.renderer);
-    if (!parsedRenderer.success) return fail('renderer 只能是 remotion 或 legacy', 400);
+    if (!parsedRenderer.success) return fail('旧渲染已下线，请使用新版渲染', 400);
     requestedRenderer = parsedRenderer.data;
   }
 

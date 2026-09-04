@@ -7,30 +7,20 @@ import { redis } from '@/lib/redis';
 import { QUEUES } from '@/jobs/queue';
 import { DeepSeekTextLLM } from '@/lib/llm/deepseek';
 import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
-import { DIRECTOR, type DirectorResponse } from '@/lib/video-production/director-prompt';
 import { clampShotsToSource } from '@/lib/video-production/shot-clamp';
-import { BUILDER } from '@/lib/video-production/builder-prompt';
 import { ALIGNER } from '@/lib/video-production/aligner-prompt';
-import { renderShotToClip } from '@/lib/video-production/shot-renderer';
 import { frameOfAspect } from '@/lib/video-template/aspect';
-import { buildSrtFromAlignedActs, buildCaptionSrtFromTranscript } from '@/lib/video-production/srt-synthesis';
 import {
   buildTtsManifest, durationOfAct, readTtsManifestFile, ttsAudioFilesExist, ttsManifestMatches,
 } from '@/lib/video-production/tts-manifest';
 import {
-  concatClips,
   concatAudioTracks,
   extractAudio,
-  compositeCutawayVideo,
-  burnCaptions,
   probeVideoDimensions,
   probeVideoDurationMs,
   probeVideo,
-  muxAudioTrack,
-  type CutawaySegment,
 } from '@/lib/video/ffmpeg';
 import type { PipPosition } from '@/lib/video/pip-layout';
-import type { PersonSide } from '@/lib/video/text-zone';
 import { buildSceneComposeArgs } from '@/lib/video/scene-compose';
 import type { SceneLayout } from '@/lib/video/scene-layout';
 import { execFile } from 'child_process';
@@ -39,37 +29,20 @@ import { promisify } from 'util';
 /** 逐场景合成直接调 ffmpeg —— 参数由 buildSceneComposeArgs 构造(纯函数, 已测)。 */
 const execFileAsyncCompose = (args: string[]) =>
   promisify(execFile)('ffmpeg', args, { timeout: 900_000, maxBuffer: 1 << 26 });
-import { OVERLAY_PLAN, sanitizeOverlayItems } from '@/lib/llm/prompts/overlay-plan';
-import {
-  buildOverlayAss, REFERENCE_OVERLAY_STYLE, type OverlayItem,
-} from '@/lib/video-production/overlay-plan';
 import { LocalWhisperClient } from '@/lib/llm/local-whisper';
 import type { TranscriptSegment } from '@/lib/llm/whisper';
 import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
 import { buildFactsSection } from '@/lib/video-production/facts-guard';
-import { buildDirectorAssetSection, buildAssignedAssetSection, type ContentAsset } from '@/lib/video-production/asset-manifest';
-import { buildStyleSection, buildChapterNavSection, actAtMs } from '@/lib/video-production/style-guard';
-import { parseSrtCues } from '@/lib/video/timeline';
 import { ACT_LABELS, type ActKey } from '@/lib/script/six-act';
-import { validateShotHtml } from '@/lib/video-production/shot-html-guard';
-import { probeShotHealth } from '@/lib/video-production/shot-renderer';
 import {
   runFreezeDetect, buildFreezeReport, DEFAULT_FREEZE_OPTS, type FreezeReport,
 } from '@/lib/video/freeze-check';
-import { judgeShotDensity } from '@/lib/video-production/frame-density';
-import { judgeHollowCard } from '@/lib/video-production/frame-detail';
-import { judgeShotLayout } from '@/lib/video-production/frame-layout';
-import { judgeOverlap } from '@/lib/video-production/frame-overlap';
-import { scoreAttempt, pickBestAttempt, type ScoredAttempt } from '@/lib/video-production/attempt-score';
 import type { ScriptAct } from '@/lib/script/six-act';
 import { synthesizeVolcTts } from '@/lib/tts/volcengine';
 import { decrypt } from '@/lib/crypto';
 import { resolveTtsVoiceSelection, type VoiceSelectable } from '@/lib/video-production/voice-resolve';
 import { ttsResultsToAlignedActs, sentenceCaptionEvents, type TtsActResult } from '@/lib/video-production/srt-synthesis';
 import type { AlignedAct } from '@/lib/video-production/aligner-prompt';
-import type { DeliveryMode } from '@/lib/cockpit/model';
-import { runPackaging } from '@/lib/video-production/packaging';
-import { buildPackagingOptions } from '@/lib/video-production/packaging-input';
 import { renderFilm, renderShotStill, type CaptionItem, type FilmInput } from '@/lib/video-production/remotion-render';
 import { judgeStillPng } from '@/lib/video-production/still-check';
 import { isRemotionReadyMode } from '@/lib/video-production/renderer';
@@ -124,218 +97,6 @@ function actLabelFromAlignedActs(acts: AlignedAct[], ms: number): string | null 
   return hit ? ACT_LABELS[hit.act] : null;
 }
 
-/**
- * 调一次 Builder 并体检产物, 不合格就重来一次(二十一期)。
- *
- * 单个分镜的一次生成翻车会让整条任务失败, 而一条片子有十几到几十镜、跑十几分钟——
- * 真实出片五次里踩中两次(漏挂时间线 / 写成自言自语而非代码)。重试一次能把
- * "整条任务失败"降级成"这一镜多花一次调用"。
- * 重试仍失败才抛错, 错误信息带上体检结论, 便于定位是哪一类翻车。
- */
-async function buildShotHtmlWithRetry(
-  llm: DeepSeekTextLLM,
-  systemPrompt: string,
-  shot: { shotId: string; startMs: number; endMs: number },
-  userMessage: ReturnType<typeof BUILDER.buildUserMessage>,
-  probeDir?: string,
-  /**
-   * 成片画幅。**必须传, 否则密度体检是瞎的** —— 探针会按 160x90 横屏量, 而竖屏
-   * 成片真实渲染是 1080x1920, 量的不是同一个东西。真实事故: 一个整整 23 秒、
-   * 100% 纯空白的镜头一路过检, 报告零失败。
-   */
-  frame?: { width: number; height: number },
-): Promise<string> {
-  let lastReason = '';
-  // 上一轮的诊断结论 —— 下一轮拼进 systemPrompt 喂回给模型。Builder 是盲写的,
-  // 不把渲染结果告诉它, 它永远不知道自己排出来是整屏空白(用户点出的本质问题)。
-  let feedback = '';
-  /*
-   * 每一版都留着 + 记分。三次都不合格时挑分最高的那一版, 而不是再盲调一次模型。
-   * 原来的兜底是: 再调一次拿第四版, 只做结构校验就直接用 —— 那一版从来没被体检过,
-   * 完全可能比第二版还差。真实出片里这条路走过 2 次。
-   */
-  const attempts: ScoredAttempt[] = [];
-
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    const { result } = await llm.callStructured({
-      systemPrompt: systemPrompt + feedback,
-      userMessage,
-      responseSchema: BUILDER.responseSchema,
-    });
-
-    // 第一关: 结构与语法体检(确定性, 不花渲染时间)
-    const check = validateShotHtml(result.html);
-    if (!check.ok) {
-      lastReason = check.reason ?? '未知';
-      feedback = `\n\n上一版产出不合格: ${lastReason} 请修正后重写。`;
-      console.warn(`[video-production] 镜头 ${shot.shotId} 第 ${attempt} 次产物不合格: ${lastReason}`);
-      continue;
-    }
-
-    // 第二关: 真渲几帧量画面密度。probeDir 缺省时跳过 —— 让不关心密度的调用方
-    // (以及单测)保持原来的行为。
-    if (!probeDir) return result.html;
-
-    const health = await probeShotHealth({
-      html: result.html,
-      durationMs: shot.endMs - shot.startMs,
-      workDir: path.join(probeDir, `probe-${attempt}`),
-      frame,
-    });
-
-    // 运行时错误优先于密度 —— 页面报错时画面本来就是空的, 报"太空"会指向错的方向。
-    // 真实出片踩过 `t.duration is not a function`: 语法对、时间线也挂了, 直到正式
-    // 渲染跑完几十镜才炸。体检本来就在真跑页面, 顺手拦下不额外花渲染。
-    if (health.runtimeErrors.length > 0) {
-      lastReason = `页面运行时报错: ${health.runtimeErrors.slice(0, 2).join(' | ')}`;
-      feedback = `\n\n上一版在浏览器里跑不起来: ${lastReason} 请检查 GSAP 用法与选择器是否正确, 重写。`;
-      console.warn(`[video-production] 镜头 ${shot.shotId} 第 ${attempt} 次运行时报错: ${lastReason}`);
-      continue;
-    }
-
-    const density = judgeShotDensity(health.samples, health.details.map((d) => d.detailRatio));
-    const hollowJ = health.samples
-      .map((m, i) => judgeHollowCard({ contentRatio: m.contentRatio, detailRatio: health.details[i]?.detailRatio ?? 1 }))
-      .find((j) => !j.ok);
-    const layoutJ = judgeShotLayout(
-      health.samples.map((m, i) => ({
-        bottomReach: health.layouts[i]?.bottomReach ?? 1,
-        contentRatio: m.contentRatio,
-        sideBySide: health.geometry[i]?.sideBySide ?? false,
-        sidePair: health.geometry[i]?.sidePair ?? undefined,
-        clipped: health.geometry[i]?.clipped ?? false,
-      })),
-      frame ?? { width: 1920, height: 1080 },
-    );
-    // 元素遮挡(二十四期): 前五道关都在看单个元素自己怎么样, 没有一道看两个元素撞没撞上
-    const overlapJ = judgeOverlap(
-      health.geometry.map((g) => ({ occluded: g.occluded ?? [] })),
-    );
-
-    const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
-    attempts.push({
-      html: result.html,
-      score: scoreAttempt({
-        densityOk: density.ok,
-        hollowOk: !hollowJ,
-        layoutOk: layoutJ.ok,
-        overlapOk: overlapJ.ok,
-        detailRatio: avg(health.details.map((d) => d.detailRatio)),
-        contentRatio: avg(health.samples.map((m) => m.contentRatio)),
-      }),
-    });
-
-    if (!density.ok) {
-      lastReason = density.reason ?? '画面密度不足';
-      feedback = `\n\n上一版渲染出来的实际效果不合格: ${lastReason}`;
-      console.warn(`[video-production] 镜头 ${shot.shotId} 第 ${attempt} 次密度不足: ${lastReason}`);
-      continue;
-    }
-
-    /*
-     * 「大色块刷分」: 占比够了, 但那块面积里面是空的。
-     *
-     * 排版指令调完之后内容占比确实涨了, 但抽帧一看是一张几乎空的大灰卡片, 角上
-     * 四个字 —— 占比数的是「和背景不同的像素」, 一块纯色色块就能撑起来。指标一旦
-     * 变成目标就不再是好指标, 所以补这一关: 见 frame-detail.ts。
-     *
-     * 判据是**同一帧上占比与细节的背离**, 不是新的绝对阈值 —— 后者必须跟着一整套
-     * 取样方法重新标定, 那是另一件事。
-     */
-    if (hollowJ) {
-      lastReason = hollowJ.reason ?? '画面被空色块占着';
-      feedback = `\n\n上一版渲染出来的实际效果不合格: ${lastReason}`;
-      console.warn(`[video-production] 镜头 ${shot.shotId} 第 ${attempt} 次空壳色块: ${lastReason}`);
-      continue;
-    }
-
-    /*
-     * 版面: 内容有没有排到画面下半部分。
-     *
-     * prompt 里已经写死了「最下沿落在 65%~80%」, 真实出片照样交上来只排到 46% 的
-     * 版面, 下面一大片空着。同密度、空壳两关一个道理: 能量的就别指望它自觉。
-     */
-    if (!layoutJ.ok) {
-      lastReason = layoutJ.reason ?? '版面没铺开';
-      feedback = `\n\n上一版渲染出来的实际效果不合格: ${lastReason}`;
-      console.warn(`[video-production] 镜头 ${shot.shotId} 第 ${attempt} 次版面不合格: ${lastReason}`);
-      continue;
-    }
-
-    // 元素遮挡(二十四期): 判定放在 attempts.push 之后, 与密度/空壳/版面三关同一位置 ——
-    // 放在 attempts.push 之前会导致只因遮挡被拒的版本不进 attempts 数组, 三次都不合格时
-    // pickBestAttempt 就少了这一版可选, 甚至可能因为 attempts 空了而触发「再要第四版」
-    // (那条路正是 ccce069 特意拆掉的: 第四版从没体检过, 可能比第二版还差)。
-    if (!overlapJ.ok) {
-      lastReason = overlapJ.reason ?? '有文字被遮挡';
-      feedback = `\n\n上一版渲染出来的实际效果不合格: ${lastReason}`;
-      console.warn(`[video-production] 镜头 ${shot.shotId} 第 ${attempt} 次有遮挡: ${lastReason}`);
-      continue;
-    }
-
-    return result.html;
-  }
-
-  /*
-   * 三次都不达标: 挑**三版里分最高的那一版**, 不再盲调第四次。
-   *
-   * 画面质量不是可用性问题, 为它废掉整条任务不划算(结构/语法不合格才是真的不能用,
-   * 那条路上面已经 continue 掉了)。但「放行最后一版」是错的 —— 最后一版是反馈驱动下
-   * 越改越偏的产物, 而且从没被体检过。三版都量过, 谁好用谁, 顺带省一次模型调用。
-   */
-  const best = pickBestAttempt(attempts);
-  if (best) {
-    console.warn(
-      `[video-production] 镜头 ${shot.shotId} 三次仍未达标, 取三版里最好的一版: ${lastReason}`,
-    );
-    return best;
-  }
-
-  // 一版都没留下(三次全在结构/运行时那关就被打回了)—— 那才需要再要一版
-  console.warn(`[video-production] 镜头 ${shot.shotId} 三版都没通过结构校验, 再要一版: ${lastReason}`);
-  const { result: fallback } = await llm.callStructured({
-    systemPrompt: systemPrompt + feedback,
-    userMessage,
-    responseSchema: BUILDER.responseSchema,
-  });
-  const finalCheck = validateShotHtml(fallback.html);
-  if (!finalCheck.ok) throw new Error(`镜头 ${shot.shotId} 连续多次产出不合格: ${finalCheck.reason}`);
-  return fallback.html;
-}
-
-/**
- * 取该内容挂的真实素材(二十一期方向 B)。参考视频里密度最高的那几帧靠的就是这类
- * 整块真实截图/表格 —— 纯文字排版结构上达不到那个量级(实测参考自己的纯文字帧也
- * 只有 5% 左右), 所以要有实感只能把真材料喂进去。
- */
-async function loadContentAssets(userId: string, contentId: string): Promise<ContentAsset[]> {
-  const rows = await prisma.contentAsset.findMany({
-    where: { userId, contentId },
-    orderBy: { createdAt: 'asc' },
-  });
-  return rows.map((r) => ({
-    id: r.id, kind: r.kind as ContentAsset['kind'], description: r.description,
-    fileName: r.fileName, text: r.text,
-  }));
-}
-
-/**
- * 把图片素材拷进镜头 workDir —— HTML 里用相对路径引用(与 gsap.min.js 同一套路),
- * 写绝对路径换台机器就失效。拷不动的单个文件跳过, 不让一份坏素材废掉整镜。
- */
-async function copyAssetsInto(workDir: string, assets: ContentAsset[], contentId: string): Promise<void> {
-  const dir = path.join(process.env.CONTENT_ASSET_ROOT || './content-assets', contentId);
-  await fs.mkdir(workDir, { recursive: true });
-  for (const a of assets) {
-    if (a.kind !== 'image' || !a.fileName) continue;
-    try {
-      await fs.copyFile(path.join(dir, a.fileName), path.join(workDir, a.fileName));
-    } catch (e) {
-      console.warn(`[video-production] 素材 ${a.fileName} 拷贝失败, 跳过:`, e instanceof Error ? e.message : e);
-    }
-  }
-}
-
 /** 取该内容的六幕稿; 取不到(旧稿/未生成)时返回空数组, 调用方据此退回原行为。 */
 async function loadActs(contentId: string): Promise<ScriptAct[]> {
   const content = await prisma.cockpitContent.findUnique({ where: { id: contentId } });
@@ -361,210 +122,6 @@ async function loadResearch(
   return parsed?.research ?? null;
 }
 
-/** 取该内容六幕稿的逐幕台词(act → narration), 供字幕按幕边界铺排; 取不到时返回空表。 */
-async function loadNarrations(contentId: string): Promise<Record<string, string>> {
-  const acts = await loadActs(contentId);
-  return Object.fromEntries(acts.map((a) => [a.act, a.narration]));
-}
-
-
-/**
- * `ppt-narration` 交付模式 (十八期既有行为，原样从 handleProduce 里抽出，零行为改动)。
- * Director 产出的 SRT 驱动分镜, 全部镜头串联成完整片子(无源出镜视频, 无挖空替换)。
- */
-/** 导出仅供测试用(见 tests/jobs/video-production-worker-visual-style.test.ts) —— 终审发现2
- * 校验 template.visualStyle 真的接线到了 BUILDER.buildSystemPrompt 调用参数上。 */
-export async function handlePptNarration(
-  vp: VideoProduction,
-  mode: 'preview' | 'master',
-  setStatus: SetStatusFn,
-  outputFileName: string,
-  readyStatus: string,
-  outputField: 'previewPath' | 'masterPath',
-): Promise<void> {
-  const clipPaths: string[] = [];
-
-  if (mode === 'preview') {
-    await setStatus('directing');
-    const deepseekKey = await resolveDeepSeekApiKey(vp.userId);
-    if (!deepseekKey) throw new Error('未配置 DeepSeek key');
-    // 二十一期: 六幕稿的 facts 台账下发到画面层, 约束哪些数字允许被具象化(见 facts-guard.ts)。
-    // 取不到六幕稿(旧稿)时 factsSection 为空串, prompt 与改动前字符级一致。
-    const acts = await loadActs(vp.contentId);
-    const factsSection = buildFactsSection(acts, await loadResearch(vp.contentId));
-    // 二十一期方向 B: 内容挂的真实素材(截图/表格/长文)。参考视频密度最高的那几帧
-    // 靠的就是这类整块真材料, 纯文字排版达不到那个量级。
-    const contentAssets = await loadContentAssets(vp.userId, vp.contentId);
-    // 导演先看到素材, 主动为它们排镜头并在 assetIds 里指派 —— 第一版只给 Builder,
-    // 导演不知情就排不出"展示这张表"的镜头, 实测 4 镜 0 用。
-    const directorAssetSection = buildDirectorAssetSection(contentAssets);
-    // 二十一期: 模板的风格(亮/暗基调、切镜节奏)要在 Director 阶段就生效——调色板与
-    // 分镜时长都是它决定的。所以模板查询提前到 Director 调用之前。
-    const template = vp.templateId
-      ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
-      : null;
-    const styleSection = buildStyleSection(
-      template
-        ? {
-            visualTone: (template.visualTone as 'light' | 'dark' | undefined) ?? 'dark',
-            shotPaceSec: template.shotPaceSec ?? null,
-          }
-        : null,
-    );
-    const llm = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-reasoner' });
-    const { result: direction } = await llm.callStructured({
-      systemPrompt: DIRECTOR.buildSystemPrompt(factsSection, styleSection, directorAssetSection),
-      userMessage: DIRECTOR.buildUserMessage(vp.srt),
-      responseSchema: DIRECTOR.responseSchema,
-    });
-    // 持久化 Director 结果，供后续 approve 之后的 master 渲染复用，
-    // 避免正式导出重新调用 DeepSeek 产出和预览不一致的分镜/画面。
-    await fs.writeFile(
-      path.join(vp.productionRoot, 'direction.json'),
-      JSON.stringify(direction),
-      'utf-8',
-    );
-
-    // 终审发现2: template.visualStyle 此前从未被读到调用点, 用户在模板编辑器改这个下拉会被
-    // 静默丢弃。templateId 为空(内容详情页旧入口)时 template 为 null, 落回硬编码默认值 'card'。
-    const visualStyle = (template?.visualStyle as 'card' | 'illustration' | undefined) ?? 'card';
-    const chapterActs = acts.map((a) => ({ act: a.act, title: a.title }));
-
-    await setStatus('building');
-    // 排版吃模型能力: 实测 deepseek-chat 即便有素材+骨架+渲染反馈, 画面密度也只到
-    // 5%~8%(参考视频 30%~54%)。模板可以指定更强的模型; 缺省沿用 deepseek-chat。
-    const builderModel = (template?.builderModel as 'deepseek-chat' | 'deepseek-reasoner' | undefined) ?? 'deepseek-chat';
-    const builderLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: builderModel });
-    // 画幅来自模板: 这条链纯由 AI 生成画面, 没有素材可反推(见 aspect.ts)
-    const shotFrame = frameOfAspect(template?.aspect);
-    // 常驻框架层(二十四期)要的两样: 全片字幕、总镜数。都是现成数据, 只是从没上过画面。
-    const chromeCues = parseSrtCues(vp.srt);
-    const shotTotal = direction.shots.length;
-    let shotIndex = 0;
-    for (const shot of direction.shots) {
-      // 章节条要高亮"这一镜讲到哪一幕", 用镜头起点落在哪个幕区间来判定
-      // 素材文件要拷进这一镜的 workDir, HTML 才能用相对路径引用
-      await copyAssetsInto(shotDir(vp.productionRoot, shotIndex), contentAssets, vp.contentId);
-      const currentActKey = actAtMs(acts, shot.startMs);
-      const navSection = buildChapterNavSection(
-        template?.showChapterNav ?? false,
-        chapterActs,
-        currentActKey,
-      );
-      const builtHtml = await buildShotHtmlWithRetry(
-        builderLLM,
-        BUILDER.buildSystemPrompt(
-          direction.palette,
-          visualStyle,
-          factsSection + buildAssignedAssetSection(contentAssets, shot.assetIds),
-          navSection,
-          shotFrame,
-        ),
-        shot,
-        BUILDER.buildUserMessage(shot),
-        // 密度体检的临时渲染目录; 只有走模板的任务开这一关(内容详情页旧入口
-        // 不传 probeDir, 行为与之前完全一致)
-        vp.templateId ? shotDir(vp.productionRoot, shotIndex) : undefined,
-        shotFrame,
-      );
-      const shotWorkDir = shotDir(vp.productionRoot, shotIndex);
-      await fs.mkdir(shotWorkDir, { recursive: true });
-      // 先落盘原始 HTML（与 renderShotToClip 自己写的 workDir/index.html 分开保存），
-      // 这样即便这一镜的渲染后续失败，产出的 HTML 依然能保留下来供 master 复用。
-      await fs.writeFile(path.join(shotWorkDir, 'source.html'), builtHtml, 'utf-8');
-      const clipPath = path.join(shotWorkDir, 'clip.mp4');
-      await renderShotToClip({
-        html: builtHtml,
-        durationMs: shot.endMs - shot.startMs,
-        fps: 15, // 预览档固定 15fps
-        workDir: shotWorkDir,
-        // 画幅来自模板 —— 这条链纯由 AI 生成画面, 没有素材可反推(见 aspect.ts)
-        frame: shotFrame,
-        outputClipPath: clipPath,
-        chrome: {
-          width: shotFrame.width,
-          height: shotFrame.height,
-          actLabel: currentActKey ? (ACT_LABELS[currentActKey as ActKey] ?? null) : null,
-          shotNo: shotIndex + 1,
-          shotTotal,
-          cues: chromeCues,
-          shotStartMs: shot.startMs,
-        },
-      });
-      clipPaths.push(clipPath);
-      shotIndex += 1;
-    }
-  } else {
-    // master 模式：不再调用 Director/Builder，复用 approve 时批准的那份预览产出，
-    // 保证正式导出和用户看到并确认的预览在概念/调色/分镜/动画上完全一致。
-    let direction: DirectorResponse;
-    try {
-      const raw = await fs.readFile(path.join(vp.productionRoot, 'direction.json'), 'utf-8');
-      direction = JSON.parse(raw) as DirectorResponse;
-    } catch {
-      throw new Error('预览未完成或已损坏，无法确认导出，请重新生成预览');
-    }
-
-    await setStatus('building');
-    // 和预览同一个画幅: master 复用预览生成的 HTML, 视口不一致会把它裁掉
-    const shotFrame = frameOfAspect((await templateOf(vp.templateId))?.aspect);
-    // master 不重跑 Director/Builder，但常驻框架层的章节标签仍要算——重新取一次六幕稿
-    // (preview 分支同一份数据源，见 loadActs)，与预览阶段的章节判定同一套 actAtMs 逻辑。
-    const acts = await loadActs(vp.contentId);
-    const chromeCues = parseSrtCues(vp.srt);
-    const shotTotal = direction.shots.length;
-    let shotIndex = 0;
-    for (const shot of direction.shots) {
-      const shotWorkDir = shotDir(vp.productionRoot, shotIndex);
-      const sourceHtmlPath = path.join(shotWorkDir, 'source.html');
-      let html: string;
-      try {
-        html = await fs.readFile(sourceHtmlPath, 'utf-8');
-      } catch {
-        throw new Error(`预览未完成或已损坏，无法确认导出，请重新生成预览 (镜头缺失: ${shot.shotId})`);
-      }
-      // master 用独立的 workDir 子目录渲染，天然隔离 frames/index.html，
-      // 不会与预览 15fps 跑出来的旧帧混在一起；clip 文件名也不同，不覆盖 clip.mp4。
-      const masterWorkDir = path.join(shotWorkDir, 'master');
-      await fs.mkdir(masterWorkDir, { recursive: true });
-      const clipPath = path.join(shotWorkDir, 'clip-master.mp4');
-      await renderShotToClip({
-        html,
-        durationMs: shot.endMs - shot.startMs,
-        fps: 30, // 正式渲染档固定 30fps
-        workDir: masterWorkDir,
-        frame: shotFrame,
-        outputClipPath: clipPath,
-        chrome: {
-          width: shotFrame.width,
-          height: shotFrame.height,
-          actLabel: (() => {
-            const key = actAtMs(acts, shot.startMs);
-            return key ? (ACT_LABELS[key as ActKey] ?? null) : null;
-          })(),
-          shotNo: shotIndex + 1,
-          shotTotal,
-          cues: chromeCues,
-          shotStartMs: shot.startMs,
-        },
-      });
-      clipPaths.push(clipPath);
-      shotIndex += 1;
-    }
-  }
-
-  await setStatus('assembling');
-  const outputPath = path.join(vp.productionRoot, outputFileName);
-  await concatClips({
-    clipPaths,
-    outputPath,
-    concatListPath: path.join(vp.productionRoot, 'concat-list.txt'),
-  });
-
-  const freezeReport = await reportFreeze(outputPath, mode);
-  await setStatus(readyStatus, { [outputField]: outputPath, freezeReport });
-}
-
 /**
  * 图文口播 · Remotion 链(二十五期)。
  *
@@ -581,8 +138,7 @@ export async function handlePptNarration(
  *   分支不读模板那个字段, 值由调用方按交付模式写死。
  * - `onMissingTts`: 未配置火山 TTS 时的行为。ppt-narration 无声降级出片(旧行为,
  *   不可改——下面 tests/jobs/video-production-remotion-audio-wiring.test.ts 的源码级
- *   锚点测试盯着); illustration-tts 直接报错, 照抄旧链 `handleIllustrationTts`
- *   (1176 行)的定义与措辞——"插画+配音"没有配音就没有意义, 无声降级那套不该出现
+ *   锚点测试盯着); illustration-tts 直接报错, 照抄已删除的旧链同名 handler 的定义与措辞——"插画+配音"没有配音就没有意义, 无声降级那套不该出现
  *   在这条链上。
  *
  * 之所以没有把这段逻辑挪去另一个函数名下、让本函数变成一个三行转发的薄包装:
@@ -617,7 +173,7 @@ async function handlePptNarrationRemotion(
 
   // 状态推进: preview 走 directing(编排分镜, 调 LLM) → building(落库+渲染);
   // master 没有编排这一步(复用 preview 落库的 plan), 直接进 building。
-  // 旧链 handlePptNarration 也是 directing → building 这个顺序, 这里保持一致,
+  // 旧渲染层(已删除)也是 directing → building 这个顺序, 这里保持一致,
   // 不要反过来变成 building → directing → building, 否则前端进度条会先跳后退。
   let plan: FilmPlan;
   let captionEvents: CaptionEvent[];
@@ -640,7 +196,7 @@ async function handlePptNarrationRemotion(
     /*
      * 真实语音时间轴(二十九期): 配了火山 TTS 就逐幕合成人声, 画面窗口与字幕都按
      * 真实时长走(actWindowsFromAligned/sentenceCaptionEvents)——先例见
-     * handleIllustrationTts 1024 行附近(TTS 配置读取)与 1045-1049 行(逐幕合成)。
+     * 旧渲染层(已删除)对应逻辑同一先例(TTS 配置读取 + 逐幕合成)。
      * 没配置就退回估算窗口(actWindows)无声出片: 字幕仍然要产, 只是拿估算窗口
      * 构造出与 AlignedAct 同形的数据喂给同一个 sentenceCaptionEvents, 不为无声
      * 路径另写一份比例分配逻辑(那份逻辑已经在 sentenceCaptionEvents 里, 复制一份
@@ -656,7 +212,7 @@ async function handlePptNarrationRemotion(
     let productionNotice: string | null;
     if (ttsConfig) {
       const apiKey = decrypt(ttsConfig.apiKey);
-      // 音色/资源档位优先级同 handleIllustrationTts: 本次覆盖 > 模板 voicePreset > 全局配置兜底。
+      // 音色/资源档位优先级同旧渲染层(已删除): 本次覆盖 > 模板 voicePreset > 全局配置兜底。
       const { voiceType, resourceId } = resolveTtsVoiceSelection({
         voiceOverride: vp.voiceOverride as VoiceSelectable | null,
         templateVoicePreset: (template?.voicePreset as VoiceSelectable | null) ?? null,
@@ -704,7 +260,7 @@ async function handlePptNarrationRemotion(
          */
         await fs.rm(path.join(vp.productionRoot, 'timing.json'), { force: true });
         for (const act of acts) {
-          // 扩展名用 .mp3: synthesizeVolcTts 实际写出的是 mp3 编码字节, 见 handleIllustrationTts 同一行注释。
+          // 扩展名用 .mp3: synthesizeVolcTts 实际写出的是 mp3 编码字节。
           const audioPath = path.join(vp.productionRoot, `tts-${act.act}.mp3`);
           const { durationMs } = await synthesizeVolcTts(act.narration, audioPath, {
             apiKey,
@@ -723,7 +279,7 @@ async function handlePptNarrationRemotion(
       // concatAudioTracks 强制重编码为 pcm_s16le 而不是直拼 mp3: mp3 帧编码在拼接点上不是
       // 采样点精确的(实测有几十毫秒漂移 + Non-monotonic DTS 警告), 而 alignedActs 的
       // startMs/endMs 假设了拼接后严丝合缝——直拼会让漂移随幕数增多累积成画面渐进错位。
-      // 见 handleIllustrationTts 1162-1174 行同一段注释, 理由完全一致。
+      // 与旧渲染层(已删除)同一段注释理由完全一致。
       await concatAudioTracks({
         audioPaths: ttsResults.map((r) => r.audioPath),
         outputPath: concatenatedAudioPath,
@@ -748,8 +304,8 @@ async function handlePptNarrationRemotion(
       productionNotice = null;
     } else {
       /*
-       * illustration-tts 不走无声降级——照抄旧链 handleIllustrationTts(1176 行)
-       * 的判断与措辞: 这条交付模式的定义就是"插画+配音", 没有配音就没有存在意义,
+       * illustration-tts 不走无声降级——照抄已删除的旧渲染层同名 handler 的判断
+       * 与措辞: 这条交付模式的定义就是"插画+配音", 没有配音就没有存在意义,
        * 不该像 ppt-narration 那样退而求其次出一条无声片。
        */
       if (options.onMissingTts === 'throw') {
@@ -837,7 +393,7 @@ async function handlePptNarrationRemotion(
     plan = FilmPlanSchema.parse(vp.filmPlan);
 
     // master 不重新调 TTS(耗真实调用额度)——复用 preview 落盘的 tts-audio.wav 与已持久化
-    // 的 alignedActs, 与 handleIllustrationTts master 分支(1249-1265 行)同一先例。
+    // 的 alignedActs, 与旧渲染层(已删除)的 master 分支同一先例。
     if (!vp.alignedActs) throw new Error('预览未完成或已损坏，无法确认导出，请重新生成预览');
     const aligned = vp.alignedActs as unknown as AlignedAct[];
     const acts = await loadActs(vp.contentId);
@@ -1099,7 +655,7 @@ export async function handleTalkingHeadBrollRemotion(
   const sourceVideoPath = vp.sourceVideoPath;
 
   const template = await templateOf(vp.templateId);
-  // 模板可以整个关掉 B-roll(与旧链 handleTalkingHeadBroll 同一先例)——关掉时
+  // 模板可以整个关掉 B-roll(与旧渲染层已删除的同名 handler 同一先例)——关掉时
   // 画面就是原始出镜视频 + 字幕, 跳过整个 FilmPlan 生成(不白烧一次 LLM 调用)。
   const brollOn = template?.brollEnabled ?? true;
 
@@ -1119,7 +675,7 @@ export async function handleTalkingHeadBrollRemotion(
   let rawTranscript: TranscriptSegment[];
   if (mode === 'preview') {
     // 转写 + 语音对齐(复用现有 directing 状态值, 语义上这里是"转写+对齐",
-    // 与旧链 handleTalkingHeadBroll 同一先例)。
+    // 与旧渲染层(已删除)同一先例)。
     await setStatus('directing');
     const audioPath = path.join(vp.productionRoot, 'source-audio.wav');
     await extractAudio({ videoPath: sourceVideoPath, audioPath });
@@ -1127,7 +683,7 @@ export async function handleTalkingHeadBrollRemotion(
     const transcription = await whisper.transcribe(audioPath);
     rawTranscript = transcription.segments;
 
-    // 取六幕脚本(与旧链 handleTalkingHeadBroll 同一条查找链)
+    // 取六幕脚本(与旧渲染层已删除的同名 handler 同一条查找链)
     const content = await prisma.cockpitContent.findUnique({ where: { id: vp.contentId } });
     const draft = content?.scriptDraftId
       ? await prisma.scriptDraft.findUnique({ where: { id: content.scriptDraftId } })
@@ -1147,7 +703,7 @@ export async function handleTalkingHeadBrollRemotion(
     aligned = alignedResult.acts;
 
     // 持久化对齐结果: master 渲染直接复用, 不重新做 ASR/对齐这类非确定性 AI 调用
-    // (与旧链 handleTalkingHeadBroll 同一先例)。
+    // (与旧渲染层(已删除)同一先例)。
     await prisma.videoProduction.update({
       where: { id: vp.id },
       data: {
@@ -1343,611 +899,6 @@ export async function handleTalkingHeadBrollRemotion(
   await setStatus(readyStatus, { [outputField]: outputPath, freezeReport });
 }
 
-/**
- * `talking-head-broll` 交付模式 (十九期新增) —— 真人出镜视频 + AI 生成的 B-roll
- * 挖空替换 + 真实字幕烧录。与 ppt-narration 的关键差异：
- * - 时间轴锚点来自真实 ASR 转写 + 语音对齐(ALIGNER)，不是 Director 凭空排布的虚拟时长；
- * - 最终产物是"挖空替换"(compositeCutawayVideo)+"字幕烧录"(burnCaptions)两步合成，
- *   不是纯 AI 分镜片段直接拼接(concatClips)。
- */
-/** 导出仅供测试用(见 tests/jobs/video-production-worker-wrap-fixes.test.ts) —— 终审发现1
- * (模板配了 captionStyle 时跳过默认 .srt 烧录) 与发现2 (visualStyle 接线) 的回归测试。 */
-export async function handleTalkingHeadBroll(
-  vp: VideoProduction,
-  mode: 'preview' | 'master',
-  setStatus: SetStatusFn,
-  outputFileName: string,
-  readyStatus: string,
-  outputField: 'previewPath' | 'masterPath',
-): Promise<void> {
-  if (!vp.sourceVideoPath) throw new Error('尚未上传出镜视频');
-  const sourceVideoPath = vp.sourceVideoPath;
-
-  if (mode === 'preview') {
-    // 转写 + 语音对齐 (复用现有 directing 状态值，语义上这里是"转写+对齐")
-    await setStatus('directing');
-    const audioPath = path.join(vp.productionRoot, 'source-audio.wav');
-    await extractAudio({ videoPath: sourceVideoPath, audioPath });
-    const whisper = new LocalWhisperClient();
-    const transcription = await whisper.transcribe(audioPath);
-
-    // 取六幕脚本 (同 POST /api/v1/cockpit/video-productions 的 route.ts 用的同一条查找链)
-    const content = await prisma.cockpitContent.findUnique({ where: { id: vp.contentId } });
-    const draft = content?.scriptDraftId
-      ? await prisma.scriptDraft.findUnique({ where: { id: content.scriptDraftId } })
-      : null;
-    const parsed = draft ? parseDraftOutput(draft.output) : null;
-    if (!parsed?.acts || !parsed.four_dims) throw new Error('需要先生成六幕脚本');
-    const acts = parsed.acts;
-
-    const deepseekKey = await resolveDeepSeekApiKey(vp.userId);
-    if (!deepseekKey) throw new Error('未配置 DeepSeek key');
-    const alignLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-reasoner' });
-    const { result: aligned } = await alignLLM.callStructured({
-      systemPrompt: ALIGNER.buildSystemPrompt(),
-      userMessage: ALIGNER.buildUserMessage(transcription.segments, acts),
-      responseSchema: ALIGNER.responseSchema,
-    });
-    // 持久化对齐结果：master 渲染直接复用，不重新做 ASR/对齐这类非确定性 AI 调用。
-    await prisma.videoProduction.update({
-      where: { id: vp.id },
-      data: {
-        alignedActs: aligned.acts as unknown as Prisma.InputJsonValue,
-        rawTranscript: transcription.segments as unknown as Prisma.InputJsonValue,
-        updatedAt: new Date().toISOString(),
-      },
-    });
-
-    const narrations = Object.fromEntries(acts.map((a) => [a.act, a.narration]));
-    const srt = buildSrtFromAlignedActs(aligned.acts, narrations);
-
-    await setStatus('building');
-    // 二十一期: acts 已在上方取到, 直接派生画面层的事实护栏(见 facts-guard.ts)。
-    const factsSection = buildFactsSection(acts, await loadResearch(vp.contentId));
-    const directorLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-reasoner' });
-    const { result: rawDirection } = await directorLLM.callStructured({
-      systemPrompt: DIRECTOR.buildSystemPrompt(factsSection),
-      userMessage: DIRECTOR.buildUserMessage(srt),
-      responseSchema: DIRECTOR.responseSchema,
-    });
-
-    /*
-     * 分镜必须裁回素材长度之内。
-     *
-     * 真实事故: 素材 155 秒, 导演排出 234 秒(s7 从 155 秒起、s8 到 234 秒止), 合成
-     * 照单全收 —— 成片比素材长 79 秒, 那 79 秒既没人声也没台词, 纯凑画面。同一份稿子
-     * 上一轮导演给的是 0~154 秒, 完全正常, 所以这是模型随机性, 而管线一条校验都没有。
-     */
-    const sourceMs = (await probeVideoDurationMs(sourceVideoPath)) ?? undefined;
-    const clamped = clampShotsToSource(rawDirection.shots, sourceMs);
-    if (clamped.length !== rawDirection.shots.length) {
-      console.warn(
-        `[video-production] 导演分镜超出素材长度(${((sourceMs ?? 0) / 1000).toFixed(0)}s), ` +
-        `丢掉 ${rawDirection.shots.length - clamped.length} 个越界镜头`,
-      );
-    }
-    const direction: DirectorResponse = { ...rawDirection, shots: clamped };
-
-    await fs.writeFile(
-      path.join(vp.productionRoot, 'direction.json'),
-      JSON.stringify(direction),
-      'utf-8',
-    );
-
-    // 终审发现2: template.visualStyle 此前从未被读到调用点。
-    const visualStyleTemplate = vp.templateId
-      ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
-      : null;
-    const visualStyle = (visualStyleTemplate?.visualStyle as 'card' | 'illustration' | undefined) ?? 'card';
-
-    const builderLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-chat' });
-    /*
-     * B-roll 必须按**成片真实画幅**渲染, 而成片画幅由出镜素材决定。
-     *
-     * 之前渲染视口写死 1920x1080: 用户拍的是 1080x1920 竖屏, 每个 B-roll 镜头都出成
-     * 横屏, 合成时等比缩进竖屏画面 —— 内容只剩 32% 的高度, 其余 68% 全是黑边。
-     * 第一条真人出镜成片就是这么废掉的。
-     *
-     * 画幅同时要写进 Builder 的 prompt: 光换视口不够, 模型按横屏排的版塞进竖屏视口
-     * 会溢出或被裁。
-     */
-    const shotFrame = await probeVideoDimensions(sourceVideoPath);
-    const cutawaySegments: CutawaySegment[] = [];
-    let shotIndex = 0;
-    /*
-     * 模板可以整个关掉 B-roll(二十三期)。关掉之后画面就是原始出镜视频, 视觉全靠
-     * 文字叠加层 —— 拆参考片的结论是真实口播视频本来就是这样。
-     *
-     * 关掉时**跳过整个 Builder + 渲染循环**, 不是生成了再丢: 那一圈是这条管线里
-     * 最贵的部分(每镜一次 LLM + 一次无头浏览器逐帧截图)。
-     */
-    const brollOn = (await templateOf(vp.templateId))?.brollEnabled ?? true;
-    for (const shot of brollOn ? direction.shots : []) {
-      const builtHtml = await buildShotHtmlWithRetry(
-        builderLLM,
-        // 画幅要进 prompt: 只换渲染视口的话, 模型按横屏排的版塞进竖屏会溢出/被裁
-        BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection, undefined, shotFrame),
-        shot,
-        BUILDER.buildUserMessage(shot),
-        /*
-         * 这条链**之前根本没开密度体检**(不传 probeDir 就整关跳过)。
-         * 后果是真实的: 一个整整 23 秒、100% 纯空白的镜头一路进了成片, 而日志上
-         * 「零失败」—— 它压根没被检查过。图文口播那条一直开着, 所以只有它报过失败。
-         */
-        vp.templateId ? shotDir(vp.productionRoot, shotIndex) : undefined,
-        shotFrame,
-      );
-      const shotWorkDir = shotDir(vp.productionRoot, shotIndex);
-      await fs.mkdir(shotWorkDir, { recursive: true });
-      await fs.writeFile(path.join(shotWorkDir, 'source.html'), builtHtml, 'utf-8');
-      const clipPath = path.join(shotWorkDir, 'clip.mp4');
-      await renderShotToClip({
-        html: builtHtml,
-        durationMs: shot.endMs - shot.startMs,
-        fps: 15, // 预览档固定 15fps，与 ppt-narration 分支一致
-        workDir: shotWorkDir,
-        outputClipPath: clipPath,
-        frame: shotFrame,
-      });
-      cutawaySegments.push({ startMs: shot.startMs, endMs: shot.endMs, clipPath });
-      shotIndex += 1;
-    }
-
-    await setStatus('assembling');
-    const compositedPath = path.join(vp.productionRoot, 'composited.mp4');
-    // 画中画由模板配置驱动。cutaway(默认)时不传 pip, 走原来的顺序挖空。
-    const layoutTemplate = vp.templateId
-      ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
-      : null;
-    const pip =
-      layoutTemplate?.talkingHeadLayout === 'pip'
-        ? {
-            position: (layoutTemplate.pipPosition ?? 'br') as PipPosition,
-            scale: layoutTemplate.pipScale ?? 0.25,
-            margin: layoutTemplate.pipMargin ?? 40,
-          }
-        : undefined;
-    /*
-     * 逐场景版面(二十三期)。production 上存了 sceneLayouts 就走新的合成器
-     * (支持人物全屏/分屏/圆窗), 没存就走原来的顺序挖空 —— 已有任务零迁移。
-     *
-     * 这一步之前是个「界面在撒谎」的口子: 编辑台里能选分屏和圆窗、也能预览,
-     * 但出片时根本没实现, 成片和编辑台对不上。
-     */
-    const refreshedLayouts = vp.sceneLayouts as unknown[] | null;
-    const layoutMap = new Map(
-      (Array.isArray(refreshedLayouts) ? refreshedLayouts : []).map(
-        (x) => [String((x as { shotId?: string }).shotId ?? ''), String((x as { layout?: string }).layout ?? '')],
-      ),
-    );
-    if (layoutMap.size > 0) {
-      const { width, height } = await probeVideoDimensions(sourceVideoPath);
-      const { durationSec } = await probeVideo(sourceVideoPath);
-      await execFileAsyncCompose(
-        buildSceneComposeArgs({
-          sourceVideoPath,
-          outputPath: compositedPath,
-          frame: { width, height },
-          sourceDurationMs: Math.round(durationSec * 1000),
-          segments: direction.shots.map((shot, i) => ({
-            startMs: shot.startMs,
-            endMs: shot.endMs,
-            clipPath: cutawaySegments[i]?.clipPath,
-            layout: (layoutMap.get(shot.shotId) ?? 'content-full') as SceneLayout,
-          })),
-        }),
-      );
-    } else {
-      await compositeCutawayVideo({ sourceVideoPath, segments: cutawaySegments, outputPath: compositedPath, pip });
-    }
-    const outputPath = path.join(vp.productionRoot, outputFileName);
-    const captionTemplate = vp.templateId
-      ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
-      : null;
-    if (captionTemplate?.captionStyle) {
-      // 终审发现1(spec §3.2 去重规则): 模板配了 captionStyle 时, 默认 .srt 烧录整段跳过,
-      // 交给成片包装段(runPackaging, 见 handleProduce)统一烧 .ass, 避免两层字幕叠在一起。
-      // 预览档不跑包装段(spec §3.1: 预览审内容不包装), 所以这里预览产物就是"裸画面,
-      // 无字幕"——这是设计取舍, 不是遗漏: 预览审的是分镜与内容, 字幕样式要等 master
-      // 包装段才最终呈现。不要因为预览没字幕就把这段烧录加回来。
-      await fs.copyFile(compositedPath, outputPath);
-    } else {
-      const captionSrt = buildCaptionSrtFromTranscript(transcription.segments);
-      await burnCaptions({ videoPath: compositedPath, srt: captionSrt, outputPath });
-    }
-
-    const freezeReport = await reportFreeze(outputPath, mode);
-  await setStatus(readyStatus, { [outputField]: outputPath, freezeReport });
-  } else {
-    // master 模式：复用持久化的 direction.json/source.html + 已对齐的 alignedActs/rawTranscript，
-    // 不重新做 ASR/对齐这类耗时且非确定性的 AI 调用 —— 与 ppt-narration master 分支同一先例。
-    if (!vp.alignedActs || !vp.rawTranscript) {
-      throw new Error('预览未完成或已损坏，无法确认导出，请重新生成预览');
-    }
-    const rawTranscript = vp.rawTranscript as unknown as TranscriptSegment[];
-
-    let direction: DirectorResponse;
-    try {
-      const raw = await fs.readFile(path.join(vp.productionRoot, 'direction.json'), 'utf-8');
-      direction = JSON.parse(raw) as DirectorResponse;
-    } catch {
-      throw new Error('预览未完成或已损坏，无法确认导出，请重新生成预览');
-    }
-
-    await setStatus('building');
-    const cutawaySegments: CutawaySegment[] = [];
-    let shotIndex = 0;
-    // 同预览分支: 模板关掉 B-roll 时整个循环跳过, 画面就是原始出镜视频
-    const brollOnMaster = (await templateOf(vp.templateId))?.brollEnabled ?? true;
-    for (const shot of brollOnMaster ? direction.shots : []) {
-      const shotWorkDir = shotDir(vp.productionRoot, shotIndex);
-      const sourceHtmlPath = path.join(shotWorkDir, 'source.html');
-      let html: string;
-      try {
-        html = await fs.readFile(sourceHtmlPath, 'utf-8');
-      } catch {
-        throw new Error(`预览未完成或已损坏，无法确认导出，请重新生成预览 (镜头缺失: ${shot.shotId})`);
-      }
-      const masterWorkDir = path.join(shotWorkDir, 'master');
-      await fs.mkdir(masterWorkDir, { recursive: true });
-      const clipPath = path.join(shotWorkDir, 'clip-master.mp4');
-      await renderShotToClip({
-        html,
-        durationMs: shot.endMs - shot.startMs,
-        fps: 30, // 正式渲染档固定 30fps，与 ppt-narration 分支一致
-        workDir: masterWorkDir,
-        frame: await probeVideoDimensions(sourceVideoPath),
-        outputClipPath: clipPath,
-      });
-      cutawaySegments.push({ startMs: shot.startMs, endMs: shot.endMs, clipPath });
-      shotIndex += 1;
-    }
-
-    await setStatus('assembling');
-    // 用独立文件名，与预览档的 composited.mp4 分开，避免 approve→master 渲染中途覆盖预览产物。
-    const compositedPath = path.join(vp.productionRoot, 'composited-master.mp4');
-    // 画中画由模板配置驱动。cutaway(默认)时不传 pip, 走原来的顺序挖空。
-    const layoutTemplate = vp.templateId
-      ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
-      : null;
-    const pip =
-      layoutTemplate?.talkingHeadLayout === 'pip'
-        ? {
-            position: (layoutTemplate.pipPosition ?? 'br') as PipPosition,
-            scale: layoutTemplate.pipScale ?? 0.25,
-            margin: layoutTemplate.pipMargin ?? 40,
-          }
-        : undefined;
-    /*
-     * 逐场景版面(二十三期)。production 上存了 sceneLayouts 就走新的合成器
-     * (支持人物全屏/分屏/圆窗), 没存就走原来的顺序挖空 —— 已有任务零迁移。
-     *
-     * 这一步之前是个「界面在撒谎」的口子: 编辑台里能选分屏和圆窗、也能预览,
-     * 但出片时根本没实现, 成片和编辑台对不上。
-     */
-    const refreshedLayouts = vp.sceneLayouts as unknown[] | null;
-    const layoutMap = new Map(
-      (Array.isArray(refreshedLayouts) ? refreshedLayouts : []).map(
-        (x) => [String((x as { shotId?: string }).shotId ?? ''), String((x as { layout?: string }).layout ?? '')],
-      ),
-    );
-    if (layoutMap.size > 0) {
-      const { width, height } = await probeVideoDimensions(sourceVideoPath);
-      const { durationSec } = await probeVideo(sourceVideoPath);
-      await execFileAsyncCompose(
-        buildSceneComposeArgs({
-          sourceVideoPath,
-          outputPath: compositedPath,
-          frame: { width, height },
-          sourceDurationMs: Math.round(durationSec * 1000),
-          segments: direction.shots.map((shot, i) => ({
-            startMs: shot.startMs,
-            endMs: shot.endMs,
-            clipPath: cutawaySegments[i]?.clipPath,
-            layout: (layoutMap.get(shot.shotId) ?? 'content-full') as SceneLayout,
-          })),
-        }),
-      );
-    } else {
-      await compositeCutawayVideo({ sourceVideoPath, segments: cutawaySegments, outputPath: compositedPath, pip });
-    }
-    const outputPath = path.join(vp.productionRoot, outputFileName);
-    const captionTemplate = vp.templateId
-      ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
-      : null;
-    if (captionTemplate?.captionStyle) {
-      // 同预览分支(终审发现1): 交给包装段统一烧 .ass, 这里只原样搬运合成结果, 保证
-      // master 与 preview 观感一致(两个分支都要改, 否则用户预览看到的字幕样式和最终
-      // 成片对不上)。
-      await fs.copyFile(compositedPath, outputPath);
-    } else {
-      const captionSrt = buildCaptionSrtFromTranscript(rawTranscript);
-      await burnCaptions({ videoPath: compositedPath, srt: captionSrt, outputPath });
-    }
-
-    const freezeReport = await reportFreeze(outputPath, mode);
-  await setStatus(readyStatus, { [outputField]: outputPath, freezeReport });
-  }
-}
-
-/**
- * `illustration-tts` 交付模式 (十九期新增) —— 无出镜视频, 用火山引擎 TTS 逐幕合成配音,
- * 驱动纯 AI 插画分镜(BUILDER visualStyle='illustration')直接拼接。与另外两个分支的关键差异：
- * - 没有真人出镜视频/ASR，时间轴锚点来自 TTS 逐幕合成的真实音频时长(ttsResultsToAlignedActs)；
- * - 最终产物是"画面拼接(concatClips)+ TTS 配音轨拼接 + 混流(muxAudioTrack)"，
- *   不是 compositeCutawayVideo 那种挖空替换。
- */
-/** 导出仅供测试用(见 tests/jobs/video-production-worker.test.ts) —— 校验缺口1 的音色优先级链
- * 真的接线到了 TTS 调用参数上, 且 apiKey 始终来自全局配置、不受模板/覆盖影响。 */
-export async function handleIllustrationTts(
-  vp: VideoProduction,
-  mode: 'preview' | 'master',
-  setStatus: SetStatusFn,
-  outputFileName: string,
-  readyStatus: string,
-  outputField: 'previewPath' | 'masterPath',
-): Promise<void> {
-  if (mode === 'preview') {
-    // TTS 逐幕配音 (复用现有 directing 状态值，语义上这里是"TTS 配音")
-    await setStatus('directing');
-
-    // 取六幕脚本 (同 handleTalkingHeadBroll 用的同一条查找链)
-    const content = await prisma.cockpitContent.findUnique({ where: { id: vp.contentId } });
-    const draft = content?.scriptDraftId
-      ? await prisma.scriptDraft.findUnique({ where: { id: content.scriptDraftId } })
-      : null;
-    const parsed = draft ? parseDraftOutput(draft.output) : null;
-    if (!parsed?.acts || !parsed.four_dims) throw new Error('需要先生成六幕脚本');
-    const acts = parsed.acts;
-
-    const ttsConfig = await prisma.volcTtsConfig.findUnique({ where: { userId: vp.userId } });
-    if (!ttsConfig) throw new Error('请先在设置页配置火山 TTS');
-    const apiKey = decrypt(ttsConfig.apiKey);
-
-    // 音色/资源档位优先级(task-10b 缺口1): 本次任务的临时覆盖 > 模板 voicePreset > 全局配置兜底。
-    // apiKey 不参与这条链——它是账号级密钥, 上面已经直接从全局 ttsConfig 取好, 不受模板/覆盖影响。
-    // templateId 为空(内容详情页旧入口)时 template 为 null, 优先级链自然落到全局配置, 零迁移。
-    const template = vp.templateId
-      ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
-      : null;
-    const { voiceType, resourceId } = resolveTtsVoiceSelection({
-      voiceOverride: vp.voiceOverride as VoiceSelectable | null,
-      templateVoicePreset: (template?.voicePreset as VoiceSelectable | null) ?? null,
-      globalConfig: { voiceType: ttsConfig.voiceType, resourceId: ttsConfig.resourceId },
-    });
-
-    const ttsResults: TtsActResult[] = [];
-    for (const act of acts) {
-      // 扩展名用 .mp3：synthesizeVolcTts 实际写出的是 mp3 编码字节(audio_params.format:'mp3')，
-      // 用 .wav 会误导直接翻 productionRoot 目录的人。
-      const audioPath = path.join(vp.productionRoot, `tts-${act.act}.mp3`);
-      const { durationMs } = await synthesizeVolcTts(act.narration, audioPath, {
-        apiKey,
-        voiceType,
-        resourceId,
-      });
-      ttsResults.push({ act: act.act, audioPath, durationMs });
-    }
-    const alignedActs = ttsResultsToAlignedActs(ttsResults);
-    // 持久化对齐结果：master 渲染直接复用，不重新调用 TTS(耗真实调用额度)。
-    await prisma.videoProduction.update({
-      where: { id: vp.id },
-      data: {
-        alignedActs: alignedActs as unknown as Prisma.InputJsonValue,
-        updatedAt: new Date().toISOString(),
-      },
-    });
-
-    const narrations = Object.fromEntries(acts.map((a) => [a.act, a.narration]));
-    const srt = buildSrtFromAlignedActs(alignedActs, narrations);
-
-    await setStatus('building');
-    const deepseekKey = await resolveDeepSeekApiKey(vp.userId);
-    if (!deepseekKey) throw new Error('未配置 DeepSeek key');
-    // 二十一期: acts 已在上方取到, 直接派生画面层的事实护栏(见 facts-guard.ts)。
-    const factsSection = buildFactsSection(acts, await loadResearch(vp.contentId));
-    const directorLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-reasoner' });
-    const { result: rawDirection } = await directorLLM.callStructured({
-      systemPrompt: DIRECTOR.buildSystemPrompt(factsSection),
-      userMessage: DIRECTOR.buildUserMessage(srt),
-      responseSchema: DIRECTOR.responseSchema,
-    });
-
-    /*
-     * 分镜必须裁回素材长度之内。
-     *
-     * 真实事故: 素材 155 秒, 导演排出 234 秒(s7 从 155 秒起、s8 到 234 秒止), 合成
-     * 照单全收 —— 成片比素材长 79 秒, 那 79 秒既没人声也没台词, 纯凑画面。同一份稿子
-     * 上一轮导演给的是 0~154 秒, 完全正常, 所以这是模型随机性, 而管线一条校验都没有。
-     */
-    // 这条链没有出镜素材, 时间轴基准是 TTS 逐幕音频的总长
-    const sourceMs = alignedActs.length > 0
-      ? Math.max(...alignedActs.map((a) => a.endMs))
-      : undefined;
-    const clamped = clampShotsToSource(rawDirection.shots, sourceMs);
-    if (clamped.length !== rawDirection.shots.length) {
-      console.warn(
-        `[video-production] 导演分镜超出素材长度(${((sourceMs ?? 0) / 1000).toFixed(0)}s), ` +
-        `丢掉 ${rawDirection.shots.length - clamped.length} 个越界镜头`,
-      );
-    }
-    const direction: DirectorResponse = { ...rawDirection, shots: clamped };
-
-    await fs.writeFile(
-      path.join(vp.productionRoot, 'direction.json'),
-      JSON.stringify(direction),
-      'utf-8',
-    );
-
-    // 终审发现2: template.visualStyle 此前从未被读到调用点, 一直硬编码 'illustration'——
-    // 复用上面(音色优先级链)已经取过的同一个 template, 不重复查询。
-    const visualStyle = (template?.visualStyle as 'card' | 'illustration' | undefined) ?? 'illustration';
-
-    const builderLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-chat' });
-    // 画幅来自模板: 这条链纯由 AI 生成画面, 没有素材可反推(见 aspect.ts)
-    const shotFrame = frameOfAspect(template?.aspect);
-    // 常驻框架层(二十四期)要的字幕: 用上面刚合成的 srt(基于真实 TTS 时长的 alignedActs),
-    // 不用 vp.srt —— 那是创建时按 targetSec 估出来的时间轴, 跟真实配音时长对不上。
-    const chromeCues = parseSrtCues(srt);
-    const shotTotal = direction.shots.length;
-    const clipPaths: string[] = [];
-    let shotIndex = 0;
-    for (const shot of direction.shots) {
-      const builtHtml = await buildShotHtmlWithRetry(
-        builderLLM,
-        BUILDER.buildSystemPrompt(direction.palette, visualStyle, factsSection, undefined, shotFrame),
-        shot,
-        BUILDER.buildUserMessage(shot),
-        /*
-         * 这条链**之前根本没开密度体检**(不传 probeDir 就整关跳过)。
-         * 后果是真实的: 一个整整 23 秒、100% 纯空白的镜头一路进了成片, 而日志上
-         * 「零失败」—— 它压根没被检查过。图文口播那条一直开着, 所以只有它报过失败。
-         */
-        vp.templateId ? shotDir(vp.productionRoot, shotIndex) : undefined,
-        shotFrame,
-      );
-      const shotWorkDir = shotDir(vp.productionRoot, shotIndex);
-      await fs.mkdir(shotWorkDir, { recursive: true });
-      await fs.writeFile(path.join(shotWorkDir, 'source.html'), builtHtml, 'utf-8');
-      const clipPath = path.join(shotWorkDir, 'clip.mp4');
-      await renderShotToClip({
-        html: builtHtml,
-        durationMs: shot.endMs - shot.startMs,
-        fps: 15, // 预览档固定 15fps，与另外两个分支一致
-        workDir: shotWorkDir,
-        frame: shotFrame,
-        outputClipPath: clipPath,
-        chrome: {
-          width: shotFrame.width,
-          height: shotFrame.height,
-          actLabel: actLabelFromAlignedActs(alignedActs, shot.startMs),
-          shotNo: shotIndex + 1,
-          shotTotal,
-          cues: chromeCues,
-          shotStartMs: shot.startMs,
-        },
-      });
-      clipPaths.push(clipPath);
-      shotIndex += 1;
-    }
-
-    await setStatus('assembling');
-    const videoOnlyPath = path.join(vp.productionRoot, 'video-only.mp4');
-    await concatClips({
-      clipPaths,
-      outputPath: videoOnlyPath,
-      concatListPath: path.join(vp.productionRoot, 'concat-list.txt'),
-    });
-    // 音频轨拼接：ttsResults 天然按六幕固定顺序排列，与合成 alignedActs 的顺序一致。
-    // 注意不能复用 concatClips —— 它对视频用 `-c copy` 纯字节拼接，视频分镜是同一渲染器
-    // 产出、编码参数严格一致，字节拼接安全；但 mp3 这类帧编码音频用 -c copy 在拼接点上
-    // 不是采样点精确的(实测会有几十毫秒漂移 + Non-monotonic DTS 警告)，而 alignedActs 的
-    // 每幕 startMs/endMs 是按 ffprobe 出来的单幕时长累加算出的，假设了拼接后严丝合缝——
-    // 漂移会让实际音轨边界和这个假设对不上，随幕数增多累积成画面渐进错位。
-    // concatAudioTracks 用同一份 concat demuxer 技巧但强制重编码为 pcm_s16le，规避这个问题。
-    const concatenatedAudioPath = path.join(vp.productionRoot, 'tts-audio.wav');
-    await concatAudioTracks({
-      audioPaths: ttsResults.map((r) => r.audioPath),
-      outputPath: concatenatedAudioPath,
-      concatListPath: path.join(vp.productionRoot, 'concat-audio-list.txt'),
-    });
-
-    const outputPath = path.join(vp.productionRoot, outputFileName);
-    await muxAudioTrack({ videoPath: videoOnlyPath, audioPath: concatenatedAudioPath, outputPath });
-
-    const freezeReport = await reportFreeze(outputPath, mode);
-  await setStatus(readyStatus, { [outputField]: outputPath, freezeReport });
-  } else {
-    // master 模式：复用持久化的 direction.json/source.html + 已合成的 alignedActs/per-act TTS 音频，
-    // 不重新调用 TTS(真实调用额度)/DeepSeek —— 与另外两个分支 master 分支同一先例。
-    if (!vp.alignedActs) {
-      throw new Error('预览未完成或已损坏，无法确认导出，请重新生成预览');
-    }
-    const alignedActs = vp.alignedActs as unknown as AlignedAct[];
-
-    let direction: DirectorResponse;
-    try {
-      const raw = await fs.readFile(path.join(vp.productionRoot, 'direction.json'), 'utf-8');
-      direction = JSON.parse(raw) as DirectorResponse;
-    } catch {
-      throw new Error('预览未完成或已损坏，无法确认导出，请重新生成预览');
-    }
-
-    await setStatus('building');
-    // 和预览同一个画幅: master 复用预览生成的 HTML, 视口不一致会把它裁掉
-    const shotFrame = frameOfAspect((await templateOf(vp.templateId))?.aspect);
-    // master 不重跑 TTS/DeepSeek，但常驻框架层的字幕仍要算——重新取一次六幕稿的台词文本
-    // (preview 分支同一份数据源, 见 loadActs)，配合已持久化的 alignedActs 重建同一份 srt。
-    const chromeActs = await loadActs(vp.contentId);
-    const chromeNarrations = Object.fromEntries(chromeActs.map((a) => [a.act, a.narration]));
-    const chromeCues = parseSrtCues(buildSrtFromAlignedActs(alignedActs, chromeNarrations));
-    const shotTotal = direction.shots.length;
-    const clipPaths: string[] = [];
-    let shotIndex = 0;
-    for (const shot of direction.shots) {
-      const shotWorkDir = shotDir(vp.productionRoot, shotIndex);
-      const sourceHtmlPath = path.join(shotWorkDir, 'source.html');
-      let html: string;
-      try {
-        html = await fs.readFile(sourceHtmlPath, 'utf-8');
-      } catch {
-        throw new Error(`预览未完成或已损坏，无法确认导出，请重新生成预览 (镜头缺失: ${shot.shotId})`);
-      }
-      const masterWorkDir = path.join(shotWorkDir, 'master');
-      await fs.mkdir(masterWorkDir, { recursive: true });
-      const clipPath = path.join(shotWorkDir, 'clip-master.mp4');
-      await renderShotToClip({
-        html,
-        durationMs: shot.endMs - shot.startMs,
-        fps: 30, // 正式渲染档固定 30fps，与另外两个分支一致
-        workDir: masterWorkDir,
-        frame: shotFrame,
-        outputClipPath: clipPath,
-        chrome: {
-          width: shotFrame.width,
-          height: shotFrame.height,
-          actLabel: actLabelFromAlignedActs(alignedActs, shot.startMs),
-          shotNo: shotIndex + 1,
-          shotTotal,
-          cues: chromeCues,
-          shotStartMs: shot.startMs,
-        },
-      });
-      clipPaths.push(clipPath);
-      shotIndex += 1;
-    }
-
-    await setStatus('assembling');
-    // 用独立文件名，与预览档的 video-only.mp4 分开，避免 approve→master 渲染中途覆盖预览产物。
-    const videoOnlyPath = path.join(vp.productionRoot, 'video-only-master.mp4');
-    await concatClips({
-      clipPaths,
-      outputPath: videoOnlyPath,
-      concatListPath: path.join(vp.productionRoot, 'concat-list-master.txt'),
-    });
-    // 复用预览阶段已经拼接好的完整 TTS 音轨(tts-audio.wav，重编码 pcm 后的产物)，音频时长与
-    // 画面 fps 无关，不需要因为画面重渲染为 30fps 就重新合成/重新拼接语音——按 alignedActs 里
-    // 持久化的顺序(startMs 升序，等同预览阶段合成 ttsResults 时的六幕固定顺序)找回各幕原始
-    // mp3 文件仅用于校验其仍然存在；真正参与混流的是预览阶段已拼好的那条完整音轨。
-    const orderedActs = [...alignedActs].sort((a, b) => a.startMs - b.startMs);
-    for (const a of orderedActs) {
-      const perActPath = path.join(vp.productionRoot, `tts-${a.act}.mp3`);
-      try {
-        await fs.access(perActPath);
-      } catch {
-        throw new Error(`预览未完成或已损坏，无法确认导出，请重新生成预览 (缺少 ${a.act} 幕配音)`);
-      }
-    }
-    const concatenatedAudioPath = path.join(vp.productionRoot, 'tts-audio.wav');
-
-    const outputPath = path.join(vp.productionRoot, outputFileName);
-    await muxAudioTrack({ videoPath: videoOnlyPath, audioPath: concatenatedAudioPath, outputPath });
-
-    const freezeReport = await reportFreeze(outputPath, mode);
-  await setStatus(readyStatus, { [outputField]: outputPath, freezeReport });
-  }
-}
-
 async function handleProduce(job: Job<JobData>) {
   const { videoProductionId, mode } = job.data;
 
@@ -1971,7 +922,7 @@ async function handleProduce(job: Job<JobData>) {
 
     // 外层按交付模式(vp.mode，与本函数的 preview/master 渲染档是两个不同概念)分岔，
     // 各交付模式的具体流程封装成独立函数——ppt-narration、talking-head-broll 与
-    // illustration-tts(十九期新增)互不干扰，照此形状新增分支不需要改动这两个函数。
+    // illustration-tts 互不干扰，照此形状新增分支不需要改动这两个函数。
     if (mode === 'recompose') {
       // 只重新合成 —— 分镜和 B-roll 原样复用, 见 handleRecompose 的说明
       await handleRecompose(vp, setStatus);
@@ -1979,125 +930,30 @@ async function handleProduce(job: Job<JobData>) {
     }
 
     /*
-     * 二十五期: Remotion 渲染分支。**与旧分支并存, 由 vp.renderer 选。**
-     * 先建后拆 —— 新链路验收通过之前, 旧链路必须始终能出片。
-     * 二十九期 Task 2 起 illustration-tts 也走这条分支(与 ppt-narration 共用
-     * handlePptNarrationRemotion, 差异见该函数顶部的 RemotionShotPlanOptions 说明);
-     * Task 4 起 talking-head-broll 也走这条分支, 但走的是独立的
-     * handleTalkingHeadBrollRemotion(不参数化进 handlePptNarrationRemotion——
-     * 差异远超一半, 见该函数顶部注释)。
-     * 是否有 Remotion handler 能接住某个 mode, 由 isRemotionReadyMode 判断——
-     * 与 PATCH /[id] 路由允许切换到 'remotion' 的判断共用同一份
-     * REMOTION_READY_MODES 清单, 见该常量顶部注释, 别各写一份导致分叉。
+     * 三十期 Task 3: 旧渲染层(三条旧交付模式 handler、文字叠加层、成片包装段)
+     * 已整体删除——三条交付模式均已完成用户验收并全部支持 Remotion(见 renderer.ts
+     * REMOTION_READY_MODES), 新建任务默认 renderer='remotion'(defaultRendererForMode)。
+     * 历史上 renderer 仍是 'legacy' 的任务(prisma 字段 @default("legacy")，历史数据
+     * 不删)如果被重新触发渲染, 在这里直接报错——不是静默失败, 是一句可操作的人话,
+     * 写进 errorMessage(见下面 catch 块), 界面上引导用户先把 renderer 切换到 remotion。
+     * film-detail.tsx 的切换按钮已相应改为只展示"这条历史任务用旧渲染生成"的说明,
+     * 不再提供切回 legacy 的选项(PATCH 路由的 RendererSchema 也已收紧为只接受
+     * 'remotion', 拒绝新建/切换到 'legacy')。文字叠加层(textOverlayEnabled)与成片
+     * 包装段(BGM 混音/片头片尾)作为产品能力随旧链一起下线, 这两个模板字段在
+     * Remotion 渲染下不再生效——见 README。
      */
-    if (vp.renderer === 'remotion' && isRemotionReadyMode(vp.mode)) {
-      if (vp.mode === 'ppt-narration') {
-        await handlePptNarrationRemotion(vp, mode, setStatus, outputFileName, readyStatus, outputField);
-      } else if (vp.mode === 'illustration-tts') {
-        await handleIllustrationTtsRemotion(vp, mode, setStatus, outputFileName, readyStatus, outputField);
-      } else {
-        await handleTalkingHeadBrollRemotion(vp, mode, setStatus, outputFileName, readyStatus, outputField);
-      }
-      // 范围限制(终审已裁决, 本轮不补): 这条分支渲完就 return, 不会走下面的文字叠加层
-      // (二十三期)与成片包装段(二十期, BGM 混音/片头片尾/包装后静止复检)——那两段是
-      // 针对旧渲染层的成片路径写的, 尚未对接到 Remotion 分支。显式出声而不是悄悄跳过,
-      // 是因为「静默跳过」违反本项目的原则; **改库不是走到这里的唯一路径**——
-      // 二十八期加的 PATCH /[id] 路由 + film-detail.tsx 的切换按钮本身就能把
-      // REMOTION_READY_MODES 里的 mode 切到 'remotion'(按钮只按 canStartProduction
-      // 显隐, 不看 mode), 用户从真实 UI 就能走到这条分支, 不需要改库。这条警告是
-      // 提醒"这两段还没接上", 不是在断言一条不会被触发的死代码路径。
-      const t = vp.templateId
-        ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
-        : null;
-      console.warn(
-        `[video-production] renderer=remotion 跳过文案叠加与成片包装段 (videoProductionId=${vp.id})，` +
-        `本分支尚未接入这两段(见 docs/superpowers/specs/2026-08-31-remotion-migration-design.md)` +
-        (t?.textOverlayEnabled
-          ? `——模板 ${vp.templateId} 已开启 textOverlayEnabled, 但该叠加效果不会出现在这条渲染分支的产物上。`
-          : '。'),
-      );
-      return;
+    if (vp.renderer !== 'remotion') {
+      throw new Error('旧渲染已下线，请把这条任务的 renderer 切换到 remotion 后重试');
     }
-
-    if (vp.mode === 'talking-head-broll') {
-      await handleTalkingHeadBroll(vp, mode, setStatus, outputFileName, readyStatus, outputField);
-    } else if (vp.mode === 'ppt-narration') {
-      await handlePptNarration(vp, mode, setStatus, outputFileName, readyStatus, outputField);
-    } else if (vp.mode === 'illustration-tts') {
-      await handleIllustrationTts(vp, mode, setStatus, outputFileName, readyStatus, outputField);
-    } else {
+    if (!isRemotionReadyMode(vp.mode)) {
       throw new Error(`暂不支持的交付模式: ${vp.mode}`);
     }
-
-    /*
-     * 二十三期: 文字叠加层 —— **和交付模式正交**, 三种模式跑完都能加。
-     *
-     * 放在包装段之前: 包装段要烧字幕、混 BGM、接片头片尾, 而叠加是画面内容的
-     * 一部分, 必须先进画面再被包装。顺序反了的话片头片尾上也会盖上关键词。
-     *
-     * 失败不影响已经产出的画面 —— 叠加是加分项, 不该让一条渲染好的片子作废。
-     */
-    {
-      const t = vp.templateId
-        ? await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } })
-        : null;
-      if (t?.textOverlayEnabled) {
-        const refreshed = await prisma.videoProduction.findUnique({ where: { id: videoProductionId } });
-        const basePath = refreshed?.[outputField];
-        if (basePath) {
-          try {
-            const withText = path.join(vp.productionRoot, `overlay-${outputFileName}`);
-            const r = await applyTextOverlay({
-              userId: vp.userId,
-              videoPath: basePath,
-              outputPath: withText,
-              productionRoot: vp.productionRoot,
-              template: t,
-              setStatus,
-            });
-            if (r) {
-              const freezeReport = await reportFreeze(withText, mode);
-              await setStatus(readyStatus, {
-                [outputField]: withText, alignedActs: r.items, freezeReport,
-              });
-            }
-          } catch (e) {
-            console.error('[text-overlay]', e);
-          }
-        }
-      }
-    }
-
-    // 二十期: 成片包装段 —— 三交付模式共用, 只在 master 渲染完成后执行(预览审内容, 不包装)。
-    // templateId 为空(内容详情页旧入口)时整段跳过, 行为与十九期字符级一致(零迁移)。
-    if (mode === 'master' && vp.templateId) {
-      const template = await prisma.videoTemplate.findUnique({ where: { id: vp.templateId } });
-      const refreshed = await prisma.videoProduction.findUnique({ where: { id: videoProductionId } });
-      const masterPath = refreshed?.masterPath;
-      if (template && masterPath) {
-        await setStatus('packaging');
-        const narrations = await loadNarrations(vp.contentId);
-        const packagedPath = path.join(vp.productionRoot, 'packaged.mp4');
-        await runPackaging({
-          masterPath,
-          workDir: vp.productionRoot,
-          outputPath: packagedPath,
-          options: buildPackagingOptions({
-            template,
-            mode: vp.mode as DeliveryMode,
-            transcript: (refreshed?.rawTranscript as unknown as TranscriptSegment[] | null) ?? null,
-            alignedActs: (refreshed?.alignedActs as unknown as AlignedAct[] | null) ?? null,
-            narrations,
-            srt: vp.srt,
-          }),
-        });
-        // 包装后的成片取代原 masterPath 作为交付物; 未包装的 master.mp4 保留在
-        // productionRoot 里(包装若失败也有东西可下, spec §3.1)。
-        // 包装会接片头片尾、烧字幕、混 BGM —— 画面变了, 静止数字必须跟着重量,
-        // 否则交付物挂的是未包装那一版的数字。
-        const packagedFreeze = await reportFreeze(packagedPath, 'master');
-        await setStatus('done', { masterPath: packagedPath, freezeReport: packagedFreeze });
-      }
+    if (vp.mode === 'ppt-narration') {
+      await handlePptNarrationRemotion(vp, mode, setStatus, outputFileName, readyStatus, outputField);
+    } else if (vp.mode === 'illustration-tts') {
+      await handleIllustrationTtsRemotion(vp, mode, setStatus, outputFileName, readyStatus, outputField);
+    } else {
+      await handleTalkingHeadBrollRemotion(vp, mode, setStatus, outputFileName, readyStatus, outputField);
     }
   } catch (err) {
     await setStatus('failed', { errorMessage: err instanceof Error ? err.message : String(err) });
@@ -2177,80 +1033,4 @@ async function handleRecompose(
    */
   const freezeReport = await reportFreeze(outputPath, 'preview');
   await setStatus('preview_ready', { previewPath: outputPath, freezeReport });
-}
-
-/**
- * 文字叠加层(二十三期)。
- *
- * **和交付模式正交** —— 图文口播、真人出镜、插画配音跑完之后都能加这一层。
- * 第一版把它做成了第四种交付模式, 那是层级错误: 它只是口播视频的一种形式,
- * 而真人形象将来要能加到任何模式上。
- *
- * 参考片拆解见 `docs/superpowers/specs/2026-08-29-talking-head-overlay-style.md`:
- * 真实的口播视频不切镜, 所有视觉都是叠在真人画面上的文字。所以这一层不需要
- * Builder、不需要 Chromium —— 编译成一个 `.ass` 一次烧完。
- *
- * **文字落位由安全区算, 不写死。** 安全区来自画幅 + 版面 + 人在哪一侧:
- * 横屏人在右 → 左半边; 竖屏 → 上方一条带(人脸占中间, 左右都贴脸)。
- */
-async function applyTextOverlay(input: {
-  userId: string;
-  videoPath: string;
-  outputPath: string;
-  productionRoot: string;
-  template: { personSide: string | null; description: string | null } | null;
-  setStatus: SetStatusFn;
-}): Promise<{ items: OverlayItem[] } | null> {
-  const { userId, videoPath, outputPath, productionRoot, template, setStatus } = input;
-
-  await setStatus('building');
-  const audioPath = path.join(productionRoot, 'overlay-audio.wav');
-  await extractAudio({ videoPath, audioPath });
-  const transcription = await new LocalWhisperClient().transcribe(audioPath);
-  await fs.unlink(audioPath).catch(() => {});
-
-  const segments = transcription.segments
-    .map((s) => ({
-      startMs: Math.round(s.startSec * 1000),
-      endMs: Math.round(s.endSec * 1000),
-      text: s.text.trim(),
-    }))
-    .filter((s) => s.text.length > 0);
-  // 没有人声就没有可叠的东西 —— 直接跳过整层, 而不是叠一堆编出来的词
-  if (segments.length === 0) return null;
-
-  const durationMs = Math.round(transcription.durationSec * 1000);
-  const deepseekKey = await resolveDeepSeekApiKey(userId);
-  if (!deepseekKey) throw new Error('未配置 DeepSeek key');
-
-  const llm = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-reasoner' });
-  const { result } = await llm.callStructured({
-    systemPrompt: OVERLAY_PLAN.buildSystemPrompt(),
-    userMessage: OVERLAY_PLAN.buildUserMessage({ segments, durationMs }),
-    responseSchema: OVERLAY_PLAN.responseSchema,
-  });
-
-  const items = sanitizeOverlayItems(
-    result.items,
-    durationMs,
-    segments.map((s) => s.text),
-  ) as OverlayItem[];
-  if (items.length === 0) return null;
-
-  // 尺寸必须探真的: 传错时 libass 会静默把整层拉伸, 字号和位置一起歪
-  const frame = await probeVideoDimensions(videoPath);
-  const disclaimer = String(template?.description ?? '')
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean);
-
-  const ass = buildOverlayAss(items, REFERENCE_OVERLAY_STYLE, frame, {
-    disclaimer: disclaimer.length > 0 ? disclaimer : undefined,
-    durationMs,
-    personSide: (template?.personSide ?? 'right') as PersonSide,
-  });
-  await fs.writeFile(path.join(productionRoot, 'overlay.ass'), ass, 'utf-8');
-
-  await burnCaptions({ videoPath, srt: ass, outputPath, format: 'ass' });
-  return { items };
 }
