@@ -183,9 +183,10 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     return fail('任务状态刚刚变化(可能切换了渲染器或已开始处理), 请刷新后重试', 409);
   }
 
-  // Task 3 的 still 缓存在此失效——本任务(Task 2)只留挂点, 不实现。方案改了,
-  // 卡面预览多半也变了, Task 3 落地后应在这次 update 之后让该任务的卡面缓存
-  // (还没实现)失效, 否则剪辑台会显示改动前的旧预览图。
+  // 无需在此主动失效卡面缓存——见三十一期 Task 3 的 `shot-still-cache.ts`:
+  // 缓存文件名 = `<shotIndex>-<该镜 shot JSON + visualStyle + aspect 的 hash>`,
+  // 方案一改 hash 自然跟着变, 旧文件名不会再被任何请求命中, 天然失效, 不需要
+  // 这次 PUT 主动去删——孤儿文件由 shot-still 接口下次渲染同一镜时顺手清理。
 
   return ok({ id: vp.id, filmPlan: plan });
 }

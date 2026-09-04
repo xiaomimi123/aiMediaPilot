@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import { createRequire } from 'module';
 
 /**
  * `@remotion/bundler` / `@remotion/renderer` 故意不在主项目依赖图里
@@ -17,7 +16,23 @@ import { createRequire } from 'module';
 // (不写 eslint-disable: 本项目 ESLint 只 extends next/core-web-vitals, 没装
 //  typescript-eslint 插件, 引用其规则名会让 next build 的 lint 阶段报
 //  "Definition for rule not found" —— 三十期跑 build 时实测炸过。)
-const remotionRequire: (specifier: string) => any = createRequire(
+/**
+ * `nodeRequire`: 真正的 Node 原生 `require`, 通过 `eval` 拿——**不是**顶层
+ * `import { createRequire } from 'module'`(三十一期 Task 3 实测踩到的坑, worker
+ * 之前从未暴露过): worker 进程用 `tsx` 直接跑源码, 从不经过 webpack; 这个模块
+ * 头一次被 Next.js 编译的 API 路由(剪辑台的 shot-still 接口)直接 import 时,
+ * webpack 会对 `createRequire(path.resolve(...))` 这种"参数不是字符串字面量"的
+ * 调用做静态分析, 分析失败后把 `createRequire` 替换成一个不可调用的桩, 运行时
+ * 报 `TypeError: remotionRequire is not a function`("module.createRequire failed
+ * parsing argument" 那条 webpack 警告就是这个静态分析失败的信号)。`eval('require')`
+ * 绕开的是 webpack 对表达式的静态解析——webpack 明确记载"遇到 eval 就放弃分析
+ * 里面的内容", 拿到的是未被 webpack 改写过的原生 require, 之后用它取
+ * `require('module').createRequire`, 后续从 remotion/node_modules 找真实安装的
+ * 逻辑一个字不改。
+ */
+// eslint-disable-next-line no-eval -- 见上方注释: 故意用 eval 绕开 webpack 静态分析, 不是偷懒。
+const nodeRequire: (specifier: string) => any = eval('require');
+const remotionRequire: (specifier: string) => any = nodeRequire('module').createRequire(
   path.resolve(process.cwd(), 'remotion/package.json'),
 );
 const { bundle } = remotionRequire('@remotion/bundler');
