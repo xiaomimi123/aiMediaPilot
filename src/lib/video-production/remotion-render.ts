@@ -12,8 +12,11 @@ import { createRequire } from 'module';
  * Node 自己"从指定路径向上找 node_modules"的规则, 直接找到 remotion/node_modules
  * 里的实际安装, 不需要符号链接、不需要改主项目 package.json。
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- 见上方注释: 这两个包的类型声明
-// 也不在主项目 node_modules 里, `typeof import(...)` 会让 tsc 去解析同一个找不到的模块。
+// any 的理由见上方注释: 这两个包的类型声明也不在主项目 node_modules 里,
+// `typeof import(...)` 会让 tsc 去解析同一个找不到的模块。
+// (不写 eslint-disable: 本项目 ESLint 只 extends next/core-web-vitals, 没装
+//  typescript-eslint 插件, 引用其规则名会让 next build 的 lint 阶段报
+//  "Definition for rule not found" —— 三十期跑 build 时实测炸过。)
 const remotionRequire: (specifier: string) => any = createRequire(
   path.resolve(process.cwd(), 'remotion/package.json'),
 );
