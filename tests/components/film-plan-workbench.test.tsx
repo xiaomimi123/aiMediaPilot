@@ -305,3 +305,88 @@ describe('FilmPlanWorkbench —— 保存计数器只在成功时自增', () => 
     await waitFor(() => expect((screen.getAllByAltText('第 1 镜')[0] as HTMLImageElement).src).toContain('?v=1'));
   });
 });
+
+/*
+ * 三十二期 Task 5——预览区(单镜/整片切换)与画面参数面板。`@remotion/player`/`Film`
+ * 在 vitest 的 Node 模块解析下(不吃 `next.config.js` 的 webpack alias, 那条 alias
+ * 只作用于 Next 自己的 webpack 编译)会因为双份 React 实例报 "Invalid hook call",
+ * `PlanPreview` 内的 React error boundary 接住它、降级成静态卡面——这里不重复验证
+ * Player 本身的 props 契约(`plan-preview.test.tsx` 已经 mock 掉 Player 单独测过),
+ * 只验证工作台这一侧: 预览区/切换按钮存在、参数面板改动确实写进了本地方案
+ * (dirty 置真、保存后随 plan 一起提交)。
+ */
+describe('FilmPlanWorkbench —— 预览区与画面参数面板（三十二期 Task 5）', () => {
+  beforeEach(() => {
+    mockFetchSequence([() => filmPlanGetBody]);
+  });
+
+  it('预览区展示单镜/整片切换按钮', async () => {
+    render(<FilmPlanWorkbench productionId="f1" onStatusChange={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('film-plan-workbench')).not.toBeNull());
+    expect(screen.getByText('预览')).not.toBeNull();
+    expect(screen.getByText('单镜')).not.toBeNull();
+    expect(screen.getByText('整片')).not.toBeNull();
+  });
+
+  it('画面参数面板用中文用户向文案（动画快慢/强调色/卡片大小），不出现内部术语', async () => {
+    render(<FilmPlanWorkbench productionId="f1" onStatusChange={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('film-plan-workbench')).not.toBeNull());
+    expect(screen.getAllByText((_, el) => el?.textContent?.includes('动画快慢') ?? false).length).toBeGreaterThan(0);
+    expect(screen.getByText('强调色')).not.toBeNull();
+    expect(screen.getAllByText((_, el) => el?.textContent?.includes('卡片大小') ?? false).length).toBeGreaterThan(0);
+  });
+
+  it('拖动"动画快慢"滑杆——改动写进本地方案（dirty 置真，保存时随 plan 一起提交）', async () => {
+    render(<FilmPlanWorkbench productionId="f1" onStatusChange={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('film-plan-workbench')).not.toBeNull());
+
+    const saveBtn = screen.getByText('保存修改') as HTMLButtonElement;
+    expect(saveBtn.disabled).toBe(true); // 还没改动, 不可点
+
+    const speedSlider = screen.getAllByRole('slider')[0] as HTMLInputElement;
+    fireEvent.change(speedSlider, { target: { value: '2' } });
+
+    expect(screen.getByText('保存修改').hasAttribute('disabled')).toBe(false);
+    expect(screen.getAllByText((_, el) => el?.textContent?.includes('动画快慢（2×）') ?? false).length).toBeGreaterThan(0);
+
+    mockFetchSequence([
+      () => filmPlanGetBody,
+      (_url, init) => {
+        const body = JSON.parse((init?.body as string) ?? '{}');
+        expect(body.plan.shots[0].style).toEqual({ speed: 2 });
+        return { success: true, data: { id: 'f1', filmPlan: body.plan } };
+      },
+    ]);
+    fireEvent.click(screen.getByText('保存修改'));
+    await waitFor(() => expect(screen.getByText('已保存，缩略图已刷新。')).not.toBeNull());
+  });
+
+  it('换"强调色"下拉——同样写进本地方案的 style', async () => {
+    render(<FilmPlanWorkbench productionId="f1" onStatusChange={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('film-plan-workbench')).not.toBeNull());
+    const accentSelect = screen.getByLabelText('强调色') as HTMLSelectElement;
+    fireEvent.change(accentSelect, { target: { value: 'blue' } });
+    expect((screen.getByText('保存修改') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('"恢复默认"——未改动时禁用；改动后点击把该字段从 style 里删掉、滑杆回到缺省刻度', async () => {
+    render(<FilmPlanWorkbench productionId="f1" onStatusChange={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('film-plan-workbench')).not.toBeNull());
+
+    const resetButtons = screen.getAllByText('恢复默认') as HTMLButtonElement[];
+    // 还没改过任何参数——全部「恢复默认」按钮禁用, 点了也没意义。
+    resetButtons.forEach((btn) => expect(btn.disabled).toBe(true));
+
+    const speedSlider = screen.getAllByRole('slider')[0] as HTMLInputElement;
+    fireEvent.change(speedSlider, { target: { value: '2' } });
+    expect(screen.getAllByText((_, el) => el?.textContent?.includes('动画快慢（2×）') ?? false).length).toBeGreaterThan(0);
+
+    const speedResetBtn = screen.getAllByText('恢复默认')[0] as HTMLButtonElement;
+    expect(speedResetBtn.disabled).toBe(false);
+    fireEvent.click(speedResetBtn);
+
+    // 回到缺省刻度(1×)——字段已经从本地方案的 style 里删掉, 不是写回 1。
+    expect(screen.getAllByText((_, el) => el?.textContent?.includes('动画快慢（1×）') ?? false).length).toBeGreaterThan(0);
+    expect((screen.getAllByText('恢复默认')[0] as HTMLButtonElement).disabled).toBe(true);
+  });
+});

@@ -8,6 +8,8 @@ import { CARD_TYPES, type CardType, type FilmPlan } from '@/lib/video-production
 import {
   checkFilmPlanTimingWindowed, BROLL_MIN_SHOT_MS, BROLL_MIN_GAP_MS,
 } from '@/lib/video-production/film-plan-timing';
+import { SHOT_STYLE_CONTROLS } from '@/lib/video-production/card-controls';
+import { PlanPreview, type PreviewPlan } from '@/components/films/plan-preview';
 
 /**
  * 剪辑台(三十一期 Task 4)。
@@ -49,6 +51,9 @@ interface LocalShot {
   endMs: number;
   card: CardType;
   slots: Record<string, unknown>;
+  /** 画面参数覆盖(三十二期 Task 5)——与 `SHOT_STYLE_CONTROLS`/`ShotStyleSchema`
+   * 逐字段同形, 用户在这里改的值直接写进方案, PUT 时随 `plan` 一起落盘, API 不用改。 */
+  style?: { speed?: number; accent?: 'default' | 'blue' | 'yellow' | 'red'; scale?: number };
 }
 interface LocalPlan {
   shots: LocalShot[];
@@ -209,6 +214,9 @@ export function FilmPlanWorkbench({
   const [actionError, setActionError] = useState('');
   const [pendingCardSwitch, setPendingCardSwitch] = useState<{ shotIndex: number; newCard: CardType } | null>(null);
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
+  /** 预览双模(三十二期 Task 5)——单镜默认: 打开剪辑台第一时间就想看当前选中
+   * 这一镜的效果, 整片是核对全局节奏时才切过去的进阶操作。 */
+  const [previewMode, setPreviewMode] = useState<'shot' | 'film'>('shot');
 
   useEffect(() => {
     let cancelled = false;
@@ -293,6 +301,37 @@ export function FilmPlanWorkbench({
       if (!prev) return prev;
       const shots = [...prev.shots];
       shots[idx] = { ...shots[idx], slots: { ...shots[idx].slots, [key]: value } };
+      return { ...prev, shots };
+    });
+  }
+
+  /** 画面参数改动(三十二期 Task 5)——写进本地 `plan`, `PlanPreview` 下一次渲染
+   * 就会用新值(props 变化触发 React 重渲, 不需要额外的手动刷新)。 */
+  function updateStyle(idx: number, key: string, value: unknown) {
+    setPlan((prev) => {
+      if (!prev) return prev;
+      const shots = [...prev.shots];
+      const style = { ...(shots[idx].style ?? {}), [key]: value };
+      shots[idx] = { ...shots[idx], style };
+      return { ...prev, shots };
+    });
+  }
+
+  /** 「恢复默认」——把这个字段从 style 里删掉, 不是写回一个"默认值"。
+   * 删掉字段与"卡片组件读不到这个 key 时用的缺省值"是同一件事(见
+   * `remotion/src/cards/style.ts` 的 `speedT`/`resolveAccent`/`scaleStyle`
+   * 都是 `style?.xxx ?? 默认值`), 比反查一遍默认值再写回去更不容易两边失配。
+   * 字段清空后如果 style 变成空对象, 一并把 `style` 整个字段也删掉——避免
+   * PUT 时方案里留一堆 `style: {}` 的死字段。 */
+  function resetStyleField(idx: number, key: string) {
+    setPlan((prev) => {
+      if (!prev) return prev;
+      const shots = [...prev.shots];
+      const nextStyle = { ...(shots[idx].style ?? {}) } as Record<string, unknown>;
+      delete nextStyle[key];
+      const hasAny = Object.keys(nextStyle).length > 0;
+      const { style: _drop, ...rest } = shots[idx];
+      shots[idx] = hasAny ? { ...rest, style: nextStyle } : rest;
       return { ...prev, shots };
     });
   }
@@ -499,6 +538,47 @@ export function FilmPlanWorkbench({
         ))}
       </div>
 
+      {/* 预览区(三十二期 Task 5)——单镜/整片双模, 选中镜或参数改动会立刻反映在这里。 */}
+      {plan.shots.length > 0 ? (
+        <div className="mt-3 rounded-md border border-border bg-background p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-medium">预览</span>
+            <div className="flex gap-1 text-xs">
+              <button
+                type="button"
+                onClick={() => setPreviewMode('shot')}
+                className={cn(
+                  'rounded border px-2 py-1',
+                  previewMode === 'shot' ? 'border-foreground/70 bg-secondary/60' : 'border-border hover:border-foreground/30',
+                )}
+              >
+                单镜
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreviewMode('film')}
+                className={cn(
+                  'rounded border px-2 py-1',
+                  previewMode === 'film' ? 'border-foreground/70 bg-secondary/60' : 'border-border hover:border-foreground/30',
+                )}
+              >
+                整片
+              </button>
+            </div>
+          </div>
+          <div className="mt-2">
+            <PlanPreview
+              mode={previewMode}
+              plan={plan as PreviewPlan}
+              selected={selected ?? 0}
+              vpId={productionId}
+              aspect={meta.aspect}
+              visualStyle={meta.visualStyle}
+            />
+          </div>
+        </div>
+      ) : null}
+
       {/* 编辑抽屉——不用 modal, 单页纵向下就地展开在缩略图条下方。 */}
       {shot && selected !== null ? (
         <div className="mt-3 rounded-md border border-border bg-background p-3">
@@ -587,6 +667,16 @@ export function FilmPlanWorkbench({
                 出镜画面全程有真人铺底, 镜间可以留空档(≥1 秒)——拖柄互相独立。
               </span>
             )}
+          </div>
+
+          {/* 画面参数面板(三十二期 Task 5)——遍历 SHOT_STYLE_CONTROLS 生成 UI,
+              加新参数不用改这里的代码。改动写进本地 plan, 上方预览立刻用新值重渲染。 */}
+          <div className="mt-3 flex flex-wrap items-end gap-4 border-t border-border pt-3 text-xs">
+            <StyleControls
+              shot={shot}
+              onChange={(key, value) => updateStyle(selected, key, value)}
+              onReset={(key) => resetStyleField(selected, key)}
+            />
           </div>
         </div>
       ) : null}
@@ -697,6 +787,89 @@ function TextField({
         {missing ? '必填' : `${value.length}/${max}`}
       </span>
     </label>
+  );
+}
+
+/**
+ * 画面参数面板(三十二期 Task 5)——遍历 `SHOT_STYLE_CONTROLS` 生成 range/select,
+ * 加新参数不用改这个组件。控件的 label/取值范围完全由那份声明决定; 这里只负责
+ * "当前值缺省时按卡片组件的实际默认值展示"(与 `remotion/src/cards/style.ts`
+ * 的 `speedT`/`resolveAccent`/`scaleStyle` 缺省值逐条对齐, 否则面板显示的初始
+ * 刻度和画面实际呈现的效果会对不上)。
+ */
+function StyleControls({
+  shot, onChange, onReset,
+}: {
+  shot: LocalShot;
+  onChange: (key: string, value: unknown) => void;
+  /** 「恢复默认」——把这个字段从 style 里删掉, 回到卡片组件自身的缺省值。 */
+  onReset: (key: string) => void;
+}) {
+  const style = shot.style ?? {};
+  return (
+    <>
+      {SHOT_STYLE_CONTROLS.map((ctrl) => {
+        // 是否已经被用户改过——决定「恢复默认」是否可点(没改过点了也没意义)。
+        const isOverridden = (style as Record<string, unknown>)[ctrl.key] !== undefined;
+        if (ctrl.type === 'range') {
+          const fallback = ctrl.key === 'speed' || ctrl.key === 'scale' ? 1 : ctrl.min;
+          const raw = (style as Record<string, unknown>)[ctrl.key];
+          const value = typeof raw === 'number' ? raw : fallback;
+          return (
+            <div key={ctrl.key} className="flex items-end gap-2">
+              <label className="flex flex-col gap-1">
+                {`${ctrl.label}（${value}${ctrl.unit ?? ''}）`}
+                <input
+                  type="range"
+                  min={ctrl.min}
+                  max={ctrl.max}
+                  step={ctrl.step}
+                  value={value}
+                  onChange={(e) => onChange(ctrl.key, e.target.valueAsNumber)}
+                  className="w-40"
+                />
+              </label>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={!isOverridden}
+                onClick={() => onReset(ctrl.key)}
+              >
+                恢复默认
+              </Button>
+            </div>
+          );
+        }
+        const raw = (style as Record<string, unknown>)[ctrl.key];
+        const value = typeof raw === 'string' ? raw : ctrl.options[0].value;
+        return (
+          <div key={ctrl.key} className="flex items-center gap-2">
+            <label className="flex items-center gap-1">
+              {ctrl.label}
+              <select
+                value={value}
+                onChange={(e) => onChange(ctrl.key, e.target.value)}
+                className="rounded border border-input bg-card px-2 py-1"
+              >
+                {ctrl.options.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </label>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={!isOverridden}
+              onClick={() => onReset(ctrl.key)}
+            >
+              恢复默认
+            </Button>
+          </div>
+        );
+      })}
+    </>
   );
 }
 
