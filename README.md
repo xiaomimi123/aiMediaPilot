@@ -655,6 +655,80 @@ renderer 切换到 remotion 后重试」写进 `errorMessage`, 不再有旧 hand
 删除而产生或加重。
 
 
+### 剪辑台: 动效接线 + 参数面板 + Player 实时预览 (三十二期新增, 设计见 `docs/superpowers/specs/2026-09-05-workbench-live-preview-design.md`)
+
+**背景**: 二十五期从 video-talkcraft 搬进来的动效资产(`remotion/src/motion/`)搬进来后
+零引用; 三十一期的剪辑台只能改文字, 改不了任何视觉; 预览还是 `renderStill` 抽一帧的静态
+卡面, 动效是时间的函数, 单帧看不出来。本期打通这条链: 动效接上四张卡、卡加一层用户可调
+的样式参数、剪辑台预览换成 Remotion `<Player>` 实时播放。
+
+**动效纯函数**(`remotion/src/motion/anim.ts`): 七个「时间 → 样式」纯函数(`smashIn`/
+`fadeUp`/`beatHit`/`sweepHighlight`/`drawLine`/`slideIn`/`staggerIn`)。**不直接用
+`motion/components.tsx` 的动效组件**——那些组件是绝对定位(`x`/`y` 必填 props), 与卡片的
+栅格 + flex 布局冲突(二十五期写 `Stat.tsx` 时已撞过一次)。四张卡都要接动效, 不能每张都
+手抄一遍, 所以把「时间→样式」抽成纯函数, 卡片写 `<div style={smashIn(frame, fps, 0.3)}>`,
+位置仍归 flex 布局管。手法出处标在文件头注释里(`smashIn`←`SmashWord`、`fadeUp`←
+`FlowerWord`、`beatHit`←`BeatHit`、`sweepHighlight`←`HighlightSweep`、`drawLine`←
+`DrawPath`, 均来自已获书面商用授权的 video-talkcraft; `slideIn`/`staggerIn` 是本项目
+新写, 原库无对应组件)。纯函数的收益是可单测, 与项目里其它判据(freeze-check/still-check/
+时间轴校验)同一路数。
+
+**`shot.style` 参数**(`shot-plan.ts` 的 `ShotStyleSchema`): 每镜三个可调参数——
+`speed`(0.3–3×动画快慢)、`accent`(主题 token 枚举 `default`/`blue`/`yellow`/`red`,
+**不给自由色盘**)、`scale`(0.6–1.6×卡片整体大小)。**用户可调、模型不碰**靠三重保证:
+①`describeCardsForPrompt()` 一个字不提 style; ②`buildFilmPlan` 产出后主动剥掉 style
+(防模型意外填, 见该函数注释); ③schema 里 style 为 optional, 不填即合法, 历史 plan
+直接兼容。存在 `FilmPlan` 里而不是外挂一份 map——本项目已吃过三次「两份数据失效条件不
+对称」的亏(bundle 快照/TTS manifest/timing.json), plan 与 style 存一起, 删一镜天然带走
+它的样式。
+
+**accent 归主题**: 强调色不是全局共享一份鲜色, 而是 `card`/`illustration` 两套主题
+(`remotion/src/theme.ts`)各自定义一份 `accents: {blue, yellow, red}`, 由
+`cards/style.ts` 的 `resolveAccent` 按当前主题取值。原因: `illustration` 是暖纸底,
+若强调色直接借全局 `C.blue`/`C.red` 会跳出这套主题本来就柔化过的色系(该主题的
+`accent` 字段本就用 `C.lightBlue` 而不是 `C.blue`, 就是为了不让鲜蓝在暖背景上刺眼)。
+`illustration` 的最终取值: blue→`C.lightBlue`(与主题已有 accent 复用同一柔和值)、
+red→`C.lightRed`(避免与该主题标题已用的 `C.red` 撞色)、yellow→`C.yellow`(未额外柔化——
+该主题的 highlight/序号早已在暖纸背景上用原样黄色, 没出现刺眼反馈)。
+
+**Player 双模预览**: 剪辑台 `PlanPreview` 组件用 `@remotion/player` 的 `<Player>` 支持
+单镜循环(调这一张卡)与整片带声播放(看节奏)两种模式。**跨项目 React 版本不同**是本期
+最大的技术未知数: 主项目 React 18.3.1、`remotion/` 子项目自带 React 19。第一轮
+直接 import `Film.tsx` 不通——webpack 就近祖先解析规则让 `Film` 拿到 `remotion/
+node_modules` 里那份 React/remotion, `@remotion/player` 拿到主项目根目录那份, 两份
+`Context` 对象不是同一引用, `useVideoConfig()` 找不到 `<Player>` 提供的 Provider, 报
+"No video config found"。第二轮改用 `next.config.js` 里的 webpack alias, 把
+`remotion$`/`react$`/`react-dom$` 三个裸导入在主项目自己的 webpack 编译里强制解析到
+根 `node_modules` 的同一份, 让 `Film` 与 `Player` 共用同一个模块实例、同一个 Context——
+这条通了(不碰 `remotion/` 子项目自己独立的 `bundle()`, 服务器出片不受影响)。
+**alias 的 key 必须带 `$`**——不带 `$` 是前缀匹配, 会把 `react-dom/server.edge` 这类
+子路径也一并重写, 绕过 `react-dom` 的 `exports` 条件导出, 实测导致**全站 SSR 500**
+(不止预览页面, 首页/`/films` 都炸)。
+
+**音频路由**: `GET /api/v1/cockpit/video-productions/[id]/audio` 返回 `tts-audio.wav`,
+支持 Range 请求(200 全量/206 分段/416 越界, 含后缀式 `bytes=-N`)。**支持 Range 的原因
+不是 Remotion 强制要求**——Remotion 预览态的 `<Audio>` 底层是原生 HTML `<audio>` 元素,
+Range 是浏览器原生 `<audio>` seek 到未缓冲区间的标准依赖; 3MB 左右的音频下不支持 Range
+也能播(只是 seek 体验差), 长稿才会变成事实上的必要。
+
+**已知边界**(如实记录, 未粉饰):
+- **预览里没有字幕**——`FilmPlan` 编辑态不携带字幕, 字幕是渲染阶段由
+  `align-captions.ts` 基于音频对齐生成的, 不是遗漏。
+- **降级只接渲染期同步错误**。`PlanPreview` 的 `PlayerBoundary` 是 React error
+  boundary, 只能兜住 `Film` 组件渲染阶段抛出的同步异常。真机复测证实音频 404/解码
+  失败这类最可能真实发生的故障是 `<audio>` 元素内部异步触发的 `error`/`stalled`
+  事件, 不经过 React 渲染流程, boundary 完全接不住——用户看到的是"能播但没声音"或
+  卡死, 不会自动降级。Remotion 未提供订阅内部 audio 元素状态的公开钩子, 因此预览区
+  提供了手动的「没声音或卡顿？改用静态卡面」入口, 用户自己发现问题后点一下切换,
+  不依赖自动检测。
+- **still-check 的中点取样对"动效中途细节骤降帧"是盲区**。逐镜画面体检(见上文
+  三十期小节)只抽每镜时间窗的中点一帧; 给四张卡接上动效之后复审逐窗口核算过——
+  Stat/Contrast/List 三张卡的动效多半在中点前已经结束(如 Contrast 的描画在 1000ms
+  前收尾, 而 3000ms 镜头的中点是 1500ms), 现有测试矩阵**没有真正抽样到这三张卡的
+  动效中途帧**, 只是恰好没测到问题, 不等于验证过安全。取样逻辑与阈值本期未改
+  (详见 `still-check.ts` 顶部注释)。
+
+
 ### AI 视频交付三模式 (十九期新增)
 
 > **三十期更新**: 三条模式本身(`ppt-narration`/`talking-head-broll`/`illustration-tts`)
