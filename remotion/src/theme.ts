@@ -30,6 +30,16 @@ export type CardTheme = {
   stroke: string;
   /** 注脚/弱化文案色，已含透明度(不再需要外层再叠一层 opacity)。 */
   footnote: string;
+  /**
+   * `shot.style.accent`(三十二期 Task 3, 复审补修)可选的三个强调色, **限定在
+   * 本主题的 token 内**——spec §4.1 原话"限定在主题 token 内, 保证不跑出设计
+   * 系统"。Task 3 最初实现直接从 `motion/lib.tsx` 的 `C` 取一份全局鲜色
+   * (`C.blue`/`C.yellow`/`C.red`), 在 `illustration` 主题下选"蓝"会跳出该
+   * 主题刻意柔化过的色系(`accent` 本来就用 `C.lightBlue` 而不是 `C.blue`,
+   * 就是为了不让鲜蓝出现在暖纸背景上)——两套主题各自定义一份, 由
+   * `cards/style.ts` 的 `resolveAccent` 从这里取, 不再直接碰 `C`。
+   */
+  accents: {blue: string; yellow: string; red: string};
 };
 
 export const THEMES: Record<'card' | 'illustration', CardTheme> = {
@@ -41,6 +51,10 @@ export const THEMES: Record<'card' | 'illustration', CardTheme> = {
     highlight: C.yellow,
     stroke: C.ink,
     footnote: 'rgba(26,26,46,0.55)', // = C.ink 在 0.55 不透明度, 与 Stat.note 现状一致
+    // card 主题本来就是"冷静克制的打印感", 三个强调色直接取 C 里对应的鲜色——
+    // 与这套主题现有的 accent(C.blue)/highlight(C.yellow) 是同一饱和度量级,
+    // 不需要额外柔化。
+    accents: {blue: C.blue, yellow: C.yellow, red: C.red},
   },
 
   /**
@@ -52,6 +66,19 @@ export const THEMES: Record<'card' | 'illustration', CardTheme> = {
    *   仍需要一圈浅色描边才不会糊进背景里。
    * - footnote 跟着 title 走暖色调(红系低透明度)，与 card 的灰调注脚区分开，
    *   让整体呈现"暖色系一套到底"而不是"局部贴了暖色的冷色系卡片"。
+   *
+   * `accents`(复审补修): 三个强调色都按"这套主题本来就柔化过的同色系变体"
+   * 来选, 不直接借 card 主题的鲜色:
+   * - blue → C.lightBlue: 与这套主题现有的 `accent` 字段同一个值——本来就是
+   *   为了不让鲜蓝出现在暖纸上而选的柔和蓝, 直接复用。
+   * - red → C.lightRed: 这套主题的 `title` 已经用了 C.red, 如果强调色也用
+   *   C.red 会和标题撞色、分不清谁是标题谁是强调; C 调色板里 C.lightRed 正是
+   *   给 C.red 配的柔和变体(与 C.lightBlue 之于 C.blue 同一设计), 拿来当
+   *   "暖色系但比标题更内敛"的强调色。
+   * - yellow → C.yellow: 与 card 主题相同, 不额外柔化——这套主题的
+   *   `highlight`(Stat 主数字/ListCard 序号)已经在暖纸背景上用了原样的
+   *   C.yellow, 没有出现"刺眼"的反馈, 说明黄色在这套暖色背景上本来就协调,
+   *   不需要像蓝/红那样额外挑柔和变体; C 调色板里也没有现成的柔和黄可选。
    */
   illustration: {
     background: '#f7e8c8',
@@ -60,5 +87,6 @@ export const THEMES: Record<'card' | 'illustration', CardTheme> = {
     highlight: C.yellow,
     stroke: C.white,
     footnote: 'rgba(239,84,54,0.5)', // = C.red 在 0.5 不透明度
+    accents: {blue: C.lightBlue, yellow: C.yellow, red: C.lightRed},
   },
 };

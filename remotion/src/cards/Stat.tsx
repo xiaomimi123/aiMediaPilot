@@ -33,8 +33,8 @@ export const Stat: React.FC<{
   const box = safeBox(width, height);
   const label = assertContent(slots.label, 'stat.label');
   const t = speedT(style);
-  const accentColor = resolveAccent(style?.accent, theme.accent);
-  const highlightColor = resolveAccent(style?.accent, theme.highlight);
+  const accentColor = resolveAccent(style?.accent, theme, theme.accent);
+  const highlightColor = resolveAccent(style?.accent, theme, theme.highlight);
 
   const countDur = Math.min(fps * 1.6, durationInFrames * 0.5);
   const p = interpolate(frame, [fps * 0.6, fps * 0.6 + countDur], [0, 1], {

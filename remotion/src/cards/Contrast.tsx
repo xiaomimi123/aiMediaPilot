@@ -85,7 +85,7 @@ export const Contrast: React.FC<{
   const leftLabel = assertContent(slots.leftLabel, 'contrast.leftLabel');
   const rightLabel = assertContent(slots.rightLabel, 'contrast.rightLabel');
   const t = speedT(style);
-  const accentColor = resolveAccent(style?.accent, theme.accent);
+  const accentColor = resolveAccent(style?.accent, theme, theme.accent);
 
   const slideAtSec = t(0.15);
   const slideArriveAt = slideAtSec + 0.5;

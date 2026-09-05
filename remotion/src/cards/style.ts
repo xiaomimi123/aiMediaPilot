@@ -1,5 +1,5 @@
 import type React from 'react';
-import {C} from '../motion/lib';
+import {CardTheme} from '../theme';
 
 /**
  * 卡片消费的 style 参数(三十二期 Task 3)。
@@ -32,20 +32,30 @@ export const speedT = (style: ShotStyle | undefined) => {
  * `accent` → 具体颜色。`'default'`(含未传)保留调用方传入的 `fallback`——
  * 也就是这张卡这个位置原本该用的颜色(`theme.accent` 或 `theme.highlight`,
  * 两个角色默认色不同), 不强行统一成一个颜色, 否则不传 style 的分镜(绝大多数,
- * 模型不填这个字段)画面就会平白变了样, 破坏向后兼容。只有显式传
- * `blue`/`yellow`/`red` 时才用 `motion/lib.tsx` 的 `C` 覆盖。
+ * 模型不填这个字段)画面就会平白变了样, 破坏向后兼容。
+ *
+ * 显式传 `blue`/`yellow`/`red` 时, **从 `theme.accents` 取, 不直接碰
+ * `motion/lib.tsx` 的 `C`**(复审补修, 见 `theme.ts` 的 `CardTheme.accents`
+ * 注释)——spec §4.1 的要求是"限定在主题 token 内, 保证不跑出设计系统"。
+ * `illustration` 主题的 `accent` 字段本来就用柔化过的 `C.lightBlue` 而不是
+ * `C.blue`, 是刻意避免鲜蓝出现在暖纸背景上; 如果这里直接返回全局 `C.blue`,
+ * 用户在 illustration 主题下选"蓝"反而会跳出该主题的色系, 与"限定在主题
+ * token 内"这条约束正面冲突。所以 `resolveAccent` 必须接收当前卡的 `theme`,
+ * 让同一个 `accent` 取值在不同 `visualStyle` 下解析出不同(但都在各自主题
+ * 色系内)的颜色。
  */
 export const resolveAccent = (
   accent: ShotStyle['accent'] | undefined,
+  theme: CardTheme,
   fallback: string,
 ): string => {
   switch (accent) {
     case 'blue':
-      return C.blue;
+      return theme.accents.blue;
     case 'yellow':
-      return C.yellow;
+      return theme.accents.yellow;
     case 'red':
-      return C.red;
+      return theme.accents.red;
     default:
       return fallback;
   }

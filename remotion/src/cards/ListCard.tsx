@@ -34,7 +34,7 @@ export const ListCard: React.FC<{
   const title = assertContent(slots.title, 'list.title');
   const items = slots.items.map((item, i) => assertContent(item, `list.items[${i}]`));
   const t = speedT(style);
-  const highlightColor = resolveAccent(style?.accent, theme.highlight);
+  const highlightColor = resolveAccent(style?.accent, theme, theme.highlight);
 
   const firstItemAtSec = t(0.4);
 

@@ -34,7 +34,7 @@ export const Statement: React.FC<{
   const box = safeBox(width, height);
   const text = assertContent(slots.text, 'statement.text');
   const t = speedT(style);
-  const accentColor = resolveAccent(style?.accent, theme.accent);
+  const accentColor = resolveAccent(style?.accent, theme, theme.accent);
 
   // 主文案: smashIn 在 0.3s(nominal)起播, 内部固定时长 0.42s —— 数值来自
   // anim.ts 的手法设计, 不由本卡自行改动。
