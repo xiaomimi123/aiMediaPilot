@@ -159,9 +159,28 @@ export function PlanPreview(props: PlanPreviewProps) {
   // 这个概念对画面的影响, 退而求其次展示第一镜。
   const fallbackShotIndex = mode === 'shot' ? selected : 0;
 
+  /**
+   * 真机复测踩坑(三十二期 Task 5): Remotion 官方文档明确 `durationInFrames`/
+   * `fps`/`compositionWidth`/`compositionHeight` 初始化后不可动态改——实测
+   * 复现: 不带 `key` 时, 单镜→整片切换(durationInFrames 从几十帧跳到几千帧)
+   * 会让 `<Player>` 内部的 `SharedAudioContextProvider` 处于半新半旧状态:
+   * 人声 `<Audio>` 确实 mount 过一次(用 `HTMLMediaElement.prototype.src` 的
+   * setter 拦截实测捕获到真实 URL 被赋过值), 但随即被重置回 Remotion 预置的
+   * 静音占位 tag、之后再也没有真实音源——整片模式变成"能拖时间轴但永远没声音"。
+   * 单镜模式切换选中镜同样会改变 `durationInFrames`(镜长不同), 同一类风险。
+   *
+   * 修法: 给 `<Player>` 挂一个随"合成级配置"(`durationInFrames`/`fps`/画幅)
+   * 变化而变化的 `key`——触发 React 完整卸载重挂, 而不是让 Player 在内部
+   * 尝试"原地更新"一份文档警告过不支持动态改的配置。**不能把 `key` 绑到
+   * `inputProps` 整体**(那样连改一个 style 参数都会重挂, 播放进度被打断,
+   * 违背"改完立刻见效、不中断预览"的核心诉求)——只绑定这四个真正不可变的量。
+   */
+  const playerKey = `${width}x${height}@${fps}:${durationInFrames}`;
+
   return (
     <PlayerBoundary fallback={<StaticFallback vpId={vpId} shotIndex={fallbackShotIndex} />}>
       <Player
+        key={playerKey}
         component={Film}
         inputProps={inputProps}
         durationInFrames={durationInFrames}
