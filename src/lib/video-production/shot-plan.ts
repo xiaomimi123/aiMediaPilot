@@ -96,11 +96,33 @@ const ShotIdSchema = z.preprocess(
   z.string().min(1),
 );
 
+/** 强调色只认这几个主题 token —— 不给自由色盘, 保证不跑出设计系统。 */
+export const ACCENTS = ['default', 'blue', 'yellow', 'red'] as const;
+
+/**
+ * 这一镜的样式覆盖(三十二期)。
+ *
+ * **模型不填这个字段**, 三重保证: ① describeCardsForPrompt 一个字不提;
+ * ② buildFilmPlan 产出后 stripPlanStyle 剥掉(防意外); ③ optional, 不填即合法。
+ * 只有剪辑台(用户)写它。
+ *
+ * 为什么存进 FilmPlan 而不是外挂 map: 本会话吃过三次「两份数据的失效条件
+ * 不对称」(bundle 快照 / TTS manifest / timing.json)。plan 与 style 存一起,
+ * 删一镜天然带走它的样式, 没有第二份东西需要同步。
+ */
+export const ShotStyleSchema = z.object({
+  speed: z.number().min(0.3).max(3).optional(),
+  accent: z.enum(ACCENTS).optional(),
+  scale: z.number().min(0.6).max(1.6).optional(),
+}).strict();
+export type ShotStyle = z.infer<typeof ShotStyleSchema>;
+
 /** 分镜的公共字段。四种卡片只在 `card` 与 `slots` 上分岔。 */
 const SHOT_BASE = {
   shotId: ShotIdSchema,
   startMs: z.number().int().min(0),
   endMs: z.number().int().min(1),
+  style: ShotStyleSchema.optional(),
 } as const;
 
 const shotVariant = <T extends CardType>(card: T) =>
@@ -216,4 +238,18 @@ export function describeCardsForPrompt(): string {
     '',
     '不要输出坐标、颜色、字号、动画参数——版面与动效由渲染层决定，你只负责选型与填字。',
   ].join('\n');
+}
+
+/**
+ * 剥掉 plan 里所有 style —— 模型产出后立刻调用。
+ * 模型本不该填(提示词里没有), 但"不该"不等于"不会", 显式剥一遍才是保证。
+ */
+export function stripPlanStyle(plan: FilmPlan): FilmPlan {
+  return {
+    ...plan,
+    shots: plan.shots.map((s) => {
+      const { style: _drop, ...rest } = s as typeof s & { style?: unknown };
+      return rest as typeof s;
+    }),
+  };
 }

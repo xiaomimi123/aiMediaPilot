@@ -1,7 +1,7 @@
 import type { CallStructuredOpts } from '@/lib/llm/vision';
 import { FILM_PLAN, type ActWindow } from '@/lib/video-production/film-plan-prompt';
 import { checkFilmPlanTiming } from '@/lib/video-production/film-plan-timing';
-import { FilmPlanSchema, type FilmPlan } from '@/lib/video-production/shot-plan';
+import { FilmPlanSchema, stripPlanStyle, type FilmPlan } from '@/lib/video-production/shot-plan';
 
 /**
  * 最多修几轮。
@@ -151,7 +151,11 @@ export async function buildFilmPlan(opts: {
       : describeZodIssues(result);
 
     if (issues.length === 0 && parsed.success) {
-      return { plan: parsed.data, rounds: round };
+      /*
+       * `style` 是剪辑台(用户)专属字段, 提示词里从没提过它——但"没提过"不等于
+       * "模型绝不会填", 出方案后立刻剥一遍才是真正的保证(三十二期)。
+       */
+      return { plan: stripPlanStyle(parsed.data), rounds: round };
     }
 
     lastIssues = issues;
