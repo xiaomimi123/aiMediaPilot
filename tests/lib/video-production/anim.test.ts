@@ -14,6 +14,24 @@ describe('anim 纯函数 —— 三个边界: at 之前 / 进行中 / 结束后'
     expect(after.transform).toBe('scale(1) translateY(0px)');
   });
 
+  /*
+   * 三十二期 Task 1 复审: opacity 的"提前完成"是 SmashWord 手法的一部分 ——
+   * 文字先快速可见(砸的冲击), 缩放随后由 back-out 继续回弹(落的物理感), 两者
+   * 刻意错峰。上面那条"进行中"断言只要求 0<opacity<1, 把 opacity 拉成全程线性
+   * (抹平错峰、退化成普通缩放淡入)照样能过 —— 实测确认过。所以单独钉住错峰本身:
+   * 动效过半时 opacity 必须显著领先于缩放的回弹进度。
+   */
+  it('smashIn: opacity 领先于缩放回弹(错峰, 不是同步渐变)', () => {
+    const half = smashIn(Math.round(FPS * (1 + 0.21)), FPS, 1); // p≈0.5
+    // opacity 到此已过 90%(0.5/0.55), 而缩放仍在运动中(尚未落到 1)。
+    // 注意缩放此刻是 0.968 —— **小于 1**: Easing.back 的 out 版本会过冲,
+    // 砸字的缩放轨迹是 1.35 →(砸下去过冲到 0.97)→ 回弹到 1, 这正是"砸"的
+    // 物理感。所以错峰的证据是"缩放仍在运动(≠1)", 不是"缩放大于 1"。
+    expect(half.opacity as number).toBeGreaterThan(0.85);
+    const scaleV = Number((half.transform as string).match(/scale\(([\d.]+)\)/)![1]);
+    expect(Math.abs(scaleV - 1)).toBeGreaterThan(0.02);
+  });
+
   it('fadeUp: 结束后 opacity 1 且不再位移', () => {
     expect(fadeUp(0, FPS, 1).opacity).toBe(0);
     expect(fadeUp(FPS * 3, FPS, 1)).toEqual({ opacity: 1, transform: 'translateY(0px)' });

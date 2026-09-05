@@ -44,15 +44,21 @@ const clean = (n: number, digits: number): string => String(Number(n.toFixed(dig
 export const smashIn = (frame: number, fps: number, atSec: number): React.CSSProperties => {
   const p = prog(frame, fps, atSec, 0.42);
   const e = Easing.out(Easing.back(1.8))(p);
-  // 本项目修改: 源组件 SmashWord 的 opacity 用 `clamp(p*3, 0, 1)`(前 1/3 时长内
-  // 快速淡入、随后保持), 但那样在动效"进行中"的大半时段(p 从 0.33 到 1)
-  // opacity 都恒为 1、无法体现"进行中"这个状态——纯函数化后要单测覆盖三个
-  // 边界(之前/进行中/结束后), 快速淡入会让"进行中"这个中间态在断言里等同于
-  // "结束后"。改为 opacity 跟整个 0.42s 进度线性走(等于 p 本身), 视觉上砸字
-  // 效果不受影响(缩放和位移仍由 back-out 缓动 e 负责, 才是"砸落感"的来源),
-  // 但让 opacity 在动效全程内单调递增、可被"进行中"断言区分出来。
+  /*
+   * 本项目修改: 源组件 SmashWord 的 opacity 是 `clamp(p*3, 0, 1)` —— 前 1/3
+   * 时长内淡入完毕、随后恒为 1。**这个"提前完成"是手法的一部分, 不是随手写的**:
+   * 文字先快速可见(砸的冲击), 缩放/位移随后由 back-out 继续过冲回弹(落的物理感),
+   * 两者刻意错峰。把 opacity 拉成全程线性会把错峰抹平, 手感退化成普通的"缩放淡入"
+   * (三十二期 Task 1 复审对照原组件指出的)。
+   *
+   * 但原样照搬 p*3 有个纯函数化带来的问题: opacity 在 p>0.33 后恒为 1,
+   * "进行中"与"结束后"在断言里不可区分, 三态覆盖立不住。
+   *
+   * 折中: 保留"提前完成"的错峰设计, 只把完成阈值从 1/3 放宽到 0.55 ——
+   * 冲击感仍在(opacity 在动效前半程就基本到位、领先于回弹), 同时中段可辨。
+   */
   return {
-    opacity: p,
+    opacity: interpolate(p, [0, 0.55], [0, 1], {extrapolateRight: 'clamp'}),
     transform: `scale(${clean(1 + (1 - e) * 0.35, 3)}) translateY(${clean((1 - e) * -22, 1)}px)`,
   };
 };
