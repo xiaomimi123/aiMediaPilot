@@ -67,6 +67,15 @@ export type CaptionItem = {
 };
 
 export type FilmInput = {
+  /**
+   * `unknown[]`——各调用点直接塞 `FilmPlan['shots']`(见 `shot-plan.ts`)进来,
+   * 类型上不在这里收窄。三十二期 Task 3 加的 `style?: ShotStyle` 字段(同样
+   * 定义在 `shot-plan.ts`)因此**不需要在这里跟着改动**就能透传到
+   * `remotion/src/Film.tsx`——那边的 `FilmInput.shots[].style` 才是真正读取
+   * 这个字段的地方(与 `remotion/src/cards/style.ts` 的 `ShotStyle` 逐字段
+   * 同形，不 import，理由同 `CaptionItem`)。这里维持 `unknown[]` 只是把这条
+   * "两侧同形不 import"的既有约定记录清楚，不是遗漏。
+   */
   shots: unknown[];
   audioSrc: string | null; // 人声, staticFile 相对路径; renderFilm 负责填入
   bgm: { src: string; volume: number } | null; // BGM, loop 到片长; renderFilm 负责填入

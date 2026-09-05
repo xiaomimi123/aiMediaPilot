@@ -41,8 +41,20 @@ export type CaptionItem = {
   words?: {word: string; startMs: number; endMs: number}[];
 };
 
+/**
+ * 单镜样式覆盖(三十二期 Task 3)——与
+ * `src/lib/video-production/shot-plan.ts` 的 `ShotStyleSchema` 逐字段同形,
+ * **不 import**(独立子项目, 理由同 `CaptionItem`/`sourceVideo`)。模型不填,
+ * 只有剪辑台(用户)会写它, 详见 shot-plan.ts 的 `ShotStyleSchema` 注释。
+ */
+export type FilmShotStyle = {
+  speed?: number;
+  accent?: 'default' | 'blue' | 'yellow' | 'red';
+  scale?: number;
+};
+
 export type FilmInput = {
-  shots: {shotId: string; startMs: number; endMs: number; card: keyof typeof CARDS; slots: any}[];
+  shots: {shotId: string; startMs: number; endMs: number; card: keyof typeof CARDS; slots: any; style?: FilmShotStyle}[];
   audioSrc: string | null; // 人声, staticFile 相对路径; renderFilm 负责填入
   bgm: {src: string; volume: number} | null; // BGM, loop 到片长; renderFilm 负责填入
   captions: CaptionItem[]; // 逐句字幕, 缺省 []
@@ -203,7 +215,7 @@ export const Film: React.FC<FilmInput> = ({
               ]}
               durationSec={durationSec}
             >
-              <Card slots={s.slots} durationInFrames={dur} theme={theme} />
+              <Card slots={s.slots} durationInFrames={dur} theme={theme} style={s.style} />
             </CameraRig>
           </Sequence>
         );
