@@ -75,6 +75,13 @@ function buildInputProps(props: PlanPreviewProps): { inputProps: FilmInput; dura
   const fps = props.fps ?? DEFAULT_FPS;
   const { mode, plan, selected, vpId, aspect, visualStyle } = props;
 
+  // captions 两种模式都硬编码 []——不是本期漏做, 是范围局限: `FilmPlan`/
+  // `PreviewPlan` 这层编辑态数据结构本来就不携带字幕, 字幕是渲染阶段由
+  // `src/lib/video-production/align-captions.ts` 基于最终音频做时间对齐才
+  // 生成的产物, 编辑台此刻拿不到; 已有的静态卡面缓存
+  // (`src/lib/video-production/shot-still-cache.ts`)同理也是 `captions: []`。
+  // 所以这里预览"看不到字幕"是已知且预期的展示局限, 不是 bug。
+
   if (mode === 'shot') {
     const shot = plan.shots[selected];
     const durMs = shot.endMs - shot.startMs;
@@ -130,7 +137,22 @@ interface BoundaryState {
   hasError: boolean;
 }
 
-/** React error boundary——只有 class 组件能实现, Player 渲染期抛错时兜底降级。 */
+/**
+ * React error boundary——只有 class 组件能实现, 靠 `getDerivedStateFromError`
+ * 兜底。**边界很窄, 读的人务必留意**: React error boundary 只能接住"渲染期
+ * 同步抛错"(比如 `Film` 组件本身在 render 阶段抛异常)。
+ *
+ * 真机复测证实(三十二期 Task 5 复审): 音频 404、解码失败这类**最可能真实
+ * 发生**的故障, 是 `<audio>` 元素内部异步触发的 `error`/`stalled` 事件,
+ * 根本不经过 React 渲染流程, **这层 boundary 完全接不住**——实测复现为
+ * `networkState` 卡在 LOADING、`error` 恒为 `null`, UI 上只是"能播但没声音"
+ * 或者播放卡死, 不会触发下面这个降级。Remotion 没有提供订阅内部 audio 元素
+ * 状态的公开钩子, 去 hack 它的 DOM 句柄成本远大于收益, 本轮不做。
+ *
+ * 所以这里只覆盖"Player/Film 渲染期同步抛错"这一种故障; 异步的音频故障靠
+ * `PlanPreview` 里那个手动的"改用静态卡面"入口兜底(用户自己发现没声音后
+ * 点一下, 不是自动检测)。
+ */
 class PlayerBoundary extends React.Component<{ fallback: React.ReactNode; children: React.ReactNode }, BoundaryState> {
   state: BoundaryState = { hasError: false };
 
@@ -151,6 +173,11 @@ class PlayerBoundary extends React.Component<{ fallback: React.ReactNode; childr
 
 export function PlanPreview(props: PlanPreviewProps) {
   const { mode, plan, selected, vpId, aspect } = props;
+  // 手动降级入口(三十二期 Task 5 复审)——音频加载/解码这类异步故障不会
+  // 触发 `PlayerBoundary`(见其上方注释), 用户实际看到的是"能播但没声音"
+  // 或播放卡死。与其假装能自动检测, 不如给一个显式出路: 用户自己点一下
+  // 就切到静态卡面, 不再依赖 Player。
+  const [manualFallback, setManualFallback] = React.useState(false);
   if (plan.shots.length === 0) return null;
 
   const { inputProps, durationInFrames, fps } = buildInputProps(props);
@@ -174,24 +201,54 @@ export function PlanPreview(props: PlanPreviewProps) {
    * 尝试"原地更新"一份文档警告过不支持动态改的配置。**不能把 `key` 绑到
    * `inputProps` 整体**(那样连改一个 style 参数都会重挂, 播放进度被打断,
    * 违背"改完立刻见效、不中断预览"的核心诉求)——只绑定这四个真正不可变的量。
+   *
+   * **补一条(复审窄路径)**: `mode` 必须也编进 key。反例: 方案只有一镜且
+   * `startMs=0` 时, 单镜模式的 `durMs`(`endMs-startMs`)与整片模式的
+   * `totalMs`(`max(endMs)`)数值相等——若 key 不含 mode, 切换模式时 key
+   * 不变、Player 不重挂载, 而 `audioSrc` 恰好从 `null` 变成真实 URL, 复现
+   * 上面那个"音轨静默丢失"bug。
    */
-  const playerKey = `${width}x${height}@${fps}:${durationInFrames}`;
+  const playerKey = `${mode}:${width}x${height}@${fps}:${durationInFrames}`;
+
+  if (manualFallback) {
+    return (
+      <div className="flex flex-col items-center gap-2">
+        <StaticFallback vpId={vpId} shotIndex={fallbackShotIndex} />
+        <button
+          type="button"
+          onClick={() => setManualFallback(false)}
+          className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+        >
+          改用实时预览
+        </button>
+      </div>
+    );
+  }
 
   return (
     <PlayerBoundary fallback={<StaticFallback vpId={vpId} shotIndex={fallbackShotIndex} />}>
-      <Player
-        key={playerKey}
-        component={Film}
-        inputProps={inputProps}
-        durationInFrames={durationInFrames}
-        fps={fps}
-        compositionWidth={width}
-        compositionHeight={height}
-        style={{ width: '100%', aspectRatio: `${width} / ${height}` }}
-        controls
-        loop
-        clickToPlay={false}
-      />
+      <div className="flex flex-col gap-1">
+        <Player
+          key={playerKey}
+          component={Film}
+          inputProps={inputProps}
+          durationInFrames={durationInFrames}
+          fps={fps}
+          compositionWidth={width}
+          compositionHeight={height}
+          style={{ width: '100%', aspectRatio: `${width} / ${height}` }}
+          controls
+          loop
+          clickToPlay={false}
+        />
+        <button
+          type="button"
+          onClick={() => setManualFallback(true)}
+          className="self-start text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+        >
+          没声音或卡顿？改用静态卡面
+        </button>
+      </div>
     </PlayerBoundary>
   );
 }
