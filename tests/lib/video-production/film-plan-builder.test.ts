@@ -39,6 +39,32 @@ describe('formatIssuesForModel', () => {
   });
 });
 
+/*
+ * 「模型不碰 style」的第二重保证(三十二期 Task 2)必须在**集成路径**上钉住。
+ *
+ * 变异实测: 只对 stripPlanStyle 做纯函数单测时, 把 buildFilmPlan 里那句调用
+ * 整个删掉, 测试照样全绿 —— 纯函数是对的、却没人验证它真的被调用了。
+ * 这条用假 LLM 吐一份带 style 的 plan(模拟模型意外填了), 断言 buildFilmPlan
+ * 的产出里 style 已被剥掉。
+ */
+describe('buildFilmPlan 剥掉模型产出的 style', () => {
+  const withStyle = { shots: [{
+    shotId: 's1', startMs: 0, endMs: 10000, card: 'statement',
+    slots: { text: '三天赚五千?' }, style: { speed: 2, accent: 'red' },
+  }] };
+
+  it('模型意外填了 style 也不会进入产出', async () => {
+    const llm = fakeLLM([withStyle]);
+    const r = await buildFilmPlan({
+      llm: llm as any, windows, cardsSection: '卡片说明', factsSection: '', totalMs: 10000,
+    });
+    expect(r.rounds).toBe(0);
+    expect(r.plan.shots[0]).not.toHaveProperty('style');
+    // 其余字段原样保留 —— 剥的是 style, 不是把整条镜头重建
+    expect(r.plan.shots[0].slots).toEqual({ text: '三天赚五千?' });
+  });
+});
+
 describe('buildFilmPlan', () => {
   it('一次就对时不重试', async () => {
     const llm = fakeLLM([good]);
