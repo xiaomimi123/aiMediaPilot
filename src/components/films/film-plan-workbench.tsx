@@ -163,15 +163,41 @@ export function blankSlots(card: CardType): Record<string, unknown> {
 }
 
 /** 换卡前要不要弹确认——原槽位已经写了东西才问, 空槽位直接换。 */
-function slotHasContent(card: CardType, slots: Record<string, unknown>): boolean {
-  if (card === 'list') {
-    const items = Array.isArray(slots.items) ? (slots.items as unknown[]) : [];
-    return Boolean(slots.title) || items.some((it) => typeof it === 'string' && it.trim() !== '');
+/**
+ * 不算"用户填的内容"的槽位键。
+ *
+ * `tone`(entity 的浅/深)和 `max`(ring 的分母, 默认 100)在空槽位里就有值 ——
+ * 它们是这张卡的结构默认值, 不是用户填进去的东西。不排除的话, 一镜刚换成
+ * ring/entity 还什么都没写, 就会被判成"已有内容"而弹确认框。
+ */
+const STRUCTURAL_KEYS = new Set(['tone', 'max']);
+
+/** 递归判断一个槽位值里有没有用户填的东西(字符串非空 / 数字非零 / 数组或对象里有)。 */
+function valueHasContent(v: unknown): boolean {
+  if (typeof v === 'string') return v.trim() !== '';
+  if (typeof v === 'number') return v !== 0;
+  if (Array.isArray(v)) return v.some(valueHasContent);
+  if (v && typeof v === 'object') {
+    return Object.entries(v as Record<string, unknown>)
+      .some(([k, x]) => !STRUCTURAL_KEYS.has(k) && valueHasContent(x));
   }
-  return Object.entries(slots).some(([key, v]) => {
-    if (key === 'value') return typeof v === 'number' && v !== 0;
-    return typeof v === 'string' && v.trim() !== '';
-  });
+  return false;
+}
+
+/**
+ * 换卡前要不要弹确认——原槽位已经写了东西才问, 空槽位直接换。
+ *
+ * 三十三期改成递归(原来只看顶层的字符串与 `value` 数字)。原写法对
+ * curve/rank/entity 这三张**内容装在数组里**的新卡完全失效: `points`/`rows`/`chips`
+ * 是数组, `typeof v === 'string'` 判 false, 于是"填了三行排名再换卡"会被当成
+ * 空镜**静默丢弃, 连确认框都不弹**。
+ *
+ * 写成递归而不是再加五个分支, 是因为下次加卡时不会有人记得回来改这里 ——
+ * 递归对任何形状的槽位都成立。
+ */
+export function slotHasContent(card: CardType, slots: Record<string, unknown>): boolean {
+  return Object.entries(slots)
+    .some(([key, v]) => !STRUCTURAL_KEYS.has(key) && valueHasContent(v));
 }
 
 /**
