@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildFilmPlan, formatIssuesForModel, MAX_REPAIR_ROUNDS } from '@/lib/video-production/film-plan-builder';
+import { buildFilmPlan, formatIssuesForModel, describeZodIssues, MAX_REPAIR_ROUNDS } from '@/lib/video-production/film-plan-builder';
 import type { ActWindow } from '@/lib/video-production/film-plan-prompt';
 
 const windows: ActWindow[] = [
@@ -143,5 +143,43 @@ describe('buildFilmPlan', () => {
       maxTokens: 8192,
     });
     expect(r.rounds).toBe(0);
+  });
+});
+
+describe('describeZodIssues: 有既定处置办法的问题, 报错要说那个办法', () => {
+  /*
+   * 三十三期实测: 45 次真实运行里整片失败 10 次, 头号原因是 `list` 条目不足 3 条(5 次) ——
+   * 而且是**两轮修复之后仍然失败**。
+   *
+   * 根因不是模型笨, 是两句话打架。提示词里写着「凑不满 3 条(items 下限)就换用 statement,
+   * 宁可用一句真话, 也不要用编出来的第四条」; 而修复循环喂回去的是 zod 原文
+   * 「Array must contain at least 3 element(s)」—— 那句话的字面意思是"再加一条"。
+   * 模型听了更近、更具体的那句去凑数, 可事实纪律又不许它编, 于是反复过不去。
+   *
+   * 这与二十七期 z.union 那次是同一类: **报错措辞是契约, 不是日志**。
+   * 所以对"提示词里已经规定了处置办法"的那几种问题, 报错必须复述那个办法。
+   */
+  const shot = (card: string, slots: unknown) => ({ shotId: 's1', startMs: 0, endMs: 4000, card, slots });
+
+  it('list 条目不足: 报错要说改用 statement, 而不是"再加一条"', () => {
+    const issues = describeZodIssues({ shots: [shot('list', { title: '两点', items: ['第一条', '第二条'] })] });
+    const text = issues.join('\n');
+    expect(text, '要说出处置办法').toContain('statement');
+    // 断言的是「明确禁止编造」这个意图, 不是某个具体词。写死一个词会在措辞微调时
+    // 假红, 但放到只查"编"字又会被"编排"之类的词蒙混 —— 取「否定 + 凑/编」的组合。
+    expect(text, '要点明不许为了凑数而编造').toMatch(/不(要|许)[^。]*(凑|编)/);
+    expect(text, '要指出是哪一镜').toContain('shots.0');
+  });
+
+  it('list 条目不足: 不许把 zod 原文原样透传 —— 那句话在教它凑数', () => {
+    const text = describeZodIssues({ shots: [shot('list', { title: '两点', items: ['一', '二'] })] }).join('\n');
+    expect(text).not.toContain('at least 3 element');
+  });
+
+  it('没有既定处置办法的问题, 仍然照原样报(不要为了统一而含糊化)', () => {
+    // label 超长是能直接改短的, 没有"换一张卡"这种处置, 报原文即可
+    const text = describeZodIssues({ shots: [shot('stat', { label: '这个标签特别特别特别特别长超过十六个字了', value: 1 })] }).join('\n');
+    expect(text).toContain('shots.0.slots.label');
+    expect(text.length).toBeGreaterThan(10);
   });
 });

@@ -34,11 +34,55 @@ export function formatIssuesForModel(issues: string[]): string {
   ].join('\n');
 }
 
+/**
+ * 提示词里**已经规定了处置办法**的那几种问题, 报错必须复述那个办法。
+ *
+ * 三十三期实测: 45 次真实运行里整片失败 10 次, 头号原因是 `list` 条目不足 3 条(5 次),
+ * 而且都是**两轮修复之后仍然失败**。根因不是模型笨, 是两句话打架 ——
+ * `facts-guard` 里写着「凑不满 3 条(items 下限)就换用 statement, 宁可用一句真话,
+ * 也不要用编出来的第四条」; 而修复循环喂回去的是 zod 原文
+ * 「Array must contain at least 3 element(s)」, 字面意思是"再加一条"。模型听了更近、
+ * 更具体的那句去凑数, 可事实纪律又不许它编 —— 于是它在两条互斥的指令之间反复过不去。
+ *
+ * 与二十七期 `z.union` 那次同一类: **报错措辞是契约, 不是日志**。
+ *
+ * 只翻译"有既定处置办法"的问题。像 label 超长这种能直接改短的, 保持 zod 原文 ——
+ * 为了统一而把所有报错都含糊成一套话术, 会毁掉那些本来就清楚的报错。
+ */
+function remedyFor(
+  issue: { code: string; path: (string | number)[]; message: string },
+  plan: unknown,
+): string | null {
+  const path = issue.path;
+  const cardOf = (shotIdx: unknown): string | undefined => {
+    const shots = (plan as { shots?: unknown[] })?.shots;
+    if (!Array.isArray(shots) || typeof shotIdx !== 'number') return undefined;
+    return (shots[shotIdx] as { card?: string } | undefined)?.card;
+  };
+
+  // list 的条目下限: 唯一的处置办法是换卡, 不是补条目。
+  if (
+    path[0] === 'shots' && path[2] === 'slots' && path[3] === 'items'
+    && cardOf(path[1]) === 'list' && issue.code === 'too_small'
+  ) {
+    const shots = (plan as { shots?: Array<{ slots?: { items?: unknown[] } }> }).shots;
+    const got = shots?.[path[1] as number]?.slots?.items?.length ?? 0;
+    return `shots.${path[1]}: 这一镜用了 list 卡, 但只有 ${got} 条内容 —— list 至少要 3 条。`
+      + `**不要为了凑够 3 条去编第三条**。稿子和事实清单里如果确实只有 ${got} 条, `
+      + `就把这一镜改成 statement 卡(把最要紧的那一条写进 text, 次要的放 sub), `
+      + `宁可用一句真话, 也不要用编出来的第三条。`;
+  }
+
+  return null;
+}
+
 /** zod 的 issue → 一句人话。`discriminatedUnion` 保证了这里拿到的是单一分支的问题。 */
-function describeZodIssues(plan: unknown): string[] {
+export function describeZodIssues(plan: unknown): string[] {
   const r = FilmPlanSchema.safeParse(plan);
   if (r.success) return [];
   return r.error.issues.map((i) => {
+    const remedy = remedyFor(i as unknown as { code: string; path: (string | number)[]; message: string }, plan);
+    if (remedy) return remedy;
     const path = i.path.join('.');
     return path ? `${path}: ${i.message}` : i.message;
   });
