@@ -75,7 +75,18 @@ describe('九张卡的说明', () => {
     expect(text).toContain('不比大小');    // rank vs list
   });
 
-  it('说明里不提 style/坐标/颜色 —— 那些不归模型管', () => {
-    expect(text).not.toMatch(/style|accent|坐标|字号/);
+  it('卡片说明里不提 style/坐标/颜色 —— 那些不归模型管', () => {
+    /*
+     * 只查卡片说明那几行(以 `- \`` 开头的), 不查整段提示词。
+     * 我最初写成 `expect(text).not.toMatch(...)` 查全文, 结果被三十二期就有的
+     * 收尾句「不要输出坐标、颜色、字号、动画参数」判红 —— 那句话恰恰是在**禁止**
+     * 模型输出这些, 与本条的意图同向。断言写得比意图宽, 就会把满足意图的写法也判成
+     * 违规。改成只查卡片说明本身: 一张卡的介绍里不该出现视觉参数, 全局禁令则该出现。
+     */
+    const cardLines = text.split('\n').filter((l) => l.trimStart().startsWith('- `'));
+    expect(cardLines.length).toBeGreaterThanOrEqual(9);
+    for (const line of cardLines) {
+      expect(line, `卡片说明里出现了视觉参数: ${line}`).not.toMatch(/style|accent|坐标|字号/);
+    }
   });
 });
