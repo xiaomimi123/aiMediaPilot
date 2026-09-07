@@ -73,6 +73,8 @@ interface FilmPlanMeta {
 
 const CARD_LABELS: Record<CardType, string> = {
   statement: '陈述', stat: '数据', contrast: '对照', list: '清单',
+  // 三十三期新增五张卡的标签——组件本身在 Task 3/4 才建, 这里先让类型对齐。
+  ring: '环形', odometer: '翻牌', curve: '曲线', rank: '排名', entity: '铭牌',
 };
 
 /**

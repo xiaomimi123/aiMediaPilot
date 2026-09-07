@@ -171,6 +171,23 @@ function findBlankSlots(shots: unknown[]): string[] {
         }
         break;
       }
+      case 'ring':
+      case 'odometer':
+        if (isBlank(slots.label)) bad('label');
+        break;
+      case 'curve':
+        if (isBlank(slots.label)) bad('label');
+        break;
+      case 'rank':
+        if (isBlank(slots.title)) bad('title');
+        break;
+      case 'entity': {
+        const chips = Array.isArray(slots.chips) ? slots.chips : [];
+        chips.forEach((c, i) => {
+          if (isBlank((c as { name?: unknown })?.name)) bad(`chips[${i}].name`);
+        });
+        break;
+      }
       default:
         // 未知卡片类型不在这里管——那是 CARD_TYPES/CARDS 注册表对齐的事,
         // 有 card-registry.test.ts 守着, 这里只管"内容是不是空白"。

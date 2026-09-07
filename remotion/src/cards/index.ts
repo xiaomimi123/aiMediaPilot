@@ -9,4 +9,14 @@ export const CARDS = {
   stat: Stat,
   contrast: Contrast,
   list: ListCard,
+  // TODO(三十三期 Task 3/4): 换成真实组件
+  ring: Statement,
+  // TODO(三十三期 Task 3/4): 换成真实组件
+  odometer: Statement,
+  // TODO(三十三期 Task 3/4): 换成真实组件
+  curve: Statement,
+  // TODO(三十三期 Task 3/4): 换成真实组件
+  rank: Statement,
+  // TODO(三十三期 Task 3/4): 换成真实组件
+  entity: Statement,
 } as const;

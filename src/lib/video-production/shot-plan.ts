@@ -11,7 +11,7 @@ import { z } from 'zod';
  * 多余字段, 模型想偷偷塞坐标进来是不行的。
  */
 
-export const CARD_TYPES = ['statement', 'stat', 'contrast', 'list'] as const;
+export const CARD_TYPES = ['statement', 'stat', 'contrast', 'list', 'ring', 'odometer', 'curve', 'rank', 'entity'] as const;
 export type CardType = (typeof CARD_TYPES)[number];
 
 /**
@@ -76,6 +76,49 @@ const SLOTS = {
     title: z.string().min(1).max(16),
     /** 条目数下限 3: 少于 3 条用不着列表, 用 statement 更好。 */
     items: z.array(z.string().min(1).max(20)).min(3).max(8),
+  }).strict(),
+
+  ring: z.object({
+    label: z.string().min(1).max(16),
+    value: z.number(),
+    max: z.number().positive().default(100),
+    unit: z.string().max(6).optional(),
+    note: z.string().max(24).optional(),
+  }).strict(),
+
+  odometer: z.object({
+    label: z.string().min(1).max(16),
+    value: z.number().int(),
+    unit: z.string().max(6).optional(),
+    note: z.string().max(24).optional(),
+  }).strict(),
+
+  curve: z.object({
+    label: z.string().min(1).max(16),
+    points: z.array(z.object({
+      at: z.string().min(1).max(8),
+      value: z.number(),
+    }).strict()).min(3).max(8),
+    unit: z.string().max(6).optional(),
+    note: z.string().max(24).optional(),
+  }).strict(),
+
+  rank: z.object({
+    title: z.string().min(1).max(16),
+    rows: z.array(z.object({
+      name: z.string().min(1).max(12),
+      value: z.number(),
+    }).strict()).min(2).max(6),
+    suffix: z.string().max(6).optional(),
+  }).strict(),
+
+  entity: z.object({
+    chips: z.array(z.object({
+      name: z.string().min(1).max(12),
+      sub: z.string().max(16).optional(),
+      tone: z.enum(['light', 'dark']),
+    }).strict()).min(1).max(3),
+    note: z.string().max(20).optional(),
   }).strict(),
 } as const;
 
@@ -153,6 +196,11 @@ const SHOT_VARIANTS = [
   shotVariant('stat'),
   shotVariant('contrast'),
   shotVariant('list'),
+  shotVariant('ring'),
+  shotVariant('odometer'),
+  shotVariant('curve'),
+  shotVariant('rank'),
+  shotVariant('entity'),
 ] as const;
 
 /**
@@ -235,6 +283,11 @@ export function describeCardsForPrompt(): string {
     '- `contrast`：左右两组东西，中间用一个中性分隔件连起来。**什么时候用**：讲 A 与 B 的对照。槽位：leftLabel/leftText、rightLabel/rightText。',
     '  中间那个分隔件由渲染层统一提供，你不需要也不能指定左右两边是什么关系（没有这个字段）。把两组内容填准就行。',
     '- `list`：一份条目清单。**什么时候用**：用"多"本身说明问题时。槽位：title、items（3~8 条，每条 ≤20 字）。少于 3 条请改用 statement。',
+    '- `ring`：一个比例做成圆环，环心是数字。**什么时候用**：这个数**有分母**——占比、完成度、达成率、市场份额。槽位：label、value、max（分母，默认 100）、unit（可选）、note（可选注脚）。**没有分母的数用 `stat`**，别把绝对量硬塞成比例。',
+    '- `odometer`：翻牌计数器，每位数字像里程表一样滚到位。**什么时候用**：这个数的**量级本身**是重点（累计总量、里程碑、突破多少）。槽位：label、value（**必须是整数**）、unit（可选）、note（可选）。带小数的用 `stat`，有分母的用 `ring`。',
+    '- `curve`：一条随时间变化的曲线，点会跟着画到的位置逐个亮起。**什么时候用**：讲的是**一段过程**——增长、下滑、波动。槽位：label、points（3~8 个点，每点 at 是时间标签≤8 字、value 是数值）、unit（可选）、note（可选出处）。**只有首尾两个数、不讲中间过程的用 `contrast`**。',
+    '- `rank`：多项排名，每项一条能比长短的横条。**什么时候用**：几项之间要**比大小**（排名、份额、多方对比）。槽位：title、rows（2~6 项，每项 name≤12 字 + value 数值）、suffix（可选单位）。**只是列举、不比大小的用 `list`**。',
+    '- `entity`：人物/机构名牌，滑入后常驻。**什么时候用**：要**点名具体的人或机构**（引用来源、提到某公司某人）。槽位：chips（1~3 块，每块 name≤12 字、sub 可选≤16 字放头衔或机构、tone 选 light 或 dark）、note（可选≤20 字）。泛指的主体（"有些人"、"很多公司"）不要用这张。',
     '',
     '不要输出坐标、颜色、字号、动画参数——版面与动效由渲染层决定，你只负责选型与填字。',
   ].join('\n');
