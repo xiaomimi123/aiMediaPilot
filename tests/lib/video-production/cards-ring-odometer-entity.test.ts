@@ -40,7 +40,7 @@ const countInk = (img: ReturnType<typeof parsePpm>, y0: number, y1: number, x0: 
 
 describe('ring 卡', () => {
   it('画面上有环也有数字', async () => {
-    const { img, cleanup } = await renderCard('ring', { label: '四线城市占比', value: 32.2, unit: '%' }, 2000, 'ring');
+    const { img, cleanup } = await renderCard('ring', { label: '四线城市占比', value: 32.2, suffix: '%' }, 2000, 'ring');
     try {
       // 环画在画面中部, 数字在环心 —— 中间那块区域必须有明显的墨
       const ink = countInk(img, Math.floor(img.height * 0.3), Math.floor(img.height * 0.7),

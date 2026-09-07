@@ -36,7 +36,7 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
  * `display:grid` 容器、都 `gridArea:'1/1'`——两者天然重叠居中, 不需要摸坐标。
  */
 export const Ring: React.FC<{
-  slots: {label: string; value: number; max?: number; unit?: string; note?: string};
+  slots: {label: string; value: number; max?: number; suffix?: string; note?: string};
   durationInFrames: number;
   theme: CardTheme;
   style?: ShotStyle;
@@ -127,7 +127,7 @@ export const Ring: React.FC<{
               fontSize: scaleFont(width, height, 68), lineHeight: 1,
             }}
           >
-            {shownValue}{slots.unit ?? ''}
+            {shownValue}{slots.suffix ?? ''}
           </span>
         </Live>
       </div>

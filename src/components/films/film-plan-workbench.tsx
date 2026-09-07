@@ -106,18 +106,18 @@ export const SLOT_LIMITS = {
   // 三十三期新增五张卡的上限——逐个对着 shot-plan.ts 的 `SLOTS` 抄, 抄完自核一遍数值。
   ring: {
     label: { min: 1, max: 16 },
-    unit: { min: 0, max: 6 },
+    suffix: { min: 0, max: 6 },
     note: { min: 0, max: 24 },
   },
   odometer: {
     label: { min: 1, max: 16 },
-    unit: { min: 0, max: 6 },
+    suffix: { min: 0, max: 6 },
     note: { min: 0, max: 24 },
   },
   curve: {
     label: { min: 1, max: 16 },
     at: { min: 1, max: 8 },
-    unit: { min: 0, max: 6 },
+    suffix: { min: 0, max: 6 },
     note: { min: 0, max: 24 },
     minPoints: 3,
     maxPoints: 8,
@@ -153,9 +153,9 @@ export function blankSlots(card: CardType): Record<string, unknown> {
     // 三十三期新增——数组类的给出 schema `.min()` 那个下限个数的空元素(curve 3
     // 个点、rank 2 行、entity 1 块), 用户一进来就是个合法骨架, 不用自己想
     // "该加几个"。
-    case 'ring': return { label: '', value: 0, max: 100, unit: '', note: '' };
-    case 'odometer': return { label: '', value: 0, unit: '', note: '' };
-    case 'curve': return { label: '', points: [{ at: '', value: 0 }, { at: '', value: 0 }, { at: '', value: 0 }], unit: '', note: '' };
+    case 'ring': return { label: '', value: 0, max: 100, suffix: '', note: '' };
+    case 'odometer': return { label: '', value: 0, suffix: '', note: '' };
+    case 'curve': return { label: '', points: [{ at: '', value: 0 }, { at: '', value: 0 }, { at: '', value: 0 }], suffix: '', note: '' };
     case 'rank': return { title: '', rows: [{ name: '', value: 0 }, { name: '', value: 0 }], suffix: '' };
     case 'entity': return { chips: [{ name: '', sub: '', tone: 'light' }], note: '' };
     default: return {};
@@ -1099,7 +1099,7 @@ function SlotFields({
             />
           </label>
         ) : null}
-        <TextField field="unit" label="unit" min={limits.unit.min} max={limits.unit.max} value={str('unit')} optional onChange={onChange} />
+        <TextField field="suffix" label="suffix" min={limits.suffix.min} max={limits.suffix.max} value={str('suffix')} optional onChange={onChange} />
         <TextField field="note" label="note" min={limits.note.min} max={limits.note.max} value={str('note')} optional onChange={onChange} />
       </>
     );
@@ -1165,7 +1165,7 @@ function SlotFields({
             加一个点
           </Button>
         </div>
-        <TextField field="unit" label="unit" min={SLOT_LIMITS.curve.unit.min} max={SLOT_LIMITS.curve.unit.max} value={str('unit')} optional onChange={onChange} />
+        <TextField field="suffix" label="suffix" min={SLOT_LIMITS.curve.suffix.min} max={SLOT_LIMITS.curve.suffix.max} value={str('suffix')} optional onChange={onChange} />
         <TextField field="note" label="note" min={SLOT_LIMITS.curve.note.min} max={SLOT_LIMITS.curve.note.max} value={str('note')} optional onChange={onChange} />
       </>
     );

@@ -11,7 +11,7 @@ describe('五张新卡的 schema', () => {
   });
 
   it('ring: 合法通过; max 缺省为 100', () => {
-    const r = ShotPlanSchema.safeParse({ ...base, card: 'ring', slots: { label: '四线城市占比', value: 32.2, unit: '%' } });
+    const r = ShotPlanSchema.safeParse({ ...base, card: 'ring', slots: { label: '四线城市占比', value: 32.2, suffix: '%' } });
     expect(r.success).toBe(true);
     if (r.success) expect((r.data as { slots: { max: number } }).slots.max).toBe(100);
   });
@@ -87,6 +87,51 @@ describe('九张卡的说明', () => {
     expect(cardLines.length).toBeGreaterThanOrEqual(9);
     for (const line of cardLines) {
       expect(line, `卡片说明里出现了视觉参数: ${line}`).not.toMatch(/style|accent|坐标|字号/);
+    }
+  });
+});
+
+describe('单位槽位的命名跨卡一致', () => {
+  /*
+   * 三十三期实测出的故障: 新卡最初用 `unit` 装单位, 而老卡 `stat` 用 `suffix`。
+   * 同一个概念两个名字, 模型会串填 —— 真实运行里出现过
+   * `shots.11.slots: Unrecognized key(s) in object: 'unit'`(把 unit 填进了 stat),
+   * 而 .strict() 下这是**整片失败**, 不是少一个单位。
+   *
+   * 统一到 `suffix`(老卡已在用的那个名字)之后, `unit` 这个名字在契约里不复存在,
+   * 也就没有了串填的来源。这条断言钉住它: 谁再引入 `unit`, 或者给某张卡起第三个
+   * 名字装单位, 都在这里红。
+   *
+   * 判据走 zod 自省而不是搜字符串 —— 搜字符串会被注释和变量名骗过去。
+   */
+  const slotKeysOf = (card: string): string[] => {
+    const union = (ShotPlanSchema as unknown as { innerType: () => { options: Array<{ shape: { card: { value: string }; slots: { shape: Record<string, unknown> } } }> } }).innerType();
+    const variant = union.options.find((o) => o.shape.card.value === card);
+    expect(variant, `${card} 在 discriminatedUnion 里没有分支`).toBeTruthy();
+    /*
+     * `contrast` 的 slots 外面裹了一层 z.preprocess(丢弃遗留的 connector 字段),
+     * 那是 ZodEffects 而不是 ZodObject, 直接读 .shape 会是 undefined。
+     * 剥到里层再取键 —— 这一层包装是既有设计, 不该为了让测试好写而去掉它。
+     */
+    const slotsSchema = variant!.shape.slots as unknown as {
+      shape?: Record<string, unknown>;
+      _def?: { schema?: { shape?: Record<string, unknown> } };
+    };
+    const shape = slotsSchema.shape ?? slotsSchema._def?.schema?.shape;
+    expect(shape, `${card} 的 slots 取不到字段表`).toBeTruthy();
+    return Object.keys(shape!);
+  };
+
+  it('没有任何一张卡用 `unit` 当槽位名', () => {
+    for (const card of CARD_TYPES) {
+      expect(slotKeysOf(card), `${card} 用了 unit —— 单位一律叫 suffix`).not.toContain('unit');
+    }
+  });
+
+  it('带单位的卡都叫 suffix', () => {
+    // 这五张卡的语义里有"单位"这件事; 其余四张没有, 不该凭空长出来
+    for (const card of ['stat', 'ring', 'odometer', 'curve', 'rank']) {
+      expect(slotKeysOf(card), `${card} 应当有 suffix 装单位`).toContain('suffix');
     }
   });
 });

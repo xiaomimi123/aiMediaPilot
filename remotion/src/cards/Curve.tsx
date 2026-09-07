@@ -87,7 +87,7 @@ function catmullRomToBezierPath(points: Array<{x: number; y: number}>): string {
  * 节奏设计, 不是笔误。
  */
 export const Curve: React.FC<{
-  slots: {label: string; points: Array<{at: string; value: number}>; unit?: string; note?: string};
+  slots: {label: string; points: Array<{at: string; value: number}>; suffix?: string; note?: string};
   durationInFrames: number;
   theme: CardTheme;
   style?: ShotStyle;
@@ -169,7 +169,7 @@ export const Curve: React.FC<{
             data-slot="peak"
             style={{fontFamily: FONT_CN, fontWeight: 900, color: theme.title, fontSize: scaleFont(width, height, 52)}}
           >
-            {shownPeak}{slots.unit ?? ''}
+            {shownPeak}{slots.suffix ?? ''}
           </span>
         </Live>
       </div>
@@ -189,7 +189,7 @@ export const Curve: React.FC<{
                   fontSize: scaleFont(width, height, 22), opacity: on,
                 }}
               >
-                {roundToSourceDecimals(p.value, p.value)}{slots.unit ?? ''}
+                {roundToSourceDecimals(p.value, p.value)}{slots.suffix ?? ''}
               </span>
             );
           })}

@@ -67,10 +67,10 @@ describe('curve 卡', () => {
 
   it('描画早期(还没画到)两份内容几乎一样, 画完之后应有明显不同', async () => {
     const [early1, early2, late1, late2] = await Promise.all([
-      renderCard('curve', { label: '搜索量', points: POINTS_UP, unit: '万' }, 200, 'curve-up-early'),
-      renderCard('curve', { label: '搜索量', points: POINTS_FLAT, unit: '万' }, 200, 'curve-flat-early'),
-      renderCard('curve', { label: '搜索量', points: POINTS_UP, unit: '万' }, 6000, 'curve-up-late'),
-      renderCard('curve', { label: '搜索量', points: POINTS_FLAT, unit: '万' }, 6000, 'curve-flat-late'),
+      renderCard('curve', { label: '搜索量', points: POINTS_UP, suffix: '万' }, 200, 'curve-up-early'),
+      renderCard('curve', { label: '搜索量', points: POINTS_FLAT, suffix: '万' }, 200, 'curve-flat-early'),
+      renderCard('curve', { label: '搜索量', points: POINTS_UP, suffix: '万' }, 6000, 'curve-up-late'),
+      renderCard('curve', { label: '搜索量', points: POINTS_FLAT, suffix: '万' }, 6000, 'curve-flat-late'),
     ]);
     try {
       const w = early1.img.width, h = early1.img.height;

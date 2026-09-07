@@ -58,7 +58,7 @@ const DigitWheel: React.FC<{
  * 停摆——那样看不出"滚动"这个动作本身。
  */
 export const Odometer: React.FC<{
-  slots: {label: string; value: number; unit?: string; note?: string};
+  slots: {label: string; value: number; suffix?: string; note?: string};
   durationInFrames: number;
   theme: CardTheme;
   style?: ShotStyle;
@@ -83,7 +83,7 @@ export const Odometer: React.FC<{
   const fontSize = scaleFont(width, height, 64);
   const digitH = Math.round(fontSize * 1.15);
 
-  // 最后一位(个位)结束的时刻, 用于 unit/note 的到位时机。
+  // 最后一位(个位)结束的时刻, 用于 suffix/note 的到位时机。
   const lastDigitArriveAt = t(0.3) + DIGIT_ROLL_SEC;
 
   return (
@@ -134,9 +134,9 @@ export const Odometer: React.FC<{
             />
           );
         })}
-        {slots.unit ? (
+        {slots.suffix ? (
           <span style={{fontFamily: FONT_CN, fontWeight: 900, fontSize: scaleFont(width, height, 34), color: theme.title, marginLeft: scaleFont(width, height, 8)}}>
-            {slots.unit}
+            {slots.suffix}
           </span>
         ) : null}
       </div>
