@@ -82,8 +82,10 @@ export const Rank: React.FC<{
         ...scaleStyle(style),
       }}
     >
+      {/* data-slot 打在内层 span 上而不是 Live 上 —— Live 只解构它认识的 props,
+          多传的属性不会透传到 DOM。五张新卡一致遵循这个写法。 */}
       <Live seed={0} style={{fontFamily: FONT_CN, fontWeight: 900, color: theme.title, fontSize: scaleFont(width, height, 44), ...titleFade}}>
-        {title}
+        <span data-slot="title">{title}</span>
       </Live>
 
       <div style={{display: 'flex', flexDirection: 'column', marginTop: scaleFont(width, height, 24)}}>

@@ -109,6 +109,13 @@ export const Curve: React.FC<{
 
   const drawAtSec = t(0.3);
   const draw = curveDraw(frame, fps, drawAtSec, 2.0);
+  /*
+ * 一个点"亮到什么程度": 画笔画到它所在的位置时才淡入(0.15 的宽度让它渐显而不是啪地出现)。
+ * 这个式子原本在下面的三处渲染(数值标注 / 圆点 / 时间标签)里各写了一遍 —— 三处必须
+ * 同步变化, 否则数值先亮、圆点后亮, 一眼就穿帮。抽成一个函数, 让"必须一致"这件事
+ * 由代码结构保证, 而不是靠三处都记得改。
+ */
+  const onAt = (i: number) => clamp((draw - (n <= 1 ? 0 : (i / (n - 1)) * 0.9)) / 0.15, 0, 1);
   const drawArriveAt = drawAtSec + 2.0;
   const shownPeak = roundToSourceDecimals(countTo(frame, fps, drawAtSec, peak, 2.3), peak);
   const peakArriveAt = drawAtSec + 2.3;
@@ -172,7 +179,7 @@ export const Curve: React.FC<{
             分布, 靠 justifyContent:'space-between' 天然对齐, 不需要绝对坐标。 */}
         <div style={{display: 'flex', flexDirection: 'row', justifyContent: 'space-between'}}>
           {points.map((p, i) => {
-            const on = clamp((draw - (n <= 1 ? 0 : (i / (n - 1)) * 0.9)) / 0.15, 0, 1);
+            const on = onAt(i);
             return (
               <span
                 key={i}
@@ -214,7 +221,7 @@ export const Curve: React.FC<{
             strokeDashoffset={1 - draw}
           />
           {geomPoints.map((p, i) => {
-            const on = clamp((draw - (n <= 1 ? 0 : (i / (n - 1)) * 0.9)) / 0.15, 0, 1);
+            const on = onAt(i);
             return (
               <g key={i} data-slot={`point-${i}`}>
                 <circle cx={p.x} cy={p.y} r={1.6 * (0.4 + 0.6 * on)} fill={highlightColor} opacity={on} />
@@ -225,7 +232,7 @@ export const Curve: React.FC<{
 
         <div style={{display: 'flex', flexDirection: 'row', justifyContent: 'space-between', marginTop: scaleFont(width, height, 12)}}>
           {points.map((p, i) => {
-            const on = clamp((draw - (n <= 1 ? 0 : (i / (n - 1)) * 0.9)) / 0.15, 0, 1);
+            const on = onAt(i);
             return (
               <span
                 key={i}
