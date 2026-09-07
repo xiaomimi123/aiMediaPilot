@@ -5,6 +5,8 @@ import {ListCard} from './ListCard';
 import {Ring} from './Ring';
 import {Odometer} from './Odometer';
 import {Entity} from './Entity';
+import {Curve} from './Curve';
+import {Rank} from './Rank';
 
 /** CardType → 组件。Task 3 的 CARD_TYPES 每一项都必须在这里有实现。 */
 export const CARDS = {
@@ -14,9 +16,7 @@ export const CARDS = {
   list: ListCard,
   ring: Ring,
   odometer: Odometer,
-  // TODO(三十三期 Task 4): 换成真实组件
-  curve: Statement,
-  // TODO(三十三期 Task 4): 换成真实组件
-  rank: Statement,
+  curve: Curve,
+  rank: Rank,
   entity: Entity,
 } as const;
