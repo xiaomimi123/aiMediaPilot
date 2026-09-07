@@ -82,24 +82,24 @@ export default async function WriteDetailPage(props: { params: Promise<{ id: str
   const soft = content ? readCachedSoft(content.scriptScore, acts) : null;
 
   return (
+    // 编辑器是三栏满高布局(左轨 + 中栏 + 右栏各自到边), 不能再套 max-w-6xl 的
+    // 居中窄栏 —— 那是给单栏正文页(PageShell)用的, 会把左右两条轨道往里挤。
     <main className="flex-1 overflow-hidden">
-      <div className="mx-auto flex h-full max-w-6xl flex-col px-8 py-8">
-        <ScriptWorkspace
-          scriptId={id}
-          topic={draft.topic}
-          platform={draft.platform}
-          durationSec={durationSec}
-          initialActs={acts}
-          softScore={soft ? soft.dimensions.reduce((n, d) => n + d.score, 0) : null}
-          softMax={SOFT_MAX}
-          softDimensions={soft?.dimensions ?? []}
-          softStaleReason={soft?.staleReason ?? null}
-          aiBaselineActs={aiBaselineActs}
-          imported={isImported}
-          titleSuggestions={titleSuggestions}
-          compareVersions={compareVersions}
-        />
-      </div>
+      <ScriptWorkspace
+        scriptId={id}
+        topic={draft.topic}
+        platform={draft.platform}
+        durationSec={durationSec}
+        initialActs={acts}
+        softScore={soft ? soft.dimensions.reduce((n, d) => n + d.score, 0) : null}
+        softMax={SOFT_MAX}
+        softDimensions={soft?.dimensions ?? []}
+        softStaleReason={soft?.staleReason ?? null}
+        aiBaselineActs={aiBaselineActs}
+        imported={isImported}
+        titleSuggestions={titleSuggestions}
+        compareVersions={compareVersions}
+      />
     </main>
   );
 }

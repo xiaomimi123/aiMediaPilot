@@ -6,14 +6,14 @@ import type { ScriptAct } from '@/lib/script/six-act';
 import { buildActPlan } from '@/lib/script/act-plan';
 import { scoreHardDimensions, type ScoreDimension, isUnwritten } from '@/lib/cockpit/script-score';
 import { buttonVariants } from '@/components/ui/button';
-import { Tabs } from '@/components/ui/tabs';
 import { MaterialPanel } from './material-panel';
 import { RewritePanel } from './rewrite-panel';
 import { TitlePanel, type TitleSuggestion } from './title-panel';
 import type { CompareAct } from './compare-block';
 import { splitGaps } from '@/lib/script/score-gaps';
 import { compareToBaseline } from '@/lib/script/rewrite-diff';
-import { ActStrip } from './act-strip';
+import { cn } from '@/lib/utils';
+import { ActRail } from './act-rail';
 import { ActEditor } from './act-editor';
 import { ScorePanel } from './score-panel';
 
@@ -151,9 +151,6 @@ export function ScriptWorkspace({
     () => (aiBaselineActs ? scoreHardDimensions(aiBaselineActs, durationSec).total : null),
     [aiBaselineActs, durationSec],
   );
-  // 评分模型换过之后旧软分不可比, 不计入总分
-  const countSoft = softScore !== null && softStaleReason !== 'model';
-
   /**
    * 待处理: 把扣分项翻译成「去改哪一幕的哪个东西」。
    * 只给分不给去处, 用户还是不知道下一步做什么。
@@ -184,76 +181,152 @@ export function ScriptWorkspace({
   );
 
   if (!current) {
-    return <p className="text-sm text-muted-foreground">这份稿子没有可编辑的幕。</p>;
+    return <p className="text-sm text-fg-3">这份稿子没有可编辑的幕。</p>;
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="mb-4 flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="truncate text-xl font-semibold tracking-tight">{topic}</h1>
-          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="rounded bg-secondary px-1.5 py-0.5">{platform}</span>
-            <span className="rounded bg-secondary px-1.5 py-0.5">{durationSec} 秒</span>
-            <span className="tabular-nums">实际 {plan.totalActualSec.toFixed(1)} 秒</span>
-          </div>
+      {/*
+        topbar 与 PageShell 同形态(58px, 置顶, canvas 底) —— 编辑器是三栏满高布局,
+        不套 PageShell 组件本身(它只管单栏正文的 padding), 但视觉上要长得一样。
+      */}
+      <header className="flex h-topbar shrink-0 items-center gap-2.5 border-b border-line-subtle bg-canvas px-6">
+        <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
+          <h1 className="truncate text-base font-semibold text-fg">{topic}</h1>
+          <p className="flex flex-wrap items-center gap-x-1.5 truncate text-xs text-fg-3">
+            <span>{platform}</span>
+            <span>·</span>
+            <span>
+              目标 <span className="font-mono tabular-nums">{durationSec}</span> 秒
+            </span>
+            <span>·</span>
+            <span>
+              实际{' '}
+              <span className="font-mono tabular-nums">{plan.totalActualSec.toFixed(1)}</span> 秒
+            </span>
+            <span>·</span>
+            {/* 保存状态照旧走 save.status —— 设计稿这里是静态文案, 但真实状态
+                (保存中/失败)比静态文案更重要, 不能为了对齐设计丢掉。 */}
+            <span
+              className={cn(save.status === 'error' && 'font-medium text-bad')}
+              role={save.status === 'error' ? 'alert' : undefined}
+            >
+              {saveLabel(save)}
+            </span>
+          </p>
         </div>
-        {/*
-          还没写一个字就先给个分, 是在教错的东西 —— 空稿子在时长偏差、简洁度这
-          几项上天生满分。骨架模式的稿子一打开就是这个状态。
-        */}
-        {unwritten ? (
-          <div className="shrink-0 rounded-lg border border-dashed border-border px-4 py-2 text-center">
-            <p className="text-xs text-muted-foreground">还没开始写</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">写下第一句就开始算分</p>
-          </div>
-        ) : (
-          <div className="shrink-0 rounded-md border border-border bg-card px-4 py-2 text-center">
-            {/* 软指标作废时只报硬指标 —— 把旧模型的分加进总分会拼出一个不可比的数字 */}
-            <p className="text-xs text-muted-foreground">{countSoft ? '总分' : '硬指标'}</p>
-            <p className="text-2xl font-semibold tabular-nums">
-              {hard.total + (countSoft ? softScore! : 0)}
-              <span className="text-sm font-normal text-muted-foreground">
-                /{hard.max + (countSoft ? softMax : 0)}
-              </span>
-            </p>
-          </div>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {/* Button 只有一个身份(button)。要跳转就用 Link 套 buttonVariants,
+              不给 Button 加一个 asChild 之类的 prop 让它在两种身份间切换。 */}
+          <Link
+            href={`/write/${scriptId}/teleprompter`}
+            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+          >
+            提词器
+          </Link>
+          <Link href="/scripts" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
+            回稿库
+          </Link>
+          {/* 不放「出片」—— 出片链路刚跑通第一次, 稳定之前不给它做界面(同 nav.ts)。 */}
+        </div>
       </header>
 
-      <ActStrip plan={plan} current={currentAct} onSelect={setCurrentAct} />
+      <div className="flex min-h-0 flex-1">
+        <ActRail plan={plan} durationSec={durationSec} current={currentAct} onSelect={setCurrentAct} />
 
-      <div className="mt-4 flex min-h-0 flex-1 gap-4 overflow-y-auto">
-        <section className="flex min-w-0 flex-1 flex-col rounded-md border border-border bg-card p-4">
-          <div className="mb-3 flex items-baseline gap-2">
-            <h2 className="text-sm font-medium">{currentRow?.label ?? current.title}</h2>
-            {currentRow ? (
-              <span className="rounded bg-secondary px-1.5 py-0.5 text-xs tabular-nums">
-                目标 {currentRow.targetSec.toFixed(1)}s
-              </span>
-            ) : null}
-          </div>
-          <ActEditor
-            act={current}
-            targetSec={currentRow?.targetSec ?? 0}
-            onChange={patchCurrent}
-            compare={currentCompare}
-            compareOriginal={compare?.forNarration?.[currentAct] ?? ''}
-            compareStale={compareStale}
-          />
+        {/*
+          中栏: 当前幕完整展开(.scene 样式), 其余幕折叠成单行卡片。
+          折叠行标题不能单独渲染成一个只含幕名的元素 —— 会和左轨那一行的幕名
+          撞成两个一模一样的文本节点; 这里把幕名和台词预览拼进同一段文字里,
+          视觉上仍然是"幕名 + 台词一行", 但作为一个整体文本存在。
+        */}
+        <section className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto p-6">
+          {plan.rows.map((r, i) => {
+            const isCurrent = r.act === currentAct;
+            if (isCurrent) {
+              return (
+                <div
+                  key={r.act}
+                  className="flex flex-col gap-3.5 rounded-xl border border-brand-line bg-surface p-4 pb-[18px]"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="shrink-0 rounded-sm bg-brand px-1.5 py-0.5 text-[11px] text-white">
+                      {`幕 ${i + 1}`}
+                    </span>
+                    <h2 className="min-w-0 flex-1 text-base font-semibold text-fg">{r.label}</h2>
+                    <span
+                      className={cn(
+                        'shrink-0 rounded px-1.5 py-0.5 text-[11px]',
+                        r.warn ? 'bg-warn-subtle text-warn' : 'bg-elevated text-fg-3',
+                      )}
+                    >
+                      {r.actualSec.toFixed(1)}s / 目标 {r.targetSec.toFixed(1)}s
+                    </span>
+                  </div>
+                  <ActEditor
+                    act={current}
+                    targetSec={currentRow?.targetSec ?? 0}
+                    onChange={patchCurrent}
+                    compare={currentCompare}
+                    compareOriginal={compare?.forNarration?.[currentAct] ?? ''}
+                    compareStale={compareStale}
+                  />
+                </div>
+              );
+            }
+            const act = acts.find((a) => a.act === r.act);
+            return (
+              <button
+                key={r.act}
+                type="button"
+                onClick={() => setCurrentAct(r.act)}
+                className="flex items-center gap-3 rounded-lg border border-line-subtle bg-surface p-4 text-left transition-colors hover:border-line"
+              >
+                <span className="shrink-0 rounded-sm bg-elevated px-1.5 py-0.5 text-[11px] text-fg-3">
+                  {`幕 ${i + 1}`}
+                </span>
+                <p className="min-w-0 flex-1 truncate text-sm">
+                  <span className="font-medium text-fg">{r.label}：</span>
+                  <span className="text-fg-3">{act?.narration || '还没写'}</span>
+                </p>
+                <span
+                  className={cn(
+                    'shrink-0 font-mono text-xs tabular-nums',
+                    r.warn ? 'text-warn' : 'text-fg-3',
+                  )}
+                >
+                  {r.actualSec.toFixed(1)} / {r.targetSec.toFixed(1)}s
+                </span>
+              </button>
+            );
+          })}
         </section>
 
-        <aside className="flex w-[220px] shrink-0 flex-col gap-3">
-          <Tabs
-            tabs={[
-              { value: 'score' as const, label: '评分' },
-              { value: 'rewrite' as const, label: '改写' },
-              { value: 'title' as const, label: '标题' },
-              { value: 'material' as const, label: '素材' },
-            ]}
-            value={panel}
-            onChange={setPanel}
-          />
+        <aside className="flex w-panel shrink-0 flex-col gap-3.5 overflow-y-auto border-l border-line-subtle bg-shell p-[18px]">
+          <div className="flex gap-0.5 rounded-lg bg-inset p-[3px]">
+            {(
+              [
+                { value: 'score', label: '评分' },
+                { value: 'rewrite', label: '改写' },
+                { value: 'title', label: '标题' },
+                { value: 'material', label: '素材' },
+              ] as const
+            ).map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                role="tab"
+                aria-selected={panel === t.value}
+                onClick={() => setPanel(t.value)}
+                className={cn(
+                  'flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors',
+                  panel === t.value ? 'bg-elevated text-fg' : 'text-fg-3 hover:text-fg',
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
           {panel === 'rewrite' ? (
             <RewritePanel
               comparison={comparison}
@@ -288,32 +361,6 @@ export function ScriptWorkspace({
           ) : null}
         </aside>
       </div>
-
-      <footer className="mt-4 flex items-center justify-between gap-4 border-t border-border pt-3">
-        <p
-          className={cnSave(save.status)}
-          role={save.status === 'error' ? 'alert' : undefined}
-        >
-          {saveLabel(save)}
-        </p>
-        <div className="flex gap-2">
-          {/* Button 只有一个身份(button)。要跳转就用 Link 套 buttonVariants,
-              不给 Button 加一个 asChild 之类的 prop 让它在两种身份间切换。 */}
-          <Link
-            href={`/write/${scriptId}/teleprompter`}
-            className={buttonVariants({ variant: 'outline', size: 'sm' })}
-          >
-            提词器
-          </Link>
-          <Link href="/scripts" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
-            回稿库
-          </Link>
-        </div>
-      </footer>
     </div>
   );
-}
-
-function cnSave(status: SaveState['status']): string {
-  return status === 'error' ? 'text-xs text-destructive' : 'text-xs text-muted-foreground';
 }
