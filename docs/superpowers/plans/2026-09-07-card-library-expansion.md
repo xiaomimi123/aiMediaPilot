@@ -711,3 +711,117 @@ git commit -m "docs(video): 三十三期收尾 —— 九张卡与选卡分布�
 - **SVG 与「不许绝对坐标」断言**：`card-registry.test.ts` 有一条禁绝对坐标的断言，SVG 内部的 `cx`/`cy`/`d` 属性可能触发它。Task 3 Step 5 点名了：触发就先报告再改断言，不要默默放宽。
 - **真渲染测试的耗时**：本期新增约 9 条真渲染（每条渲 1-2 张 PNG）。三十二期实测单帧约 0.6s、全量 52s；本期后全量预计 70-80s，仍可接受。若超过 2 分钟，报告里说明并考虑合并测试用例。
 - **`odometer` 的字体度量**：数字滚轮的窗口高度与行高必须精确匹配（`1.15em` 对 `line-height: 1.15`），否则窗口会露出相邻数字。这是实现细节陷阱，Task 3 的构成里写明了。
+
+---
+
+### Task 4.5: 剪辑台支持五张新卡（Task 2 审查中发现的 spec 缺口，补入）
+
+**为什么补这个任务**：Task 2 的实施者报告 `film-plan-workbench.tsx` 的 `CARD_LABELS` 因 `CARD_TYPES` 扩容而类型报错，顺手补了五个标签。顺着查下去发现三处更严重的：
+
+1. `blankSlots(card)` 的 `default` 返回 `{}` —— 在剪辑台把一镜换成 `ring`，得到的是空槽位对象，缺 `label`/`value`。
+2. `missingFieldsOfShot()` 只有旧四卡的分支 —— 新卡的必填项**在保存前的本地校验里完全不被检查**，一镜空 `ring` 能通过校验直接送到服务端。
+3. **最严重**：卡片编辑器的最后一段是裸的 `// list` 兜底（`film-plan-workbench.tsx:929` 附近），**任何不是 statement/stat/contrast 的卡都会渲染出 list 的编辑器**。用户在剪辑台点开一镜 `ring`，看到的是「title + 条目」输入框；一编辑就把 `title`/`items` 写进 ring 的槽位。
+
+第 3 条不是"少了个功能"，是**静默写坏数据**。而这一期的整个前提是「模型照选，我不满意再换」——被打断的恰恰是这五张新卡的「再换」那一半。
+
+spec §四只写了「为下一期拖拽留位」，没有任何一条认领「剪辑台要能编辑新卡」，所以四次审查都不会碰到它。（这正是本项目 ledger 里记过的那条：没人认领的需求不会在任何一次审查里留痕。）
+
+**Files:**
+- Modify: `src/components/films/film-plan-workbench.tsx`
+- Test: `tests/components/films/workbench-new-cards.test.tsx`（新建）
+
+**Interfaces:**
+- Consumes: Task 2 的 `CARD_TYPES`（9 项）与五份 slots schema
+- Produces: 无（UI 层，无下游）
+
+- [ ] **Step 1: 写失败的测试**
+
+三条测试，对应上面三处：
+
+```ts
+import { describe, it, expect } from 'vitest';
+import { CARD_TYPES, ShotPlanSchema } from '@/lib/video-production/shot-plan';
+import { blankSlots, missingFieldsOfShot, SLOT_LIMITS } from '@/components/films/film-plan-workbench';
+
+/*
+ * 这三条测的是「剪辑台对九张卡一视同仁」, 不是某张卡的具体字段。
+ * 遍历 CARD_TYPES 而不是手写九个用例 —— 下次再加卡时, 忘了改剪辑台会在这里红,
+ * 而不是等用户在界面上把数据编坏了才发现。
+ */
+describe('剪辑台认得全部九张卡', () => {
+  it('blankSlots: 每张卡都给出非空的空槽位, 且字段名与 schema 对得上', () => {
+    for (const card of CARD_TYPES) {
+      const slots = blankSlots(card);
+      expect(Object.keys(slots).length, `${card} 的空槽位是空对象`).toBeGreaterThan(0);
+      // 空槽位必填项还没填, 所以整体应当被 schema 拒绝; 但拒绝的理由必须是
+      // "必填项太短", 不能是 "多了个不认识的字段"(那说明字段名写错了)。
+      const r = ShotPlanSchema.safeParse({ shotId: 's1', startMs: 0, endMs: 3000, card, slots });
+      if (!r.success) {
+        for (const issue of r.error.issues) {
+          expect(issue.code, `${card} 的空槽位字段名与 schema 不符: ${JSON.stringify(issue)}`)
+            .not.toBe('unrecognized_keys');
+        }
+      }
+    }
+  });
+
+  it('missingFieldsOfShot: 每张卡的空槽位都至少报出一个必填项', () => {
+    for (const card of CARD_TYPES) {
+      const missing = missingFieldsOfShot({ shotId: 's1', startMs: 0, endMs: 3000, card, slots: blankSlots(card) } as never);
+      expect(missing.length, `${card} 的空镜在保存前校验里一个必填项都没报出来`).toBeGreaterThan(0);
+    }
+  });
+
+  it('SLOT_LIMITS: 九张卡都有字数上限表, 不留兜底', () => {
+    for (const card of CARD_TYPES) {
+      expect(SLOT_LIMITS, `${card} 没有字数上限`).toHaveProperty(card);
+    }
+  });
+});
+```
+
+> `blankSlots` / `missingFieldsOfShot` / `SLOT_LIMITS` 目前都是模块私有，需要 `export` 出来才能测——**这就是这一步该做的**：能被单测看见的东西，才有人在改坏之后发现它。
+
+- [ ] **Step 2: 跑测试确认失败**
+
+Run: `npx vitest run tests/components/films/workbench-new-cards.test.tsx`
+Expected: FAIL —— 三条全红（导出不存在 → 五张新卡无分支）
+
+- [ ] **Step 3: 实现**
+
+1. `SLOT_LIMITS` 补五张新卡的字数上限，**数值必须与 `shot-plan.ts` 的 schema 逐一对齐**（`SLOT_LIMITS` 是手抄的第二份限值——这份重复是既有的，本任务不重构它，但**新加的五份必须对着 schema 抄，不许拍脑袋**）。
+2. `blankSlots` 补五个 case：
+   ```ts
+   case 'ring': return { label: '', value: 0, max: 100, unit: '', note: '' };
+   case 'odometer': return { label: '', value: 0, unit: '', note: '' };
+   case 'curve': return { label: '', points: [{ at: '', value: 0 }, { at: '', value: 0 }, { at: '', value: 0 }], unit: '', note: '' };
+   case 'rank': return { title: '', rows: [{ name: '', value: 0 }, { name: '', value: 0 }], suffix: '' };
+   case 'entity': return { chips: [{ name: '', sub: '', tone: 'light' }], note: '' };
+   ```
+   （数组类的给出**下限个数**的空元素——`curve` 3 个点、`rank` 2 行、`entity` 1 块，与 schema 的 `.min()` 一致，这样用户一进来就是个合法骨架而不是要自己想"该加几个"。）
+3. `missingFieldsOfShot` 补五个分支：`ring`/`odometer`/`curve` 查 `label`，`rank` 查 `title`，`entity` 逐块查 `chips[i].name`，`curve` 逐点查 `points[i].at`，`rank` 逐行查 `rows[i].name`。
+4. **卡片编辑器把裸的 `// list` 兜底改成显式 `if (card === 'list')`，再给五张新卡各写一段编辑器**：
+   - `ring`/`odometer`：`label` 文本 + `value` 数字 + `unit`/`note` 可选文本；`ring` 多一个 `max` 数字。
+   - `curve`：`label` + 一组「时间标签 + 数值」行（可增删，3~8 行）+ `unit`/`note`。
+   - `rank`：`title` + 一组「名称 + 数值」行（可增删，2~6 行）+ `suffix`。
+   - `entity`：1~3 块「name + sub + tone 下拉（浅/深）」。
+   条目增删的交互照抄 `list` 那段已有的写法（增删按钮、到下限时禁用删除、超长红字）。
+5. **函数末尾加一道 exhaustive 兜底**，让下次再加卡时是编译期报错而不是静默渲染错卡：
+   ```ts
+   const _exhaustive: never = card;
+   throw new Error(`卡片编辑器漏了: ${String(_exhaustive)}`);
+   ```
+   这一条是本任务的要点——**裸兜底正是这次事故的根因**：`// list` 那个兜底让五张新卡静默渲染成 list 编辑器，编译器一声不吭。
+
+- [ ] **Step 4: 跑测试确认通过**
+
+Run: `npx vitest run tests/components/films/workbench-new-cards.test.tsx && npm run typecheck:all`
+
+- [ ] **Step 5: 全量 + build + 提交**
+
+Run: `npx vitest run && npm run build`（**跑 build 前确认没有 `next dev` 在跑**）
+
+```bash
+git add src/components/films/film-plan-workbench.tsx tests/
+git commit -m "fix(films): 剪辑台补上五张新卡 —— 裸兜底曾让新卡静默渲染成 list 编辑器"
+```
