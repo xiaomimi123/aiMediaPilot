@@ -98,3 +98,58 @@ export const drawLine = (frame: number, fps: number, atSec: number): React.CSSPr
   const p = prog(frame, fps, atSec, 0.5);
   return {clipPath: `inset(0 ${Math.round((1 - p) * 100)}% 0 0)`};
 };
+
+/**
+ * 环形进度描画(三十三期)。
+ *
+ * 手法: SVG `stroke-dasharray` = 周长、`stroke-dashoffset` 从周长收到
+ * `周长×(1-ratio)` —— 未开始时整圈都是"空隙"(看不见), 画完时露出 ratio 那一段。
+ * 与 overlay-studio 的 RingMetric 同一手法, 但它靠 CSS transition 走 1100ms、
+ * 环心数字另用 JS 计时器走 1100ms(两套时钟手动对齐); 我们两者都由 frame 驱动,
+ * 天然同步, 不需要对齐。
+ */
+export const ringDraw = (
+  frame: number, fps: number, atSec: number, ratio: number, circumference: number,
+): React.CSSProperties => {
+  const p = prog(frame, fps, atSec, 0.9);
+  const e = Easing.out(Easing.cubic)(p);
+  return {
+    strokeDasharray: circumference,
+    strokeDashoffset: circumference * (1 - ratio * e),
+  };
+};
+
+/**
+ * 曲线描画的归一化进度(三十三期)。
+ *
+ * 返回 0→1 的裸进度而不是样式对象 —— 曲线卡要用同一个进度值同时驱动三件事
+ * (描画长度、面积透明度、数据点逐个亮起), 返回样式就没法复用。配合 SVG 的
+ * `pathLength={1}` 使用: 把路径长度归一化成 1 之后, "画了多长"直接就是这个进度值,
+ * 与真实像素长度解耦(overlay-studio 的 GrowthCurve 用的就是这个技巧)。
+ */
+export const curveDraw = (frame: number, fps: number, atSec: number, durSec: number): number =>
+  prog(frame, fps, atSec, durSec);
+
+/** 条形从左生长到 ratio(三十三期)。`transformOrigin: left` 让它从左端长出而不是中间撑开。 */
+export const barGrow = (
+  frame: number, fps: number, atSec: number, ratio: number,
+): React.CSSProperties => {
+  const p = prog(frame, fps, atSec, 0.9);
+  const e = Easing.out(Easing.cubic)(p);
+  return {transform: `scaleX(${clean(ratio * e, 3)})`, transformOrigin: 'left center'};
+};
+
+/**
+ * 从 0 数到 target(三十三期)。
+ *
+ * 结束后**精确等于** target, 不做取整 —— 非整数值(如 facts 台账里的 32.2%)
+ * 取整会与台账不再逐位一致, 这是 Stat 卡二十九期定下的约定(见 lib.tsx 的
+ * roundToSourceDecimals)。显示时的取整精度由调用方按 target 自身的小数位决定。
+ */
+export const countTo = (
+  frame: number, fps: number, atSec: number, target: number, durSec: number,
+): number => {
+  const p = prog(frame, fps, atSec, durSec);
+  const e = Easing.out(Easing.cubic)(p);
+  return target * e;
+};

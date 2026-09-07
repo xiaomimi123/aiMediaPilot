@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { smashIn, fadeUp, beatHit, slideIn, staggerIn, sweepHighlight, drawLine } from '../../../remotion/src/motion/anim';
+import { ringDraw, curveDraw, barGrow, countTo } from '../../../remotion/src/motion/anim';
 
 const FPS = 30;
 
@@ -74,3 +75,45 @@ describe('anim 纯函数 —— 三个边界: at 之前 / 进行中 / 结束后'
     expect(drawLine(FPS * 3, FPS, 1).clipPath).toBe('inset(0 0% 0 0)');
   });
 });
+
+describe('新卡用的动效函数(三十三期)', () => {
+  const FPS = 30;
+  const C = 880; // 圆周长, 2πR ≈ 2π×140
+
+  it('ringDraw: at 之前环全空, 结束后停在 ratio 对应的位置', () => {
+    expect(ringDraw(0, FPS, 1, 0.5, C).strokeDashoffset).toBe(C);
+    const done = ringDraw(FPS * 3, FPS, 1, 0.5, C);
+    expect(done.strokeDasharray).toBe(C);
+    expect(done.strokeDashoffset).toBeCloseTo(C * 0.5, 1);
+  });
+
+  it('ringDraw: ratio=1 时结束后 offset 归零(整圈画满)', () => {
+    expect(ringDraw(FPS * 3, FPS, 0, 1, C).strokeDashoffset).toBeCloseTo(0, 1);
+  });
+
+  it('curveDraw: 0 → 1, 时长由调用方给', () => {
+    expect(curveDraw(0, FPS, 1, 2)).toBe(0);
+    expect(curveDraw(FPS * 5, FPS, 1, 2)).toBe(1);
+    // 时长 2s: at=1s 起, 2s 处正好走一半
+    expect(curveDraw(FPS * 2, FPS, 1, 2)).toBeCloseTo(0.5, 1);
+  });
+
+  it('barGrow: scaleX 从 0 长到 ratio, 左对齐原点', () => {
+    expect(barGrow(0, FPS, 0, 0.8).transform).toBe('scaleX(0)');
+    expect(barGrow(FPS * 3, FPS, 0, 0.8).transform).toBe('scaleX(0.8)');
+    expect(barGrow(0, FPS, 0, 0.8).transformOrigin).toBe('left center');
+  });
+
+  it('countTo: 从 0 数到 target, 结束后精确等于 target', () => {
+    expect(countTo(0, FPS, 1, 900, 1.6)).toBe(0);
+    expect(countTo(FPS * 5, FPS, 1, 900, 1.6)).toBe(900);
+    const mid = countTo(FPS * 1 + 24, FPS, 1, 900, 1.6);
+    expect(mid).toBeGreaterThan(0);
+    expect(mid).toBeLessThan(900);
+  });
+
+  it('countTo: 非整数 target 结束后不被取整(与 Stat 卡的既有约定一致)', () => {
+    expect(countTo(FPS * 5, FPS, 0, 32.2, 1)).toBeCloseTo(32.2, 5);
+  });
+});
+
