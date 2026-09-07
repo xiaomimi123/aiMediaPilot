@@ -729,6 +729,33 @@ Range 是浏览器原生 `<audio>` seek 到未缓冲区间的标准依赖; 3MB �
   (详见 `still-check.ts` 顶部注释)。
 
 
+### UI 重做: Linear 风深色 (三十四期, 设计交付见 `docs/superpowers/specs/2026-09-08-ui-dark-handoff/`)
+
+**纸感退役, 整站换成 Linear 风高密度深色。** 设计交付 = tokens.css(令牌真源, Figma 变量
+一一对应) + 14 页高保真 HTML 样板。三条设计原则: 每个数字带口径和样本量; 空态解释原因
+并给下一步; 状态双重编码(颜色 + 文案)。状态色语义固定不许挪用: success=链路通,
+warning=等你处理, danger=断链/失败, info=系统在跑, soft=AI 软指标; 靛蓝 accent 只用于
+主操作与当前位置。「红色只表示问题」这条旧原则由 danger 的固定语义继承。
+
+**接入策略是桥接, 不是重写**: 新令牌换算成 HSL 三元组映射进 shadcn 语义变量
+(--background/--card/...), 47 个组件一次换肤; 只有侧栏/页面外壳/写稿编辑器/总览页
+做了结构精配。两层颜色并存(见 tailwind.config.ts 注释): shadcn 语义层支持 /alpha,
+直通层(canvas/shell/surface/line/fg/brand)不支持 —— 需要半透明用前者或 *-subtle。
+
+**三个踩过的坑, 后来者别再踩**:
+1. **CSS 变量撞名**: tokens.css 的 --accent(hex)与桥接层的 --accent(HSL 三元组)同名
+   互相覆盖, 所有靛蓝方块静默消失。桥接层让名 --ui-hover。加新变量前先
+   grep 两个文件。
+2. **Tailwind 颜色名撞内置工具类**: 颜色叫 `base` 会让 text-base 从"字号"变成
+   "涂色", 全库标题黑字黑底。现叫 shell。
+3. **临时文件别放 src/ 底下**: Tailwind content 监视整个 src/, 临时文件建了又删,
+   陈旧路径会一直留在 .next 缓存的 content 清单里, 每次重编译都 ENOENT 打崩
+   postcss —— **只重启 dev 不够, 要 rm -rf .next**。临时文件放 /tmp 或 scratchpad。
+
+字体: 不引任何 webfont(本机连不通 Google Fonts, 旧版 next/font/google 每次冷启动
+刷 48 条重试)。中文系统字体、数字系统等宽栈, 独立展示的数字一律 font-mono
+tabular-nums。root 15px 让 text-sm 恰为设计稿的 13px 正文。
+
 ### 卡片库: 四张扩到九张 (三十三期新增, 设计见 `docs/superpowers/specs/2026-09-07-card-library-expansion-design.md`)
 
 **背景**: 填槽渲染只有四张卡(statement/stat/contrast/list)时, 所有数字都只能走
