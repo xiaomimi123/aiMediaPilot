@@ -83,7 +83,7 @@ const CARD_LABELS: Record<CardType, string> = {
  * 常量(未导出), 这里按同一份契约手抄一份; **改任何一处上下限都要同步改这里**,
  * 否则前端红字提示与服务端 400 的实际拒绝阈值会悄悄分岔。
  */
-const SLOT_LIMITS = {
+export const SLOT_LIMITS = {
   statement: { text: { min: 1, max: 24 }, sub: { min: 0, max: 20 } },
   stat: {
     label: { min: 1, max: 16 },
@@ -103,6 +103,39 @@ const SLOT_LIMITS = {
     minItems: 3,
     maxItems: 8,
   },
+  // 三十三期新增五张卡的上限——逐个对着 shot-plan.ts 的 `SLOTS` 抄, 抄完自核一遍数值。
+  ring: {
+    label: { min: 1, max: 16 },
+    unit: { min: 0, max: 6 },
+    note: { min: 0, max: 24 },
+  },
+  odometer: {
+    label: { min: 1, max: 16 },
+    unit: { min: 0, max: 6 },
+    note: { min: 0, max: 24 },
+  },
+  curve: {
+    label: { min: 1, max: 16 },
+    at: { min: 1, max: 8 },
+    unit: { min: 0, max: 6 },
+    note: { min: 0, max: 24 },
+    minPoints: 3,
+    maxPoints: 8,
+  },
+  rank: {
+    title: { min: 1, max: 16 },
+    name: { min: 1, max: 12 },
+    suffix: { min: 0, max: 6 },
+    minRows: 2,
+    maxRows: 6,
+  },
+  entity: {
+    name: { min: 1, max: 12 },
+    sub: { min: 0, max: 16 },
+    note: { min: 0, max: 20 },
+    minChips: 1,
+    maxChips: 3,
+  },
 } as const;
 
 /** 相邻联动/独立拖柄共用的镜长软下限——与 `film-plan-timing.ts` 导出的
@@ -111,12 +144,20 @@ const SLOT_LIMITS = {
  * 输入层就产生, 而不是等保存才被服务端 400。 */
 const MIN_SHOT_MS = BROLL_MIN_SHOT_MS;
 
-function blankSlots(card: CardType): Record<string, unknown> {
+export function blankSlots(card: CardType): Record<string, unknown> {
   switch (card) {
     case 'statement': return { text: '', sub: '' };
     case 'stat': return { label: '', value: 0, prefix: '', suffix: '', note: '' };
     case 'contrast': return { leftLabel: '', leftText: '', rightLabel: '', rightText: '' };
     case 'list': return { title: '', items: ['', '', ''] };
+    // 三十三期新增——数组类的给出 schema `.min()` 那个下限个数的空元素(curve 3
+    // 个点、rank 2 行、entity 1 块), 用户一进来就是个合法骨架, 不用自己想
+    // "该加几个"。
+    case 'ring': return { label: '', value: 0, max: 100, unit: '', note: '' };
+    case 'odometer': return { label: '', value: 0, unit: '', note: '' };
+    case 'curve': return { label: '', points: [{ at: '', value: 0 }, { at: '', value: 0 }, { at: '', value: 0 }], unit: '', note: '' };
+    case 'rank': return { title: '', rows: [{ name: '', value: 0 }, { name: '', value: 0 }], suffix: '' };
+    case 'entity': return { chips: [{ name: '', sub: '', tone: 'light' }], note: '' };
     default: return {};
   }
 }
@@ -138,7 +179,7 @@ function slotHasContent(card: CardType, slots: Record<string, unknown>): boolean
  * 不查超长(超长在 `TextField`/条目输入框里已经即时红字, 不必在保存前再拦一次)。
  * 返回字段名(如 `leftLabel`/`items[2]`), 由调用方拼成"第 N 镜 · 字段：必填"。
  */
-function missingFieldsOfShot(shot: LocalShot): string[] {
+export function missingFieldsOfShot(shot: LocalShot): string[] {
   const slots = shot.slots;
   const str = (k: string) => (typeof slots[k] === 'string' ? (slots[k] as string) : '');
   const missing: string[] = [];
@@ -155,6 +196,29 @@ function missingFieldsOfShot(shot: LocalShot): string[] {
     const items = Array.isArray(slots.items) ? (slots.items as string[]) : [];
     items.forEach((it, i) => {
       if (typeof it !== 'string' || it.length < SLOT_LIMITS.list.item.min) missing.push(`items[${i}]`);
+    });
+  } else if (shot.card === 'ring' || shot.card === 'odometer') {
+    // 两张卡的必填项同形——都只有 label 一个必填字符串字段。
+    if (str('label').length < SLOT_LIMITS[shot.card].label.min) missing.push('label');
+  } else if (shot.card === 'curve') {
+    if (str('label').length < SLOT_LIMITS.curve.label.min) missing.push('label');
+    const points = Array.isArray(slots.points) ? (slots.points as { at?: unknown }[]) : [];
+    points.forEach((p, i) => {
+      const at = typeof p?.at === 'string' ? p.at : '';
+      if (at.length < SLOT_LIMITS.curve.at.min) missing.push(`points[${i}].at`);
+    });
+  } else if (shot.card === 'rank') {
+    if (str('title').length < SLOT_LIMITS.rank.title.min) missing.push('title');
+    const rows = Array.isArray(slots.rows) ? (slots.rows as { name?: unknown }[]) : [];
+    rows.forEach((r, i) => {
+      const name = typeof r?.name === 'string' ? r.name : '';
+      if (name.length < SLOT_LIMITS.rank.name.min) missing.push(`rows[${i}].name`);
+    });
+  } else if (shot.card === 'entity') {
+    const chips = Array.isArray(slots.chips) ? (slots.chips as { name?: unknown }[]) : [];
+    chips.forEach((c, i) => {
+      const name = typeof c?.name === 'string' ? c.name : '';
+      if (name.length < SLOT_LIMITS.entity.name.min) missing.push(`chips[${i}].name`);
     });
   }
   return missing;
@@ -926,52 +990,306 @@ function SlotFields({
       </>
     );
   }
-  // list
-  const items = Array.isArray(slots.items) ? (slots.items as string[]) : [];
-  return (
-    <>
-      <TextField field="title" label="title" min={SLOT_LIMITS.list.title.min} max={SLOT_LIMITS.list.title.max} value={str('title')} onChange={onChange} />
-      <div className="flex flex-col gap-1 text-xs sm:col-span-2">
-        {`条目（${SLOT_LIMITS.list.minItems}~${SLOT_LIMITS.list.maxItems} 条）`}
-        {items.map((it, i) => {
-          const missing = it.length < SLOT_LIMITS.list.item.min;
-          const overflow = it.length > SLOT_LIMITS.list.item.max;
-          const bad = missing || overflow;
-          return (
-            <div key={i} className="flex items-center gap-2">
-              <input
-                value={it}
-                onChange={(e) => {
-                  const next = [...items];
-                  next[i] = e.target.value;
-                  onChange('items', next);
-                }}
-                className={cn('flex-1 rounded border bg-card px-2 py-1', bad ? 'border-destructive' : 'border-input')}
-              />
-              <span className={cn(bad ? 'text-destructive' : 'text-muted-foreground')}>
-                {missing ? '必填' : `${it.length}/${SLOT_LIMITS.list.item.max}`}
-              </span>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={items.length <= SLOT_LIMITS.list.minItems}
-                onClick={() => onChange('items', items.filter((_, j) => j !== i))}
-              >
-                删除
-              </Button>
-            </div>
-          );
-        })}
-        <Button
-          size="sm"
-          variant="outline"
-          className="self-start"
-          disabled={items.length >= SLOT_LIMITS.list.maxItems}
-          onClick={() => onChange('items', [...items, ''])}
-        >
-          加一条
-        </Button>
-      </div>
-    </>
-  );
+  if (card === 'list') {
+    const items = Array.isArray(slots.items) ? (slots.items as string[]) : [];
+    return (
+      <>
+        <TextField field="title" label="title" min={SLOT_LIMITS.list.title.min} max={SLOT_LIMITS.list.title.max} value={str('title')} onChange={onChange} />
+        <div className="flex flex-col gap-1 text-xs sm:col-span-2">
+          {`条目（${SLOT_LIMITS.list.minItems}~${SLOT_LIMITS.list.maxItems} 条）`}
+          {items.map((it, i) => {
+            const missing = it.length < SLOT_LIMITS.list.item.min;
+            const overflow = it.length > SLOT_LIMITS.list.item.max;
+            const bad = missing || overflow;
+            return (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  value={it}
+                  onChange={(e) => {
+                    const next = [...items];
+                    next[i] = e.target.value;
+                    onChange('items', next);
+                  }}
+                  className={cn('flex-1 rounded border bg-card px-2 py-1', bad ? 'border-destructive' : 'border-input')}
+                />
+                <span className={cn(bad ? 'text-destructive' : 'text-muted-foreground')}>
+                  {missing ? '必填' : `${it.length}/${SLOT_LIMITS.list.item.max}`}
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={items.length <= SLOT_LIMITS.list.minItems}
+                  onClick={() => onChange('items', items.filter((_, j) => j !== i))}
+                >
+                  删除
+                </Button>
+              </div>
+            );
+          })}
+          <Button
+            size="sm"
+            variant="outline"
+            className="self-start"
+            disabled={items.length >= SLOT_LIMITS.list.maxItems}
+            onClick={() => onChange('items', [...items, ''])}
+          >
+            加一条
+          </Button>
+        </div>
+      </>
+    );
+  }
+
+  if (card === 'ring' || card === 'odometer') {
+    const limits = SLOT_LIMITS[card];
+    return (
+      <>
+        <TextField field="label" label="label" min={limits.label.min} max={limits.label.max} value={str('label')} onChange={onChange} />
+        <label className="flex flex-col gap-1 text-xs">
+          value（裸数字{card === 'odometer' ? '，整数' : ''}）
+          <input
+            type="number"
+            step={card === 'odometer' ? 1 : undefined}
+            value={num('value')}
+            onChange={(e) => {
+              const v = e.target.valueAsNumber;
+              const n = Number.isNaN(v) ? 0 : v;
+              onChange('value', card === 'odometer' ? Math.round(n) : n);
+            }}
+            className="rounded border border-input bg-card px-2 py-1"
+          />
+        </label>
+        {card === 'ring' ? (
+          <label className="flex flex-col gap-1 text-xs">
+            max（分母）
+            <input
+              type="number"
+              value={typeof slots.max === 'number' ? slots.max : 100}
+              onChange={(e) => {
+                const v = e.target.valueAsNumber;
+                onChange('max', Number.isNaN(v) ? 100 : v);
+              }}
+              className="rounded border border-input bg-card px-2 py-1"
+            />
+          </label>
+        ) : null}
+        <TextField field="unit" label="unit" min={limits.unit.min} max={limits.unit.max} value={str('unit')} optional onChange={onChange} />
+        <TextField field="note" label="note" min={limits.note.min} max={limits.note.max} value={str('note')} optional onChange={onChange} />
+      </>
+    );
+  }
+
+  if (card === 'curve') {
+    const points = Array.isArray(slots.points) ? (slots.points as { at: string; value: number }[]) : [];
+    return (
+      <>
+        <TextField field="label" label="label" min={SLOT_LIMITS.curve.label.min} max={SLOT_LIMITS.curve.label.max} value={str('label')} onChange={onChange} />
+        <div className="flex flex-col gap-1 text-xs sm:col-span-2">
+          {`时间点（${SLOT_LIMITS.curve.minPoints}~${SLOT_LIMITS.curve.maxPoints} 个）`}
+          {points.map((p, i) => {
+            const at = typeof p?.at === 'string' ? p.at : '';
+            const missing = at.length < SLOT_LIMITS.curve.at.min;
+            const overflow = at.length > SLOT_LIMITS.curve.at.max;
+            const bad = missing || overflow;
+            return (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  value={at}
+                  placeholder="时间标签"
+                  onChange={(e) => {
+                    const next = [...points];
+                    next[i] = { ...next[i], at: e.target.value };
+                    onChange('points', next);
+                  }}
+                  className={cn('w-24 rounded border bg-card px-2 py-1', bad ? 'border-destructive' : 'border-input')}
+                />
+                <input
+                  type="number"
+                  value={typeof p?.value === 'number' ? p.value : 0}
+                  placeholder="数值"
+                  onChange={(e) => {
+                    const v = e.target.valueAsNumber;
+                    const next = [...points];
+                    next[i] = { ...next[i], value: Number.isNaN(v) ? 0 : v };
+                    onChange('points', next);
+                  }}
+                  className="w-20 rounded border border-input bg-card px-2 py-1"
+                />
+                <span className={cn(bad ? 'text-destructive' : 'text-muted-foreground')}>
+                  {missing ? '必填' : `${at.length}/${SLOT_LIMITS.curve.at.max}`}
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={points.length <= SLOT_LIMITS.curve.minPoints}
+                  onClick={() => onChange('points', points.filter((_, j) => j !== i))}
+                >
+                  删除
+                </Button>
+              </div>
+            );
+          })}
+          <Button
+            size="sm"
+            variant="outline"
+            className="self-start"
+            disabled={points.length >= SLOT_LIMITS.curve.maxPoints}
+            onClick={() => onChange('points', [...points, { at: '', value: 0 }])}
+          >
+            加一个点
+          </Button>
+        </div>
+        <TextField field="unit" label="unit" min={SLOT_LIMITS.curve.unit.min} max={SLOT_LIMITS.curve.unit.max} value={str('unit')} optional onChange={onChange} />
+        <TextField field="note" label="note" min={SLOT_LIMITS.curve.note.min} max={SLOT_LIMITS.curve.note.max} value={str('note')} optional onChange={onChange} />
+      </>
+    );
+  }
+
+  if (card === 'rank') {
+    const rows = Array.isArray(slots.rows) ? (slots.rows as { name: string; value: number }[]) : [];
+    return (
+      <>
+        <TextField field="title" label="title" min={SLOT_LIMITS.rank.title.min} max={SLOT_LIMITS.rank.title.max} value={str('title')} onChange={onChange} />
+        <div className="flex flex-col gap-1 text-xs sm:col-span-2">
+          {`项目（${SLOT_LIMITS.rank.minRows}~${SLOT_LIMITS.rank.maxRows} 项）`}
+          {rows.map((r, i) => {
+            const name = typeof r?.name === 'string' ? r.name : '';
+            const missing = name.length < SLOT_LIMITS.rank.name.min;
+            const overflow = name.length > SLOT_LIMITS.rank.name.max;
+            const bad = missing || overflow;
+            return (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  value={name}
+                  placeholder="名称"
+                  onChange={(e) => {
+                    const next = [...rows];
+                    next[i] = { ...next[i], name: e.target.value };
+                    onChange('rows', next);
+                  }}
+                  className={cn('flex-1 rounded border bg-card px-2 py-1', bad ? 'border-destructive' : 'border-input')}
+                />
+                <input
+                  type="number"
+                  value={typeof r?.value === 'number' ? r.value : 0}
+                  placeholder="数值"
+                  onChange={(e) => {
+                    const v = e.target.valueAsNumber;
+                    const next = [...rows];
+                    next[i] = { ...next[i], value: Number.isNaN(v) ? 0 : v };
+                    onChange('rows', next);
+                  }}
+                  className="w-20 rounded border border-input bg-card px-2 py-1"
+                />
+                <span className={cn(bad ? 'text-destructive' : 'text-muted-foreground')}>
+                  {missing ? '必填' : `${name.length}/${SLOT_LIMITS.rank.name.max}`}
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={rows.length <= SLOT_LIMITS.rank.minRows}
+                  onClick={() => onChange('rows', rows.filter((_, j) => j !== i))}
+                >
+                  删除
+                </Button>
+              </div>
+            );
+          })}
+          <Button
+            size="sm"
+            variant="outline"
+            className="self-start"
+            disabled={rows.length >= SLOT_LIMITS.rank.maxRows}
+            onClick={() => onChange('rows', [...rows, { name: '', value: 0 }])}
+          >
+            加一项
+          </Button>
+        </div>
+        <TextField field="suffix" label="suffix" min={SLOT_LIMITS.rank.suffix.min} max={SLOT_LIMITS.rank.suffix.max} value={str('suffix')} optional onChange={onChange} />
+      </>
+    );
+  }
+
+  if (card === 'entity') {
+    const chips = Array.isArray(slots.chips) ? (slots.chips as { name: string; sub?: string; tone: 'light' | 'dark' }[]) : [];
+    return (
+      <>
+        <div className="flex flex-col gap-1 text-xs sm:col-span-2">
+          {`铭牌（${SLOT_LIMITS.entity.minChips}~${SLOT_LIMITS.entity.maxChips} 块）`}
+          {chips.map((c, i) => {
+            const name = typeof c?.name === 'string' ? c.name : '';
+            const sub = typeof c?.sub === 'string' ? c.sub : '';
+            const tone = c?.tone === 'dark' ? 'dark' : 'light';
+            const missing = name.length < SLOT_LIMITS.entity.name.min;
+            const overflow = name.length > SLOT_LIMITS.entity.name.max;
+            const bad = missing || overflow;
+            return (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  value={name}
+                  placeholder="name"
+                  onChange={(e) => {
+                    const next = [...chips];
+                    next[i] = { ...next[i], name: e.target.value };
+                    onChange('chips', next);
+                  }}
+                  className={cn('w-28 rounded border bg-card px-2 py-1', bad ? 'border-destructive' : 'border-input')}
+                />
+                <input
+                  value={sub}
+                  placeholder="sub（可选）"
+                  onChange={(e) => {
+                    const next = [...chips];
+                    next[i] = { ...next[i], sub: e.target.value };
+                    onChange('chips', next);
+                  }}
+                  className="w-28 rounded border border-input bg-card px-2 py-1"
+                />
+                <select
+                  value={tone}
+                  onChange={(e) => {
+                    const next = [...chips];
+                    next[i] = { ...next[i], tone: e.target.value as 'light' | 'dark' };
+                    onChange('chips', next);
+                  }}
+                  className="rounded border border-input bg-card px-2 py-1"
+                >
+                  <option value="light">浅</option>
+                  <option value="dark">深</option>
+                </select>
+                <span className={cn(bad ? 'text-destructive' : 'text-muted-foreground')}>
+                  {missing ? '必填' : `${name.length}/${SLOT_LIMITS.entity.name.max}`}
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={chips.length <= SLOT_LIMITS.entity.minChips}
+                  onClick={() => onChange('chips', chips.filter((_, j) => j !== i))}
+                >
+                  删除
+                </Button>
+              </div>
+            );
+          })}
+          <Button
+            size="sm"
+            variant="outline"
+            className="self-start"
+            disabled={chips.length >= SLOT_LIMITS.entity.maxChips}
+            onClick={() => onChange('chips', [...chips, { name: '', sub: '', tone: 'light' }])}
+          >
+            加一块
+          </Button>
+        </div>
+        <TextField field="note" label="note" min={SLOT_LIMITS.entity.note.min} max={SLOT_LIMITS.entity.note.max} value={str('note')} optional onChange={onChange} />
+      </>
+    );
+  }
+
+  // 卡片编辑器的兜底——曾经是裸的 `// list` 注释, 任何不认识的卡型都会静默
+  // 渲染成 list 的编辑器(用户点开 ring, 看到的是 title+条目输入框, 一编辑就把
+  // title/items 写进 ring 的槽位, 编译器一声不吭)。改成显式的 `never` 检查后,
+  // 下次再加卡忘了在这里补分支, 是编译期报错, 不是运行时静默写坏数据。
+  const _exhaustive: never = card;
+  throw new Error(`卡片编辑器漏了: ${String(_exhaustive)}`);
 }
