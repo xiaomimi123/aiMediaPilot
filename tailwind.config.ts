@@ -63,7 +63,10 @@ const config: Config = {
 
         // ── ② 设计令牌直通层(不支持 /alpha) ──
         canvas: 'var(--bg-canvas)',
-        base: 'var(--bg-base)',
+        /* --bg-base 不能叫 `base`: 会注册出 text-base 这个**颜色**工具类, 覆盖
+           Tailwind 内置的 text-base(字号 1rem) —— 实测全库标题变成黑字黑底。
+           按它的用途(侧栏/右侧面板底)叫 shell。 */
+        shell: 'var(--bg-base)',
         surface: { DEFAULT: 'var(--bg-surface)', hover: 'var(--bg-surface-hover)' },
         elevated: 'var(--bg-elevated)',
         inset: 'var(--bg-inset)',

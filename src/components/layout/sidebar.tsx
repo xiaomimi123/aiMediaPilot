@@ -89,7 +89,7 @@ export function Sidebar() {
   }, []);
 
   return (
-    <aside className="sticky top-0 flex h-screen w-sidebar shrink-0 flex-col overflow-y-auto border-r border-line-subtle bg-base px-3 pb-3 pt-4">
+    <aside className="sticky top-0 flex h-screen w-sidebar shrink-0 flex-col overflow-y-auto border-r border-line-subtle bg-shell px-3 pb-3 pt-4">
       <Link href="/" className="flex items-center gap-2 px-2 pb-4">
         <span aria-hidden className="h-5 w-5 shrink-0 rounded-md bg-brand" />
         <span className="text-sm font-semibold text-fg">{APP_NAME}</span>
