@@ -1,78 +1,73 @@
+@import './tokens.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /*
- * 视觉语言: 编辑部纸感。
+ * 视觉语言: Linear 风高密度深色(三十四期 UI 重做, 设计交付见
+ * docs/superpowers/specs/2026-09-08-ui-dark-handoff/)。
  *
- * 为什么是这套: 这个工具的主活儿是**写稿**, 界面该像一张摊开的稿纸, 不像一块
- * 仪表盘。所以底色是暖纸白而不是纯白(纯白在长时间盯屏时偏刺), 标题走衬线,
- * 正文走无衬线 —— 标题是"版面", 正文是"读的东西", 两者分工在纸媒上沿用了几百年。
+ * 令牌真源是 tokens.css(与 Figma 变量集合一一对应)。这里做两件事:
+ * ① 把令牌**桥接**到 shadcn 语义变量(--background/--card/--border 那套 HSL 三元组)
+ *    —— 47 个既有组件全走这套变量, 桥一次, 全体换肤, 不逐个重写组件;
+ * ② 承接旧纸感里仍然成立的原则: 红色只表示"这里有问题"(--danger 语义固定),
+ *    数字一律等宽对齐。
  *
- * 强调色只有一个: 墨黑。红色是**扣分色**, 不当装饰用 —— 界面上出现红色只意味着
- * 一件事: 这里有问题。留着它的稀缺性, 它才有提示力。
- *
- * 字体不引外部依赖(next/font/google 的 CJK 子集化很差, 且要联网构建), 直接用
- * 系统里的思源宋体/宋体。本机是 macOS, 这几个字体一定在。
+ * 为什么桥接层是 HSL 三元组而不是直接引用 tokens.css 的 hex:
+ * 既有组件大量使用透明度修饰(bg-secondary/70、border-foreground/10),
+ * Tailwind 的 /alpha 只对 `hsl(var(--x))` 形式生效 —— hex var 会让这些修饰
+ * 静默失效(不报错, 只是渲染成不透明), 排查起来极费劲。
+ * 数值是从 tokens.css 的 hex 换算来的, 改令牌时两处要一起改(tokens.css 是真源)。
  */
 
 @layer base {
   :root {
-    /* 暖纸白 —— 不是纯白 */
-    --background: 43 41% 97%;
-    --foreground: 36 10% 10%;
-    /* 抬起来的面(卡片、输入框)比纸底更白一点, 靠明度差分层, 不靠阴影 */
-    --card: 40 60% 99%;
-    --card-foreground: 36 10% 10%;
-    /* 墨黑 */
-    --primary: 36 12% 12%;
-    --primary-foreground: 43 41% 97%;
-    /* 米色底 —— 选中态、标签、次级按钮 */
-    --secondary: 42 30% 92%;
-    --secondary-foreground: 36 12% 12%;
-    --muted: 42 28% 93%;
-    --muted-foreground: 38 8% 42%;
-    --accent: 42 35% 89%;
-    --accent-foreground: 36 12% 12%;
-    /* 扣分色。比标准红更闷一点, 印在纸上的那种红 */
-    --destructive: 4 62% 45%;
-    --destructive-foreground: 43 41% 97%;
-    --border: 40 20% 85%;
-    --input: 40 20% 82%;
-    --ring: 36 12% 12%;
-    --radius: 0.375rem;
-  }
+    /* --bg-canvas #08090A */
+    --background: 210 11% 4%;
+    /* --text-primary #F2F3F5 */
+    --foreground: 220 12% 95%;
+    /* --bg-surface #16171A */
+    --card: 225 8% 9%;
+    --card-foreground: 220 12% 95%;
+    /* 主操作 = 靛蓝 --accent #5E6AD2。README 明确: accent 只用于主操作与"当前位置" */
+    --primary: 234 56% 60%;
+    --primary-foreground: 0 0% 100%;
+    /* 次级按钮底 --bg-elevated #1E1F24 */
+    --secondary: 230 9% 13%;
+    --secondary-foreground: 220 12% 95%;
+    /* --bg-surface-hover #1C1D21; muted 文字 = --text-secondary #9195A0 */
+    --muted: 228 8% 12%;
+    --muted-foreground: 224 7% 60%;
+    /* shadcn 的 "accent"(hover/选中底)与 tokens.css 的 --accent(靛蓝 hex)撞名 ——
+       同名变量后加载的赢, 曾把 var(--accent) 覆盖成裸 HSL 三元组, 让所有
+       bg-brand(靛蓝方块)静默消失。桥接层让名: 用 --ui-hover, tokens 保住 --accent。 */
+    --ui-hover: 228 8% 12%;
+    --ui-hover-foreground: 220 12% 95%;
+    /* --danger #E5484D。语义固定: 断链/失败/0 分, 不当装饰用 */
+    --destructive: 358 75% 59%;
+    --destructive-foreground: 0 0% 100%;
+    /* --border-subtle #1F2024; input 用 --border-default #292A2F */
+    --border: 228 7% 13%;
+    --input: 230 7% 17%;
+    --ring: 235 64% 66%;
+    /* 与 tokens 的圆角阶对齐: lg=8 md=6 sm=4 */
+    --radius: 8px;
 
-  .dark {
-    /* 暖夜: 底色带一点棕, 不是冷灰 */
-    --background: 36 8% 9%;
-    --foreground: 43 20% 92%;
-    --card: 36 8% 12%;
-    --card-foreground: 43 20% 92%;
-    --primary: 43 20% 92%;
-    --primary-foreground: 36 8% 9%;
-    --secondary: 36 7% 17%;
-    --secondary-foreground: 43 20% 92%;
-    --muted: 36 7% 16%;
-    --muted-foreground: 40 6% 60%;
-    --accent: 36 7% 20%;
-    --accent-foreground: 43 20% 92%;
-    --destructive: 4 58% 52%;
-    --destructive-foreground: 43 20% 92%;
-    --border: 36 7% 20%;
-    --input: 36 7% 24%;
-    --ring: 43 20% 80%;
+    /* 状态色(hex 真源在 tokens.css, 这里是 HSL 桥接, 供 /alpha 修饰用) */
+    --status-success: 152 49% 48%;
+    --status-warning: 34 87% 59%;
+    --status-danger: 358 75% 59%;
+    --status-info: 209 97% 65%;
+    --status-soft: 255 92% 76%;
   }
 
   /*
-   * 显示比例: root 18px(浏览器默认 16px, +13%)。
-   *
-   * 抬 root 而不是逐个改 text-xs —— Tailwind 的字号和间距都是 rem, 抬 root 会让
-   * 整套比例一起等比放大, 版面关系不变。逐个改字号会把间距留在原地, 越改越挤,
-   * 而且一定会漏。
+   * 显示比例: root 15px。设计稿正文 13px/20px —— 15px root 下 text-sm 恰为
+   * 13.1px、text-xs 为 11.25px(= 设计稿 Caption 11px), 整套 rem 间距同步收紧,
+   * 得到 Linear 式的高密度。沿用旧版的手法: 抬/压 root 做等比缩放, 不逐个改字号。
    */
   html {
-    font-size: 18px;
+    font-size: 15px;
   }
 
   * {
@@ -81,34 +76,71 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-sans-latin), -apple-system, BlinkMacSystemFont, 'PingFang SC',
-      'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
-    /* 纸感来自这里: 极淡的斜向纹理, 近看几乎看不见, 只是让大片底色不那么"数字" */
-    background-image: repeating-linear-gradient(
-      45deg,
-      hsl(var(--foreground) / 0.012) 0px,
-      hsl(var(--foreground) / 0.012) 1px,
-      transparent 1px,
-      transparent 3px
-    );
+    font-family: var(--font);
+    font-size: 13px;
+    line-height: 20px;
     -webkit-font-smoothing: antialiased;
   }
 
   /*
-   * 标题走衬线。h1/h2 自动应用, 不需要每个页面记得加 class ——
-   * 靠人记得的规则一定会漂移。
+   * 标题不再走衬线(纸感退役)。h1-h3 收紧字距 —— 设计稿的 Display/Title 系列
+   * 都带负字距, 深色高密度界面里宽字距的中文标题会显得松。
    */
-  h1,
-  h2,
-  h3,
+  h1, h2, h3 {
+    letter-spacing: -0.01em;
+  }
+
+  /* 旧纸感的衬线类。8 个文件还在引用, 先降级为无衬线的加重, 三期扫尾时逐个摘除。 */
   .font-serif-cn {
-    font-family: var(--font-serif-cn), 'Source Han Serif SC', 'Noto Serif CJK SC',
-      'Songti SC', 'STSong', Georgia, serif;
-    font-feature-settings: 'kern' 1;
+    font-family: var(--font);
+    font-weight: 600;
   }
 
   /* 数字一律等宽 —— 分数、时长、字数在这个工具里到处都是, 跳动会很扰 */
   .tabular-nums {
     font-variant-numeric: tabular-nums;
+  }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-default);
+    border-radius: 6px;
+    border: 3px solid var(--bg-canvas);
+  }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  :focus-visible {
+    outline: 2px solid var(--accent-hover);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+}
+
+@layer components {
+  /*
+   * 设计稿原语里用得最密的两个, 做成类以便服务端组件直接用
+   * (状态徽章与分组标签在 14 个页面里到处都是, 每处写一串 utility 会漂移)。
+   */
+  .t-label {
+    font-size: 11px;
+    line-height: 16px;
+    font-weight: 500;
+    letter-spacing: 0.4px;
+    color: var(--text-tertiary);
+  }
+
+  .badge-base {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 7px;
+    border-radius: 5px;
+    font-size: 11px;
+    line-height: 16px;
+    white-space: nowrap;
   }
 }

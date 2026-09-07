@@ -1,0 +1,979 @@
+<title>MediaPilot 设计系统</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg-canvas:#08090A; --bg-base:#0F1011; --bg-surface:#16171A; --bg-surface-hover:#1C1D21;
+  --bg-elevated:#1E1F24; --bg-inset:#0B0C0E;
+  --border-subtle:#1F2024; --border-default:#292A2F; --border-strong:#3A3B41;
+  --text-primary:#F2F3F5; --text-secondary:#9195A0; --text-tertiary:#62656E; --text-disabled:#4A4C54; --text-on-accent:#FFFFFF;
+  --accent:#5E6AD2; --accent-hover:#7079E0; --accent-subtle:#21243D; --accent-border:#3A3F72;
+  --success:#3FB77E; --success-subtle:#0F2A20;
+  --warning:#F2A33C; --warning-subtle:#2E2113;
+  --danger:#E5484D; --danger-subtle:#2E1618;
+  --info:#4EA7FC; --info-subtle:#10243A;
+  --soft:#A78BFA; --soft-subtle:#221A3A;
+  --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:20px;--s6:24px;--s7:32px;--s8:40px;--s9:48px;
+  --r-sm:4px;--r-md:6px;--r-lg:8px;--r-xl:12px;--r-full:999px;
+  --font:-apple-system,BlinkMacSystemFont,"Inter","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif;
+  --mono:"JetBrains Mono","SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  --sidebar-w:224px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg-canvas);color:var(--text-primary);font-family:var(--font);font-size:13px;line-height:20px;-webkit-font-smoothing:antialiased}
+button{font:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent-hover);outline-offset:2px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--border-default);border-radius:6px;border:3px solid var(--bg-canvas)}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ---------- typography ---------- */
+.t-display{font-size:28px;line-height:36px;font-weight:700;letter-spacing:-.3px}
+.t-h1{font-size:20px;line-height:28px;font-weight:700;letter-spacing:-.2px}
+.t-h2{font-size:16px;line-height:24px;font-weight:600;letter-spacing:-.1px}
+.t-h3{font-size:14px;line-height:20px;font-weight:600}
+.t-body{font-size:13px;line-height:20px}
+.t-bodym{font-size:13px;line-height:20px;font-weight:500}
+.t-sm{font-size:12px;line-height:18px}
+.t-smm{font-size:12px;line-height:18px;font-weight:500}
+.t-cap{font-size:11px;line-height:16px}
+.t-label{font-size:11px;line-height:16px;font-weight:500;letter-spacing:.4px;color:var(--text-tertiary)}
+.mono{font-family:var(--mono)}
+.m-xl{font-family:var(--mono);font-size:28px;line-height:34px;font-weight:500;letter-spacing:-.5px}
+.m-lg{font-family:var(--mono);font-size:20px;line-height:26px;font-weight:500;letter-spacing:-.3px}
+.m-sm{font-family:var(--mono);font-size:13px;line-height:18px;font-weight:500}
+.m-xs{font-family:var(--mono);font-size:12px;line-height:18px}
+.c-2{color:var(--text-secondary)}.c-3{color:var(--text-tertiary)}.c-4{color:var(--text-disabled)}
+.c-ok{color:var(--success)}.c-warn{color:var(--warning)}.c-bad{color:var(--danger)}
+.c-acc{color:var(--accent-hover)}.c-info{color:var(--info)}.c-soft{color:var(--soft)}
+
+/* ---------- layout ---------- */
+.app{display:flex;min-height:100vh}
+.sidebar{width:var(--sidebar-w);flex:0 0 var(--sidebar-w);background:var(--bg-base);border-right:1px solid var(--border-subtle);
+  padding:16px 12px 12px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.brand{display:flex;align-items:center;gap:8px;padding:4px 8px 16px}
+.brand .mark{width:20px;height:20px;border-radius:6px;background:var(--accent);flex:0 0 20px}
+.navgroup{padding:14px 8px 4px}
+.nav{display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:var(--r-md);color:var(--text-secondary);
+  font-size:13px;font-weight:500;text-decoration:none;cursor:pointer;border:0;background:none;width:100%;text-align:left;transition:background .12s}
+.nav:hover{background:var(--bg-surface)}
+.nav .ico{width:14px;height:14px;border-radius:4px;background:var(--border-strong);flex:0 0 14px}
+.nav.active{background:var(--bg-surface-hover);color:var(--text-primary)}
+.nav.active .ico{background:var(--accent)}
+.nav .dot{width:5px;height:5px;border-radius:50%;background:var(--warning);margin-left:auto;flex:0 0 5px}
+.nav .label{flex:1}
+.worker-status{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r-lg);
+  background:var(--danger-subtle);border:1px solid var(--danger);color:var(--danger);font-size:11px;margin-bottom:6px}
+.worker-status i{width:6px;height:6px;border-radius:50%;background:var(--danger);display:block}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;gap:10px;padding:13px 24px;border-bottom:1px solid var(--border-subtle);position:sticky;top:0;background:var(--bg-canvas);z-index:5}
+.topbar .tt{flex:1;min-width:0}
+.body{padding:18px 24px 32px;display:flex;flex-direction:column;gap:16px}
+.row{display:flex;gap:12px}
+.row.g16{gap:16px}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.grow{flex:1;min-width:0}
+.spacer{flex:1}
+
+/* ---------- primitives ---------- */
+.card{background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:var(--r-lg);padding:16px 18px}
+.card.flush{padding:0}
+.card-head{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--border-subtle)}
+.card.flush .list-row{padding:12px 18px;border-top:1px solid var(--border-subtle)}
+.card.flush .list-row:first-of-type{border-top:0}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:var(--r-md);border:1px solid transparent;
+  font-size:12px;font-weight:500;white-space:nowrap;transition:all .12s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent-hover)}
+.btn-secondary{background:var(--bg-elevated);border-color:var(--border-strong);color:var(--text-primary)}
+.btn-secondary:hover{background:var(--bg-surface-hover)}
+.btn-ghost{background:none;color:var(--text-secondary)}
+.btn-ghost:hover{color:var(--text-primary);background:var(--bg-surface)}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-md{padding:7px 12px;font-size:13px}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:5px;font-size:11px;line-height:16px;white-space:nowrap;
+  background:var(--bg-elevated);color:var(--text-secondary)}
+.badge.ok{background:var(--success-subtle);color:var(--success)}
+.badge.warn{background:var(--warning-subtle);color:var(--warning)}
+.badge.bad{background:var(--danger-subtle);color:var(--danger)}
+.badge.info{background:var(--info-subtle);color:var(--info)}
+.badge.soft{background:var(--soft-subtle);color:var(--soft)}
+.badge.acc{background:var(--accent-subtle);color:var(--accent-hover)}
+.banner{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:var(--r-lg);font-size:13px;font-weight:500}
+.banner i{width:7px;height:7px;border-radius:50%;flex:0 0 7px;display:block}
+.banner .txt{flex:1}
+.banner.bad{background:var(--danger-subtle);border:1px solid var(--danger);color:var(--danger)}
+.banner.bad i{background:var(--danger)}
+.banner.warn{background:var(--warning-subtle);border:1px solid var(--warning);color:var(--warning)}
+.banner.warn i{background:var(--warning)}
+.banner.info{background:var(--info-subtle);border:1px solid var(--info);color:var(--info)}
+.banner.info i{background:var(--info)}
+.tabs{display:inline-flex;gap:2px;padding:3px;background:var(--bg-inset);border-radius:var(--r-lg)}
+.tab{padding:5px 11px;border-radius:var(--r-md);font-size:12px;font-weight:500;color:var(--text-tertiary);border:0;background:none}
+.tab.on{background:var(--bg-elevated);color:var(--text-primary)}
+.search{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg-inset);border:1px solid var(--border-default);
+  border-radius:var(--r-md);color:var(--text-tertiary);font-size:13px}
+.search i{width:11px;height:11px;border-radius:50%;border:1.5px solid var(--border-strong);display:block;flex:0 0 11px}
+.select{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg-elevated);border:1px solid var(--border-default);
+  border-radius:var(--r-md);color:var(--text-secondary);font-size:12px;font-weight:500}
+.select::after{content:"";width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:4px solid var(--border-strong)}
+.metric{background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:var(--r-lg);padding:14px 16px;flex:1;min-width:0}
+.metric .lab{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary)}
+.metric .lab>span:first-child{flex:1}
+.metric .sub{font-size:11px;color:var(--text-tertiary);margin-top:2px}
+.track{height:4px;background:var(--bg-elevated);border-radius:2px;overflow:hidden}
+.track>i{display:block;height:100%;border-radius:2px;background:var(--accent)}
+.track>i.ok{background:var(--success)} .track>i.warn{background:var(--warning)} .track>i.bad{background:var(--danger)}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11px;font-weight:500;letter-spacing:.4px;color:var(--text-tertiary);padding:10px 12px;background:var(--bg-inset);border-bottom:1px solid var(--border-subtle)}
+th:first-child,td:first-child{padding-left:18px} th:last-child,td:last-child{padding-right:18px}
+td{padding:11px 12px;border-top:1px solid var(--border-subtle);font-size:13px;vertical-align:middle}
+tbody tr:hover{background:var(--bg-surface-hover)}
+.ell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+td.ell{max-width:1px}
+.empty{border:1px dashed var(--border-default);border-radius:var(--r-lg);padding:20px;text-align:center;color:var(--text-tertiary);font-size:12px}
+.kv{background:var(--bg-inset);border:1px solid var(--border-subtle);border-radius:var(--r-lg);padding:10px 12px;flex:1;min-width:0}
+.pipe{display:flex;align-items:center}
+.pipe .step{flex:1;text-align:center;padding:12px 14px;border-radius:var(--r-lg);background:var(--bg-elevated);border:1px solid var(--border-default)}
+.pipe .step.skip{background:var(--warning-subtle);border-color:var(--warning)}
+.pipe .step.brk{background:var(--danger-subtle);border-color:var(--danger)}
+.pipe .step.dead{background:var(--bg-inset);border-color:var(--border-subtle);color:var(--text-disabled)}
+.pipe .arr{width:56px;text-align:center;font-size:11px;color:var(--text-tertiary)}
+.pipe .arr .ln{height:2px;background:var(--border-strong);margin:0 8px 3px}
+.pipe .arr.brk .ln{background:var(--danger)} .pipe .arr.brk{color:var(--danger)}
+.pipe .arr.skip .ln{background:var(--warning)} .pipe .arr.skip{color:var(--warning)}
+.field{display:flex;flex-direction:column;gap:6px}
+.field .fh{display:flex;align-items:center;gap:8px}
+.field .fh .hint{flex:1;font-size:11px;color:var(--text-disabled)}
+.box{background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:var(--r-lg);padding:10px 12px;font-size:13px}
+.box.dash{border-style:dashed;color:var(--text-tertiary)}
+.box.hero{background:var(--bg-inset);border-color:var(--accent-border);font-size:14px;line-height:24px;font-weight:500}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.scene{background:var(--bg-surface);border:1px solid var(--accent-border);border-radius:var(--r-xl);padding:16px 18px 18px;display:flex;flex-direction:column;gap:14px}
+.idx{padding:2px 6px;border-radius:4px;background:var(--accent);color:#fff;font-size:11px}
+.idx.off{background:var(--bg-elevated);color:var(--text-tertiary)}
+.bars{display:flex;align-items:flex-end;gap:8px;height:150px}
+.bars .b{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;justify-content:flex-end;height:100%}
+.bars .b i{display:block;width:100%;border-radius:4px;background:var(--bg-elevated)}
+.bars .b i.hi{background:var(--accent)} .bars .b i.mid{background:var(--accent-border)}
+.note{font-size:12px;line-height:18px;color:var(--text-tertiary)}
+.rail{width:236px;flex:0 0 236px;border-right:1px solid var(--border-subtle);padding:18px;display:flex;flex-direction:column;gap:12px}
+.panel{width:340px;flex:0 0 340px;border-left:1px solid var(--border-subtle);background:var(--bg-base);padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+.split{display:flex;flex:1;min-height:0}
+.swatch{border-radius:var(--r-md);height:44px;border:1px solid var(--border-default)}
+.gridauto{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.stage{display:flex;align-items:center;gap:0;flex-wrap:wrap}
+.stage .s{padding:5px 10px;border-radius:var(--r-md);font-size:11px;background:var(--bg-elevated);color:var(--text-tertiary)}
+.stage .s.done{background:var(--success-subtle);color:var(--success)}
+.stage .s.now{background:var(--warning-subtle);color:var(--warning);font-weight:500}
+.stage .sep{width:16px;height:1px;background:var(--border-default);margin:0 4px}
+</style>
+<div class="app">
+<aside class="sidebar">
+  <div class="brand"><span class="mark"></span><span class="t-h3">MediaPilot</span></div>
+  <button class="nav active" data-go="overview"><span class="ico"></span><span class="label">总览</span></button>
+  <div class="navgroup t-label">工作区</div>
+  <button class="nav" data-go="topics"><span class="ico"></span><span class="label">选题</span><span class="dot"></span></button>
+  <button class="nav" data-go="write"><span class="ico"></span><span class="label">写稿</span></button>
+  <button class="nav" data-go="scripts"><span class="ico"></span><span class="label">稿库</span></button>
+  <button class="nav" data-go="materials"><span class="ico"></span><span class="label">素材库</span></button>
+  <div class="navgroup t-label">生产</div>
+  <button class="nav" data-go="templates"><span class="ico"></span><span class="label">模板</span></button>
+  <button class="nav" data-go="films"><span class="ico"></span><span class="label">成片</span><span class="dot"></span></button>
+  <div class="navgroup t-label">分析</div>
+  <button class="nav" data-go="teardowns"><span class="ico"></span><span class="label">拆解</span></button>
+  <button class="nav" data-go="hooks"><span class="ico"></span><span class="label">钩子库</span></button>
+  <button class="nav" data-go="calibration"><span class="ico"></span><span class="label">校准</span><span class="dot"></span></button>
+  <button class="nav" data-go="data"><span class="ico"></span><span class="label">数据</span></button>
+  <div class="spacer"></div>
+  <div class="worker-status"><i></i><span>出片 worker 未运行</span></div>
+  <button class="nav" data-go="settings"><span class="ico"></span><span class="label">设置</span></button>
+  <button class="nav" data-go="ds"><span class="ico"></span><span class="label">设计系统</span></button>
+</aside>
+
+<div class="main">
+
+<!-- ============ 总览 ============ -->
+<section class="page" id="p-overview">
+  <div class="topbar">
+    <div class="tt"><div class="t-h1">总览</div><div class="t-sm c-2">今天该做什么，以及哪条链路断了。</div></div>
+    <button class="btn btn-secondary btn-md">刷新数据</button>
+    <button class="btn btn-primary btn-md">启动出片 worker</button>
+  </div>
+  <div class="body">
+    <div class="banner bad"><i></i><span class="txt">链路断在「出片」——1 个任务积压，最早已等待 3 天。worker 没在跑，队列里的任务不会被消费。</span><button class="btn btn-secondary">去处理</button></div>
+    <div class="row">
+      <div class="metric"><div class="lab"><span>稿子总数</span></div><div class="m-xl">36</div><div class="sub">其中 14 份是六幕结构、能打分</div></div>
+      <div class="metric"><div class="lab"><span>平均硬指标</span><span class="badge warn">待处理</span></div><div class="m-xl">17/35</div><div class="sub">按能打分的 14 份算</div></div>
+      <div class="metric"><div class="lab"><span>雷达待处理</span><span class="badge warn">堆积</span></div><div class="m-xl">175</div><div class="sub">已采纳 0 条</div></div>
+      <div class="metric"><div class="lab"><span>出片积压</span><span class="badge bad">断</span></div><div class="m-xl">1</div><div class="sub">成功出片 0 次</div></div>
+    </div>
+    <div class="row g16">
+      <div class="col grow">
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><div class="t-h2" style="flex:1">内容管线</div><span class="badge bad">断在 出片 → 发布</span></div>
+          <div class="pipe">
+            <div class="step"><div class="m-lg">175</div><div class="t-cap c-2">雷达抓取</div></div>
+            <div class="arr skip"><div class="ln"></div>绕过</div>
+            <div class="step skip"><div class="m-lg c-warn">0</div><div class="t-cap c-warn">采纳选题</div></div>
+            <div class="arr"><div class="ln"></div></div>
+            <div class="step"><div class="m-lg">14</div><div class="t-cap c-2">成稿</div></div>
+            <div class="arr brk"><div class="ln"></div>断点</div>
+            <div class="step brk"><div class="m-lg c-bad">0</div><div class="t-cap c-bad">出片</div></div>
+            <div class="arr"><div class="ln"></div></div>
+            <div class="step dead"><div class="m-lg c-4">0</div><div class="t-cap c-4">发布</div></div>
+          </div>
+          <div class="note" style="margin-top:14px">采纳选题一环被绕过（稿子没走选题池），出片积压 1 条。整条链路的产出目前是 0。</div>
+        </div>
+
+        <div class="card flush">
+          <div class="card-head"><div class="t-h2" style="flex:1">今日待办</div><span class="badge warn">3 项</span></div>
+          <div class="list-row" style="display:flex;align-items:center;gap:12px"><i style="width:6px;height:6px;border-radius:50%;background:var(--danger)"></i>
+            <div style="flex:1"><div class="t-bodym">启动出片 worker</div><div class="t-sm c-3">1 个任务积压，最早已等待 3 天</div></div>
+            <button class="btn btn-secondary">去启动</button></div>
+          <div class="list-row" style="display:flex;align-items:center;gap:12px"><i style="width:6px;height:6px;border-radius:50%;background:var(--warning)"></i>
+            <div style="flex:1"><div class="t-bodym">13 份稿子有超时的幕</div><div class="t-sm c-3">某一幕的字数撑爆了它在结构里该占的时长</div></div>
+            <button class="btn btn-secondary">去修</button></div>
+          <div class="list-row" style="display:flex;align-items:center;gap:12px"><i style="width:6px;height:6px;border-radius:50%;background:var(--warning)"></i>
+            <div style="flex:1"><div class="t-bodym">雷达堆积 175 条</div><div class="t-sm c-3">采集速度超过消化速度，建议减关键词或提高门槛</div></div>
+            <button class="btn btn-secondary">去调</button></div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><div class="t-h2" style="flex:1">三层反馈回路</div><span class="badge warn">1 / 3 运行中</span></div>
+          <div class="row">
+            <div class="kv" style="border-color:var(--success)">
+              <div style="display:flex;align-items:center;gap:6px"><div class="t-bodym" style="flex:1">快回路</div><span class="badge ok">运行中</span></div>
+              <div class="m-xs c-3" style="margin:4px 0 6px">秒级</div>
+              <div class="note">写稿时的时长偏差、幕结构、简洁度实时校验，改一个字分数就动。</div></div>
+            <div class="kv">
+              <div style="display:flex;align-items:center;gap:6px"><div class="t-bodym" style="flex:1">中回路</div><span class="badge warn">等待中</span></div>
+              <div class="m-xs c-3" style="margin:4px 0 6px">48 小时</div>
+              <div class="note">发布后回采完播与互动，更新钩子和选题类型的真实表现。等发布第一条。</div></div>
+            <div class="kv">
+              <div style="display:flex;align-items:center;gap:6px"><div class="t-bodym c-2" style="flex:1">慢回路</div><span class="badge">等待中</span></div>
+              <div class="m-xs c-3" style="margin:4px 0 6px">月级</div>
+              <div class="note">攒够 30 条对照后重拟合评分权重。等中回路——它还没开始转。</div></div>
+          </div>
+          <div class="note" style="margin-top:12px">三层是串联的，不打通前一层，后面的永远是死的。</div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><div class="t-h2" style="flex:1">评分走势</div><div class="t-sm c-3">最近 12 份 · 硬指标 · 均分 18/35 · 最高 27/35</div></div>
+          <div class="bars" id="scoreBars"></div>
+        </div>
+      </div>
+
+      <div class="col" style="width:360px;flex:0 0 360px">
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><div class="t-h2" style="flex:1">账号表现</div><span class="badge">无数据源</span></div>
+          <div class="col" style="gap:10px">
+            <div class="row" style="gap:10px">
+              <div class="kv"><div class="t-cap c-3">累计播放</div><div class="m-lg c-4">—</div></div>
+              <div class="kv"><div class="t-cap c-3">完播率</div><div class="m-lg c-4">—</div></div>
+            </div>
+            <div class="row" style="gap:10px">
+              <div class="kv"><div class="t-cap c-3">互动率</div><div class="m-lg c-4">—</div></div>
+              <div class="kv"><div class="t-cap c-3">净涨粉</div><div class="m-lg c-4">—</div></div>
+            </div>
+          </div>
+          <div class="note" style="margin-top:12px">这些指标来自发布后的回采。当前发布 0 条，所以还没有数据源。链路修通并发布第一条之后，这一区会自动填充，并用来校准评分模型。</div>
+        </div>
+        <div class="card flush">
+          <div class="card-head"><div class="t-h2" style="flex:1">出片队列</div><a class="t-smm c-acc" style="text-decoration:none" href="#" data-go="films">查看全部</a></div>
+          <div class="list-row"><div class="t-bodym ell" style="max-width:100%">DeepSeek涨价三倍(素材落库版)</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:6px"><span class="badge warn">分镜待确认</span><span class="m-xs c-3">ppt-narration · 09-04</span></div></div>
+          <div class="list-row"><div class="t-bodym ell" style="max-width:100%">我靠给别人装一个开源 agent，赚到了第一笔钱</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:6px"><span class="badge info">排队中</span><span class="m-xs c-3">talking-head-broll · 09-04</span></div></div>
+          <div class="list-row"><div class="t-bodym ell" style="max-width:100%">普通人最容易踩的AI变现陷阱</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:6px"><span class="badge warn">预览就绪</span><span class="m-xs c-3">ppt-narration · 09-04</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ============ 选题 ============ -->
+<section class="page" id="p-topics" hidden>
+  <div class="topbar"><div class="tt"><div class="t-h1">选题</div><div class="t-sm c-2">AI 为每条热点拟好的中文选题角度。挑一个开条。</div></div>
+    <button class="btn btn-secondary btn-md">配置雷达</button><button class="btn btn-primary btn-md">刷新雷达</button></div>
+  <div class="body">
+    <div class="banner warn"><i></i><span class="txt">雷达堆积 175 条，已采纳 0 条——采集速度超过消化速度。建议减关键词或提高门槛，否则这一池永远消化不完。</span><button class="btn btn-secondary">去调门槛</button></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="tabs"><button class="tab on">热点雷达 175</button><button class="tab">抖音热搜 30</button><button class="tab">灵感库 9</button></div>
+      <div class="spacer"></div><div class="select">来源：全部</div><div class="select">按时间</div>
+      <div class="search" style="width:220px"><i></i><span>搜索选题…</span></div>
+    </div>
+    <div id="topicGrid" class="col" style="gap:12px"></div>
+  </div>
+</section>
+
+<!-- ============ 写稿（新建） ============ -->
+<section class="page" id="p-write" hidden>
+  <div class="topbar"><div class="tt"><div class="t-h1">写稿</div><div class="t-sm c-2">挑个选题，选个起点粒度，剩下的你自己写。</div></div>
+    <button class="btn btn-secondary btn-md">从稿库继续</button></div>
+  <div class="body" style="max-width:900px">
+    <div class="card">
+      <div class="field"><div class="fh"><span class="t-label">选题</span><span class="hint">一句话说清这条视频要讲什么</span></div>
+        <div class="box hero" style="color:var(--text-primary)">普通人最容易踩的 AI 变现陷阱</div></div>
+      <div class="note" style="margin-top:10px">或者从灵感库挑一个：</div>
+      <div class="chips" style="margin-top:8px">
+        <span class="badge acc">分享创业干货</span><span class="badge acc">30岁了一事无成的人该做什么工作</span>
+        <span class="badge acc">如何用海外社区卖国内低价产品赚汇率差</span><span class="badge acc">我是如何靠AI代运营一个月赚2万的</span>
+        <span class="badge acc">DeepSeek 将 AI 模型价格上调三倍</span></div>
+    </div>
+    <div class="card">
+      <div class="t-h2" style="margin-bottom:4px">起点给到什么程度</div>
+      <div class="note" style="margin-bottom:14px">这一步决定了 AI 的表达会不会带偏你。三选一。</div>
+      <div class="row">
+        <div class="kv" style="border-color:var(--accent-border);background:var(--accent-subtle)">
+          <div style="display:flex;gap:8px;align-items:center"><div class="t-bodym" style="flex:1">只给骨架</div><span class="badge acc">推荐</span></div>
+          <div class="note" style="margin-top:6px">六幕各给一句「这一幕该干什么」+ 时长 + 需要什么材料，台词全空着等你写。最不容易把你带向 AI 的表达。</div></div>
+        <div class="kv"><div class="t-bodym">我自己写好了</div>
+          <div class="note" style="margin-top:6px">贴进来，AI 只把它切进六幕，一个字都不改。切完就能打分、看时长、出片。</div></div>
+        <div class="kv"><div class="t-bodym">写完整初稿</div>
+          <div class="note" style="margin-top:6px">台词写满，你在上面改。没思路时让 AI 开个头，比对着空白页干坐着强——但容易改几个词就交差。</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="t-h2" style="margin-bottom:12px">全片时长</div>
+      <div class="tabs"><button class="tab">30 秒</button><button class="tab">45 秒</button><button class="tab on">60 秒</button><button class="tab">90 秒</button></div>
+      <div class="note" style="margin-top:12px">时长决定六幕各自的时长预算，写超了会在编辑器里直接标红。</div>
+    </div>
+    <div style="display:flex;gap:10px"><button class="btn btn-primary btn-md">搭骨架</button><button class="btn btn-ghost btn-md">取消</button></div>
+  </div>
+</section>
+
+<!-- ============ 写稿编辑器 ============ -->
+<section class="page" id="p-editor" hidden>
+  <div class="topbar"><div class="tt"><div class="t-h1 ell">普通人最容易踩的AI变现陷阱</div>
+    <div class="t-sm c-2">douyin · 目标 90 秒 · 实际 53.0 秒 · 改动自动保存</div></div>
+    <button class="btn btn-secondary btn-md">提词器</button><button class="btn btn-ghost btn-md">回稿库</button><button class="btn btn-primary btn-md">出片</button></div>
+  <div class="split">
+    <div class="rail">
+      <div style="display:flex;align-items:center;gap:8px"><div class="t-h3" style="flex:1">时长分配</div><span class="m-sm c-warn">53.0s</span></div>
+      <div id="sceneRail" class="col" style="gap:4px"></div>
+      <div style="background:var(--warning-subtle);border:1px solid var(--warning);border-radius:var(--r-lg);padding:9px 10px">
+        <div class="t-smm c-warn">比目标短 37 秒</div><div class="t-cap c-warn" style="margin-top:4px">概念 A / B 各差 10 秒左右，正片会显得赶。</div></div>
+    </div>
+    <div class="body grow" style="padding:20px 24px 24px">
+      <div class="scene">
+        <div style="display:flex;align-items:center;gap:8px"><span class="idx">幕 1</span>
+          <div class="t-h2" style="flex:1">开场钩子</div><span class="badge warn">38 字 · 7.6s / 目标 9.0s</span></div>
+        <div class="field"><div class="fh"><span class="t-label">备注</span><span class="hint">骨架的指令 / 给自己的拍摄提示，不进成片</span></div>
+          <div class="box dash">开门见山抛出「三天赚五千」的结果，再立刻自曝纯小白身份。</div></div>
+        <div class="field"><div class="fh"><span class="t-label">旁白</span><span class="hint">录的时候念的就是这段</span><span class="m-xs c-warn">38 字 · 7.6s</span></div>
+          <div class="box hero">三天时间我用 AI 赚了五千块钱。先说清楚，我不卖课不收徒——我就是个接触 AI 不到半年的纯小白。</div></div>
+        <div class="field"><div class="fh"><span class="t-label">画面</span><span class="hint">这一幕拍什么 / 放什么</span></div>
+          <div class="box">左边是聊天记录截图，右边是普通卖家后台成交额截图。</div></div>
+        <div class="field"><div class="fh"><span class="t-label">关键词</span><span class="hint">写稿时按这些词去素材库检索</span></div>
+          <div class="chips"><span class="badge">三天赚五千</span><span class="badge">心动</span><span class="badge">月均 900</span><span class="badge">纯小白</span></div></div>
+        <div style="display:flex;align-items:center;gap:10px;background:var(--success-subtle);border:1px solid var(--success);border-radius:var(--r-lg);padding:10px 12px">
+          <span class="badge ok">事实核查</span><span class="t-sm c-ok" style="flex:1">闲鱼 AI 服务卖家月均成交额不足 900 元 · 与稿中「月均 900」一致</span><span class="t-smm c-ok">可信</span></div>
+      </div>
+      <div class="card" style="display:flex;align-items:center;gap:12px">
+        <span class="idx off">幕 2</span><div style="flex:1;min-width:0"><div class="t-bodym">概念 A</div>
+          <div class="t-sm c-3 ell" style="max-width:100%">很多人以为 AI 变现是把工具用熟——其实卡住大多数人的不是工具…</div></div>
+        <span class="m-sm c-warn">9.8 / 20.3s</span></div>
+      <div class="card" style="display:flex;align-items:center;gap:12px">
+        <span class="idx off">幕 3</span><div style="flex:1;min-width:0"><div class="t-bodym">概念 B</div>
+          <div class="t-sm c-3 ell" style="max-width:100%">第二个陷阱是只做交付不找需求。你会发现真正难的是…</div></div>
+        <span class="m-sm c-warn">8.6 / 20.3s</span></div>
+    </div>
+    <div class="panel">
+      <div class="tabs" style="display:flex"><button class="tab on" style="flex:1">评分</button><button class="tab" style="flex:1">改写</button><button class="tab" style="flex:1">标题</button><button class="tab" style="flex:1">素材</button></div>
+      <div class="card">
+        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:12px"><span class="t-sm c-2" style="flex:1">硬指标 · 纯函数</span><span class="m-xl">22</span><span class="t-body c-3">/35</span></div>
+        <div id="hardScores" class="col" style="gap:10px"></div>
+      </div>
+      <div class="card" style="border-style:dashed">
+        <div style="display:flex;align-items:center;gap:8px"><span class="t-sm c-2" style="flex:1">软指标 · DeepSeek</span><span class="badge soft">未评分</span></div>
+        <div class="note" style="margin:8px 0 10px">钩子力度、意外感、真实感这些要判断的项还没跑——它要调一次模型，会产生费用。</div>
+        <button class="btn btn-secondary btn-md" style="width:100%;justify-content:center">跑一次软指标评分</button></div>
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span class="t-sm c-2" style="flex:1">待处理</span><span class="badge bad">3</span></div>
+        <div class="col" style="gap:8px">
+          <div style="background:var(--bg-inset);border-left:2px solid var(--danger);border-radius:var(--r-lg);padding:9px 10px">
+            <div class="t-smm c-bad">信任声明 0 分</div><div class="t-cap c-3" style="margin-top:4px">全片没有「不卖课/不带货」这类声明。讲赚钱又不提前打预防针，评论区防不住。</div></div>
+          <div style="background:var(--bg-inset);border-left:2px solid var(--danger);border-radius:var(--r-lg);padding:9px 10px">
+            <div class="t-smm c-bad">平台合规 0 分</div><div class="t-cap c-3" style="margin-top:4px">画面里要展示收益类内容，涉嫌诱导（幕 2）。数据可以口头说，但不能上画面。</div></div>
+          <div style="background:var(--bg-inset);border-left:2px solid var(--warning);border-radius:var(--r-lg);padding:9px 10px">
+            <div class="t-smm c-warn">普适化结尾 0 分</div><div class="t-cap c-3" style="margin-top:4px">结尾只对同行成立。补一句「你做电商、做服务也是一样」，受众能扩一大圈。</div></div>
+        </div>
+        <div class="t-cap c-4" style="margin-top:10px">这两分改台词拿不到——画面说明也要一起改。</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 稿库 ============ -->
+<section class="page" id="p-scripts" hidden>
+  <div class="topbar"><div class="tt"><div class="t-h1">稿库</div><div class="t-sm c-2">36 份稿子，其中 17 份是六幕结构（3 份还没写）。已写的平均硬指标 17/35。</div></div>
+    <button class="btn btn-secondary btn-md">批量归档</button><button class="btn btn-primary btn-md">新建稿子</button></div>
+  <div class="body">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="tabs"><button class="tab on">全部 36</button><button class="tab">六幕 17</button><button class="tab">未写 3</button><button class="tab">非六幕 19</button></div>
+      <div class="spacer"></div><div class="select">平台：全部</div><div class="select">硬指标：不限</div><div class="select">按更新时间</div>
+      <div class="search" style="width:200px"><i></i><span>搜索标题…</span></div>
+    </div>
+    <div class="card flush" style="overflow:hidden">
+      <div style="overflow-x:auto"><table id="scriptTable">
+        <thead><tr><th>标题</th><th style="width:96px">平台</th><th style="width:86px">硬指标</th><th style="width:90px">软指标</th><th style="width:64px">时长</th><th style="width:70px">更新</th><th style="width:140px">操作</th></tr></thead>
+        <tbody></tbody></table></div>
+    </div>
+    <div class="note">软指标列：「未跑」= 还没花钱评过；「待重跑」= 评分模型换过，旧分不可比；带 * = 稿子在评分之后改过。</div>
+  </div>
+</section>
+
+<!-- ============ 素材库 ============ -->
+<section class="page" id="p-materials" hidden>
+  <div class="topbar"><div class="tt"><div class="t-h1">素材库</div><div class="t-sm c-2">读到、想到、经历过的具体材料。写稿时按幕自动检索——不够用，AI 就会开始编。</div></div>
+    <button class="btn btn-primary btn-md">记一条</button></div>
+  <div class="body">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="tabs"><button class="tab on">全部 14</button><button class="tab">亲身经历 5</button><button class="tab">金句 3</button><button class="tab">故事 2</button><button class="tab">数据 2</button><button class="tab">书摘 2</button></div>
+      <div class="spacer"></div><div class="search" style="width:240px"><i></i><span>搜索素材内容…</span></div>
+    </div>
+    <div class="banner info"><i></i><span class="txt">14 条素材覆盖 5 个类型。写一条 60 秒的稿子大约要吃掉 3–5 条——照现在的存量，写四五条就见底了。</span></div>
+    <div id="materialList" class="col" style="gap:10px"></div>
+  </div>
+</section>
+
+<!-- ============ 模板 ============ -->
+<section class="page" id="p-templates" hidden>
+  <div class="topbar"><div class="tt"><div class="t-h1">模板</div><div class="t-sm c-2">决定成片的画面结构、字幕样式和转场，出片时套用。</div></div>
+    <button class="btn btn-primary btn-md">新建模板</button></div>
+  <div class="body">
+    <div class="banner warn"><i></i><span class="txt">5 个模板都还没产出过成片。模板本身没问题，卡在出片链路——启动 worker 之后建议先用一个模板跑通一条，再改其他的。</span></div>
+    <div id="templateGrid" class="col" style="gap:12px"></div>
+  </div>
+</section>
+
+<!-- ============ 成片 ============ -->
+<section class="page" id="p-films" hidden>
+  <div class="topbar"><div class="tt"><div class="t-h1">成片</div><div class="t-sm c-2">出片队列与成片。队列里的任务只有 worker 在跑的时候才会被消费。</div></div>
+    <button class="btn btn-secondary btn-md">刷新</button><button class="btn btn-primary btn-md">启动出片 worker</button></div>
+  <div class="body">
+    <div class="banner bad"><i></i><span class="txt">worker 未运行 · 成功出片 0 次。下面 8 条里有 5 条在等你确认，1 条在排队——排队那条不启动 worker 永远不会动。</span></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="tabs"><button class="tab on">全部 8</button><button class="tab">等你确认 5</button><button class="tab">排队中 1</button><button class="tab">已完成 0</button></div>
+      <div class="spacer"></div><div class="search" style="width:220px"><i></i><span>搜索成片…</span></div></div>
+    <div class="card flush" id="filmList"></div>
+  </div>
+</section>
+
+<!-- ============ 成片详情 ============ -->
+<section class="page" id="p-film" hidden>
+  <div class="topbar"><div class="tt"><div class="t-h1 ell">DeepSeek涨价三倍(素材落库版)</div>
+    <div class="t-sm c-2">ppt-narration · 无模板（跳过包装）· 2026-09-04</div></div>
+    <button class="btn btn-ghost btn-md" data-go="films">回成片列表</button><button class="btn btn-primary btn-md">确认分镜，继续渲染</button></div>
+  <div class="body">
+    <div class="banner warn"><i></i><span class="txt">等你：分镜待确认——先在剪辑台里逐镜调整方案，确认后再继续渲染。</span></div>
+    <div class="card">
+      <div class="t-h3" style="margin-bottom:12px">渲染阶段</div>
+      <div class="stage">
+        <span class="s done">排队</span><span class="sep"></span><span class="s done">构思分镜</span><span class="sep"></span>
+        <span class="s now">搭建画面</span><span class="sep"></span><span class="s">拼接预览</span><span class="sep"></span>
+        <span class="s">预览就绪</span><span class="sep"></span><span class="s">正式渲染</span><span class="sep"></span>
+        <span class="s">包装</span><span class="sep"></span><span class="s">完成</span></div>
+      <div class="note" style="margin-top:12px">停在「搭建画面」不是失败——它在等你确认分镜。确认之后才会往下走。</div>
+    </div>
+    <div class="row g16">
+      <div class="col grow">
+        <div class="card"><div class="t-h3" style="margin-bottom:12px">分镜方案（6 镜）</div><div id="shotList" class="col" style="gap:10px"></div></div>
+      </div>
+      <div class="col" style="width:360px;flex:0 0 360px">
+        <div class="card"><div class="t-h3" style="margin-bottom:12px">预览</div>
+          <div style="aspect-ratio:9/16;background:var(--bg-inset);border:1px solid var(--border-default);border-radius:var(--r-lg);display:flex;align-items:center;justify-content:center;color:var(--text-disabled);font-size:12px">预览尚未生成</div>
+          <div class="note" style="margin-top:10px">预览会在「拼接预览」阶段生成，大约 2 分钟。</div></div>
+        <div class="card"><div class="t-h3" style="margin-bottom:10px">渲染参数</div>
+          <div class="col" style="gap:8px">
+            <div style="display:flex"><span class="t-sm c-3" style="flex:1">引擎</span><span class="m-xs">新版渲染</span></div>
+            <div style="display:flex"><span class="t-sm c-3" style="flex:1">模板</span><span class="m-xs c-4">无（跳过包装）</span></div>
+            <div style="display:flex"><span class="t-sm c-3" style="flex:1">分辨率</span><span class="m-xs">1080 × 1920</span></div>
+            <div style="display:flex"><span class="t-sm c-3" style="flex:1">配音</span><span class="m-xs">火山 TTS · 女声 03</span></div>
+            <div style="display:flex"><span class="t-sm c-3" style="flex:1">来源稿</span><span class="m-xs c-acc">DeepSeek涨价三倍</span></div>
+          </div></div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ============ 拆解 ============ -->
+<section class="page" id="p-teardowns" hidden>
+  <div class="topbar"><div class="tt"><div class="t-h1">拆解</div><div class="t-sm c-2">拆同赛道创作者：结构、钩子，以及他怎么把自己立起来的。</div></div>
+    <button class="btn btn-secondary btn-md">贴转写稿</button><button class="btn btn-primary btn-md">传视频拆一条</button></div>
+  <div class="body">
+    <div class="banner info"><i></i><span class="txt">几秒钟就拆完，不用等 worker。拆完的结构公式会进「可照做的」，钩子会进钩子库，衍生角度会进灵感库。</span></div>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <div class="t-h2" style="flex:1">三天用AI赚5000（人设视角重拆）</div>
+        <span class="badge acc">奥一</span><span class="m-xs c-3">2026-08-28</span>
+        <button class="btn btn-secondary">收进钩子库和灵感库</button></div>
+      <div class="note" style="margin-bottom:14px">结构公式：纯小白自曝短路径 → 放弃不匹配赛道 → 从评论区发现真实需求 → 主动私信抢客户 → 试错自研失败 → 转向代理成熟产品 → 三天成交两单 → 复盘为信息差+执行力变现</div>
+      <div class="row g16">
+        <div class="col grow" style="gap:10px">
+          <div class="t-label">分幕结构</div>
+          <div id="tdStructure" class="col" style="gap:8px"></div>
+        </div>
+        <div class="col" style="width:400px;flex:0 0 400px;gap:10px">
+          <div class="t-label">人设动作 · 观众会怎么看他</div>
+          <div id="tdPersona" class="col" style="gap:8px"></div>
+        </div>
+      </div>
+      <div style="margin-top:16px;background:var(--bg-inset);border:1px solid var(--border-subtle);border-radius:var(--r-lg);padding:14px 16px">
+        <div class="t-label" style="margin-bottom:8px">可照做的</div>
+        <div id="tdActions" class="col" style="gap:6px"></div></div>
+    </div>
+    <div class="card" style="display:flex;align-items:center;gap:12px">
+      <div style="flex:1"><div class="t-bodym">skill 怎么卖到 70 个</div>
+        <div class="t-sm c-3">王飞雨 · 2026-08-28 · 反常识结论开场 → 一句话解释核心 → 拆解海外市场优势 → 对比自媒体平台 → 点出唯一难点</div></div>
+      <span class="badge">5 幕</span><button class="btn btn-secondary">展开</button></div>
+    <div class="card" style="display:flex;align-items:center;gap:12px">
+      <div style="flex:1"><div class="t-bodym">三天用AI赚5000</div>
+        <div class="t-sm c-3">奥一 · 2026-08-27 · 开场抛结果 → 自曝新手身份 → 失败尝试 ×2 → 关键转向 → 结果验证 → 方法论复盘</div></div>
+      <span class="badge">9 幕</span><button class="btn btn-secondary">展开</button></div>
+  </div>
+</section>
+
+<!-- ============ 钩子库 ============ -->
+<section class="page" id="p-hooks" hidden>
+  <div class="topbar"><div class="tt"><div class="t-h1">钩子库</div><div class="t-sm c-2">前 3 秒决定完播。这里收你写过和拆过的开场。</div></div>
+    <button class="btn btn-secondary btn-md">从我的稿子里抽</button><button class="btn btn-primary btn-md">记一条</button></div>
+  <div class="body">
+    <div class="banner warn"><i></i><span class="txt">现在按「结构分」排序，不是按留存率。结构分只算能量的东西：字数、是否第二人称开头、有没有数字或提问——它预测不了完播。真实留存要等发布后回采，当前发布 0 条。</span></div>
+    <div class="row">
+      <div class="metric"><div class="lab"><span>以「你」开头</span></div><div class="m-xl">1<span class="t-body c-3">/10</span></div><div class="sub">第二人称能让观众代入更快</div></div>
+      <div class="metric"><div class="lab"><span>超过 22 字</span><span class="badge warn">偏长</span></div><div class="m-xl">7<span class="t-body c-3">/10</span></div><div class="sub">6 秒开场里讲不完</div></div>
+      <div class="metric"><div class="lab"><span>钩子里带书名</span></div><div class="m-xl">0<span class="t-body c-3">/10</span></div><div class="sub">具体出处能提高可信度</div></div>
+      <div class="metric" style="border-style:dashed"><div class="lab"><span>真实完播率</span><span class="badge">无数据</span></div><div class="m-xl c-4">—</div><div class="sub">等发布并回采后才有</div></div>
+    </div>
+    <div class="note">样本不足 20 条，上面这些比例说明不了任何规律，只是当前库的构成。</div>
+    <div class="card flush" id="hookList"></div>
+  </div>
+</section>
+
+<!-- ============ 校准 ============ -->
+<section class="page" id="p-calibration" hidden>
+  <div class="topbar"><div class="tt"><div class="t-h1">校准</div><div class="t-sm c-2">把预测分和实际表现放进同一张图，让评分模型逐渐变准。</div></div>
+    <button class="btn btn-primary btn-md" data-go="data">去数据页认领</button></div>
+  <div class="body">
+    <div class="banner bad"><i></i><span class="txt">校准还跑不起来，配对样本 0 条——至少要 30 条「预测分 vs 实际表现」的配对，还差 30 条。</span></div>
+    <div class="card">
+      <div class="t-h2" style="margin-bottom:6px">为什么是 0 条</div>
+      <div class="note" style="margin-bottom:14px">平台不会告诉系统哪条作品是用哪份稿子发的，只能你自己认领。现在有 8 条有播放量的作品还没关联稿子。</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="track" style="flex:1"><i class="bad" style="width:2%"></i></div>
+        <span class="m-sm c-bad">0 / 30</span></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><div class="t-h2" style="flex:1">三层反馈回路</div><span class="badge warn">1 / 3 运行中</span></div>
+      <div class="row">
+        <div class="kv" style="border-color:var(--success)"><div style="display:flex;gap:6px"><div class="t-bodym" style="flex:1">快回路 · 秒级</div><span class="badge ok">运行中</span></div>
+          <div class="note" style="margin-top:6px">写稿时的时长偏差、幕结构、简洁度实时校验，改一个字分数就动。</div></div>
+        <div class="kv"><div style="display:flex;gap:6px"><div class="t-bodym" style="flex:1">中回路 · 48 小时</div><span class="badge warn">等待中</span></div>
+          <div class="note" style="margin-top:6px">发布后回采完播与互动。等发布第一条（当前发布 0 条）。</div></div>
+        <div class="kv"><div style="display:flex;gap:6px"><div class="t-bodym c-2" style="flex:1">慢回路 · 月级</div><span class="badge">等待中</span></div>
+          <div class="note" style="margin-top:6px">攒够 30 条对照后重拟合权重。等中回路——它还没开始转。</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><div class="t-h2" style="flex:1">当前权重是怎么来的</div><span class="badge warn">未被真实数据修正</span></div>
+      <div class="note" style="margin-bottom:16px">下面这套权重是按经验定的，没有被任何真实表现数据修正过。校准跑起来之后，它会被真实完播率重新拟合——在那之前，分数的相对高低有参考价值，绝对值不必当真。</div>
+      <div class="row g16">
+        <div class="col grow"><div style="display:flex;align-items:baseline;gap:8px;margin-bottom:12px"><span class="t-h3" style="flex:1">硬指标</span><span class="m-lg">35</span><span class="t-sm c-3">纯函数</span></div>
+          <div id="wHard" class="col" style="gap:10px"></div></div>
+        <div class="col grow"><div style="display:flex;align-items:baseline;gap:8px;margin-bottom:12px"><span class="t-h3" style="flex:1">软指标</span><span class="m-lg c-soft">65</span><span class="t-sm c-3">DeepSeek</span></div>
+          <div id="wSoft" class="col" style="gap:10px"></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 数据 ============ -->
+<section class="page" id="p-data" hidden>
+  <div class="topbar"><div class="tt"><div class="t-h1">数据</div><div class="t-sm c-2">抖音后台的真实表现：账号总览、逐条作品，以及校准链路断在哪一环。</div></div>
+    <button class="btn btn-secondary btn-md">立即回采</button></div>
+  <div class="body">
+    <div class="banner warn"><i></i><span class="txt">两套口径对不上：同一条作品，列表报 22.4 万播、分析报 4,985 播。抖音没说明哪个是曝光、哪个是有效播放，所以两组都摆出来，不替它挑一个当真相。</span></div>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><div class="t-h2" style="flex:1">抖音数据总览</div>
+        <span class="m-xs c-3">窗口 2026-05-31 → 2026-08-29（平台定的近 90 天）· 快照于 08-29 12:00</span></div>
+      <div class="row" style="gap:10px;margin-bottom:10px">
+        <div class="kv"><div class="t-cap c-3">5秒完播率</div><div class="m-lg">32.1%</div><div class="t-cap c-3" style="margin-top:2px">前 3 秒的写法直接决定它</div></div>
+        <div class="kv"><div class="t-cap c-3">2秒跳出率</div><div class="m-lg">37.6%</div><div class="t-cap c-3" style="margin-top:2px">两秒内划走的比例</div></div>
+        <div class="kv"><div class="t-cap c-3">封面点击率</div><div class="m-lg">8.5%</div><div class="t-cap c-3" style="margin-top:2px">封面和标题的活儿</div></div>
+        <div class="kv"><div class="t-cap c-3">条均播放时长</div><div class="m-lg">9.4s</div><div class="t-cap c-3" style="margin-top:2px">除以片长就是真实完播</div></div>
+      </div>
+      <div class="row" style="gap:10px">
+        <div class="kv"><div class="t-cap c-3">播放量中位数</div><div class="m-lg">11.3万</div></div>
+        <div class="kv"><div class="t-cap c-3">条均点赞</div><div class="m-lg">872</div></div>
+        <div class="kv"><div class="t-cap c-3">条均评论</div><div class="m-lg">291</div></div>
+        <div class="kv"><div class="t-cap c-3">条均分享</div><div class="m-lg">337</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap">
+        <span class="t-sm c-2">平台判定的垂类</span><span class="badge acc">科技</span><span class="badge">随拍</span><span class="badge">旅行</span><span class="badge">时尚</span>
+        <span class="note" style="flex:1">这是抖音认为你在做的赛道，不是你自己认的。两者差得远，说明推荐系统还没把你归到你想去的池子里。</span></div>
+      <div class="banner warn" style="margin-top:14px"><i></i><span class="txt">窗口内投稿量只有 2 条——上面的条均值按这 2 条算，一条爆款就能带偏。当参考，别当结论。</span></div>
+    </div>
+    <div class="row g16">
+      <div class="col grow">
+        <div class="card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+          <div class="t-h2" style="flex:1">计入基线的作品播放量</div><span class="t-sm c-3">作品列表口径 · 基线从 0 起</span></div>
+          <div class="bars" id="playBars"></div>
+          <div class="note" style="margin-top:12px">基线是 0，不是最小值——从非零起点画柱会把差不多的两条画成天壤之别。深色是高于中位数（456）的那几条。</div></div>
+        <div class="card"><div class="t-h2" style="margin-bottom:6px">文案特征 × 播放</div>
+          <div class="note" style="margin-bottom:12px">只有 5 条 AI 类公开作品，下面全部是假设、不是结论。</div>
+          <div style="overflow-x:auto"><table id="featTable">
+            <thead><tr><th>特征</th><th style="width:70px">有</th><th style="width:110px">中位播放</th><th style="width:70px">没有</th><th style="width:110px">中位播放</th><th style="width:80px">倍数</th></tr></thead>
+            <tbody></tbody></table></div>
+          <div class="note" style="margin-top:12px">倍数小于 1 不代表这个特征有害——样本这么少时，很可能只是那条爆款恰好没有它。</div></div>
+      </div>
+      <div class="col" style="width:380px;flex:0 0 380px">
+        <div class="card"><div class="t-h2" style="margin-bottom:12px">校准链路</div>
+          <div id="calChain" class="col" style="gap:8px"></div>
+          <div class="banner bad" style="margin-top:12px"><i></i><span class="txt">回采到的 101 条没有一条是用本系统写的，所以没有预测分，当不了校准样本。</span></div></div>
+        <div class="card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><div class="t-h2" style="flex:1">待认领作品</div><span class="badge warn">8 条</span></div>
+          <div class="col" style="gap:8px">
+            <div class="kv"><div class="t-bodym ell" style="max-width:100%">把openclaw打包成一件安装的exe程序了！</div>
+              <div style="display:flex;gap:8px;align-items:center;margin-top:6px"><span class="m-xs c-3">2026-03-09 · 25,147 播</span><div class="spacer"></div><button class="btn btn-secondary">关联稿子</button></div></div>
+            <div class="kv"><div class="t-bodym ell" style="max-width:100%">原来你只要敢尝试你就会获得反馈！</div>
+              <div style="display:flex;gap:8px;align-items:center;margin-top:6px"><span class="m-xs c-3">2026-05-08 · 3,868 播</span><div class="spacer"></div><button class="btn btn-secondary">关联稿子</button></div></div>
+            <div class="kv"><div class="t-bodym ell" style="max-width:100%">当我把龙虾装到u盘是一种什么体验！</div>
+              <div style="display:flex;gap:8px;align-items:center;margin-top:6px"><span class="m-xs c-3">2026-03-12 · 456 播</span><div class="spacer"></div><button class="btn btn-secondary">关联稿子</button></div></div>
+          </div>
+          <div class="note" style="margin-top:10px">101 条里有 96 条是隐藏/仅自己可见的，已排除出分析——它们 0 播放不是内容问题。</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 设置 ============ -->
+<section class="page" id="p-settings" hidden>
+  <div class="topbar"><div class="tt"><div class="t-h1">设置</div><div class="t-sm c-2">账号定位、个人经历、AI 与雷达配置。</div></div>
+    <button class="btn btn-primary btn-md">保存</button></div>
+  <div class="body" style="max-width:1000px">
+    <div class="row g16">
+      <div class="col" style="width:200px;flex:0 0 200px;gap:2px">
+        <button class="nav active"><span class="ico"></span><span class="label">账号定位</span></button>
+        <button class="nav"><span class="ico"></span><span class="label">口播人设</span></button>
+        <button class="nav"><span class="ico"></span><span class="label">个人经历</span></button>
+        <button class="nav"><span class="ico"></span><span class="label">热点雷达</span></button>
+        <button class="nav"><span class="ico"></span><span class="label">AI 与模型</span></button>
+      </div>
+      <div class="col grow">
+        <div class="card">
+          <div class="t-h2" style="margin-bottom:4px">账号定位</div>
+          <div class="note" style="margin-bottom:16px">这段会进每一次写稿的 prompt。写得越具体，AI 越不容易滑向通用口水话。</div>
+          <div class="col" style="gap:14px">
+            <div class="field"><div class="fh"><span class="t-label">一句话定位</span><span class="hint">你是谁、为谁解决什么</span></div>
+              <div class="box">给想用 AI 赚钱但不想折腾环境的普通人，讲清楚可复制的具体路径。</div></div>
+            <div class="field"><div class="fh"><span class="t-label">目标观众</span><span class="hint">越具体越好，别写「所有人」</span></div>
+              <div class="box">25–40 岁、有本职工作、想做副业、被「AI 变现」相关内容吸引但被环境配置劝退的人。</div></div>
+            <div class="field"><div class="fh"><span class="t-label">绝不做的事</span><span class="hint">写进合规校验，触发会直接扣分</span></div>
+              <div class="chips"><span class="badge bad">不卖课</span><span class="badge bad">不收徒</span><span class="badge bad">画面不展示收益截图</span><span class="badge bad">不制造焦虑</span>
+                <span class="badge" style="border:1px dashed var(--border-strong);background:none">+ 添加</span></div></div>
+            <div class="field"><div class="fh"><span class="t-label">主发平台</span></div>
+              <div style="display:flex;gap:8px"><span class="badge acc">抖音（主）</span><span class="badge">小红书</span>
+                <span class="badge" style="border:1px dashed var(--border-strong);background:none">+ 添加</span></div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><div class="t-h2" style="flex:1">AI 与模型</div><span class="badge soft">按次计费</span></div>
+          <div class="note" style="margin-bottom:14px">硬指标是纯函数，不花钱、随时跑。软指标要调模型，只在你点「跑一次」的时候花钱。</div>
+          <div class="col" style="gap:10px">
+            <div style="display:flex;align-items:center;gap:12px"><div style="flex:1"><div class="t-bodym">软指标评分模型</div><div class="t-sm c-3">钩子力度、获得感、意外感、真实感等 6 项</div></div><div class="select">DeepSeek V4</div></div>
+            <div style="display:flex;align-items:center;gap:12px"><div style="flex:1"><div class="t-bodym">写稿与改写</div><div class="t-sm c-3">搭骨架、切幕、改写建议</div></div><div class="select">DeepSeek V4</div></div>
+            <div style="display:flex;align-items:center;gap:12px"><div style="flex:1"><div class="t-bodym">拆解与转写</div><div class="t-sm c-3">视频转写、结构与人设拆解</div></div><div class="select">Whisper + DeepSeek</div></div>
+            <div style="display:flex;align-items:center;gap:12px"><div style="flex:1"><div class="t-bodym">API 中转</div><div class="t-sm c-3">统一走自建中转，便于计量和切换供应商</div></div><div class="select">aitoken.homes</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ============ 设计系统 ============ -->
+<section class="page" id="p-ds" hidden>
+  <div class="topbar"><div class="tt"><div class="t-h1">设计系统</div><div class="t-sm c-2">Linear 风深色主题 · 令牌、字阶与组件。与 Figma 文件一一对应。</div></div></div>
+  <div class="body">
+    <div class="card"><div class="t-label" style="margin-bottom:12px">COLOR TOKENS</div><div id="swatches" class="col" style="gap:16px"></div></div>
+    <div class="card flush"><div class="card-head"><div class="t-label" style="flex:1">TYPOGRAPHY</div><div class="t-sm c-3">中文 PingFang SC / Noto Sans SC · 数字 JetBrains Mono</div></div>
+      <div id="typeRamp"></div></div>
+    <div class="row g16">
+      <div class="card grow"><div class="t-label" style="margin-bottom:12px">BUTTON</div>
+        <div class="col" style="gap:10px">
+          <div style="display:flex;gap:8px;align-items:center"><button class="btn btn-primary btn-md">主操作</button><button class="btn btn-secondary btn-md">次操作</button><button class="btn btn-ghost btn-md">幽灵</button><button class="btn btn-danger btn-md">删除</button></div>
+          <div style="display:flex;gap:8px;align-items:center"><button class="btn btn-primary">主操作</button><button class="btn btn-secondary">次操作</button><button class="btn btn-ghost">幽灵</button><button class="btn btn-danger">删除</button></div>
+        </div>
+        <div class="note" style="margin-top:12px">一屏只有一个 Primary。表格里的行内操作一律用 Ghost 文字按钮。</div></div>
+      <div class="card grow"><div class="t-label" style="margin-bottom:12px">BADGE</div>
+        <div class="chips"><span class="badge">中性</span><span class="badge acc">强调</span><span class="badge ok">链路通</span><span class="badge warn">等你处理</span><span class="badge bad">断链</span><span class="badge info">进行中</span><span class="badge soft">软指标</span></div>
+        <div class="note" style="margin-top:12px">语义固定：绿=通/完成，橙=等人，红=断，蓝=系统在跑，紫=AI 判断出来的分。</div></div>
+    </div>
+    <div class="row g16">
+      <div class="card grow"><div class="t-label" style="margin-bottom:12px">SCOREBAR</div>
+        <div class="col" style="gap:10px">
+          <div><div style="display:flex;gap:8px"><span class="t-sm c-2" style="flex:1">时长偏差</span><span class="m-sm c-ok">10/10</span></div><div class="track" style="margin-top:5px"><i class="ok" style="width:100%"></i></div></div>
+          <div><div style="display:flex;gap:8px"><span class="t-sm c-2" style="flex:1">信任声明</span><span class="m-sm c-warn">3/6</span></div><div class="track" style="margin-top:5px"><i class="warn" style="width:50%"></i></div></div>
+          <div><div style="display:flex;gap:8px"><span class="t-sm c-2" style="flex:1">平台合规</span><span class="m-sm c-bad">0/4</span></div><div class="track" style="margin-top:5px"><i class="bad" style="width:2%"></i></div></div>
+        </div></div>
+      <div class="card grow"><div class="t-label" style="margin-bottom:12px">METRIC TILE · 空态</div>
+        <div class="row" style="gap:10px">
+          <div class="metric"><div class="lab"><span>5秒完播率</span></div><div class="m-xl">32.1%</div><div class="sub">开头 5 秒留住了多少人</div></div>
+          <div class="metric" style="border-style:dashed"><div class="lab"><span>净涨粉</span><span class="badge">无数据源</span></div><div class="m-xl c-4">—</div><div class="sub">当前发布 0 条，还没有数据源</div></div>
+        </div>
+        <div class="note" style="margin-top:12px">空态必须说明「为什么没有」，不要只显示 0——0 和「没数据」是两件事。</div></div>
+    </div>
+    <div class="card"><div class="t-label" style="margin-bottom:12px">写作与语气规则</div>
+      <div class="col" style="gap:8px">
+        <div class="t-body">· 每个数字旁边给出它的口径和样本量；样本不足时直接说「说明不了任何规律」。</div>
+        <div class="t-body">· 空态解释原因并给下一步动作，不留孤零零的「暂无数据」。</div>
+        <div class="t-body">· 断链、积压、等待这类状态用颜色 + 文案双重编码，不只靠颜色。</div>
+        <div class="t-body">· 标题用中文短句，不用「管理」「中心」这类空词；按钮写动作本身（「启动出片 worker」而不是「确定」）。</div>
+      </div></div>
+  </div>
+</section>
+
+</div></div>
+
+<script>
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const el=(h)=>{const d=document.createElement('div');d.innerHTML=h.trim();return d.firstElementChild;};
+
+/* nav */
+const PAGES={overview:'p-overview',topics:'p-topics',write:'p-write',editor:'p-editor',scripts:'p-scripts',
+ materials:'p-materials',templates:'p-templates',films:'p-films',film:'p-film',teardowns:'p-teardowns',
+ hooks:'p-hooks',calibration:'p-calibration',data:'p-data',settings:'p-settings',ds:'p-ds'};
+function go(key){
+  Object.values(PAGES).forEach(id=>{const n=document.getElementById(id); if(n) n.hidden=true;});
+  const t=document.getElementById(PAGES[key]||PAGES.overview); if(t) t.hidden=false;
+  $$('.sidebar .nav').forEach(n=>n.classList.toggle('active', n.dataset.go===key || (key==='editor'&&n.dataset.go==='write') || (key==='film'&&n.dataset.go==='films')));
+  window.scrollTo(0,0);
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-go]'); if(b){e.preventDefault();go(b.dataset.go);}});
+
+/* 总览 · 评分走势 */
+const VALS=[8,11,15,16,11,17,20,16,25,21,27,17];
+$('#scoreBars').innerHTML=VALS.map(v=>
+ `<div class="b"><i class="${v>=20?'hi':v>=15?'mid':''}" style="height:${Math.round(v/35*120)+6}px"></i><span class="m-xs ${v>=20?'c-2':'c-3'}">${v}</span></div>`).join('');
+
+/* 选题 */
+const TOPICS=[
+ ['普通人最容易踩的AI变现陷阱','来自拆解：三天用AI赚5000','拆解','acc','',1],
+ ['我是如何靠AI代运营一个月赚2万的','来自拆解：三天用AI赚5000','拆解','acc','',0],
+ ['30岁了一事无成的人该做什么工作','抖音热搜','热搜','info','热度 2,846,000',0],
+ ['分享创业干货','抖音热搜','热搜','info','热度 789,000',0],
+ ['如何用海外社区卖国内低价产品赚汇率差','来自拆解：skill 怎么卖到 70 个','拆解','acc','',0],
+ ['垂直社区 vs 自媒体平台：哪个适合新手卖 skill','来自拆解：skill 怎么卖到 70 个','拆解','acc','',0],
+ ['海外社区注册门槛低，但如何避免水土不服','来自拆解：skill 怎么卖到 70 个','拆解','acc','',0],
+ ['DeepSeek 将 AI 模型价格上调三倍','华尔街日报','新闻','soft','已用 1 次',0]];
+$('#topicGrid').innerHTML=(()=>{let h='';for(let i=0;i<TOPICS.length;i+=2){h+='<div class="row" style="gap:12px">'+
+ TOPICS.slice(i,i+2).map(([t,src,kind,tone,heat,hot])=>`
+  <div class="card grow" style="${hot?'border-color:var(--accent-border)':''}">
+    <div style="display:flex;align-items:center;gap:6px"><span class="badge ${tone}">${kind}</span>
+      ${heat?`<span class="m-xs c-3">${heat}</span>`:''}<div class="spacer"></div><span class="m-xs c-4">2026-08-28</span></div>
+    <div class="t-h2" style="margin:12px 0 4px">${t}</div>
+    <div class="t-sm c-3">${src}</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:12px">
+      <button class="btn btn-primary" data-go="write">用它开条</button><button class="btn btn-secondary">存进灵感库</button>
+      <div class="spacer"></div><button class="btn btn-ghost">忽略</button></div></div>`).join('')+'</div>';}return h;})();
+
+/* 编辑器 */
+const SCENES=[['开场钩子',7.6,9.0,1],['概念 A',9.8,20.3,0],['概念 B',8.6,20.3,0],['冷知识',10.8,13.5,0],['知识串联',11.8,20.3,0],['金句收尾',4.4,6.8,0]];
+$('#sceneRail').innerHTML=SCENES.map(([n,a,t,on])=>{const r=a/t;
+ return `<div style="padding:9px 10px;border-radius:var(--r-lg);${on?'background:var(--bg-surface-hover);border:1px solid var(--accent-border)':''}">
+  <div style="display:flex;gap:6px;align-items:center"><span class="t-smm ${on?'':'c-2'}" style="flex:1">${n}</span>
+  <span class="m-xs ${r<0.6?'c-warn':'c-3'}">${a.toFixed(1)}/${t.toFixed(1)}s</span></div>
+  <div class="track" style="margin-top:6px"><i class="${r<0.6?'warn':''}" style="width:${Math.round(Math.min(r,1)*100)}%"></i></div></div>`}).join('');
+const HARD=[['时长偏差',10,10],['简洁度',8,8],['信任声明',0,6],['平台合规',0,4],['幕结构完整',4,4],['普适化结尾',0,3]];
+$('#hardScores').innerHTML=HARD.map(([n,g,m])=>{const c=g===m?'ok':g===0?'bad':'warn';
+ return `<div><div style="display:flex;gap:8px"><span class="t-sm c-2" style="flex:1">${n}</span><span class="m-sm c-${c==='ok'?'ok':c==='bad'?'bad':'warn'}">${g}/${m}</span></div>
+ <div class="track" style="margin-top:5px"><i class="${c}" style="width:${Math.max(2,g/m*100)}%"></i></div></div>`}).join('');
+
+/* 稿库 */
+const ROWS=[
+ ['普通人最容易踩的AI变现陷阱（来自拆解：三天用AI赚5000）','douyin','17','未跑','60s','08-29'],
+ ['30岁了一事无成的人该做什么工作（抖音热搜，热度 2,846,000）','douyin','16','未跑','60s','08-28'],
+ ['AI赚钱先找交付','douyin','20','未跑','60s','08-28'],
+ ['AI与逃避行动的借口','douyin','11','未跑','60s','08-28'],
+ ['我卡在开源项目第三步，后来做了个U盘','douyin','21','未跑','60s','08-28'],
+ ['分享创业干货（抖音热搜，热度 789,000）','douyin','未写','—','—','08-28'],
+ ['一个月用AI赚了100万：6小时做的东西卖了6000单','douyin','27','待重跑','82s','08-27'],
+ ['DeepSeek涨价三倍(素材增强版)','douyin','25','未跑','180s','08-25'],
+ ['DeepSeek涨价三倍(素材落库版)','douyin','16','未跑','180s','08-25'],
+ ['DeepSeek涨价三倍,还值得用吗','douyin','20','未跑','90s','08-24'],
+ ['手机电池为什么用久了不耐用','douyin','15','未跑','60s','08-18'],
+ ['T6走查-改标题测试-1786988000174','douyin','8','未跑','90s','08-17'],
+ ['AI 效率工具测评三连','xiaohongshu','非六幕','—','—','08-13'],
+ ['用 Claude Code 子代理流水线把开源项目整体移植进自己的仓库','douyin','非六幕','—','—','08-13']];
+$('#scriptTable tbody').innerHTML=ROWS.map(([t,pf,h,s,d,u])=>{
+ const v=parseInt(h); const cls=isNaN(v)?'c-4':v>=20?'c-ok':v>=15?'c-warn':'c-bad';
+ const soft=s==='未跑'?'<span class="badge">未跑</span>':s==='待重跑'?'<span class="badge warn">待重跑</span>':'<span class="c-4">—</span>';
+ return `<tr><td class="ell" style="width:100%"><span class="t-bodym">${t}</span></td>
+ <td><span class="badge ${pf==='douyin'?'':'acc'}">${pf}</span></td>
+ <td><span class="m-sm ${cls}">${isNaN(v)?h:h+'/35'}</span></td><td>${soft}</td>
+ <td><span class="m-sm c-2">${d}</span></td><td><span class="m-xs c-3">${u}</span></td>
+ <td><span style="display:flex;gap:10px"><a class="t-smm c-acc" href="#" data-go="editor" style="text-decoration:none">编辑</a>
+ <span class="t-smm c-3">归档</span><span class="t-smm c-bad">删除</span></span></td></tr>`}).join('');
+
+/* 素材库 */
+const MATS=[
+ ['「把一块石子扔进小水盆里，它一定会掀起水花。」——讲垂直社区主动分发对比算法被动分发','书摘','王飞雨《skill怎么卖到70个》口播原话','soft'],
+ ['「对普通人来说技术不是门槛，门槛在于你能不能找到需求、找到供应商、对接资源。」','书摘','奥一《三天用AI赚5000》口播原话','soft'],
+ ['我想跑一个 GitHub 上的开源项目，十几步的安装说明，我卡在第三步。不是报错解决不了，是我压根看不懂那些操作是什么意思。','亲身经历','本人经历','ok'],
+ ['我抱着试试看的心态，花了六个小时把它打包成软件装进 U 盘，插上就能用，不用装环境不用敲命令。','亲身经历','本人经历','ok'],
+ ['做完我先发了条短视频，评论区要的人不少；又全平台搜了一遍，做这件事的几乎没有。','亲身经历','本人经历','ok'],
+ ['这款 U 盘产品卖了六千多单，做到了平台第一。','数据','本人后台数据（不展示画面）','warn'],
+ ['同一套模式复刻到 API 中转站、各种智能体、Codex 换皮服务，都跑通了。','数据','本人经历','warn'],
+ ['别猜，去测。发条视频看有没有人要，搜一遍有没有人在做，花不了一天，省掉的是白干一个月。','金句','本人','acc'],
+ ['AI 只是工具，真正值钱的是你能不能看见别人的麻烦。','金句','本人','acc'],
+ ['王飞雨把免费的优质内容整理成 skill 卖到海外垂直社区，一周卖出七十个，靠的是 6-10 倍汇率差。','故事','小红书 @王飞雨 拆解','info']];
+$('#materialList').innerHTML=MATS.map(([t,k,src,tone])=>`
+ <div class="card" style="display:flex;align-items:flex-start;gap:12px;padding:14px 18px">
+  <span class="badge ${tone}" style="margin-top:2px">${k}</span>
+  <div style="flex:1;min-width:0"><div class="t-body">${t}</div><div class="t-cap c-3" style="margin-top:6px">${src} · 2026-08-28</div></div>
+  <button class="btn btn-ghost">删除</button></div>`).join('');
+
+/* 模板 */
+const TPLS=[
+ ['真人口播 · 文字叠加','纯知识经验分享，不售卖任何项目，不招募任何人员','talking-head-broll','2026-08-30',0],
+ ['知识长视频（横屏）','对标同行知识区横屏长视频：亮底、快切镜、常驻章节进度条、大号深色字幕','ppt-narration','2026-08-25',1],
+ ['图文口播','AI 分镜卡片串成完整片子，无需出镜也无需配音','ppt-narration','2026-08-23',1],
+ ['真人出镜 + B-roll','上传自己拍的口播视频，AI 生成 B-roll 挖空替换，烧录真实原话字幕','talking-head-broll','2026-08-23',1],
+ ['插画配音','火山 TTS 逐幕配音驱动插画风分镜，全自动出片','illustration-tts','2026-08-23',1]];
+$('#templateGrid').innerHTML=(()=>{let h='';for(let i=0;i<TPLS.length;i+=3){h+='<div class="row" style="gap:12px">'+
+ TPLS.slice(i,i+3).map(([n,d,e,dt,built])=>`
+  <div class="card grow"><div style="aspect-ratio:16/10;background:var(--bg-inset);border:1px solid var(--border-default);border-radius:var(--r-md);margin-bottom:12px"></div>
+   <div style="display:flex;align-items:center;gap:8px"><div class="t-h3" style="flex:1">${n}</div>${built?'<span class="badge">内置预设</span>':''}</div>
+   <div class="note" style="margin:6px 0 10px">${d}</div>
+   <div style="display:flex;align-items:center;gap:8px"><span class="m-xs c-3">${e} · ${dt}</span><div class="spacer"></div>
+   <span class="badge warn">0 条成片</span></div></div>`).join('')+
+ (TPLS.slice(i,i+3).length<3?'<div class="grow"></div>'.repeat(3-TPLS.slice(i,i+3).length):'')+'</div>';}return h;})();
+
+/* 成片 */
+const FILMS=[
+ ['DeepSeek涨价三倍(素材落库版)','ppt-narration','2026-09-04','分镜待确认','warn',1,'去剪辑台','btn-secondary'],
+ ['我靠给别人装一个开源 agent，赚到了第一笔钱','talking-head-broll','2026-09-04','分镜待确认','warn',1,'去剪辑台','btn-secondary'],
+ ['我靠给别人装一个开源 agent，赚到了第一笔钱','talking-head-broll','2026-09-04','排队中','info',0,'开始制作','btn-primary'],
+ ['普通人最容易踩的AI变现陷阱（来自拆解：三天用AI赚5000）','ppt-narration','2026-09-04','预览就绪','warn',1,'看预览','btn-secondary'],
+ ['DeepSeek涨价三倍(素材落库版)','ppt-narration','2026-09-02','预览就绪','warn',1,'看预览','btn-secondary'],
+ ['DeepSeek涨价三倍(素材落库版)','ppt-narration','2026-08-31','预览就绪','warn',1,'看预览','btn-secondary'],
+ ['普通人最容易踩的AI变现陷阱（来自拆解：三天用AI赚5000）','ppt-narration','2026-08-30','预览就绪','warn',1,'看预览','btn-secondary'],
+ ['我靠给别人装一个开源 agent，赚到了第一笔钱','talking-head-broll','2026-08-29','分镜待确认','warn',1,'去剪辑台','btn-secondary']];
+$('#filmList').innerHTML=FILMS.map(([t,tpl,d,st,tone,wait,act,cls])=>`
+ <div class="list-row" style="display:flex;align-items:center;gap:12px">
+  <div style="width:48px;height:30px;border-radius:5px;background:var(--bg-inset);border:1px solid var(--border-default);flex:0 0 48px"></div>
+  <div style="flex:1;min-width:0"><div class="t-bodym ell" style="max-width:100%">${t}</div>
+   <div style="display:flex;gap:8px;align-items:center;margin-top:5px"><span class="m-xs c-3">${tpl} · ${d}</span>
+   <span class="badge ${tone}">${st}</span>${wait?'<span class="badge bad">等你</span>':''}</div></div>
+  <span class="badge">新版渲染</span><button class="btn ${cls}" data-go="film">${act}</button></div>`).join('');
+
+/* 成片详情 · 分镜 */
+const SHOTS=[['开场钩子','标题大字卡 + 涨价新闻截图','7.6s','已生成'],['概念 A','对比表格：DeepSeek vs 竞品单价','9.8s','已生成'],
+ ['概念 B','高峰/低谷时段价格曲线','8.6s','生成中'],['冷知识','融资新闻截图 + 数字动效','10.8s','待生成'],
+ ['知识串联','三条应对策略列表卡','11.8s','待生成'],['金句收尾','纯色底 + 金句大字','4.4s','待生成']];
+$('#shotList').innerHTML=SHOTS.map(([n,d,dur,st],i)=>`
+ <div style="display:flex;align-items:center;gap:12px;background:var(--bg-inset);border:1px solid var(--border-subtle);border-radius:var(--r-lg);padding:10px 12px">
+  <span class="idx ${i===2?'':'off'}">镜 ${i+1}</span>
+  <div style="width:44px;height:44px;border-radius:var(--r-md);background:var(--bg-elevated);border:1px solid var(--border-default);flex:0 0 44px"></div>
+  <div style="flex:1;min-width:0"><div class="t-bodym">${n}</div><div class="t-sm c-3 ell" style="max-width:100%">${d}</div></div>
+  <span class="m-sm c-2">${dur}</span>
+  <span class="badge ${st==='已生成'?'ok':st==='生成中'?'info':''}">${st}</span>
+  <button class="btn btn-ghost">换图</button></div>`).join('');
+
+/* 拆解 */
+const TD=[['钩子','用三天赚5000的结果和小白身份开场','数字+身份反差吸引注意，承诺分享路径','acc'],
+ ['信任声明','给出「不卖课不引流」的界线和看稿说明','主动划清界限，降低防备','ok'],
+ ['试错','第一次尝试AI漫剧，因算力高、竞争激烈而放弃','用失败案例展示思考过程','warn'],
+ ['关键转向','从评论区发现大量需求，锁定人群和痛点','展示从内容输出转向服务需求的契机','info'],
+ ['执行动作','主动私信评论区每一个潜在客户','具体动作体现执行力','info'],
+ ['试错','自研智能体体验不佳，判定为半成品','暴露具体损失（算力几百）增加真实感','warn'],
+ ['结果验证','转做渠道，三天成交两单赚 5000','用成交数据证明路径可行','ok'],
+ ['金句','归结为信息差和执行力的变现，AI 是放大器','强调普通人可复制','soft'],
+ ['普适化结尾','呼吁有需求者联系，强调逻辑可复制','为转化铺垫，同时扩展适用性','acc']];
+$('#tdStructure').innerHTML=TD.map(([k,d,why,tone])=>`
+ <div style="display:flex;gap:10px;background:var(--bg-inset);border:1px solid var(--border-subtle);border-radius:var(--r-lg);padding:9px 12px">
+  <span class="badge ${tone}" style="margin-top:1px;flex:0 0 auto">${k}</span>
+  <div style="flex:1;min-width:0"><div class="t-sm">${d}</div><div class="t-cap c-3" style="margin-top:3px">${why}</div></div></div>`).join('');
+const PERS=[['示弱开场拉近与普通观众的距离','「我是一个AI纯小白而且接触不到半年」'],
+ ['主动划清界限建立「自己人」信任','「放心我不卖课也不引流量」'],
+ ['暴露具体损失证明试错真实','「我的算力也花了好几百块钱」'],
+ ['展示主动行动让观众觉得「我能做到」','「我主动私信评论区每一个可能有需求的客户」'],
+ ['强调普通人可复制，强化共鸣','「对普通人来说技术不是门槛，在于你能不能找到需求」']];
+$('#tdPersona').innerHTML=PERS.map(([t,q])=>`
+ <div style="background:var(--bg-inset);border-left:2px solid var(--accent);border-radius:var(--r-lg);padding:9px 12px">
+  <div class="t-smm">${t}</div><div class="t-sm c-3" style="margin-top:4px">${q}</div></div>`).join('');
+$('#tdActions').innerHTML=['开头用数字结果 + 身份反差吸引注意力，并在黄金 3 秒内承诺分享路径',
+ '主动声明「不卖课不带货」能快速建立信任，降低观众防御',
+ '用「算力花了好几百块」这类具体损失来证明真实试错，而不是空谈失败',
+ '从评论区互动中发现真实需求，主动私信客户拿需求，是验证市场的低成本方式',
+ '总结时把成功归为信息差和执行力，而非技术能力，让普通人觉得可复制']
+ .map(t=>`<div class="t-body c-2">· ${t}</div>`).join('');
+
+/* 钩子库 */
+const HOOKS=[
+ ['三天时间我用AI转了5000块钱','数字冲击',3,['不是第二人称开头，观众代入慢半拍']],
+ ['你以为AI越用越便宜？DeepSeek刚宣布旗舰模型涨价三倍，高峰时段直接翻四倍多！','反常识断言',3,['54 字，超过 22 字预算，6 秒开场里讲不完']],
+ ['一个skill一周售卖七十个它是怎么做到的','其它',2,['不是第二人称开头，观众代入慢半拍','既没有具体数字也没有提问，前 3 秒缺一个抓手']],
+ ['我是一个AI纯小白而且接触不到半年','其它',2,['不是第二人称开头，观众代入慢半拍','既没有具体数字也没有提问']],
+ ['手机用一年半电池就不行了，直接换新机？先别急，官方换块电池才两三百。','其它',2,['41 字，超过 22 字预算','不是第二人称开头']],
+ ['今年很火的那个开源 agent，我靠给别人装它，赚到了做互联网生意的第一笔钱。','其它',1,['57 字，超过 22 字预算','不是第二人称开头','既没有具体数字也没有提问']]];
+$('#hookList').innerHTML=HOOKS.map(([t,k,s,issues])=>`
+ <div class="list-row" style="display:flex;align-items:flex-start;gap:12px">
+  <div style="flex:1;min-width:0"><div class="t-body">${t}</div>
+   <div style="display:flex;gap:8px;align-items:center;margin-top:6px"><span class="badge ${k==='数字冲击'?'acc':k==='反常识断言'?'soft':''}">${k}</span></div>
+   ${issues.map(i=>`<div class="t-cap c-3" style="margin-top:4px">· ${i}</div>`).join('')}</div>
+  <div style="text-align:right"><div class="m-sm ${s>=3?'c-ok':s>=2?'c-warn':'c-bad'}">${s}/4</div><div class="t-cap c-3">结构分</div></div>
+  <button class="btn btn-ghost">删除</button></div>`).join('');
+
+/* 校准权重 */
+const WH=[['时长偏差',10],['简洁度',8],['信任声明',6],['平台合规',4],['幕结构完整',4],['普适化结尾',3]];
+const WS=[['钩子力度',15],['获得感',12],['意外感',12],['真实感',10],['关键转向',8],['金句收束',8]];
+const wbar=(arr,max,cls)=>arr.map(([n,v])=>`<div><div style="display:flex;gap:8px"><span class="t-sm c-2" style="flex:1">${n}</span><span class="m-sm">${v}</span></div>
+ <div class="track" style="margin-top:5px"><i class="${cls}" style="width:${v/max*100}%"></i></div></div>`).join('');
+$('#wHard').innerHTML=wbar(WH,15,'');
+$('#wSoft').innerHTML=wbar(WS,15,'').replace(/class="" style="width/g,'style="background:var(--soft);width');
+
+/* 数据 */
+const PLAYS=[['',0],['',25147],['',456],['',3868],['',0]];
+$('#playBars').innerHTML=PLAYS.map(([_,v])=>`<div class="b"><i class="${v>456?'hi':v>0?'mid':''}" style="height:${Math.max(2,Math.round(v/25147*130))}px"></i><span class="m-xs c-3">${v.toLocaleString()}</span></div>`).join('');
+const FEAT=[['文案点明了痛点',2,'12,802',3,'0','∞','ok'],['带了话题标签',4,'2,162',1,'0','∞','ok'],
+ ['时长在 20 秒以内',2,'12,574',3,'456','27.6×','ok'],['第一人称开头',1,'456',4,'1,934','0.2×','warn'],
+ ['文案里有具体数字',3,'456',2,'12,574','0.0×','warn'],['文案里有提问',1,'0',4,'2,162','0.0×','warn']];
+$('#featTable tbody').innerHTML=FEAT.map(([n,a,am,b,bm,x,tone])=>`
+ <tr><td class="t-bodym">${n}</td><td><span class="m-sm c-2">${a}</span></td><td><span class="m-sm">${am}</span></td>
+ <td><span class="m-sm c-2">${b}</span></td><td><span class="m-sm">${bm}</span></td>
+ <td><span class="badge ${tone}">${x}</span></td></tr>`).join('');
+const CHAIN=[['写稿',36,'本系统里的六幕稿','ok'],['出片',0,'成功渲染的成片','bad'],['发布',0,'本系统追踪到的发布','dead'],['回采',101,'从抖音后台抓到的作品','ok']];
+$('#calChain').innerHTML=CHAIN.map(([n,v,d,tone],i)=>`
+ <div style="display:flex;align-items:center;gap:12px;background:var(--bg-inset);border:1px solid ${tone==='bad'?'var(--danger)':'var(--border-subtle)'};border-radius:var(--r-lg);padding:10px 12px">
+  <span class="m-lg ${tone==='bad'?'c-bad':tone==='dead'?'c-4':''}" style="width:56px">${v}</span>
+  <div style="flex:1"><div class="t-bodym ${tone==='dead'?'c-4':''}">${n}</div><div class="t-cap c-3">${d}</div></div>
+  ${tone==='bad'?'<span class="badge bad">断在这里</span>':''}</div>`).join('');
+
+/* 设计系统 */
+const GROUPS=[['背景 Surface',['bg-canvas','bg-base','bg-surface','bg-surface-hover','bg-elevated','bg-inset']],
+ ['描边 Border',['border-subtle','border-default','border-strong']],
+ ['文字 Text',['text-primary','text-secondary','text-tertiary','text-disabled']],
+ ['强调 Accent',['accent','accent-hover','accent-subtle','accent-border']],
+ ['状态 Status',['success','success-subtle','warning','warning-subtle','danger','danger-subtle','info','info-subtle','soft','soft-subtle']]];
+$('#swatches').innerHTML=GROUPS.map(([g,keys])=>`<div><div class="t-smm c-2" style="margin-bottom:10px">${g}</div>
+ <div class="gridauto">${keys.map(k=>{const v=getComputedStyle(document.documentElement).getPropertyValue('--'+k).trim();
+ return `<div style="background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:var(--r-lg);padding:10px">
+  <div class="swatch" style="background:var(--${k})"></div><div class="t-cap c-2" style="margin-top:8px">--${k}</div>
+  <div class="m-xs c-3">${v.toUpperCase()}</div></div>`}).join('')}</div></div>`).join('');
+const RAMP=[['t-display','Display','28 / 36 · Bold','页面主标题'],['t-h1','Title 1','20 / 28 · Bold','区块标题'],
+ ['t-h2','Title 2','16 / 24 · 600','卡片标题'],['t-h3','Title 3','14 / 20 · 600','小标题 / 表头'],
+ ['t-body','Body','13 / 20 · 400','正文默认'],['t-bodym','Body Medium','13 / 20 · 500','正文强调'],
+ ['t-sm','Small','12 / 18 · 400','次要说明'],['t-smm','Small Medium','12 / 18 · 500','标签文字'],
+ ['t-cap','Caption','11 / 16 · 400','脚注'],['t-label','Label','11 / 16 · 500 · +0.4','分组标签'],
+ ['m-xl','Metric XL','28 / 34 · Mono','大数字'],['m-lg','Metric','20 / 26 · Mono','指标数字'],
+ ['m-sm','Metric Small','13 / 18 · Mono','表格数字'],['m-xs','Mono','12 / 18 · Mono','ID / 代码']];
+$('#typeRamp').innerHTML=RAMP.map(([cls,n,spec,use])=>`
+ <div class="list-row" style="display:flex;align-items:center;gap:24px;padding:14px 18px;border-top:1px solid var(--border-subtle)">
+  <span class="t-smm c-2" style="width:110px;flex:0 0 110px">${n}</span>
+  <span class="${cls}" style="flex:1;min-width:0;color:var(--text-primary)">${cls.startsWith('m-')?'12,802 播 · 27/35':'把选题写成六幕口播稿 Aa 123'}</span>
+  <span class="m-xs c-3" style="width:160px;flex:0 0 160px">${spec}</span>
+  <span class="t-sm c-3" style="width:110px;flex:0 0 110px">${use}</span></div>`).join('');
+
+go('overview');
+</script>
