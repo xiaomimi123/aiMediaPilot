@@ -88,7 +88,7 @@ export default async function SettingsPage() {
             >
               <div className="flex items-center gap-2">
                 <StatusDot ok={s.ok} />
-                <span className="font-serif-cn text-base font-semibold">{s.title}</span>
+                <span className="text-base font-semibold">{s.title}</span>
                 <span
                   className={
                     s.ok

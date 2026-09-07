@@ -90,12 +90,6 @@
     letter-spacing: -0.01em;
   }
 
-  /* 旧纸感的衬线类。8 个文件还在引用, 先降级为无衬线的加重, 三期扫尾时逐个摘除。 */
-  .font-serif-cn {
-    font-family: var(--font);
-    font-weight: 600;
-  }
-
   /* 数字一律等宽 —— 分数、时长、字数在这个工具里到处都是, 跳动会很扰 */
   .tabular-nums {
     font-variant-numeric: tabular-nums;

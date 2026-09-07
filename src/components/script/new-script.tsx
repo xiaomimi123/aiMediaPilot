@@ -131,7 +131,7 @@ export function NewScript({ inspirations }: { inspirations: { id: string; text: 
                 : 'border-border bg-card hover:border-foreground/25',
             )}
           >
-            <p className="font-serif-cn text-base font-semibold">只给骨架</p>
+            <p className="text-base font-semibold">只给骨架</p>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               六幕各给一句「这一幕该干什么」+ 时长 + 需要什么材料，
               <span className="font-medium text-foreground">台词全空着等你写</span>。
@@ -148,7 +148,7 @@ export function NewScript({ inspirations }: { inspirations: { id: string; text: 
                 : 'border-border bg-card hover:border-foreground/25',
             )}
           >
-            <p className="font-serif-cn text-base font-semibold">我自己写好了</p>
+            <p className="text-base font-semibold">我自己写好了</p>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               贴进来，AI 只把它切进六幕，
               <span className="font-medium text-foreground">一个字都不改</span>。
@@ -165,7 +165,7 @@ export function NewScript({ inspirations }: { inspirations: { id: string; text: 
                 : 'border-border bg-card hover:border-foreground/25',
             )}
           >
-            <p className="font-serif-cn text-base font-semibold">写完整初稿</p>
+            <p className="text-base font-semibold">写完整初稿</p>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               台词写满，你在上面改。没思路时让 AI 开个头，比对着空白页干坐着强——
               但容易改几个词就交差。

@@ -205,7 +205,7 @@ export function TeardownView({ initial }: { initial: Row[] }) {
               <li key={r.id} className="rounded-md border border-border bg-card p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <p className="font-serif-cn text-base font-semibold">{r.title}</p>
+                    <p className="text-base font-semibold">{r.title}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {r.author ? `${r.author} · ` : ''}{r.createdAt}
                       {/* 在跑的状态要说清楚在跑什么, 「转写中」和「分析中」等待时长差一个数量级 */}

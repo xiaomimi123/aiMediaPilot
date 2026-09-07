@@ -58,7 +58,7 @@ function Spark({ trend }: { trend: MetricTrend }) {
         </p>
         <span
           className={cn(
-            'text-xs tabular-nums',
+            'font-mono text-xs tabular-nums',
             delta.tone === 'up'
               ? 'text-foreground'
               : delta.tone === 'down'
@@ -70,7 +70,7 @@ function Spark({ trend }: { trend: MetricTrend }) {
         </span>
       </div>
 
-      <p className="font-serif-cn mt-1 text-xl font-semibold leading-none tabular-nums">
+      <p className="mt-1 font-mono text-xl font-semibold leading-none tabular-nums">
         {humanCount(trend.currentCount)}
       </p>
 
@@ -86,7 +86,7 @@ function Spark({ trend }: { trend: MetricTrend }) {
         <p className="mt-2 text-xs text-muted-foreground/60">还没有序列</p>
       )}
 
-      <p className="mt-1 text-[0.65rem] tabular-nums text-muted-foreground/60">
+      <p className="mt-1 font-mono text-[0.65rem] tabular-nums text-muted-foreground/60">
         {span > 0 ? `${trend.series[0].date.slice(5)} → ${trend.series[span - 1].date.slice(5)} · ${span} 天` : ''}
       </p>
     </div>

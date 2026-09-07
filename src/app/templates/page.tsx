@@ -37,7 +37,7 @@ export default async function TemplatesPage() {
               {/* 卡片本身就是入口 —— 之前这里是个死的 div, 模板只能靠改库来配 */}
               <Link href={`/templates/${t.id}`} className="block">
                 <Card className="p-4 transition-colors hover:border-foreground/30">
-                  <p className="font-serif-cn text-base font-semibold">{t.name}</p>
+                  <p className="text-base font-semibold">{t.name}</p>
                   {t.description ? (
                     <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{t.description}</p>
                   ) : null}

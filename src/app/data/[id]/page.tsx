@@ -25,7 +25,7 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
       <p className="text-[0.7rem] font-medium uppercase tracking-[0.14em] text-muted-foreground">
         {label}
       </p>
-      <p className="font-serif-cn mt-1.5 text-2xl font-semibold leading-none tabular-nums">{value}</p>
+      <p className="mt-1.5 font-mono text-2xl font-semibold leading-none tabular-nums">{value}</p>
       {note ? <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{note}</p> : null}
     </div>
   );

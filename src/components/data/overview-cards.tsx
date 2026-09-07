@@ -45,7 +45,7 @@ function Card({
       </p>
       <p
         className={cn(
-          'font-serif-cn mt-1.5 font-semibold leading-none tabular-nums',
+          'mt-1.5 font-mono font-semibold leading-none tabular-nums',
           emphasis ? 'text-[2rem]' : 'text-2xl',
         )}
       >
@@ -138,7 +138,7 @@ export function OverviewCards({ snapshot }: { snapshot: OverviewSnapshot | null 
           <p className="text-[0.7rem] font-medium uppercase tracking-[0.14em] text-muted-foreground">
             窗口内投稿量
           </p>
-          <p className="font-serif-cn mt-1.5 text-2xl font-semibold tabular-nums">
+          <p className="mt-1.5 font-mono text-2xl font-semibold tabular-nums">
             {s.submissionCount}
           </p>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">

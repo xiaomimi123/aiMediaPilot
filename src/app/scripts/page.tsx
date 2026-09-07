@@ -145,7 +145,7 @@ export default async function ScriptsPage() {
                     </Link>
                   </td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{r.platform}</td>
-                  <td className="px-3 py-2 text-right text-xs tabular-nums">
+                  <td className="px-3 py-2 text-right font-mono text-xs tabular-nums">
                     {!r.sixAct ? (
                       <span className="text-muted-foreground">非六幕</span>
                     ) : r.unwritten ? (
@@ -168,13 +168,13 @@ export default async function ScriptsPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-right text-xs tabular-nums text-muted-foreground">
+                  <td className="px-3 py-2 text-right font-mono text-xs tabular-nums text-muted-foreground">
                     {!r.sixAct || r.unwritten ? '—' :
                       r.soft === null ? '未跑' :
                       r.soft === 'outdated' ? '待重跑' :
                       r.soft.stale ? `${r.soft.total}*` : r.soft.total}
                   </td>
-                  <td className="px-3 py-2 text-right text-xs tabular-nums text-muted-foreground">
+                  <td className="px-3 py-2 text-right font-mono text-xs tabular-nums text-muted-foreground">
                     {r.sixAct && !r.unwritten ? `${r.durationSec}s` : '—'}
                   </td>
                   <td className="px-3 py-2 text-right text-xs text-muted-foreground">

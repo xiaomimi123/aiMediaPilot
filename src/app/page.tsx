@@ -119,8 +119,8 @@ export default async function OverviewPage() {
             <p className="text-[0.7rem] font-medium uppercase tracking-[0.14em] text-muted-foreground">
               {s.label}
             </p>
-            {/* 数字走衬线 —— 头版的统计数字就是衬线的, 它比标签重要得多 */}
-            <p className="font-serif-cn mt-1.5 text-[2rem] font-semibold leading-none tabular-nums">
+            {/* 数字一律走 Mono, 保证表格和指标对齐 */}
+            <p className="mt-1.5 font-mono text-[2rem] font-semibold leading-none tabular-nums">
               {s.value}
             </p>
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{s.hint}</p>
