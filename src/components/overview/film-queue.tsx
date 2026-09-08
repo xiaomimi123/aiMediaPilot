@@ -36,7 +36,11 @@ const LABEL: Record<string, string> = {
  * **发起任务之前先读 health**(全局约定): worker 不在时按钮禁用并把原因说出来,
  * 而不是让人点一个什么都不会发生的按钮 —— 那正是这条链路半年没跑通却没人发现的原因。
  */
-export function FilmQueue({ rows }: { rows: Row[] }) {
+/** 在跑中的状态 —— 列表要为它们轮询, 也要给它们画活动指示。 */
+const RUNNING = new Set(['directing', 'building', 'assembling', 'rendering', 'packaging']);
+
+export function FilmQueue({ rows: initialRows }: { rows: Row[] }) {
+  const [rows, setRows] = useState(initialRows);
   const [health, setHealth] = useState<{ ready: boolean; hint: string | null } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -44,6 +48,44 @@ export function FilmQueue({ rows }: { rows: Row[] }) {
   useEffect(() => {
     fetch('/api/v1/health').then((r) => r.json()).then((b) => setHealth(b?.data ?? null)).catch(() => {});
   }, []);
+
+  /*
+   * 只轮询在跑的行(通常 0~2 条), 5 秒一次。用户反馈: 列表上看不出任务动没动,
+   * 要反复手动刷新 —— 在跑的任务几分钟就换阶段, 列表跟着动, 人才敢离开这页。
+   * 没有在跑的行时这个 effect 什么都不做, 不白耗。
+   */
+  useEffect(() => {
+    const running = rows.filter((r) => RUNNING.has(r.status) || r.status === 'queued');
+    if (running.length === 0) return;
+    const t = setInterval(async () => {
+      for (const r of running) {
+        try {
+          const res = await fetch(`/api/v1/cockpit/video-productions/${r.id}`);
+          const body = await res.json();
+          const d = body?.data?.production ?? body?.data;
+          if (body?.success && d?.status && d.status !== r.status) {
+            setRows((rs) => rs.map((x) => (x.id === r.id ? { ...x, status: d.status, errorMessage: d.errorMessage ?? null } : x)));
+          }
+        } catch { /* 下一轮再说 */ }
+      }
+    }, 5000);
+    return () => clearInterval(t);
+  }, [rows]);
+
+  /** 删除。DELETE 接口对进行中的任务会拒(400), 前端把那个理由原样透出来。 */
+  async function remove(id: string, title: string) {
+    if (!window.confirm(`删除「${title.slice(0, 20)}」这条出片任务？成片文件一并删除，不可恢复。`)) return;
+    setBusy(id);
+    setNote(null);
+    try {
+      const res = await fetch(`/api/v1/cockpit/video-productions/${id}`, { method: 'DELETE' });
+      const body = await res.json();
+      if (res.ok) setRows((rs) => rs.filter((x) => x.id !== id));
+      else setNote(body?.message ?? '删除失败');
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function start(id: string) {
     setBusy(id);
@@ -85,7 +127,15 @@ export function FilmQueue({ rows }: { rows: Row[] }) {
               <Link href={`/films/${r.id}`} className="min-w-0 flex-1">
                 <p className="truncate text-sm">{r.title}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {r.mode} · {r.createdAt} · {LABEL[r.status] ?? r.status}
+                  {r.mode} · {r.createdAt} ·{' '}
+                  {RUNNING.has(r.status) ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <span aria-hidden className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-info" />
+                      <span className="text-info">{LABEL[r.status] ?? r.status}</span>
+                    </span>
+                  ) : (
+                    LABEL[r.status] ?? r.status
+                  )}
                   {/* 渲染方式只标新版——旧版是当前多数, 每条都挂标只会增加噪音 */}
                   {r.renderer === 'remotion' ? (
                     <span className="ml-2 rounded bg-secondary px-1.5 py-0.5 font-medium text-foreground">
@@ -117,17 +167,30 @@ export function FilmQueue({ rows }: { rows: Row[] }) {
                   <p className="mt-0.5 truncate text-xs text-destructive">{r.errorMessage}</p>
                 ) : null}
               </Link>
-              {canStartProduction(r.status) ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy === r.id || health?.ready === false}
-                  title={health?.ready === false ? (health.hint ?? '') : undefined}
-                  onClick={() => void start(r.id)}
-                >
-                  {busy === r.id ? '启动中…' : r.status === 'failed' ? '重新制作' : '开始制作'}
-                </Button>
-              ) : null}
+              <div className="flex shrink-0 items-center gap-2">
+                {canStartProduction(r.status) ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy === r.id || health?.ready === false}
+                    title={health?.ready === false ? (health.hint ?? '') : undefined}
+                    onClick={() => void start(r.id)}
+                  >
+                    {busy === r.id ? '启动中…' : r.status === 'failed' ? '重新制作' : '开始制作'}
+                  </Button>
+                ) : null}
+                {/* 在跑的不给删 —— 后端也会拒, 但按钮压根不出现比点了报错好 */}
+                {!RUNNING.has(r.status) ? (
+                  <button
+                    type="button"
+                    disabled={busy === r.id}
+                    onClick={() => void remove(r.id, r.title)}
+                    className="text-xs text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
+                  >
+                    删除
+                  </button>
+                ) : null}
+              </div>
             </li>
           ))}
         </ul>

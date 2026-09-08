@@ -109,7 +109,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       contentId = existing.id;
     } else {
       const now = new Date().toISOString();
-      const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim() : draft.topic;
+      // 首行截断: 从灵感写的稿 topic 是整段原文, 原样当内容卡标题会撑爆每一处标题栏
+      const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim() : draft.topic.split('\n')[0].trim().slice(0, 60);
       // Json 必填字段的空白骨架与 script 分支同一套(见下方那个分支的注释)。
       const content = await prisma.cockpitContent.create({
         data: {

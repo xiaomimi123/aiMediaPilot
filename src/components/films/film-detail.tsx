@@ -156,6 +156,7 @@ export function FilmDetail({ initial }: { initial: Film }) {
         const body = await res.json();
         if (body?.success) {
           const d = body.data.production ?? body.data;
+          setLastPoll(new Date().toTimeString().slice(0, 8));
           setFilm((f) => ({
             ...f,
             status: d.status ?? f.status,
@@ -270,6 +271,9 @@ export function FilmDetail({ initial }: { initial: Film }) {
   }
 
   const [uploadError, setUploadError] = useState('');
+  // 轮询确实在跑的证据 —— 用户反馈「看不出任务动没动」。每次轮询回来都更新,
+  // 状态没变时它也在走, 人就知道页面是活的、不用手动刷新。
+  const [lastPoll, setLastPoll] = useState('');
 
   /** 出镜源视频上传。失败必须露出来 —— 500MB 的文件传一半静默失败, 人会一直等。 */
   async function uploadSource(file: File) {
@@ -290,6 +294,23 @@ export function FilmDetail({ initial }: { initial: Film }) {
       }
     } catch (e) {
       setUploadError(e instanceof Error ? e.message : '网络错误');
+    } finally {
+      setBusy('');
+    }
+  }
+
+  /** 删除整条出片任务(连文件)。成功后回列表 —— 详情页已经没有东西可看了。 */
+  async function deleteFilm() {
+    if (!window.confirm('删除这条出片任务？成片文件一并删除，不可恢复。')) return;
+    setBusy('delete');
+    try {
+      const res = await fetch(`/api/v1/cockpit/video-productions/${film.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        window.location.href = '/films';
+        return; // 跳转前不解 busy, 避免按钮闪一下
+      }
+      const body = (await res.json()) as { message?: string };
+      window.alert(body.message ?? '删除失败');
     } finally {
       setBusy('');
     }
@@ -319,10 +340,18 @@ export function FilmDetail({ initial }: { initial: Film }) {
         )}
       >
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {wait === 'machine' && !failed ? (
+              <span aria-hidden className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-info" />
+            ) : null}
             {failed ? '失败' : wait === 'you' ? '等你' : wait === 'machine' ? '在跑' : '完成'}
           </p>
           <p className="text-sm leading-relaxed">{stageHint(film.status)}</p>
+          {wait === 'machine' && !failed && lastPoll ? (
+            <p className="ml-auto font-mono text-xs tabular-nums text-muted-foreground/60" title="每 3 秒自动查一次进度, 阶段变化会自己跳, 不用刷新页面">
+              {lastPoll} 已查
+            </p>
+          ) : null}
         </div>
 
         {film.errorMessage ? (
@@ -342,7 +371,7 @@ export function FilmDetail({ initial }: { initial: Film }) {
                     i < idx
                       ? 'text-muted-foreground'
                       : i === idx
-                        ? 'bg-primary text-primary-foreground'
+                        ? cn('bg-primary text-primary-foreground', wait === 'machine' && 'animate-pulse')
                         : 'text-muted-foreground/40',
                   )}
                 >
@@ -363,7 +392,10 @@ export function FilmDetail({ initial }: { initial: Film }) {
         喂进去。上传成功后后端自动入队渲染(那是 API 自己的行为), 这里只要刷状态。
         只在「还没传过 && 任务还没跑起来」时出现: 传过了这块就没意义了。
       */}
-      {film.mode === 'talking-head-broll' && !film.hasSource && (film.status === 'queued' || failed) ? (
+      {/* 只要还没传、片子还没渲完, 这块就一直在 —— 原来只在 queued 显示,
+          但任务可以被「开始制作」推着跑到分镜待确认, 那时还没传视频,
+          等确认完分镜再渲染就会因为没素材而失败, 而界面上已经没有上传入口了。 */}
+      {film.mode === 'talking-head-broll' && !film.hasSource && film.status !== 'done' ? (
         <div className="mb-6 rounded-md border border-primary/40 bg-card px-4 py-3">
           <p className="text-sm font-medium">上传你拍的口播视频</p>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
@@ -510,6 +542,18 @@ export function FilmDetail({ initial }: { initial: Film }) {
           <Button variant="outline" disabled={busy !== ''} onClick={() => void post('/start', 'start')}>
             {busy === 'start' ? '启动中…' : failed ? '重新制作' : '开始制作'}
           </Button>
+        ) : null}
+
+        {/* 删除。在跑时不出现(后端也会拒 400) —— 删任务连成片文件一起删, 不可恢复。 */}
+        {wait !== 'machine' || failed ? (
+          <button
+            type="button"
+            disabled={busy !== ''}
+            onClick={() => void deleteFilm()}
+            className="text-xs text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
+          >
+            {busy === 'delete' ? '删除中…' : '删除任务'}
+          </button>
         ) : null}
 
         {/*

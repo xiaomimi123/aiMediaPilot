@@ -28,7 +28,9 @@ export function PageShell({
     <main className={cn('flex min-w-0 flex-1 flex-col overflow-y-auto', className)}>
       <header className="sticky top-0 z-10 flex items-center gap-2.5 border-b border-line-subtle bg-canvas px-6 py-[13px]">
         <div className="flex min-w-0 flex-1 items-baseline gap-2.5">
-          <h1 className="shrink-0 text-sm font-semibold text-fg">{title}</h1>
+          {/* 标题必须可截断: 内容卡标题可能是整段灵感原文, shrink-0 会把右侧
+              操作按钮直接顶出屏(成片详情页实测)。悬停 title 属性看全文。 */}
+          <h1 className="min-w-0 shrink truncate text-sm font-semibold text-fg" title={title}>{title}</h1>
           {description ? (
             <p className="truncate text-xs text-fg-3">{description}</p>
           ) : null}
