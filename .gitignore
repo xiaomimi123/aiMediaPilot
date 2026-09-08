@@ -41,3 +41,6 @@ logs/
 # 二十九期 Task 5: 字级对齐脚本的 venv 与模型缓存, 不进 git
 scripts/align/.venv
 scripts/align/__pycache__
+
+# 模板演示视频(本地生成, npm run gen:template-demos)
+/public/template-demos/

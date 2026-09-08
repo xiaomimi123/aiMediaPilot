@@ -19,7 +19,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "worker:dev": "tsx src/jobs/workers/index.ts",
-    "postinstall": "prisma generate && node scripts/setup-remotion.mjs"
+    "postinstall": "prisma generate && node scripts/setup-remotion.mjs",
+    "gen:template-demos": "tsx scripts/generate-template-demos.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

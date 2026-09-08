@@ -756,6 +756,18 @@ warning=等你处理, danger=断链/失败, info=系统在跑, soft=AI 软指标
 刷 48 条重试)。中文系统字体、数字系统等宽栈, 独立展示的数字一律 font-mono
 tabular-nums。root 15px 让 text-sm 恰为设计稿的 13px 正文。
 
+### 模板演示视频 (三十五期新增)
+
+模板库每张卡片顶部循环播放一段 12 秒演示 —— 用该模板**自己的配置**(画幅/视觉
+风格/出镜版面/PIP 参数)走与正式出片同一条 Remotion 渲染链渲出来, 不是示意图,
+所以演示不会和真实出片长得不一样。出镜模板没有真人素材, 用明确标注的灰色渐变
+占位片当人物画面, 演示的是「人物画面 ↔ 知识卡」的版面切换行为。
+
+文件名带配置指纹(`public/template-demos/<id>.<hash8>.mp4`): 模板配置改了指纹
+就变, 旧演示自动不再显示(宁可显示"演示未生成"也不显示一个对不上的)。
+重新生成: `npm run gen:template-demos`(每条约 20 秒, 已存在且指纹一致的跳过,
+FORCE=1 强制重渲)。
+
 ### 卡片库: 四张扩到九张 (三十三期新增, 设计见 `docs/superpowers/specs/2026-09-07-card-library-expansion-design.md`)
 
 **背景**: 填槽渲染只有四张卡(statement/stat/contrast/list)时, 所有数字都只能走
