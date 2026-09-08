@@ -55,6 +55,12 @@ export interface PlanPreviewProps {
   /** 预览用帧率, 默认 30——与 `remotion/src/Root.tsx` Studio 默认 Composition 一致。
    * 调用方可传更低的值(如 worker preview 链用的 15)换取更流畅的实时交互。 */
   fps?: number;
+  /**
+   * 模板级默认样式(三十六期 Task 3/5)——与逐镜 `PreviewShot.style` 合并的
+   * 唯一输入口子, 合并发生在 `Film.tsx` 渲卡处。可选, 没有模板或模板未配置
+   * 时传 `null`/不传, 与 `film-plan` GET 返回的 `templateStyle` 字段同形。
+   */
+  templateStyle?: PreviewShotStyle | null;
 }
 
 const DEFAULT_FPS = 30;
@@ -73,7 +79,7 @@ const COMPOSITION_SIZE: Record<'16:9' | '9:16', { width: number; height: number 
  */
 function buildInputProps(props: PlanPreviewProps): { inputProps: FilmInput; durationInFrames: number; fps: number } {
   const fps = props.fps ?? DEFAULT_FPS;
-  const { mode, plan, selected, vpId, aspect, visualStyle } = props;
+  const { mode, plan, selected, vpId, aspect, visualStyle, templateStyle } = props;
 
   // captions 两种模式都硬编码 []——不是本期漏做, 是范围局限: `FilmPlan`/
   // `PreviewPlan` 这层编辑态数据结构本来就不携带字幕, 字幕是渲染阶段由
@@ -96,6 +102,7 @@ function buildInputProps(props: PlanPreviewProps): { inputProps: FilmInput; dura
         aspect,
         visualStyle,
         sourceVideo: null,
+        templateStyle: templateStyle ?? undefined,
       },
       durationInFrames: Math.max(1, Math.ceil((durMs / 1000) * fps)),
       fps,
@@ -112,6 +119,7 @@ function buildInputProps(props: PlanPreviewProps): { inputProps: FilmInput; dura
       aspect,
       visualStyle,
       sourceVideo: null,
+      templateStyle: templateStyle ?? undefined,
     },
     durationInFrames: Math.max(1, Math.ceil((totalMs / 1000) * fps)),
     fps,

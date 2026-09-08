@@ -33,6 +33,14 @@ export type ShotStillCacheOpts = {
   shot: unknown;
   aspect: '16:9' | '9:16';
   visualStyle: 'card' | 'illustration';
+  /**
+   * 模板级默认样式(三十六期 Task 3)——参与 hash(见下方 `stillCacheFileName`
+   * 注释): 模板样式变了(哪怕这一镜自己的 shot JSON 一个字没改), 卡面画面也
+   * 会跟着变(`mergeShotStyle` 逐字段合并), 不参与 hash 会让剪辑台改完模板
+   * 默认样式后仍然命中旧缓存、看不到变化。可选, 缺省 `undefined`(没有模板
+   * 或模板未配置)。
+   */
+  templateStyle?: FilmInput['templateStyle'];
 };
 
 /**
@@ -53,10 +61,12 @@ export function stillCacheFileName(
   shot: unknown,
   aspect: '16:9' | '9:16',
   visualStyle: 'card' | 'illustration',
+  templateStyle?: FilmInput['templateStyle'],
 ): string {
   const hash = crypto
     .createHash('sha1')
-    .update(JSON.stringify({ shot, visualStyle, aspect }))
+    // templateStyle 参与 hash 见 `ShotStillCacheOpts.templateStyle` 注释。
+    .update(JSON.stringify({ shot, visualStyle, aspect, templateStyle: templateStyle ?? null }))
     .digest('hex')
     .slice(0, 12);
   return `${shotIndex}-${hash}.png`;
@@ -106,6 +116,7 @@ async function renderAndCleanup(opts: ShotStillCacheOpts, filePath: string, file
     visualStyle: opts.visualStyle,
     // 见文件顶部注释: cutaway/pip 两种版式的卡面都视觉等价于"不挂出镜视频"。
     sourceVideo: null,
+    templateStyle: opts.templateStyle,
   };
 
   await renderShotStill({
@@ -138,7 +149,7 @@ async function renderAndCleanup(opts: ShotStillCacheOpts, filePath: string, file
 export async function ensureShotStill(
   opts: ShotStillCacheOpts,
 ): Promise<{ filePath: string; hit: boolean }> {
-  const fileName = stillCacheFileName(opts.shotIndex, opts.shot, opts.aspect, opts.visualStyle);
+  const fileName = stillCacheFileName(opts.shotIndex, opts.shot, opts.aspect, opts.visualStyle, opts.templateStyle);
   const filePath = path.join(opts.stillsDir, fileName);
 
   try {

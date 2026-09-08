@@ -114,6 +114,15 @@ export type FilmInput = {
       shape?: 'rounded' | 'circle';
     } | null;
   } | null;
+  /**
+   * 模板级默认样式(三十六期 Task 3)——与 `remotion/src/Film.tsx` 的
+   * `FilmInput.templateStyle` 逐字段同形, **不 import**(独立子项目, 理由同
+   * `CaptionItem`)。与逐镜 `shots[].style`(`shot-plan.ts` 的
+   * `ShotStyleSchema`)合并的唯一输入口子, 合并发生在 `Film.tsx` 渲卡处
+   * (`mergeShotStyle`, 定义于 `remotion/src/cards/style.ts`)——这里只是
+   * 透传, 不在主项目侧做任何合并逻辑。可选, 缺省 `undefined`。
+   */
+  templateStyle?: { speed?: number; accent?: 'default' | 'blue' | 'yellow' | 'red'; scale?: number };
 };
 
 /**

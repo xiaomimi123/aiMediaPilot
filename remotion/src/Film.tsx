@@ -5,6 +5,7 @@ import {Ambient} from './motion/ambient';
 import {CameraRig} from './motion/camera';
 import {Captions} from './Captions';
 import {THEMES} from './theme';
+import {mergeShotStyle} from './cards/style';
 
 /**
  * 每镜的单调推近幅度(二十六期, 补环境运动层缺口)。
@@ -59,6 +60,14 @@ export type FilmInput = {
   bgm: {src: string; volume: number} | null; // BGM, loop 到片长; renderFilm 负责填入
   captions: CaptionItem[]; // 逐句字幕, 缺省 []
   aspect: '16:9' | '9:16';
+  /**
+   * 模板级默认样式(三十六期 Task 3)——与逐镜 `shots[].style` 合并的唯一
+   * 输入口子(合并逻辑见 `./cards/style` 的 `mergeShotStyle`, 唯一合并点在
+   * 下方渲卡处)。可选、缺省 `undefined`——大多数任务没有模板或模板没配置
+   * 默认样式, 这种情况下行为与三十六期之前完全一致(`mergeShotStyle` 对
+   * `undefined` 输入返回逐镜 style 原样, 见该函数注释)。
+   */
+  templateStyle?: FilmShotStyle;
   /**
    * 卡面视觉风格(二十九期 Task 1)——`'card'` 是四张卡目前的默认配色,
    * `'illustration'` 是给 illustration-tts 迁移用的暖纸/手写感配色, 见
@@ -166,6 +175,7 @@ export const Film: React.FC<FilmInput> = ({
   captions = [],
   visualStyle,
   sourceVideo = null,
+  templateStyle,
 }) => {
   const {fps, width, height} = useVideoConfig();
   const theme = THEMES[visualStyle];
@@ -215,7 +225,7 @@ export const Film: React.FC<FilmInput> = ({
               ]}
               durationSec={durationSec}
             >
-              <Card slots={s.slots} durationInFrames={dur} theme={theme} style={s.style} />
+              <Card slots={s.slots} durationInFrames={dur} theme={theme} style={mergeShotStyle(templateStyle, s.style)} />
             </CameraRig>
           </Sequence>
         );

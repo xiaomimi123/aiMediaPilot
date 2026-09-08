@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
-import { FilmPlanSchema, type FilmPlan } from '@/lib/video-production/shot-plan';
+import { FilmPlanSchema, type FilmPlan, type ShotStyle } from '@/lib/video-production/shot-plan';
 import { timingCheckerFor } from '@/lib/video-production/film-plan-timing';
 import type { AlignedAct } from '@/lib/video-production/aligner-prompt';
 import { probeVideoDurationMs } from '@/lib/video/ffmpeg';
@@ -110,6 +110,10 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     aspect,
     totalMs,
     layout,
+    // 模板级默认样式(三十六期 Task 3/5)——剪辑台面板显示"跟随模板(当前:×)"
+    // 消费这个字段。没有模板或模板未配置时给 null, 不给 undefined(JSON 序列化
+    // undefined 字段会直接消失, 前端拿不到"这个字段存在但是空"的信号)。
+    templateStyle: (template?.defaultShotStyle as ShotStyle | null) ?? null,
   });
 }
 

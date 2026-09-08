@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
-import { ensureShotStill } from '@/lib/video-production/shot-still-cache';
+import { ensureShotStill, type ShotStillCacheOpts } from '@/lib/video-production/shot-still-cache';
 
 /**
  * 剪辑台的 renderStill 卡面图接口(三十一期 Task 3)。
@@ -56,9 +56,12 @@ export async function GET(
   // aspect 推导照抄 worker/film-plan 路由现状: 模板 aspect==='9:16' 才是竖屏。
   const aspect: '16:9' | '9:16' = template?.aspect === '9:16' ? '9:16' : '16:9';
   const visualStyle = visualStyleForMode(vp.mode);
+  // 模板级默认样式(三十六期 Task 3)——照 worker/film-plan 路由同一写法, 让卡面
+  // 预览与真实渲染出的画面一致。
+  const templateStyle = (template?.defaultShotStyle as ShotStillCacheOpts['templateStyle']) ?? undefined;
 
   const stillsDir = path.join(vp.productionRoot, 'stills');
-  const { filePath } = await ensureShotStill({ stillsDir, shotIndex, shot, aspect, visualStyle });
+  const { filePath } = await ensureShotStill({ stillsDir, shotIndex, shot, aspect, visualStyle, templateStyle });
 
   let buf: Buffer;
   try {

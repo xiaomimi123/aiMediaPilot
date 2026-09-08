@@ -486,7 +486,9 @@ export async function handlePptNarrationRemotion(
     // illustration-tts 传 'illustration', 两条链共用这同一处 renderFilm 调用。
     // sourceVideo 留 null: 出镜视频层接入 worker 是二十九期 Task 4 的范围,
     // 本任务(Task 3)只做 Remotion 侧与 renderFilm 管道——必填字段先显式传 null。
-    input: { shots: plan.shots as any, audioSrc: null, bgm: null, captions, aspect, visualStyle: options.visualStyle, sourceVideo: null },
+    // templateStyle(三十六期 Task 3): 模板级默认样式, 与逐镜 style 的合并只发生
+    // 在 Film.tsx 渲卡处(mergeShotStyle)——这里只透传, `as` 断言理由同 shots。
+    input: { shots: plan.shots as any, audioSrc: null, bgm: null, captions, aspect, visualStyle: options.visualStyle, sourceVideo: null, templateStyle: (template?.defaultShotStyle as FilmInput['templateStyle']) ?? undefined },
     outputPath,
     durationInFrames: Math.ceil((lastMs / 1000) * fps),
     fps,
@@ -928,6 +930,8 @@ export async function handleTalkingHeadBrollRemotion(
       // 见 Task 2 报告里的命名撞车提醒)。
       visualStyle: 'card',
       sourceVideo: { src: '', layout, pip },
+      // templateStyle(三十六期 Task 3): 同上一处注释, 只透传, 合并发生在 Film.tsx。
+      templateStyle: (template?.defaultShotStyle as FilmInput['templateStyle']) ?? undefined,
     },
     outputPath,
     durationInFrames: Math.ceil((sourceMs / 1000) * fps),
