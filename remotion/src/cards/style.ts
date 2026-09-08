@@ -71,3 +71,19 @@ export const scaleStyle = (style: ShotStyle | undefined): React.CSSProperties =>
   if (scale === 1) return {};
   return {transform: `scale(${scale})`, transformOrigin: 'center'};
 };
+
+/** 剔除值为 undefined 的键 —— {...a, ...b} 里 b 的 undefined 键**存在**时会覆盖 a, 直接展开是错的。 */
+const compact = (s?: ShotStyle | null): Partial<ShotStyle> => {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(s ?? {})) if (v !== undefined) out[k] = v;
+  return out as Partial<ShotStyle>;
+};
+
+/**
+ * 模板默认样式与逐镜覆盖的合并(三十六期)。逐字段: 镜上显式设置的字段优先,
+ * 没设的用模板默认。**唯一合并点** —— Film.tsx 渲卡前调它, 剪辑台面板显示
+ * "跟随模板(当前:×)"也调它, 两处永远一致。
+ */
+export const mergeShotStyle = (
+  templateStyle?: ShotStyle | null, shotStyle?: ShotStyle | null,
+): ShotStyle => ({ ...compact(templateStyle), ...compact(shotStyle) });
