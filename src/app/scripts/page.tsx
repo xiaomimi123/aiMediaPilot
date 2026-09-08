@@ -60,13 +60,13 @@ export default async function ScriptsPage() {
   const rows = drafts.map((d) => {
     const acts = readActsFromDraftOutput(d.output);
     if (!acts) {
-      return { id: d.id, topic: d.topic, platform: d.platform, sixAct: false as const,
+      return { id: d.id, topic: d.topic.split('\n')[0].trim(), platform: d.platform, sixAct: false as const,
                unwritten: false as const, createdAt: d.createdAt,
                archived: d.archivedAt !== null, impact: impactOf(d.id) };
     }
     // 骨架稿(台词全空)是六幕, 但分数没有意义 —— 空稿子在时长、简洁度上天生满分
     if (isUnwritten(acts)) {
-      return { id: d.id, topic: d.topic, platform: d.platform, sixAct: true as const,
+      return { id: d.id, topic: d.topic.split('\n')[0].trim(), platform: d.platform, sixAct: true as const,
                unwritten: true as const, createdAt: d.createdAt,
                archived: d.archivedAt !== null, impact: impactOf(d.id) };
     }
@@ -74,7 +74,7 @@ export default async function ScriptsPage() {
     const soft = readCachedSoft(softOf.get(d.id), acts);
     return {
       id: d.id,
-      topic: d.topic,
+      topic: d.topic.split('\n')[0].trim(),
       platform: d.platform,
       sixAct: true as const,
       unwritten: false as const,
@@ -113,7 +113,9 @@ export default async function ScriptsPage() {
         <p className="text-sm text-muted-foreground">还没有稿子。去「选题」挑一个开条。</p>
       ) : (
         <div className="overflow-x-auto rounded-md border border-border bg-card">
-          <table className="w-full text-sm">
+          {/* 全表禁换行: 标题列被 max-w-0 约束后, 剩余列会被挤到换行(「归档」竖排、日期折行)。
+              标题自己的 truncate 本身就含 nowrap, 不冲突。 */}
+          <table className="w-full text-sm [&_td]:whitespace-nowrap [&_th]:whitespace-nowrap">
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted-foreground">
                 <th className="px-3 py-2 font-normal">标题</th>
@@ -134,8 +136,15 @@ export default async function ScriptsPage() {
                     r.archived ? 'opacity-55' : '',
                   )}
                 >
-                  <td className="px-3 py-2">
-                    <Link href={`/write/${r.id}`} className="block truncate">
+                  {/*
+                    w-full max-w-0: 表格单元格默认被内容撑开, truncate 在没有宽度
+                    约束的格子里不生效 —— 长标题(从灵感写的稿带整段原文)会把整张表
+                    撑到 overflow-x-auto 里, 「操作」列被推出屏幕, 归档/删除要横向
+                    滚动才够得着(用户实测)。这对组合让标题列吃掉剩余宽度但不许超出,
+                    其余列保持内容自适应。
+                  */}
+                  <td className="w-full max-w-0 px-3 py-2">
+                    <Link href={`/write/${r.id}`} className="block truncate" title={r.topic}>
                       {r.topic}
                       {r.archived ? (
                         <span className="ml-2 rounded bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground">
