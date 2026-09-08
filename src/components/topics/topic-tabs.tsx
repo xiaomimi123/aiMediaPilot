@@ -52,8 +52,14 @@ export function TopicTabs({
   const [tab, setTab] = useState<'inspiration' | 'hot' | 'radar'>('inspiration');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [hotRows, setHotRows] = useState(hot);
+  const [radarRows, setRadarRows] = useState(radar);
+  // 灵感库也转本地 state: 采纳的下一个动作就是「切到灵感库看一眼」, 列表若还是
+  // 服务端渲染的旧数据, 刚存的那条要刷新页面才出现 —— 像丢了。
+  const [inspRows, setInspRows] = useState(inspirations);
   const [busy, setBusy] = useState<string | null>(null);
-  const backlog = radarTotal - adoptedCount;
+  // 本地采纳/忽略过几条, 让「待处理 N 条」跟着降 —— 不然点完数字不动, 像没生效
+  const [handled, setHandled] = useState(0);
+  const backlog = radarTotal - adoptedCount - handled;
 
   async function adoptHot(id: string) {
     setBusy(id);
@@ -65,12 +71,46 @@ export function TopicTabs({
     }
   }
 
+  /**
+   * 雷达条目 采纳/忽略(三十四期补)。后端 PATCH 四期就建好了(带事务与幂等守卫),
+   * 但前端一直只做了「展开看详情」—— 想把雷达文章收进灵感库, 界面上无路可走。
+   * 成功后把这一条从列表里移掉: 列表本来就只显示待处理(status=new)的。
+   * 失败时**不动列表** —— 静默吞掉失败会让人以为存进去了。
+   */
+  async function handleRadar(id: string, action: 'adopt' | 'ignore') {
+    setBusy(id);
+    try {
+      const res = await fetch(`/api/v1/radar/items/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      if (res.ok) {
+        const row = radarRows.find((r) => r.id === id);
+        setRadarRows((rs) => rs.filter((r) => r.id !== id));
+        setHandled((n) => n + 1);
+        if (action === 'adopt' && row) {
+          // 文案拼法与后端一致(title\n角度\n摘要\nurl), 刷新后两边长得一样
+          const body = (await res.json()) as { data?: { inspirationId?: string } };
+          setInspRows((list) => [{
+            id: body.data?.inspirationId ?? id,
+            text: [row.title, row.angle, row.summary, row.url].filter(Boolean).join('\n'),
+            createdAt: new Date().toISOString().slice(0, 10),
+            used: 0,
+          }, ...list]);
+        }
+      }
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <>
       <Tabs
         className="mb-4 max-w-md"
         tabs={[
-          { value: 'inspiration' as const, label: `灵感库 ${inspirations.length}` },
+          { value: 'inspiration' as const, label: `灵感库 ${inspRows.length}` },
           { value: 'hot' as const, label: `抖音热搜 ${hotRows.length}` },
           { value: 'radar' as const, label: `热点雷达 ${radarTotal}` },
         ]}
@@ -136,33 +176,54 @@ export function TopicTabs({
             待处理 {backlog} 条，翻不完是正常的。
           </p>
 
-          {radar.length === 0 ? (
+          {radarRows.length === 0 ? (
             <p className="text-sm text-muted-foreground">雷达还没抓到东西。</p>
           ) : (
             <ul className="flex flex-col divide-y divide-border rounded-md border border-border bg-card">
-              {radar.map((r) => {
+              {radarRows.map((r) => {
                 const open = expanded === r.id;
                 return (
                   <li key={r.id} className="p-3">
-                    <button
-                      type="button"
-                      onClick={() => setExpanded(open ? null : r.id)}
-                      className="block w-full text-left"
-                    >
-                      <p className="text-sm leading-relaxed">{r.angle || r.title}</p>
-                      <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                        <span>{r.source}</span>
-                        <span>·</span>
-                        <span>{r.collectedAt}</span>
-                        {r.heat >= 100 ? null : (
-                          <>
-                            <span>·</span>
-                            <span className="tabular-nums">热度 {r.heat}</span>
-                          </>
-                        )}
-                        <span className={cn('ml-auto', open && 'rotate-180')}>⌄</span>
-                      </p>
-                    </button>
+                    {/* 展开钮与动作钮是并排的兄弟, 不嵌套 —— button 里包 button 是非法 DOM */}
+                    <div className="flex items-start gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setExpanded(open ? null : r.id)}
+                        className="block min-w-0 flex-1 text-left"
+                      >
+                        <p className="text-sm leading-relaxed">{r.angle || r.title}</p>
+                        <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                          <span>{r.source}</span>
+                          <span>·</span>
+                          <span>{r.collectedAt}</span>
+                          {r.heat >= 100 ? null : (
+                            <>
+                              <span>·</span>
+                              <span className="tabular-nums">热度 {r.heat}</span>
+                            </>
+                          )}
+                          <span className={cn('ml-auto', open && 'rotate-180')}>⌄</span>
+                        </p>
+                      </button>
+                      <div className="flex shrink-0 gap-1.5 pt-0.5">
+                        <button
+                          type="button"
+                          disabled={busy === r.id}
+                          onClick={() => void handleRadar(r.id, 'adopt')}
+                          className="rounded-md border border-border bg-card px-2.5 py-1 text-xs transition-colors hover:border-foreground/30 disabled:opacity-50"
+                        >
+                          {busy === r.id ? '处理中…' : '存进灵感库'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy === r.id}
+                          onClick={() => void handleRadar(r.id, 'ignore')}
+                          className="rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                        >
+                          忽略
+                        </button>
+                      </div>
+                    </div>
 
                     {open ? (
                       <div className="mt-2 border-l-2 border-border pl-3">
@@ -183,13 +244,13 @@ export function TopicTabs({
             </ul>
           )}
         </>
-      ) : inspirations.length === 0 ? (
+      ) : inspRows.length === 0 ? (
         <p className="text-sm leading-relaxed text-muted-foreground">
           灵感库是空的。去「拆解」拆一条同赛道创作者的片子，衍生的选题会自动写进这里。
         </p>
       ) : (
         <ul className="flex flex-col divide-y divide-border rounded-md border border-border bg-card">
-          {inspirations.map((i) => (
+          {inspRows.map((i) => (
             <li key={i.id} className="flex items-start justify-between gap-4 p-3">
               <p className="min-w-0 text-sm leading-relaxed">{i.text}</p>
               <span className="shrink-0 text-xs text-muted-foreground">
