@@ -363,6 +363,9 @@ model VideoProduction {
   renderer        String  @default("legacy")
   /// 二十五期: Builder 的填槽产出(FilmPlan)。null = 还没跑到 Builder 或走的是旧链路。
   filmPlan        Json?
+  /// 三十七期: 与 filmPlan 平级的叠加层计划(关键词大字/注解/箭头)。null = 未开启
+  /// 文字叠加层, 或提取失败(提取失败不拦片, 见 overlay-extraction.ts)。
+  overlayPlan     Json?
   /// 二十八期终审: 面向用户的非失败提醒(如"本条为无声成片")。null = 没有要说的话。
   /// 与 errorMessage 分开: errorMessage 语义是"失败", 无声降级不是失败, 混进
   /// errorMessage 会让用户把正常出片当报错。有声路径/legacy 路径保持 null,
@@ -560,6 +563,9 @@ model VideoTemplate {
   /// 都能开, 不是某一种模式专属。第一版错做成了第四种交付模式, 用户指出那是
   /// 层级错误: 它只是口播视频的一种形式, 而真人形象将来要能加到任何模式上。
   textOverlayEnabled Boolean @default(false)
+  /// 三十七期: 右上角常驻小字(如账号/系列名), 与文字叠加层同层但生命周期覆盖全片。
+  /// null = 不显示。
+  cornerBadge       String?
   /// 拍摄时人在画面哪一侧 —— 文字安全区靠它算。不做人像识别(要 matting),
   /// 猜错的代价是字直接糊在脸上, 所以由人设定。left|center|right
   personSide        String  @default("right")

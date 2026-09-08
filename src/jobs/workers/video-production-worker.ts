@@ -49,6 +49,7 @@ import { isRemotionReadyMode } from '@/lib/video-production/renderer';
 import { FilmPlanSchema, describeCardsForPrompt, type FilmPlan } from '@/lib/video-production/shot-plan';
 import { actWindows, actWindowsFromAligned, FILM_PLAN, FILM_PLAN_BROLL, type ActWindow } from '@/lib/video-production/film-plan-prompt';
 import { buildFilmPlan } from '@/lib/video-production/film-plan-builder';
+import { extractOverlayPlan } from '@/lib/video-production/overlay-extraction';
 import { timingCheckerFor } from '@/lib/video-production/film-plan-timing';
 import { captionEventsFromTranscript, type CaptionEvent } from '@/lib/video-production/caption-events';
 import { PIP_SCALE_MIN, PIP_SCALE_MAX } from '@/lib/video/pip-layout';
@@ -725,6 +726,9 @@ export async function handleTalkingHeadBrollRemotion(
   let plan: FilmPlan;
   let aligned: AlignedAct[];
   let rawTranscript: TranscriptSegment[];
+  // 三十七期: 文字叠加层提取失败不拦片(spec 红线), notice 并进 productionNotice
+  // (写法照 handlePptNarrationRemotion 的 productionNotice ?? 拼接惯例)。
+  let overlayNotice: string | null = null;
   // `skipPlanGeneration`(三十一期 Task 1): 与 handlePptNarrationRemotion 同一先例,
   // 见该函数内对应注释。
   if (mode === 'preview' && !skipPlanGeneration) {
@@ -766,6 +770,32 @@ export async function handleTalkingHeadBrollRemotion(
         updatedAt: new Date().toISOString(),
       },
     });
+
+    // 三十七期: 文字叠加层与交付模式正交(与 brollOn 无关), 只由模板开关控制。
+    // 提取失败不拦片——`extractOverlayPlan` 两轮修复仍不合格时自己兜底返回
+    // `{ items: [] }` + notice, 这里只需要落库, 不用 try/catch。
+    if (template?.textOverlayEnabled) {
+      const overlayLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-chat' });
+      const { plan: overlayPlan, notice } = await extractOverlayPlan({
+        llm: overlayLLM,
+        // TranscriptSegment 是秒(startSec/endSec)——OverlayExtractionSchema/
+        // archaeology 提示词的时间轴是毫秒, 这里换算。
+        segments: rawTranscript.map((s) => ({
+          startMs: Math.round(s.startSec * 1000),
+          endMs: Math.round(s.endSec * 1000),
+          text: s.text,
+        })),
+        durationMs: (await probeVideoDurationMs(sourceVideoPath)) ?? 0,
+      });
+      overlayNotice = notice;
+      await prisma.videoProduction.update({
+        where: { id: vp.id },
+        data: {
+          overlayPlan: overlayPlan as unknown as Prisma.InputJsonValue,
+          updatedAt: new Date().toISOString(),
+        },
+      });
+    }
 
     // FilmPlan 的时间边界: 总时长 = 源视频真实时长(ffprobe), 不是幕窗口总和——
     // 出镜链画面全程有源视频铺底, 卡片只是间歇覆盖, 分镜不需要铺满时间轴。
@@ -961,7 +991,14 @@ export async function handleTalkingHeadBrollRemotion(
     kind: mode,
   });
 
-  await setStatus(readyStatus, { [outputField]: outputPath, freezeReport });
+  // overlayNotice 只在本次跑了提取(preview 且未 skipPlanGeneration)时非空——master
+  // 复用 preview 分支不重跑提取, 不传这个键就不会用 null 覆盖掉 preview 已落库的
+  // productionNotice(拼接惯例同 handlePptNarrationRemotion)。
+  await setStatus(readyStatus, {
+    [outputField]: outputPath,
+    freezeReport,
+    ...(overlayNotice ? { productionNotice: overlayNotice } : {}),
+  });
 }
 
 async function handleProduce(job: Job<JobData>) {
