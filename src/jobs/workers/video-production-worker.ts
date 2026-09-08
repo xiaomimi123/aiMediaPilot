@@ -502,7 +502,9 @@ export async function handlePptNarrationRemotion(
   // 逐镜画面体检(renderStill 版, 三十期 Task 1)——只报不拦, 见 reportStillHealth 顶部注释。
   await reportStillHealth({
     shots: plan.shots as StillCheckShot[],
-    input: { shots: [], audioSrc: null, bgm: null, captions, aspect, visualStyle: options.visualStyle, sourceVideo: null },
+    // templateStyle 也要带上(Task 3 盘外补): 体检渲的帧必须和真实出片同一配置,
+    // 否则模板默认 scale 改小时, 体检看到的是未缩放的帧, 空白判定跟成片对不上。
+    input: { shots: [], audioSrc: null, bgm: null, captions, aspect, visualStyle: options.visualStyle, sourceVideo: null, templateStyle: (template?.defaultShotStyle as FilmInput['templateStyle']) ?? undefined },
     fps,
     workDir: path.join(vp.productionRoot, `still-check-${mode}`),
     kind: mode,
@@ -952,7 +954,7 @@ export async function handleTalkingHeadBrollRemotion(
   // 直接返回, 不会白跑一次抽帧。
   await reportStillHealth({
     shots: plan.shots as StillCheckShot[],
-    input: { shots: [], audioSrc: null, bgm: null, captions, aspect, visualStyle: 'card', sourceVideo: { src: '', layout, pip } },
+    input: { shots: [], audioSrc: null, bgm: null, captions, aspect, visualStyle: 'card', sourceVideo: { src: '', layout, pip }, templateStyle: (template?.defaultShotStyle as FilmInput['templateStyle']) ?? undefined },
     fps,
     sourceVideoFile: sourceVideoPath,
     workDir: path.join(vp.productionRoot, `still-check-${mode}`),
