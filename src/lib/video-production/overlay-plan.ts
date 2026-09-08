@@ -66,83 +66,59 @@ export const OverlayPlanSchema = z.object({
   ),
 });
 
-export type OverlayAspect = '16:9' | '9:16';
-export type OverlayPersonSide = 'left' | 'center' | 'right';
-
-export interface OverlayRect {
-  x: number;
-  y: number;
-  anchor: 'top' | 'bottom';
-}
+/**
+ * 定位纯函数(`overlaySlotRect`/`overlayPosition`)与其类型(`OverlayAspect`/
+ * `OverlayPersonSide`/`OverlayRect`)——**三十七期 Task 3 起本体搬到
+ * `remotion/src/overlay/position.ts`**(remotion 侧), 这里只转发。
+ *
+ * 为什么反过来搬(`mergeShotStyle` 的先例是主项目 import remotion 侧实现,
+ * 这条规矩延续同一个方向): `remotion/` 是独立 tsconfig 的子项目, 渲染层
+ * (`TextOverlayLayer.tsx`)需要这两个函数算像素位置, 而 remotion 侧不能反过来
+ * import 主项目文件。主项目 import remotion 文件则有先例可循(`plan-preview.tsx`
+ * import `Film.tsx`、`merge-shot-style.test.ts` import `cards/style.ts`)——
+ * 主项目 tsc 的 include 本来就会把 `remotion/src/**` 一起编译进去(`remotion`/
+ * `@remotion/player` 也在主项目 node_modules 里, 见 `package.json`), 这条路
+ * 是通的。
+ *
+ * 这里 re-export 而不是整体删掉本文件里的定义: 本文件里的 `OverlaySlot`/
+ * `OVERLAY_SLOTS`/`OVERLAY_KINDS` 是 LLM 契约(`OverlayExtractionSchema`/
+ * `OverlayPlanSchema`)的一部分, 继续留在这里; 只有"给定坐标算像素位置"这条
+ * 纯几何逻辑挪走。两边类型同名同形(`OverlaySlot` 在 remotion 侧也有定义,
+ * 结构相同, 互不 import, 与 `CaptionItem` 那类"两侧同形不 import"惯例一致
+ * ——但这两个函数**确实**互相 import 了, 因为它们的行为必须完全同源, 不能
+ * 靠"同形状但两份实现"来保证一致(T1 测试与 Task 6 拖拽层都依赖这一点)。
+ */
+export {
+  overlaySlotRect,
+  overlayPosition,
+  type OverlayAspect,
+  type OverlayPersonSide,
+  type OverlayRect,
+} from '../../../remotion/src/overlay/position';
+import type { OverlayPersonSide as _OverlayPersonSide } from '../../../remotion/src/overlay/position';
 
 /**
- * 槽位 → 归一化坐标 + 锚点。
+ * 从 `vp.overlayPlan`(存储 Json, 可能是 `null`/未经校验的历史数据) +
+ * `template.personSide`/`cornerBadge` 算出喂给 `FilmInput` 的三个叠加层字段。
  *
- * 移植自考古版 `slotPosition` + `textSafeZone` 的思想, 换算成 0~1:
- * - 横屏(16:9): 安全区是画面左右半边之一, 由人物所在侧决定 —— 人在右, 安全区
- *   (以及格子)在左半边, 反之亦然; 人在中间时退回考古版"上方一条带"的思路,
- *   这里简化为居中偏上的窄带。
- *   格带取 x∈[0.06,0.42](考古版 `textSafeZone` 半区宽 0.48 画幅 + `slotsInZone`
- *   的 8% 内边距, 这里合并成一个直接量出的归一化区间), 镜像时整体翻到右半边
- *   (1 - 0.42, 1 - 0.06)。
- *   五行 y 从 0.18 到 0.72 均匀分布(考古版 `slotsInZone`: 顶部留 12%、可用高度
- *   82%, 这里取头尾两行的归一化位置, 中间三行等距)。
- * - 竖屏(9:16): 人脸占中下(参考 `text-zone.ts` 的 `PORTRAIT_FACE_TOP = 0.34`,
- *   这里格带留得更宽一点给五行文字), 格带 y∈[0.08,0.42], x 固定贴左对齐一条,
- *   与横屏保持同一套 x∈[0.06,0.42] 的左侧字带写法一致。
- * - top-center: y=0.12(考古版 `frame.height * 0.12` 直接可用, 已是归一化写法)。
- * - bottom-center: y=0.78, **不是**考古版的 0.88 —— 那个数字是旧问题的来源
- *   (底部格和字幕安全区打架, 见任务书), 这里抬高到字幕安全区上方, 测试断言
- *   y < 0.82, 0.78 留了余量。
- */
-export function overlaySlotRect(
-  aspect: OverlayAspect,
-  personSide: OverlayPersonSide,
-  slot: OverlaySlot,
-): OverlayRect {
-  if (slot === 'top-center') {
-    return { x: 0.5, y: 0.12, anchor: 'top' };
-  }
-  if (slot === 'bottom-center') {
-    return { x: 0.5, y: 0.78, anchor: 'bottom' };
-  }
-
-  const row = Number(slot.split('-')[1]); // 1~5
-  const rowsY = [0.18, 0.27, 0.405, 0.54, 0.72]; // 五格自上而下(见上方注释)
-  const y = rowsY[Math.min(row - 1, rowsY.length - 1)];
-
-  if (aspect === '9:16') {
-    // 竖屏: 格带整体挪到上方(人脸占中下), x 与横屏左侧字带写法一致
-    const portraitRowsY = [0.08, 0.145, 0.245, 0.335, 0.42];
-    return { x: 0.06, y: portraitRowsY[Math.min(row - 1, portraitRowsY.length - 1)], anchor: 'top' };
-  }
-
-  // 横屏: 人在右 → 格子在左半边(x∈[0.06,0.42]); 人在左 → 镜像到右半边;
-  // 人在中间 → 退回左半边兜底(考古版对"人在中"也是回落上方带, 这里简化统一
-  // 为左半边, 因为 overlaySlotRect 不像考古版拿到完整 layout, 无法判断分屏方向)。
-  if (personSide === 'left') {
-    return { x: 1 - 0.06, y, anchor: 'top' };
-  }
-  return { x: 0.06, y, anchor: 'top' };
-}
-
-/**
- * 定位纯函数——渲染层与拖拽编辑层的唯一几何真源。
+ * **三处调用点共用同一份实现**(worker 的四处渲染/体检入口、`shot-still` 路由、
+ * `film-plan` GET 路由), 不各写一份——三十六期 templateStyle 那批注入点是内联
+ * 表达式抄四遍(字段简单, 抄得起), 这里多了一次 schema 校验 + 枚举兜底, 值得
+ * 抽成函数, 改一处不用满仓找。
  *
- * item.x/y 存在(用户拖拽覆盖过) → 直接用, 不再查槽位表; 否则回退到
- * `overlaySlotRect` 的默认格位。锚点固定为 'top': 用户拖拽给的是左上角原点,
- * 不像槽位表还带着 bottom-center 那种底部对齐的语义。
+ * `overlayPlanJson` 校验失败(历史脏数据/未来 schema 演进)时不抛错、按"没有
+ * 叠加层"处理(`overlays: []`)——这是可选功能, 与 `extractOverlayPlan` 提取
+ * 失败不拦片同一个纪律, 不该因为读出来的旧数据对不上新 schema 就让渲染/体检
+ * 报错。
  */
-export function overlayPosition(
-  aspect: OverlayAspect,
-  personSide: OverlayPersonSide,
-  // slot 放宽收 string: 调用方(测试里的 item() 工厂函数)常把 slot 字面量组装
-  // 在一个未标注类型的对象里, TS 会把它推宽成 string —— 真正的枚举校验交给
-  // OverlayExtractionSchema/OverlayPlanSchema, 这里信任上游已经校验过。
-  item: { slot: string; x?: number; y?: number },
-): OverlayRect {
-  if (item.x !== undefined && item.y !== undefined) {
-    return { x: item.x, y: item.y, anchor: 'top' };
-  }
-  return overlaySlotRect(aspect, personSide, item.slot as OverlaySlot);
+export function resolveOverlayInput(
+  overlayPlanJson: unknown,
+  personSide: string | null | undefined,
+  cornerBadge: string | null | undefined,
+): { overlays: OverlayItem[]; overlayPersonSide: _OverlayPersonSide; cornerBadge: string | null } {
+  const parsed = overlayPlanJson ? OverlayPlanSchema.safeParse(overlayPlanJson) : null;
+  const overlays = parsed?.success ? (parsed.data.items as OverlayItem[]) : [];
+  const overlayPersonSide: _OverlayPersonSide =
+    personSide === 'left' || personSide === 'center' || personSide === 'right' ? personSide : 'right';
+  return { overlays, overlayPersonSide, cornerBadge: cornerBadge ?? null };
 }

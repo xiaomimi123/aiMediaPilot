@@ -6,6 +6,8 @@ import {CameraRig} from './motion/camera';
 import {Captions} from './Captions';
 import {THEMES} from './theme';
 import {mergeShotStyle} from './cards/style';
+import {TextOverlayLayer, type TextOverlayItem} from './overlay/TextOverlayLayer';
+import type {OverlayPersonSide} from './overlay/position';
 
 /**
  * 每镜的单调推近幅度(二十六期, 补环境运动层缺口)。
@@ -68,6 +70,18 @@ export type FilmInput = {
    * `undefined` 输入返回逐镜 style 原样, 见该函数注释)。
    */
   templateStyle?: FilmShotStyle;
+  /**
+   * 文字叠加层(三十七期 Task 3)——与
+   * `src/lib/video-production/remotion-render.ts` 的 `FilmInput.overlays`/
+   * `overlayPersonSide`/`cornerBadge` 逐字段同形, **不 import**(独立子项目,
+   * 理由同 `CaptionItem`)。三者都缺省时(`overlays` 为 `undefined`/空数组、
+   * `cornerBadge` 为 `null`/`undefined`)`TextOverlayLayer` 不渲染任何东西,
+   * 与之前(没有这层)的画面完全一致——只有 `talking-head-broll` 链
+   * (worker 里 `vp.overlayPlan` 非空)才会真的填这三个字段。
+   */
+  overlays?: TextOverlayItem[];
+  overlayPersonSide?: OverlayPersonSide;
+  cornerBadge?: string | null;
   /**
    * 卡面视觉风格(二十九期 Task 1)——`'card'` 是四张卡目前的默认配色,
    * `'illustration'` 是给 illustration-tts 迁移用的暖纸/手写感配色, 见
@@ -176,6 +190,10 @@ export const Film: React.FC<FilmInput> = ({
   visualStyle,
   sourceVideo = null,
   templateStyle,
+  aspect,
+  overlays = [],
+  overlayPersonSide = 'right',
+  cornerBadge = null,
 }) => {
   const {fps, width, height} = useVideoConfig();
   const theme = THEMES[visualStyle];
@@ -195,6 +213,24 @@ export const Film: React.FC<FilmInput> = ({
           width: Math.round(width * sourceVideo!.pip!.scale) + sourceVideo!.pip!.margin,
         }
       : undefined;
+
+  /*
+   * 文字叠加层(三十七期 Task 3)——挂载点在人物视频层之上、卡片轨之下:
+   * 三个渲染分支都把它放在 `cardsTrack` 前面, 让卡片(cutaway 下每个 Sequence
+   * 自带的不透明背景)天然盖住它, 不需要额外写"卡片出现时隐藏叠加层"的避让
+   * 逻辑——与参考片行为一致(design doc §3.4)。`aspect` 用来算格位(横屏/竖屏
+   * 安全区不同), 与 `useVideoConfig()` 的 width/height 只用来把归一化坐标
+   * 换算成像素是两件事。
+   */
+  const overlayLayer = (
+    <TextOverlayLayer
+      overlays={overlays}
+      overlayPersonSide={overlayPersonSide}
+      cornerBadge={cornerBadge}
+      aspect={aspect}
+      theme={theme}
+    />
+  );
 
   const cardsTrack = (
     <>
@@ -245,10 +281,12 @@ export const Film: React.FC<FilmInput> = ({
            * cardsTrack 之前, 让卡片在自己的时间窗内用整幅不透明背景盖住它。
            */}
           <OffthreadVideo src={staticFile(sourceVideo!.src)} style={CUTAWAY_VIDEO_STYLE} />
+          {overlayLayer}
           {cardsTrack}
         </>
       ) : isPip ? (
         <>
+          {overlayLayer}
           {cardsTrack}
           {/*
            * pip: 出镜视频角标常驻, 必须在卡片轨之后渲染才不会被卡片整幅背景盖住。
@@ -304,7 +342,10 @@ export const Film: React.FC<FilmInput> = ({
           })()}
         </>
       ) : (
-        cardsTrack
+        <>
+          {overlayLayer}
+          {cardsTrack}
+        </>
       )}
       {audioSrc ? <Audio src={staticFile(audioSrc)} /> : null}
       {bgm ? <Audio src={staticFile(bgm.src)} loop volume={bgm.volume} /> : null}

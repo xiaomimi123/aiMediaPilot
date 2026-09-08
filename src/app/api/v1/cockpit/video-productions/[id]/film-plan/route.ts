@@ -5,6 +5,7 @@ import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { FilmPlanSchema, type FilmPlan, type ShotStyle } from '@/lib/video-production/shot-plan';
 import { timingCheckerFor } from '@/lib/video-production/film-plan-timing';
+import { OverlayPlanSchema, resolveOverlayInput } from '@/lib/video-production/overlay-plan';
 import type { AlignedAct } from '@/lib/video-production/aligner-prompt';
 import { probeVideoDurationMs } from '@/lib/video/ffmpeg';
 
@@ -100,7 +101,19 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     ? (template?.talkingHeadLayout === 'pip' ? 'pip' : 'cutaway')
     : null;
 
+  // 文字叠加层(三十七期 Task 3, 给 Task 5/6 的剪辑台面板/拖拽层用)——
+  // `overlayPlan` 下发**解析后的对象**(`{items:[...]}`)而不是原始 Json, 脏数据
+  // (历史数据/未来 schema 演进)解析失败按"没有叠加层"处理, 下发 `null`,
+  // 不把校验失败甩给前端。`overlayPersonSide` 复用 `resolveOverlayInput` 里
+  // 同一份枚举兜底(非法值/未设置 → 'right'), 与渲染层拿到的值保持一致——
+  // 剪辑台预览与真实出片必须是同一份"人在哪侧"判断, 不能各自兜底出不同结果。
+  const overlayPlanParsed = vp.overlayPlan ? OverlayPlanSchema.safeParse(vp.overlayPlan) : null;
+  const overlayPlan = overlayPlanParsed?.success ? overlayPlanParsed.data : null;
+  const { overlayPersonSide } = resolveOverlayInput(vp.overlayPlan, template?.personSide, template?.cornerBadge);
+
   return ok({
+    overlayPlan,
+    overlayPersonSide,
     id: vp.id,
     filmPlan: vp.filmPlan,
     // 幕边界(时间窗编辑要用)——原样返回, 剪辑台按幕分组展示分镜。

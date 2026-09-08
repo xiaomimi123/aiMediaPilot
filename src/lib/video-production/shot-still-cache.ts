@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { renderShotStill, type FilmInput } from './remotion-render';
+import type { OverlayItem, OverlayPersonSide } from './overlay-plan';
 
 /**
  * 剪辑台「每镜卡面图」的渲染+缓存层(三十一期 Task 3)。
@@ -41,6 +42,15 @@ export type ShotStillCacheOpts = {
    * 或模板未配置)。
    */
   templateStyle?: FilmInput['templateStyle'];
+  /**
+   * 文字叠加层(三十七期 Task 3)——同样参与 hash(见下方 `stillCacheFileName`
+   * 注释): `vp.overlayPlan`/`template.personSide`/`template.cornerBadge` 任一
+   * 变化, 这一镜时间窗内看到的叠加画面也可能跟着变, 不参与 hash 会让改完
+   * 叠加计划后仍命中旧缓存。三者缺省 `undefined`(没有叠加层)。
+   */
+  overlays?: OverlayItem[];
+  overlayPersonSide?: OverlayPersonSide;
+  cornerBadge?: string | null;
 };
 
 /**
@@ -62,17 +72,26 @@ export function stillCacheFileName(
   aspect: '16:9' | '9:16',
   visualStyle: 'card' | 'illustration',
   templateStyle?: FilmInput['templateStyle'],
+  overlays?: OverlayItem[],
+  overlayPersonSide?: OverlayPersonSide,
+  cornerBadge?: string | null,
 ): string {
   const hash = crypto
     .createHash('sha1')
     // templateStyle 参与 hash 见 `ShotStillCacheOpts.templateStyle` 注释。
     // key 排序归一(三十六期终审 minor): 编辑器按操作顺序追加字段, 同值不同序
     // 会算出不同 hash, 缓存被误判失效白重渲。
+    // overlays(三十七期 Task 3)不排序——`items` 数组本身顺序有语义(同一格位
+    // 靠先后区分谁在前), 直接 JSON.stringify 即可, 照抄 templateStyle 的归一
+    // 惯例只对"对象字段顺序"这一层做, 不对"数组元素顺序"做。
     .update(JSON.stringify({
       shot, visualStyle, aspect,
       templateStyle: templateStyle
         ? Object.fromEntries(Object.entries(templateStyle).sort(([a], [b]) => a.localeCompare(b)))
         : null,
+      overlays: overlays ?? null,
+      overlayPersonSide: overlayPersonSide ?? null,
+      cornerBadge: cornerBadge ?? null,
     }))
     .digest('hex')
     .slice(0, 12);
@@ -124,6 +143,9 @@ async function renderAndCleanup(opts: ShotStillCacheOpts, filePath: string, file
     // 见文件顶部注释: cutaway/pip 两种版式的卡面都视觉等价于"不挂出镜视频"。
     sourceVideo: null,
     templateStyle: opts.templateStyle,
+    overlays: opts.overlays,
+    overlayPersonSide: opts.overlayPersonSide,
+    cornerBadge: opts.cornerBadge,
   };
 
   await renderShotStill({
@@ -156,7 +178,10 @@ async function renderAndCleanup(opts: ShotStillCacheOpts, filePath: string, file
 export async function ensureShotStill(
   opts: ShotStillCacheOpts,
 ): Promise<{ filePath: string; hit: boolean }> {
-  const fileName = stillCacheFileName(opts.shotIndex, opts.shot, opts.aspect, opts.visualStyle, opts.templateStyle);
+  const fileName = stillCacheFileName(
+    opts.shotIndex, opts.shot, opts.aspect, opts.visualStyle, opts.templateStyle,
+    opts.overlays, opts.overlayPersonSide, opts.cornerBadge,
+  );
   const filePath = path.join(opts.stillsDir, fileName);
 
   try {

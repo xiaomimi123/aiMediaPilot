@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import type { OverlayItem, OverlayPersonSide } from './overlay-plan';
 
 /**
  * `@remotion/bundler` / `@remotion/renderer` 故意不在主项目依赖图里
@@ -123,6 +124,19 @@ export type FilmInput = {
    * 透传, 不在主项目侧做任何合并逻辑。可选, 缺省 `undefined`。
    */
   templateStyle?: { speed?: number; accent?: 'default' | 'blue' | 'yellow' | 'red'; scale?: number };
+  /**
+   * 文字叠加层(三十七期 Task 3)——与 `remotion/src/Film.tsx` 的
+   * `FilmInput.overlays`/`overlayPersonSide`/`cornerBadge` 逐字段同形, **不
+   * import**(独立子项目, 理由同 `CaptionItem`)。`overlays` 缺省 `undefined`
+   * 时 `TextOverlayLayer` 按空数组处理, 不渲染任何叠加元素——只有
+   * `talking-head-broll` 链(worker 里 `vp.overlayPlan` 非空)会真的填这三个
+   * 字段, 其余链传 `[]`/`'right'`/`null` 也不产生任何画面差异。
+   */
+  overlays?: OverlayItem[];
+  /** 拍摄时人在画面哪一侧——安全区(格位)靠它算, 见 `overlay-plan.ts` 的 `overlaySlotRect`。 */
+  overlayPersonSide?: OverlayPersonSide;
+  /** 右上角常驻小字(账号/系列声明), 支持 `\n` 多行。`null`/缺省 = 不显示。 */
+  cornerBadge?: string | null;
 };
 
 /**

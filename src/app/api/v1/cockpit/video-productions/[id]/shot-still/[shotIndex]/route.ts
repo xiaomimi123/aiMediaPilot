@@ -4,6 +4,7 @@ import { fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
 import { ensureShotStill, type ShotStillCacheOpts } from '@/lib/video-production/shot-still-cache';
+import { resolveOverlayInput } from '@/lib/video-production/overlay-plan';
 
 /**
  * 剪辑台的 renderStill 卡面图接口(三十一期 Task 3)。
@@ -59,9 +60,16 @@ export async function GET(
   // 模板级默认样式(三十六期 Task 3)——照 worker/film-plan 路由同一写法, 让卡面
   // 预览与真实渲染出的画面一致。
   const templateStyle = (template?.defaultShotStyle as ShotStillCacheOpts['templateStyle']) ?? undefined;
+  // 文字叠加层(三十七期 Task 3)——同一份 `resolveOverlayInput`, worker/
+  // film-plan 路由共用, 见该函数顶部注释。
+  const { overlays, overlayPersonSide, cornerBadge } = resolveOverlayInput(
+    vp.overlayPlan, template?.personSide, template?.cornerBadge,
+  );
 
   const stillsDir = path.join(vp.productionRoot, 'stills');
-  const { filePath } = await ensureShotStill({ stillsDir, shotIndex, shot, aspect, visualStyle, templateStyle });
+  const { filePath } = await ensureShotStill({
+    stillsDir, shotIndex, shot, aspect, visualStyle, templateStyle, overlays, overlayPersonSide, cornerBadge,
+  });
 
   let buf: Buffer;
   try {

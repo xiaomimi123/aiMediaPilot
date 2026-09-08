@@ -50,6 +50,7 @@ import { FilmPlanSchema, describeCardsForPrompt, type FilmPlan } from '@/lib/vid
 import { actWindows, actWindowsFromAligned, FILM_PLAN, FILM_PLAN_BROLL, type ActWindow } from '@/lib/video-production/film-plan-prompt';
 import { buildFilmPlan } from '@/lib/video-production/film-plan-builder';
 import { extractOverlayPlan } from '@/lib/video-production/overlay-extraction';
+import { resolveOverlayInput } from '@/lib/video-production/overlay-plan';
 import { timingCheckerFor } from '@/lib/video-production/film-plan-timing';
 import { captionEventsFromTranscript, type CaptionEvent } from '@/lib/video-production/caption-events';
 import { PIP_SCALE_MIN, PIP_SCALE_MAX } from '@/lib/video/pip-layout';
@@ -87,6 +88,25 @@ type SetStatusFn = (status: string, extra?: Record<string, unknown>) => Promise<
 /** 取模板。templateId 为空(内容详情页旧入口)时返回 null, 调用方按默认值走。 */
 async function templateOf(templateId: string | null) {
   return templateId ? prisma.videoTemplate.findUnique({ where: { id: templateId } }) : null;
+}
+
+/**
+ * 三十七期 Task 3: 从 `vp.overlayPlan` + `template.personSide`/`cornerBadge`
+ * 算出喂给 `FilmInput` 的三个叠加层字段——渲染两处(handlePptNarrationRemotion/
+ * handleTalkingHeadBrollRemotion)与体检两处(reportStillHealth 的两次调用)
+ * 共用同一份计算, 不写四份。实际的 schema 校验 + 枚举兜底逻辑在
+ * `overlay-plan.ts` 的 `resolveOverlayInput`(`shot-still`/`film-plan` 两处
+ * 路由也共用同一份实现), 这里只是把 `vp`/`template` 拆成它要的三个参数。
+ *
+ * `vp.overlayPlan` 目前只有 `handleTalkingHeadBrollRemotion` 会写(设计 §3.2:
+ * "只对 talking-head-broll 链跑"), 其余链读到的恒为 `null` → `overlays: []`,
+ * 与"没有这层"的画面完全一致——四处都调用这个函数, 不必按链路分叉。
+ */
+function overlayInputFrom(
+  vp: Pick<VideoProduction, 'overlayPlan'>,
+  template: { personSide: string; cornerBadge: string | null } | null,
+) {
+  return resolveOverlayInput(vp.overlayPlan, template?.personSide, template?.cornerBadge);
 }
 
 function shotDir(productionRoot: string, shotIndex: number): string {
@@ -478,6 +498,11 @@ export async function handlePptNarrationRemotion(
   const fps = mode === 'master' ? 30 : 15;
   const aspect = template?.aspect === '9:16' ? '9:16' : '16:9';
 
+  // 三十七期 Task 3: 这条链(ppt-narration/illustration-tts)本身不产 overlayPlan,
+  // `overlayInputFrom` 恒读到 `vp.overlayPlan === null` → `overlays: []`——
+  // 四处渲染/体检入口统一调用同一份计算, 不按链路分叉(见函数顶部注释)。
+  const overlayInput = overlayInputFrom(vp, template);
+
   await setStatus('assembling');
   const outputPath = path.join(vp.productionRoot, outputFileName);
   await renderFilm({
@@ -489,7 +514,10 @@ export async function handlePptNarrationRemotion(
     // 本任务(Task 3)只做 Remotion 侧与 renderFilm 管道——必填字段先显式传 null。
     // templateStyle(三十六期 Task 3): 模板级默认样式, 与逐镜 style 的合并只发生
     // 在 Film.tsx 渲卡处(mergeShotStyle)——这里只透传, `as` 断言理由同 shots。
-    input: { shots: plan.shots as any, audioSrc: null, bgm: null, captions, aspect, visualStyle: options.visualStyle, sourceVideo: null, templateStyle: (template?.defaultShotStyle as FilmInput['templateStyle']) ?? undefined },
+    input: {
+      shots: plan.shots as any, audioSrc: null, bgm: null, captions, aspect, visualStyle: options.visualStyle, sourceVideo: null, templateStyle: (template?.defaultShotStyle as FilmInput['templateStyle']) ?? undefined,
+      ...overlayInput,
+    },
     outputPath,
     durationInFrames: Math.ceil((lastMs / 1000) * fps),
     fps,
@@ -505,7 +533,11 @@ export async function handlePptNarrationRemotion(
     shots: plan.shots as StillCheckShot[],
     // templateStyle 也要带上(Task 3 盘外补): 体检渲的帧必须和真实出片同一配置,
     // 否则模板默认 scale 改小时, 体检看到的是未缩放的帧, 空白判定跟成片对不上。
-    input: { shots: [], audioSrc: null, bgm: null, captions, aspect, visualStyle: options.visualStyle, sourceVideo: null, templateStyle: (template?.defaultShotStyle as FilmInput['templateStyle']) ?? undefined },
+    // overlays/overlayPersonSide/cornerBadge 同一理由(三十七期 Task 3)。
+    input: {
+      shots: [], audioSrc: null, bgm: null, captions, aspect, visualStyle: options.visualStyle, sourceVideo: null, templateStyle: (template?.defaultShotStyle as FilmInput['templateStyle']) ?? undefined,
+      ...overlayInput,
+    },
     fps,
     workDir: path.join(vp.productionRoot, `still-check-${mode}`),
     kind: mode,
@@ -946,6 +978,11 @@ export async function handleTalkingHeadBrollRemotion(
   // FilmPlan 的 shots 允许留空档, 用 shots 的最大 endMs 会把没有卡片覆盖的尾段切掉。
   const sourceMs = (await probeVideoDurationMs(sourceVideoPath)) ?? 0;
 
+  // 三十七期 Task 3: 这条链是唯一真正产出 `vp.overlayPlan` 的链(见文件顶部
+  // `extractOverlayPlan` 调用处), `overlayInputFrom` 在这里读到的是这次 preview
+  // 刚落库的那份(或 master 复用 preview 落库的同一份)。
+  const overlayInput = overlayInputFrom(vp, template);
+
   await setStatus('assembling');
   const outputPath = path.join(vp.productionRoot, outputFileName);
   await renderFilm({
@@ -964,6 +1001,7 @@ export async function handleTalkingHeadBrollRemotion(
       sourceVideo: { src: '', layout, pip },
       // templateStyle(三十六期 Task 3): 同上一处注释, 只透传, 合并发生在 Film.tsx。
       templateStyle: (template?.defaultShotStyle as FilmInput['templateStyle']) ?? undefined,
+      ...overlayInput,
     },
     outputPath,
     durationInFrames: Math.ceil((sourceMs / 1000) * fps),
@@ -984,7 +1022,10 @@ export async function handleTalkingHeadBrollRemotion(
   // 直接返回, 不会白跑一次抽帧。
   await reportStillHealth({
     shots: plan.shots as StillCheckShot[],
-    input: { shots: [], audioSrc: null, bgm: null, captions, aspect, visualStyle: 'card', sourceVideo: { src: '', layout, pip }, templateStyle: (template?.defaultShotStyle as FilmInput['templateStyle']) ?? undefined },
+    input: {
+      shots: [], audioSrc: null, bgm: null, captions, aspect, visualStyle: 'card', sourceVideo: { src: '', layout, pip }, templateStyle: (template?.defaultShotStyle as FilmInput['templateStyle']) ?? undefined,
+      ...overlayInput,
+    },
     fps,
     sourceVideoFile: sourceVideoPath,
     workDir: path.join(vp.productionRoot, `still-check-${mode}`),
