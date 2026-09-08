@@ -126,6 +126,7 @@ export default async function FilmDetailPage(props: { params: Promise<{ id: stri
           createdAt: vp.createdAt.slice(0, 10),
           errorMessage: vp.errorMessage,
           hasPreview: Boolean(vp.previewPath),
+          hasSource: Boolean(vp.sourceVideoPath),
           hasMaster: Boolean(vp.masterPath),
           templateName: template?.name ?? null,
           scriptDraftId: content?.scriptDraftId ?? null,

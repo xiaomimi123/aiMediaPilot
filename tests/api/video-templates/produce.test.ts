@@ -4,7 +4,7 @@ vi.mock('@/lib/user', () => ({ getOrCreateDefaultUser: vi.fn(async () => ({ id: 
 
 const prismaMock = vi.hoisted(() => ({
   videoTemplate: { findUnique: vi.fn() },
-  cockpitContent: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+  cockpitContent: { findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
   scriptDraft: { findUnique: vi.fn(), create: vi.fn() },
   videoProduction: { create: vi.fn() },
 }));
@@ -110,6 +110,61 @@ describe('POST /api/v1/video-templates/[id]/produce', () => {
     expect(res.status).toBe(200);
     expect(prismaMock.videoProduction.create).toHaveBeenCalledTimes(1);
     expect(queueMock.add).not.toHaveBeenCalled();
+  });
+
+  /*
+   * scriptDraftId 分支(三十五期): 模板页「用这个模板出片」直接选稿库里的六幕稿。
+   * 不走既有 script 分支的原因: 那个分支每次发起都新建一份 ScriptDraft ——
+   * 稿库里的三连重复标题就是它制造的。按稿 ID 复用, 不再繁殖。
+   */
+  it('传 scriptDraftId → 复用既有稿, 不新建 ScriptDraft', async () => {
+    prismaMock.scriptDraft.findUnique.mockResolvedValue({
+      id: 'd1', userId: 'user1', topic: '手机电池为什么不耐用', output: NESTED_OUTPUT,
+    });
+    prismaMock.cockpitContent.findFirst.mockResolvedValue(null);
+    prismaMock.cockpitContent.create.mockImplementation(async ({ data }: any) => data);
+
+    const res = await POST(req({ scriptDraftId: 'd1' }), { params: { id: 't1' } });
+    expect(res.status).toBe(200);
+    // 核心断言: 绝不新建稿
+    expect(prismaMock.scriptDraft.create).not.toHaveBeenCalled();
+    // 新建的内容卡链回这份稿
+    expect(prismaMock.cockpitContent.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ scriptDraftId: 'd1', title: '手机电池为什么不耐用' }) }),
+    );
+    expect(prismaMock.videoProduction.create).toHaveBeenCalled();
+    expect(queueMock.add).toHaveBeenCalled();
+  });
+
+  it('scriptDraftId: 该稿已链着内容卡 → 连内容卡也复用, 什么都不新建', async () => {
+    prismaMock.scriptDraft.findUnique.mockResolvedValue({
+      id: 'd1', userId: 'user1', topic: 'T', output: NESTED_OUTPUT,
+    });
+    prismaMock.cockpitContent.findFirst.mockResolvedValue({ id: 'c-exist', userId: 'user1' });
+
+    const res = await POST(req({ scriptDraftId: 'd1' }), { params: { id: 't1' } });
+    expect(res.status).toBe(200);
+    expect(prismaMock.scriptDraft.create).not.toHaveBeenCalled();
+    expect(prismaMock.cockpitContent.create).not.toHaveBeenCalled();
+    const vp = prismaMock.videoProduction.create.mock.calls[0][0].data;
+    expect(vp.contentId).toBe('c-exist');
+  });
+
+  it('scriptDraftId: 稿不是六幕结构 → 400, 不建任务', async () => {
+    prismaMock.scriptDraft.findUnique.mockResolvedValue({
+      id: 'd1', userId: 'user1', topic: 'T', output: { sections: {} },
+    });
+    const res = await POST(req({ scriptDraftId: 'd1' }), { params: { id: 't1' } });
+    expect(res.status).toBe(400);
+    expect(prismaMock.videoProduction.create).not.toHaveBeenCalled();
+  });
+
+  it('scriptDraftId: 稿归属别的用户 → 404', async () => {
+    prismaMock.scriptDraft.findUnique.mockResolvedValue({
+      id: 'd1', userId: 'someone-else', topic: 'T', output: NESTED_OUTPUT,
+    });
+    const res = await POST(req({ scriptDraftId: 'd1' }), { params: { id: 't1' } });
+    expect(res.status).toBe(404);
   });
 
   it('内容没有六幕定稿 → 400, 不建任务', async () => {

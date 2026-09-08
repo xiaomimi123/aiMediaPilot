@@ -42,7 +42,7 @@ const VoiceOverrideSchema = z.object({
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   let body: {
-    contentId?: unknown; script?: unknown; title?: unknown; voiceOverride?: unknown; research?: unknown;
+    contentId?: unknown; scriptDraftId?: unknown; script?: unknown; title?: unknown; voiceOverride?: unknown; research?: unknown;
     renderer?: unknown;
   };
   try { body = await req.json(); } catch { return fail('请求体不是合法 JSON', 400); }
@@ -85,6 +85,63 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const parsed = draft ? parseDraftOutput(draft.output) : null;
     if (!parsed?.acts || !parsed.four_dims) return fail('需要先生成六幕脚本', 400);
     contentId = content.id;
+    acts = parsed.acts;
+  } else if (typeof body.scriptDraftId === 'string' && body.scriptDraftId) {
+    /*
+     * 按稿 ID 复用(三十五期): 模板页「用这个模板出片」直接选稿库里的六幕稿。
+     *
+     * 为什么不让前端把 acts 抠出来走既有的 script 分支: 那个分支的语义是
+     * 「粘贴进来一份**新**稿」, 每次发起都 create 一份 ScriptDraft —— 稿库里的
+     * 三连重复标题就是它制造的。这里的语义是「用**这份已有的**稿出片」,
+     * 稿要复用; 它已链着内容卡的连卡一起复用, 让同一份稿的多次出片聚在同一
+     * 张内容卡下, 复盘时数据不散。
+     */
+    const draft = await prisma.scriptDraft.findUnique({ where: { id: body.scriptDraftId } });
+    if (!draft || draft.userId !== user.id) return fail('稿子不存在', 404);
+    const parsed = parseDraftOutput(draft.output);
+    if (!parsed?.acts) return fail('这份稿不是六幕结构, 出不了片 —— 去写稿页把它改成六幕', 400);
+
+    const existing = await prisma.cockpitContent.findFirst({
+      where: { userId: user.id, scriptDraftId: draft.id },
+      select: { id: true },
+    });
+    if (existing) {
+      contentId = existing.id;
+    } else {
+      const now = new Date().toISOString();
+      const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim() : draft.topic;
+      // Json 必填字段的空白骨架与 script 分支同一套(见下方那个分支的注释)。
+      const content = await prisma.cockpitContent.create({
+        data: {
+          id: randomUUID(),
+          userId: user.id,
+          title,
+          idea: title,
+          platform: 'douyin',
+          deliveryMode: template.deliveryMode,
+          stage: 'script',
+          scriptDraftId: draft.id,
+          topic: {
+            audience: '', painPoint: '', pointOfView: '', commonAngle: '', contrastAngle: '',
+            assets: '', minimumProduction: '',
+            score: { audience: 0, pain: 0, scene: 0, demonstrable: 0, distribution: 0, efficiency: 0 },
+          } as unknown as Prisma.InputJsonValue,
+          script: {
+            headline: '', hook: '', conclusion: '', body: '', example: '', ending: '',
+          } as unknown as Prisma.InputJsonValue,
+          metrics: {
+            views: 0, likes: 0, saves: 0, comments: 0, followerGain: 0, capturedAt: '',
+          } as unknown as Prisma.InputJsonValue,
+          review: {
+            rating: 0, analysis: '', learnedRule: '', completedAt: '',
+          } as unknown as Prisma.InputJsonValue,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
+      await bumpCockpitRev(user.id);
+      contentId = content.id;
+    }
     acts = parsed.acts;
   } else if (body.script) {
     const parsed = SixActScriptSchema.safeParse(body.script);
@@ -162,7 +219,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     contentId = content.id;
     acts = parsed.data.acts;
   } else {
-    return fail('需要 contentId 或 script', 400);
+    return fail('需要 contentId、scriptDraftId 或 script', 400);
   }
 
   const srt = synthesizeSrtFromSixActScript(acts);

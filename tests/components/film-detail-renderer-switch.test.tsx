@@ -19,7 +19,7 @@ import { FilmDetail } from '@/components/films/film-detail';
 
 const base = {
   id: 'f1', title: '测试片', mode: 'ppt-narration', status: 'queued',
-  createdAt: '2026-08-30', errorMessage: null, hasPreview: false, hasMaster: false,
+  createdAt: '2026-08-30', errorMessage: null, hasPreview: false, hasSource: false, hasMaster: false,
   templateName: '图文口播', scriptDraftId: null, publishedUrl: null,
   scenes: [], captions: [], savedLayouts: {}, brollEnabled: true,
   frame: { width: 1920, height: 1080 }, freezeReport: null, renderer: 'legacy', productionNotice: null,

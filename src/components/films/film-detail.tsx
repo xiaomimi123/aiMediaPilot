@@ -21,6 +21,8 @@ interface Film {
   createdAt: string;
   errorMessage: string | null;
   hasPreview: boolean;
+  /** 出镜链: 用户拍的口播源视频是否已上传 —— 没传时任务停在 queued, 不会自动开始 */
+  hasSource: boolean;
   hasMaster: boolean;
   templateName: string | null;
   /** 这条片子是用哪份稿子出的 —— 没有稿子就登记不了发布(登记挂在稿子上)。 */
@@ -267,6 +269,32 @@ export function FilmDetail({ initial }: { initial: Film }) {
     }
   }
 
+  const [uploadError, setUploadError] = useState('');
+
+  /** 出镜源视频上传。失败必须露出来 —— 500MB 的文件传一半静默失败, 人会一直等。 */
+  async function uploadSource(file: File) {
+    setBusy('upload');
+    setUploadError('');
+    try {
+      const form = new FormData();
+      form.append('video', file);
+      const res = await fetch(`/api/v1/cockpit/video-productions/${film.id}/upload-source`, {
+        method: 'POST',
+        body: form,
+      });
+      const body = (await res.json()) as { data?: { status?: string }; message?: string };
+      if (res.ok) {
+        setFilm((f) => ({ ...f, hasSource: true, status: body.data?.status ?? f.status }));
+      } else {
+        setUploadError(body.message ?? `上传失败(HTTP ${res.status})`);
+      }
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : '网络错误');
+    } finally {
+      setBusy('');
+    }
+  }
+
   const idx = stageIndex(film.status);
   const failed = film.status === 'failed';
   const wait = waitingOn(film.status);
@@ -328,6 +356,35 @@ export function FilmDetail({ initial }: { initial: Film }) {
           </ol>
         ) : null}
       </div>
+
+      {/*
+        出镜链源视频上传(三十五期)。upload-source 接口十九期就有, 但没有任何前端
+        调过它 —— 出镜链任务建好后停在 queued, 界面上没有任何一处能把口播视频
+        喂进去。上传成功后后端自动入队渲染(那是 API 自己的行为), 这里只要刷状态。
+        只在「还没传过 && 任务还没跑起来」时出现: 传过了这块就没意义了。
+      */}
+      {film.mode === 'talking-head-broll' && !film.hasSource && (film.status === 'queued' || failed) ? (
+        <div className="mb-6 rounded-md border border-primary/40 bg-card px-4 py-3">
+          <p className="text-sm font-medium">上传你拍的口播视频</p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            真人出镜任务要等这一步：上传完成后自动开始渲染。支持 mp4 / mov / webm / mkv，500MB 以内。
+          </p>
+          <div className="mt-2 flex items-center gap-3">
+            <input
+              type="file"
+              accept="video/mp4,video/quicktime,video/webm,video/x-matroska"
+              disabled={busy === 'upload'}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void uploadSource(f);
+              }}
+              className="text-xs file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-xs file:text-foreground"
+            />
+            {busy === 'upload' ? <span className="text-xs text-muted-foreground">上传中…别关页面</span> : null}
+          </div>
+          {uploadError ? <p className="mt-2 text-xs text-destructive">{uploadError}</p> : null}
+        </div>
+      ) : null}
 
       {/*
         **这一页原来是 3.17 屏, 主操作在 2400px 处。** 量出来的三条毛病:

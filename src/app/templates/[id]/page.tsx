@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { PageShell } from '@/components/layout/page-shell';
 import { TemplateEditor } from '@/components/templates/template-editor';
+import { ProducePanel } from '@/components/templates/produce-panel';
+import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
 import type { VideoTemplateConfig } from '@/lib/video-template/model';
 
 export const dynamic = 'force-dynamic';
@@ -32,6 +34,42 @@ export default async function TemplateDetailPage(props: { params: Promise<{ id: 
     take: 8,
     select: { id: true, status: true, createdAt: true },
   });
+
+  /*
+   * 可出片的稿(三十五期「用这个模板出片」): 取最近的稿, 用 worker 同一套判别
+   * (parseDraftOutput)筛出六幕结构的 —— 在这里筛掉, 而不是让用户选完在 API 上
+   * 撞 400。producedCount 用 scriptDraftId 关联统计: 出过的排后面。
+   */
+  const rawDrafts = await prisma.scriptDraft.findMany({
+    where: { userId: user.id, archivedAt: null },
+    orderBy: { createdAt: 'desc' },
+    take: 60,
+    select: { id: true, topic: true, createdAt: true, output: true },
+  });
+  const contents = await prisma.cockpitContent.findMany({
+    where: { userId: user.id, scriptDraftId: { in: rawDrafts.map((d) => d.id) } },
+    select: { scriptDraftId: true, id: true },
+  });
+  const producedByContent = await prisma.videoProduction.groupBy({
+    by: ['contentId'],
+    where: { userId: user.id, contentId: { in: contents.map((c) => c.id) } },
+    _count: true,
+  });
+  const producedByDraft = new Map<string, number>();
+  for (const c of contents) {
+    if (!c.scriptDraftId) continue;
+    const n = producedByContent.find((g) => g.contentId === c.id)?._count ?? 0;
+    producedByDraft.set(c.scriptDraftId, (producedByDraft.get(c.scriptDraftId) ?? 0) + n);
+  }
+  const drafts = rawDrafts
+    .filter((d) => parseDraftOutput(d.output)?.acts)
+    .map((d) => ({
+      id: d.id,
+      topic: d.topic,
+      createdAt: d.createdAt.toISOString().slice(0, 10),
+      producedCount: producedByDraft.get(d.id) ?? 0,
+    }))
+    .sort((a, b) => (a.producedCount === 0 ? 0 : 1) - (b.producedCount === 0 ? 0 : 1));
 
   const config: VideoTemplateConfig = {
     name: t.name,
@@ -79,6 +117,7 @@ export default async function TemplateDetailPage(props: { params: Promise<{ id: 
         </div>
       }
     >
+      <ProducePanel templateId={id} deliveryMode={t.deliveryMode} drafts={drafts} />
       <TemplateEditor
         templateId={id}
         initial={config}

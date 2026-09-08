@@ -19,7 +19,7 @@ import { FilmPlanWorkbench } from '@/components/films/film-plan-workbench';
 
 const baseFilm = {
   id: 'f1', title: '测试片', mode: 'ppt-narration', status: 'plan_ready',
-  createdAt: '2026-09-03', errorMessage: null, hasPreview: false, hasMaster: false,
+  createdAt: '2026-09-03', errorMessage: null, hasPreview: false, hasSource: false, hasMaster: false,
   templateName: '图文口播', scriptDraftId: null, publishedUrl: null,
   scenes: [], captions: [], savedLayouts: {}, brollEnabled: true,
   frame: { width: 1920, height: 1080 }, freezeReport: null, renderer: 'remotion', productionNotice: null,
