@@ -221,33 +221,6 @@ export function TemplateEditor({
             options={[{ v: 'card' as const, label: '卡片' }, { v: 'illustration' as const, label: '插画' }]}
           />
         </Row>
-        <Row label="明暗" hint="暂不支持（旧渲染已下线）：Remotion 渲染链目前不读这个字段。">
-          <Choice
-            value={cfg.visualTone}
-            onChange={(v) => set('visualTone', v)}
-            options={[{ v: 'light' as const, label: '亮底' }, { v: 'dark' as const, label: '暗底' }]}
-          />
-        </Row>
-        <Row label="切镜节奏" hint="暂不支持（旧渲染已下线）：新链的镜头时长由分镜时间轴独立决定，不读这个字段。留空 = 不约束。低于 1 秒就不是切镜是闪频了。">
-          <input
-            type="number"
-            min={1}
-            max={60}
-            step={0.5}
-            value={cfg.shotPaceSec ?? ''}
-            placeholder="不约束"
-            onChange={(e) => set('shotPaceSec', e.target.value === '' ? null : Number(e.target.value))}
-            className={cn(inputCls, 'w-28 tabular-nums')}
-          />
-          <span className="text-xs text-muted-foreground">秒</span>
-        </Row>
-        <Row label="章节进度条">
-          <Choice
-            value={cfg.showChapterNav ? 'on' : 'off'}
-            onChange={(v) => set('showChapterNav', v === 'on')}
-            options={[{ v: 'on' as const, label: '常驻' }, { v: 'off' as const, label: '不显示' }]}
-          />
-        </Row>
       </Section>
 
       {/*
@@ -255,36 +228,7 @@ export function TemplateEditor({
         第一版把它做成了第四种交付方式, 那是层级错误: 它只是口播视频的一种形式,
         而真人形象将来要能加到任何模式上。
       */}
-      <Section
-        title="真人形象与文字叠加"
-        hint="这两项和上面的交付方式正交：图文口播、真人出镜、插画配音都能开。"
-      >
-        <Row
-          label="文字叠加"
-          hint="暂不支持（旧渲染已下线）：Remotion 产物上不会出现这一层，这个开关目前不生效。出片后自动从口播里提关键词，按「关键词 ↓ 关键词」叠在画面上。会多花一次 LLM。"
-        >
-          <Choice
-            value={cfg.textOverlayEnabled ? 'on' : 'off'}
-            onChange={(v) => set('textOverlayEnabled', v === 'on')}
-            options={[{ v: 'on' as const, label: '开' }, { v: 'off' as const, label: '关' }]}
-          />
-        </Row>
-        {cfg.textOverlayEnabled ? (
-          <Row
-            label="人在画面哪侧"
-            hint="文字安全区靠它算：横屏人在右→字在左半边；竖屏→字在上方（人脸占中间，左右都贴脸）。不做人像识别——猜错的代价是字糊在脸上。"
-          >
-            <Choice
-              value={cfg.personSide}
-              onChange={(v) => set('personSide', v)}
-              options={[
-                { v: 'left' as const, label: '人在左' },
-                { v: 'center' as const, label: '人在中间' },
-                { v: 'right' as const, label: '人在右' },
-              ]}
-            />
-          </Row>
-        ) : null}
+      <Section title="B-roll" hint="真人出镜专属：AI 在口播中间切入知识卡。">
         {cfg.deliveryMode === 'talking-head-broll' ? (
           <Row
             label="B-roll"
@@ -299,75 +243,11 @@ export function TemplateEditor({
         ) : null}
       </Section>
 
-      <Section
-        title="字幕"
-        hint="关掉 = 成片不烧字幕。抖音端有自带字幕时可以关。"
-      >
-        <Row label="烧字幕">
-          <Choice
-            value={caption ? 'on' : 'off'}
-            onChange={(v) => set('captionStyle', v === 'on' ? defaultCaptionStyle() : null)}
-            options={[{ v: 'on' as const, label: '烧' }, { v: 'off' as const, label: '不烧' }]}
-          />
-        </Row>
-        {caption ? (
-          <>
-            <Row label="字体">
-              <select
-                value={caption.fontFamily}
-                onChange={(e) => set('captionStyle', { ...caption, fontFamily: e.target.value as typeof caption.fontFamily })}
-                className={inputCls}
-              >
-                {CAPTION_FONT_WHITELIST.map((f) => (
-                  <option key={f} value={f}>{f}</option>
-                ))}
-              </select>
-            </Row>
-            <Row label="字号 / 边宽">
-              <input
-                type="number" min={12} max={200}
-                value={caption.fontSize}
-                onChange={(e) => set('captionStyle', { ...caption, fontSize: Number(e.target.value) })}
-                className={cn(inputCls, 'w-24 tabular-nums')}
-              />
-              <input
-                type="number" min={0} max={10} step={0.5}
-                value={caption.outlineWidth}
-                onChange={(e) => set('captionStyle', { ...caption, outlineWidth: Number(e.target.value) })}
-                className={cn(inputCls, 'w-24 tabular-nums')}
-              />
-            </Row>
-            <Row label="颜色 / 描边">
-              <input
-                type="color"
-                value={caption.primaryColor}
-                onChange={(e) => set('captionStyle', { ...caption, primaryColor: e.target.value.toUpperCase() })}
-                className="h-9 w-14 cursor-pointer rounded-md border border-input bg-card p-1"
-              />
-              <input
-                type="color"
-                value={caption.outlineColor}
-                onChange={(e) => set('captionStyle', { ...caption, outlineColor: e.target.value.toUpperCase() })}
-                className="h-9 w-14 cursor-pointer rounded-md border border-input bg-card p-1"
-              />
-            </Row>
-            <Row label="底边距" hint="字幕离画面底部多少像素。">
-              <input
-                type="number" min={0} max={500}
-                value={caption.marginV}
-                onChange={(e) => set('captionStyle', { ...caption, marginV: Number(e.target.value) })}
-                className={cn(inputCls, 'w-24 tabular-nums')}
-              />
-            </Row>
-          </>
-        ) : null}
-      </Section>
-
       {/* 三十五期核对: BGM 是**活的** —— worker 两条渲染路径都把 bgmPath/bgmVolume
           喂进 renderFilm(二十八期 BGM 进了 Remotion)。旧标注一刀切写成整节暂不支持,
           在劝用户别配一个其实有效的参数。片头片尾确实还是死的(包装段未回归)。 */}
-      <Section title="音频与片头片尾" hint="BGM 有效：上传后新链出片会混入并 loop 到片长。片头/片尾暂不支持（包装段随旧渲染下线，Remotion 产物不会接入）。素材全部自己上传，系统不提供曲库。">
-        {ASSET_KINDS.map((a) => {
+      <Section title="背景音乐" hint="上传后出片时混入并 loop 到片长。素材自己上传，系统不提供曲库。">
+        {ASSET_KINDS.filter((a) => a.kind === 'bgm').map((a) => {
           const current = cfg[a.field] as string | null;
           return (
             <Row key={a.kind} label={a.label} hint={a.limit}>
@@ -428,16 +308,6 @@ export function TemplateEditor({
             options={[{ v: 'on' as const, label: '开' }, { v: 'off' as const, label: '关' }]}
           />
         </Row>
-        <Row label="Builder 模型" hint="暂不支持（旧渲染已下线）：新链的 Builder 用固定的模型选择逻辑，不读这个字段。排版吃推理能力，画面糊的时候先换这个。">
-          <Choice
-            value={cfg.builderModel}
-            onChange={(v) => set('builderModel', v)}
-            options={[
-              { v: 'deepseek-chat' as const, label: 'chat（快、便宜）' },
-              { v: 'deepseek-reasoner' as const, label: 'reasoner（慢、排版更稳）' },
-            ]}
-          />
-        </Row>
         <Row label="语气">
           <input
             value={cfg.scriptPrompt?.tone ?? ''}
@@ -473,6 +343,199 @@ export function TemplateEditor({
           />
         </Row>
       </Section>
+
+
+      {/*
+        旧版遗留(三十五期收纳)。这里的每一项都**不影响新链出片** —— 旧渲染层
+        下线时字段留了下来, 之前和有效参数混排在各节里, 用户分不清哪些真的管用
+        ("模板里哪些预设有作用?"就是这么问出来的)。收进折叠区而不是删掉:
+        字段还在 schema 里, 将来哪个功能回归(如字幕样式定制), 从这里搬回原节即可。
+        用原生 details, 默认收起 —— 死参数不该占用户一眼的注意力。
+      */}
+      <details className="mb-7 rounded-md border border-dashed border-border p-4 open:bg-secondary/20">
+        <summary className="cursor-pointer text-sm font-medium text-muted-foreground">
+          旧版遗留参数（对新链出片无效，点开查看）
+        </summary>
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+          这些参数属于已下线的旧渲染层，改了也不会体现在成片里。字段保留是为了将来功能回归时不丢配置。
+          字幕补充说明：新链<span className="font-medium">恒按内置样式烧字幕</span>，此处的开关与样式目前都不生效。
+        </p>
+        <div className="mt-3 flex flex-col gap-3">
+        <Row label="明暗" hint="暂不支持（旧渲染已下线）：Remotion 渲染链目前不读这个字段。">
+          <Choice
+            value={cfg.visualTone}
+            onChange={(v) => set('visualTone', v)}
+            options={[{ v: 'light' as const, label: '亮底' }, { v: 'dark' as const, label: '暗底' }]}
+          />
+        </Row>
+        <Row label="切镜节奏" hint="暂不支持（旧渲染已下线）：新链的镜头时长由分镜时间轴独立决定，不读这个字段。留空 = 不约束。低于 1 秒就不是切镜是闪频了。">
+          <input
+            type="number"
+            min={1}
+            max={60}
+            step={0.5}
+            value={cfg.shotPaceSec ?? ''}
+            placeholder="不约束"
+            onChange={(e) => set('shotPaceSec', e.target.value === '' ? null : Number(e.target.value))}
+            className={cn(inputCls, 'w-28 tabular-nums')}
+          />
+          <span className="text-xs text-muted-foreground">秒</span>
+        </Row>
+        <Row label="章节进度条">
+          <Choice
+            value={cfg.showChapterNav ? 'on' : 'off'}
+            onChange={(v) => set('showChapterNav', v === 'on')}
+            options={[{ v: 'on' as const, label: '常驻' }, { v: 'off' as const, label: '不显示' }]}
+          />
+        </Row>
+        <Row
+          label="文字叠加"
+          hint="暂不支持（旧渲染已下线）：Remotion 产物上不会出现这一层，这个开关目前不生效。出片后自动从口播里提关键词，按「关键词 ↓ 关键词」叠在画面上。会多花一次 LLM。"
+        >
+          <Choice
+            value={cfg.textOverlayEnabled ? 'on' : 'off'}
+            onChange={(v) => set('textOverlayEnabled', v === 'on')}
+            options={[{ v: 'on' as const, label: '开' }, { v: 'off' as const, label: '关' }]}
+          />
+        </Row>
+        {cfg.textOverlayEnabled ? (
+          <Row
+            label="人在画面哪侧"
+            hint="文字安全区靠它算：横屏人在右→字在左半边；竖屏→字在上方（人脸占中间，左右都贴脸）。不做人像识别——猜错的代价是字糊在脸上。"
+          >
+            <Choice
+              value={cfg.personSide}
+              onChange={(v) => set('personSide', v)}
+              options={[
+                { v: 'left' as const, label: '人在左' },
+                { v: 'center' as const, label: '人在中间' },
+                { v: 'right' as const, label: '人在右' },
+              ]}
+            />
+          </Row>
+        ) : null}
+
+        <Row label="烧字幕">
+          <Choice
+            value={caption ? 'on' : 'off'}
+            onChange={(v) => set('captionStyle', v === 'on' ? defaultCaptionStyle() : null)}
+            options={[{ v: 'on' as const, label: '烧' }, { v: 'off' as const, label: '不烧' }]}
+          />
+        </Row>
+        {caption ? (
+          <>
+            <Row label="字体">
+              <select
+                value={caption.fontFamily}
+                onChange={(e) => set('captionStyle', { ...caption, fontFamily: e.target.value as typeof caption.fontFamily })}
+                className={inputCls}
+              >
+                {CAPTION_FONT_WHITELIST.map((f) => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+            </Row>
+            <Row label="字号 / 边宽">
+              <input
+                type="number" min={12} max={200}
+                value={caption.fontSize}
+                onChange={(e) => set('captionStyle', { ...caption, fontSize: Number(e.target.value) })}
+                className={cn(inputCls, 'w-24 tabular-nums')}
+              />
+              <input
+                type="number" min={0} max={10} step={0.5}
+                value={caption.outlineWidth}
+                onChange={(e) => set('captionStyle', { ...caption, outlineWidth: Number(e.target.value) })}
+                className={cn(inputCls, 'w-24 tabular-nums')}
+              />
+            </Row>
+            <Row label="颜色 / 描边">
+              <input
+                type="color"
+                value={caption.primaryColor}
+                onChange={(e) => set('captionStyle', { ...caption, primaryColor: e.target.value.toUpperCase() })}
+                className="h-9 w-14 cursor-pointer rounded-md border border-input bg-card p-1"
+              />
+              <input
+                type="color"
+                value={caption.outlineColor}
+                onChange={(e) => set('captionStyle', { ...caption, outlineColor: e.target.value.toUpperCase() })}
+                className="h-9 w-14 cursor-pointer rounded-md border border-input bg-card p-1"
+              />
+            </Row>
+            <Row label="底边距" hint="字幕离画面底部多少像素。">
+              <input
+                type="number" min={0} max={500}
+                value={caption.marginV}
+                onChange={(e) => set('captionStyle', { ...caption, marginV: Number(e.target.value) })}
+                className={cn(inputCls, 'w-24 tabular-nums')}
+              />
+            </Row>
+          </>
+        ) : null}
+        {ASSET_KINDS.filter((a) => a.kind !== 'bgm').map((a) => {
+          const current = cfg[a.field] as string | null;
+          return (
+            <Row key={a.kind} label={a.label} hint={a.limit}>
+              <input
+                ref={(el) => { uploadRefs.current[a.kind] = el; }}
+                type="file"
+                accept={a.accept}
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void upload(a.kind, a.field, f);
+                  e.target.value = '';
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busy === a.kind}
+                onClick={() => uploadRefs.current[a.kind]?.click()}
+              >
+                {busy === a.kind ? '上传中…' : current ? '换一个' : '上传'}
+              </Button>
+              {current ? (
+                <>
+                  <span className="max-w-xs truncate text-xs text-muted-foreground">
+                    {current.split('/').pop()}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => set(a.field, null as never)}
+                    className="text-xs text-muted-foreground underline underline-offset-4 hover:text-destructive"
+                  >
+                    移除
+                  </button>
+                </>
+              ) : (
+                <span className="text-xs text-muted-foreground/70">未设置</span>
+              )}
+            </Row>
+          );
+        })}
+        <Row label="BGM 音量" hint={`当前 ${Math.round(cfg.bgmVolume * 100)}%。口播片子压到 15~20% 才不抢人声。`}>
+          <input
+            type="range" min={0} max={1} step={0.05}
+            value={cfg.bgmVolume}
+            onChange={(e) => set('bgmVolume', Number(e.target.value))}
+            className="w-56"
+          />
+        </Row>
+        <Row label="Builder 模型" hint="暂不支持（旧渲染已下线）：新链的 Builder 用固定的模型选择逻辑，不读这个字段。排版吃推理能力，画面糊的时候先换这个。">
+          <Choice
+            value={cfg.builderModel}
+            onChange={(v) => set('builderModel', v)}
+            options={[
+              { v: 'deepseek-chat' as const, label: 'chat（快、便宜）' },
+              { v: 'deepseek-reasoner' as const, label: 'reasoner（慢、排版更稳）' },
+            ]}
+          />
+        </Row>
+        </div>
+      </details>
 
       <Section title="用这个模板出的片" hint="只列最近 8 条。">
         {productions.length === 0 ? (
