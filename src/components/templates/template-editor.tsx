@@ -363,7 +363,10 @@ export function TemplateEditor({
         ) : null}
       </Section>
 
-      <Section title="音频与片头片尾" hint="暂不支持（旧渲染已下线）：成片包装段（BGM 混音/接片头片尾）随旧渲染层一起下线，Remotion 产物不会应用这里的配置。素材全部自己上传，系统不提供曲库。">
+      {/* 三十五期核对: BGM 是**活的** —— worker 两条渲染路径都把 bgmPath/bgmVolume
+          喂进 renderFilm(二十八期 BGM 进了 Remotion)。旧标注一刀切写成整节暂不支持,
+          在劝用户别配一个其实有效的参数。片头片尾确实还是死的(包装段未回归)。 */}
+      <Section title="音频与片头片尾" hint="BGM 有效：上传后新链出片会混入并 loop 到片长。片头/片尾暂不支持（包装段随旧渲染下线，Remotion 产物不会接入）。素材全部自己上传，系统不提供曲库。">
         {ASSET_KINDS.map((a) => {
           const current = cfg[a.field] as string | null;
           return (
