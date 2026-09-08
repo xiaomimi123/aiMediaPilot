@@ -604,6 +604,23 @@ export function FilmPlanWorkbench({
         分镜待确认——逐镜调整文字、卡片和时长, 满意了再点「确认并开始渲染」。
       </p>
 
+      {/*
+        空分镜的解释(三十五期)。出镜链的分镜提示词不要求铺满(FILM_PLAN_BROLL),
+        AI 可以合法地决定一张卡都不插 —— 但剪辑台对 shots=[] 原来什么都不画,
+        用户看到的是一张只有标题和三个按钮的空卡, 分不清是"AI 没插卡"还是"坏了"
+        (真机实测反馈)。空态必须解释原因 + 给下一步, 这是这套设计自己的原则 #2。
+      */}
+      {plan.shots.length === 0 ? (
+        <div className="mt-3 rounded-md border border-warn bg-warn-subtle px-4 py-3">
+          <p className="text-sm font-medium text-warn">AI 这次一张卡片都没插</p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            {meta.mode === 'talking-head-broll'
+              ? '整条片子会是你的人物全屏画面, 没有任何知识卡切入。这对纯口播是合法结果; 但如果你想要画面里有数据卡、清单卡, 点下面的「重新生成分镜」让 AI 再试一次, 或者直接「确认并开始渲染」接受纯口播。'
+              : '这条片子没有任何画面可渲。点「重新生成分镜」让 AI 重新规划。'}
+          </p>
+        </div>
+      ) : null}
+
       {/* 横向缩略图条 —— 17 镜全量出图实测热渲染 0.6s, 不需要懒加载。 */}
       <div className="mt-3 flex gap-2 overflow-x-auto pb-2">
         {plan.shots.map((s, idx) => (
