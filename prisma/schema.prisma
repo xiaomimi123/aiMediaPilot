@@ -565,6 +565,7 @@ model VideoTemplate {
   personSide        String  @default("right")
   /// 内容源关掉 = 全片只有真人 + 文字(参考片就是这个形态), 不跑 B-roll 生成
   brollEnabled      Boolean @default(true)
+  defaultShotStyle Json? // 三十六期: 模板级默认样式 {accent?,speed?,scale?}, 渲染时与逐镜 style 合并
   pipPosition       String @default("br") // tl|tr|bl|br
   pipScale          Float  @default(0.25) // 小窗宽度占画面宽度
   pipMargin         Int    @default(40)   // 离边缘像素

@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { ok, fail } from '@/lib/api';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
@@ -73,6 +73,13 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       textOverlayEnabled: cfg.textOverlayEnabled,
       personSide: cfg.personSide,
       brollEnabled: cfg.brollEnabled,
+      // defaultShotStyle 请求体里永远是"对象或 null"(schema 非 optional), 不会是
+      // undefined —— null 代表用户主动清除预设, 而 Prisma 对可空 Json 写 JS 的 null
+      // 会报类型错误, 必须显式传 Prisma.JsonNull 才能真的把列清空(同 undefined 语义
+      // 是"不更新"完全不同)。
+      defaultShotStyle: cfg.defaultShotStyle === null
+        ? Prisma.JsonNull
+        : (cfg.defaultShotStyle as unknown as Prisma.InputJsonValue),
       updatedAt: new Date().toISOString(),
     },
   });

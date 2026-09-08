@@ -3,6 +3,7 @@ import { ASPECTS, type Aspect } from './aspect';
 import { PIP_POSITIONS, PIP_SCALE_MIN, PIP_SCALE_MAX, type PipPosition } from '@/lib/video/pip-layout';
 import { PERSON_SIDES, type PersonSide } from '@/lib/video/text-zone';
 import type { DeliveryMode } from '@/lib/cockpit/model';
+import { ShotStyleSchema, type ShotStyle } from '@/lib/video-production/shot-plan';
 
 /**
  * 字幕字体白名单 —— `.ass` 的字体名必须是渲染机器上真实装了的字体, libass 找不到
@@ -101,6 +102,11 @@ export interface VideoTemplateConfig {
   personSide: PersonSide;
   /** 关掉 = 只有真人 + 文字, 不生成 B-roll。 */
   brollEnabled: boolean;
+  /**
+   * 模板级默认样式(三十六期)。渲染时与逐镜 style 合并(逐镜优先) —— 见
+   * `mergeShotStyle`(src/lib/video-production/shot-plan.ts)。null = 不设默认。
+   */
+  defaultShotStyle: ShotStyle | null;
   captionStyle: CaptionStyle | null;  // null = 不烧字幕
   bgmPath: string | null;
   bgmVolume: number;                  // 0~1
@@ -172,6 +178,8 @@ export const VideoTemplateConfigSchema: z.ZodType<VideoTemplateConfig> = z.objec
   personSide: z.enum(PERSON_SIDES),
   /** 关掉 = 全片只有真人 + 文字, 不跑 B-roll 生成(参考片就是这个形态)。 */
   brollEnabled: z.boolean(),
+  /** 模板级默认样式(三十六期)。渲染时与逐镜 style 合并, 逐镜优先。 */
+  defaultShotStyle: ShotStyleSchema.nullable(),
 });
 
 export function defaultCaptionStyle(): CaptionStyle {
@@ -233,6 +241,7 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     textOverlayEnabled: true,
     personSide: 'right',
     brollEnabled: false,
+    defaultShotStyle: null,
   },
   {
     name: '图文口播',
@@ -260,6 +269,7 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     textOverlayEnabled: false,
     personSide: 'right',
     brollEnabled: true,
+    defaultShotStyle: null,
   },
   {
     name: '真人出镜 + B-roll',
@@ -286,6 +296,7 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     textOverlayEnabled: false,
     personSide: 'right',
     brollEnabled: true,
+    defaultShotStyle: null,
   },
   {
     name: '插画配音',
@@ -313,6 +324,7 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     textOverlayEnabled: false,
     personSide: 'right',
     brollEnabled: true,
+    defaultShotStyle: null,
   },
   {
     // 二十一期: 按同行参考视频拆解结论复刻
@@ -357,5 +369,6 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     textOverlayEnabled: false,
     personSide: 'right',
     brollEnabled: true,
+    defaultShotStyle: null,
   },
 ];

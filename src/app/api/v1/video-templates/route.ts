@@ -80,6 +80,7 @@ export async function POST(req: Request) {
       pipPosition: cfg.pipPosition,
       pipScale: cfg.pipScale,
       pipMargin: cfg.pipMargin,
+      defaultShotStyle: (cfg.defaultShotStyle ?? undefined) as unknown as Prisma.InputJsonValue | undefined,
     },
   });
   return ok({ template: created });
