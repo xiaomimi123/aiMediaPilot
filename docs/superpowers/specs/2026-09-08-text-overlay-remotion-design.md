@@ -34,7 +34,12 @@
 ### 3.1 数据：OverlayPlan 与 FilmPlan 平级
 
 - `VideoProduction` 加可空 Json 列 `overlayPlan`：
-  `{ items: [{ kind: 'keyword'|'note'|'arrow', text: string(≤14), slot: 'left-1'..'left-5'|'top-center'|'bottom-center', startMs, endMs }] }`
+  `{ items: [{ kind: 'keyword'|'note'|'arrow', text: string(≤14), slot: 'left-1'..'left-5'|'top-center'|'bottom-center', startMs, endMs, x?, y? }] }`
+- `x`/`y` 是**拖拽产生的坐标覆盖**（0~1 归一化，画幅无关），**只有剪辑台写**——
+  与 `shot.style` 覆盖 `templateStyle` 同构：AI 给语义位置（slot），人拖拽给显式
+  坐标。三重保证照抄 style 的纪律：① 提取 prompt 一个字不提坐标；② 提取响应的
+  zod schema **不含** x/y（`.strict()` 下模型给了就校验失败进修复循环）；
+  ③ 存储/PATCH schema 才含 x/y。
 - zod：`OverlayPlanSchema`（新建 `src/lib/video-production/overlay-plan.ts`，
   常量与 schema 从历史版考古搬回，`.strict()` 全层，`items` 0~40 条）。
 - **不塞进 FilmPlan**：分镜是「片段时间窗+卡片」，叠加是全片时间轴上的独立层，
@@ -55,9 +60,10 @@
 - `FilmInput` 加 `overlays?: OverlayItem[]`、`overlayPersonSide?: 'left'|'center'|'right'`、
   `cornerBadge?: string | null`（同形不 import 惯例）。
 - 新组件 `remotion/src/overlay/TextOverlayLayer.tsx`：
-  - 格位→坐标：纯函数 `overlaySlotRect(aspect, personSide, slot)`（考古
-    `textSafeZone` 的思想：人在右→格子在左半，竖屏→格子在上方；放不下回退）。
-    纯函数可单测。
+  - 定位：纯函数 `overlayPosition(aspect, personSide, item)` ——
+    `item.x/y` 存在时直接用（拖拽覆盖优先），否则按 slot 走
+    `overlaySlotRect(aspect, personSide, slot)`（考古 `textSafeZone` 的思想：
+    人在右→格子在左半，竖屏→格子在上方；放不下回退）。两个纯函数都可单测。
   - keyword：蓝大字（`theme` 系色 + 描边），进场用 `anim.ts` 的 `smashIn`；
     note：白中字 `fadeUp`；arrow：`↓` `fadeUp`。**动效一律走 anim.ts 纯函数**。
   - 层级：在人物视频之上、字幕之下。
@@ -83,7 +89,14 @@
 - 保存走新接口 `PATCH /api/v1/cockpit/video-productions/[id]/overlay-plan`
   （全量替换，zod 校验，机制照 film-plan PATCH）。
 - Player 预览带 overlays——改完立刻看到（与样式面板同为实时预览消费者）。
-- 拖拽定位**不做**（三十四期拖拽期统一做，格位下拉够用）。
+- **画布拖拽定位（用户拍板并入本期）**：Player 上方叠一层编辑用 DOM——每个
+  overlay 元素渲染成可拖把手，拖完把归一化 x/y 写进该 item，预览即时跟动；
+  「恢复格位」按钮删掉 x/y 回到 slot 定位。
+  **编辑层与渲染层必须共用同一个 `overlayPosition` 纯函数**——本仓吃过一次
+  "编辑台画布和渲染坐标是两套"的亏（film-layout-editor 的 frame 探真教训），
+  几何一致靠共用函数保证，不靠两边各写一份对齐。
+  拖拽只做叠加元素；卡片内部文字的拖拽（三十四期遗留的 data-slot 那套）不在
+  本期——那是另一个坐标系（卡片内 flex），混做会把两套语义搅在一起。
 
 ## 四、测试
 
@@ -93,12 +106,15 @@
    `TextOverlayLayer` 短路后归零转红（判据沿用同时刻/同内容/互比铁律）。
 4. cornerBadge：带 vs 不带差分非零（角标区）。
 5. worker 注入与 PATCH 校验各一组 API 测试。
+6. 坐标覆盖：`overlayPosition` 单测（有 x/y 用 x/y、无则回 slot）；真渲染同帧
+   「slot 定位 vs 拖到画面另一侧的 x/y」差分非零 + 变异（忽略 x/y → 归零转红）。
+7. 提取响应 schema 拒收 x/y（模型不碰坐标的红线测试）。
 
 ## 五、不做的（YAGNI）
 
 - 非口播链的叠加（图文口播画面本来就是卡片）。
 - 叠加元素新类型（沿用 keyword/note/arrow 三种，拆解 spec 论证过够用）。
-- 画布拖拽定位（并入三十四期拖拽期）。
+- 卡片内部文字的拖拽（data-slot 那套，坐标系不同，仍留给拖拽专期）。
 - 角标样式配置（位置/颜色固定右上小字，先上）。
 
 ## 六、风险
