@@ -244,7 +244,25 @@ export function PlanPreview(props: PlanPreviewProps) {
           fps={fps}
           compositionWidth={width}
           compositionHeight={height}
-          style={{ width: '100%', aspectRatio: `${width} / ${height}` }}
+          /*
+            尺寸约束要双向(三十六期终审时实测): 只写 width:100% 时, 9:16 的画面会
+            按宽度撑到 ~2100px 高, 被外层裁得只剩中段一条 —— 文字全部在可视区外,
+            看起来像"预览是空白的"。maxHeight 让竖屏受高度约束、横屏仍吃满宽度,
+            aspectRatio 保证两种画幅都不变形。
+          */
+          style={
+            /*
+             * 按画幅分支(三十六期终审两轮实测):
+             * ① 只写 width:100% —— 竖屏画面按宽撑到 ~2100px 高, 被外层裁得只剩
+             *   中段一条, 文字全部在可视区外, 看起来"预览是空白的";
+             * ② width:auto + maxHeight —— 块级元素的 auto 宽不由 aspectRatio 反推,
+             *   Player 直接塌没。
+             * 竖屏显式给高、宽由 aspectRatio 推; 横屏吃满宽。两种画幅都不变形。
+             */
+            height > width
+              ? { height: 560, aspectRatio: `${width} / ${height}`, margin: '0 auto' }
+              : { width: '100%', aspectRatio: `${width} / ${height}` }
+          }
           controls
           loop
           clickToPlay={false}
