@@ -168,6 +168,17 @@ export function FilmQueue({ rows: initialRows }: { rows: Row[] }) {
                 ) : null}
               </Link>
               <div className="flex shrink-0 items-center gap-2">
+                {/* 剪辑台的显式入口(三十六期收尾): 用户两次找不到剪辑台 —— 它只在
+                    详情页里、状态是分镜待确认时出现, 而列表上"剪辑台"三个字从不
+                    出现, 整行可点这件事也是隐形的。给一个写着名字的按钮。 */}
+                {r.status === 'plan_ready' ? (
+                  <Link
+                    href={`/films/${r.id}`}
+                    className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                  >
+                    进剪辑台
+                  </Link>
+                ) : null}
                 {canStartProduction(r.status) ? (
                   <Button
                     size="sm"

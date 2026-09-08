@@ -85,7 +85,7 @@ export function stageHint(status: string): string {
     case 'plan_ready':
       return '分镜待确认：先在剪辑台里逐镜调整方案，确认后再继续渲染。';
     case 'preview_ready':
-      return '预览好了，等你看过之后确认导出——在那之前它会一直停在这儿。';
+      return '预览好了，等你看过之后确认导出——在那之前它会一直停在这儿。剪辑台已随分镜确认收起；对分镜不满意的话，回模板页用同一份稿重新发起一条。';
     case 'approved':
       return '已确认，正式渲染排队中。';
     case 'rendering':
