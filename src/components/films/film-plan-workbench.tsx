@@ -745,6 +745,32 @@ export function FilmPlanWorkbench({
             </div>
           </div>
           <div className="mt-2">
+            {/*
+             * 预览前的必填拦截(三十七期收尾, 用户实测): 换卡后槽位是空骨架(正常
+             * 中间态), 但 Player 会立即渲染空卡, 撞上卡片组件里 assertContent 的
+             * "空白不进成片"防线 —— 预览区直接抛错, 看起来像"替换特效就报错"。
+             * 那道防线在出片时是对的, 编辑中间态该由这里兜住: 缺必填就不挂 Player,
+             * 给引导占位, 填完自动恢复。检查复用 missingFieldsOfShot —— 与保存前
+             * 校验同一套判据, 不另造一份。
+             */}
+            {(() => {
+              const gaps =
+                previewMode === 'shot'
+                  ? (shot ? missingFieldsOfShot(shot).map((f) => `第 ${(selected ?? 0) + 1} 镜 · ${f}`) : [])
+                  : plan.shots.flatMap((sh, i) => missingFieldsOfShot(sh).map((f) => `第 ${i + 1} 镜 · ${f}`));
+              if (gaps.length > 0) {
+                return (
+                  <div className="flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-md border border-dashed border-warn bg-warn-subtle/40 p-6">
+                    <p className="text-sm font-medium text-warn">有必填项还没填，预览先歇一下</p>
+                    <p className="max-w-md text-center text-xs leading-relaxed text-muted-foreground">
+                      {gaps.slice(0, 4).join('、')}
+                      {gaps.length > 4 ? ` 等 ${gaps.length} 处` : ''}
+                      ——填完这些，预览自动恢复。刚换了卡？新卡的槽位要重新填。
+                    </p>
+                  </div>
+                );
+              }
+              return (
             <PlanPreview
               mode={previewMode}
               plan={plan as PreviewPlan}
@@ -760,6 +786,8 @@ export function FilmPlanWorkbench({
                 setOverlayItems((prev) => prev.map((it, i) => (i === idx ? { ...it, x: pos.x, y: pos.y } : it)));
               }}
             />
+              );
+            })()}
           </div>
         </div>
       ) : null}

@@ -390,3 +390,31 @@ describe('FilmPlanWorkbench —— 预览区与画面参数面板（三十二期
     expect((screen.getAllByText('恢复默认')[0] as HTMLButtonElement).disabled).toBe(true);
   });
 });
+
+describe('预览的必填拦截(三十七期收尾, "替换特效报错"的回归)', () => {
+  /*
+   * 换卡后槽位是空骨架(正常中间态), 但 Player 立即渲染空卡会撞上卡片组件
+   * assertContent 的"空白不进成片"防线 —— 预览区抛错, 用户以为换卡功能坏了。
+   * 修法: 缺必填时不挂 Player, 显示引导占位; 填完自动恢复。
+   */
+  it('镜的必填为空时, 预览区显示引导占位而不是 Player', async () => {
+    mockFetchSequence([() => ({
+      ...filmPlanGetBody,
+      data: {
+        ...filmPlanGetBody.data,
+        filmPlan: { shots: [{ shotId: 's1', startMs: 0, endMs: 3000, card: 'ring',
+          slots: { label: '', value: 0, max: 100, suffix: '', note: '' } }] },
+      },
+    })]);
+    render(<FilmPlanWorkbench productionId="f1" onStatusChange={() => {}} />);
+    await waitFor(() => expect(screen.getByText(/有必填项还没填/)).toBeTruthy());
+    expect(screen.getByText(/第 1 镜 · label/)).toBeTruthy();
+  });
+
+  it('必填齐全时不出现拦截占位', async () => {
+    mockFetchSequence([() => filmPlanGetBody]);
+    render(<FilmPlanWorkbench productionId="f1" onStatusChange={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('film-plan-workbench')).toBeTruthy());
+    expect(screen.queryByText(/有必填项还没填/)).toBeNull();
+  });
+});
