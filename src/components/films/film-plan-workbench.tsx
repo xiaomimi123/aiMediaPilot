@@ -10,6 +10,12 @@ import {
 } from '@/lib/video-production/film-plan-timing';
 import { SHOT_STYLE_CONTROLS } from '@/lib/video-production/card-controls';
 import { PlanPreview, type PreviewPlan } from '@/components/films/plan-preview';
+// 跨目录 import 独立子项目的合并函数——先例见 `tests/lib/video-production/
+// merge-shot-style.test.ts`(三级 `../`)与本文件 `plan-preview.tsx` 顶部
+// import `Film`/`FilmInput` 的注释, 同一惯例。这是模板默认与逐镜覆盖**唯一**
+// 的合并点, 面板显示的「跟随模板(当前:×)」必须调它, 不能自己再实现一遍
+// 合并规则, 否则面板显示值与 `Film.tsx` 实际渲染值迟早对不上。
+import { mergeShotStyle, type ShotStyle } from '../../../remotion/src/cards/style';
 
 /**
  * 剪辑台(三十一期 Task 4)。
@@ -69,6 +75,11 @@ interface FilmPlanMeta {
   /** 幕边界原样透传, pip 窗口校验按它分组——形状与服务端 `AlignedAct` 一致,
    * 这里不为了一份只读一次的数据额外定一份严格类型。 */
   alignedActs: unknown;
+  /** 模板级默认样式(三十六期 Task 3/5)——`film-plan` GET **顶层**字段(不在
+   * `meta` 包装里, 任务书原文写"meta.templateStyle"是笔误, T3 实施后已改成
+   * 与 `aspect`/`totalMs`/`layout` 并列的顶层字段, 这里按顶层取)。没有模板或
+   * 模板未配置该字段时为 `null`。 */
+  templateStyle: ShotStyle | null;
 }
 
 const CARD_LABELS: Record<CardType, string> = {
@@ -331,6 +342,7 @@ export function FilmPlanWorkbench({
           totalMs: d.totalMs,
           layout: d.layout === 'pip' || d.layout === 'cutaway' ? d.layout : null,
           alignedActs: d.alignedActs,
+          templateStyle: (d.templateStyle as ShotStyle | null) ?? null,
         });
         const p = (d.filmPlan ?? { shots: [] }) as LocalPlan;
         setPlan(p);
@@ -683,6 +695,7 @@ export function FilmPlanWorkbench({
               vpId={productionId}
               aspect={meta.aspect}
               visualStyle={meta.visualStyle}
+              templateStyle={meta.templateStyle}
             />
           </div>
         </div>
@@ -783,6 +796,7 @@ export function FilmPlanWorkbench({
           <div className="mt-3 flex flex-wrap items-end gap-4 border-t border-border pt-3 text-xs">
             <StyleControls
               shot={shot}
+              templateStyle={meta.templateStyle}
               onChange={(key, value) => updateStyle(selected, key, value)}
               onReset={(key) => resetStyleField(selected, key)}
             />
@@ -900,34 +914,55 @@ function TextField({
 }
 
 /**
- * 画面参数面板(三十二期 Task 5)——遍历 `SHOT_STYLE_CONTROLS` 生成 range/select,
- * 加新参数不用改这个组件。控件的 label/取值范围完全由那份声明决定; 这里只负责
- * "当前值缺省时按卡片组件的实际默认值展示"(与 `remotion/src/cards/style.ts`
- * 的 `speedT`/`resolveAccent`/`scaleStyle` 缺省值逐条对齐, 否则面板显示的初始
- * 刻度和画面实际呈现的效果会对不上)。
+ * 画面参数面板(三十二期 Task 5, 三十六期 Task 5 加「跟随模板」态)——遍历
+ * `SHOT_STYLE_CONTROLS` 生成 range/select, 加新参数不用改这个组件。控件的
+ * label/取值范围完全由那份声明决定; 这里只负责"当前值缺省时展示什么"——
+ * 初始显示值 = `mergeShotStyle(templateStyle, style)[ctrl.key]`(拿不到时
+ * 落到内建缺省), 与 `remotion/src/cards/style.ts` 里 `Film.tsx` 渲卡前调的
+ * 那次合并**同一个函数**, 保证面板初始刻度和画面实际呈现的效果不会对不上。
+ *
+ * 三态文案(spec §六, 只显示值不显示来源用户会以为预设没生效):
+ * - 未覆盖 + 模板设了该字段 → label 后缀「· 跟随模板」;
+ * - 已覆盖(镜上显式设了这字段) → 「恢复默认」按钮文案改「恢复跟随」
+ *   (跟随模板)——若模板压根没设这字段, 恢复的目标是卡片自身缺省值,
+ *   文案维持「恢复默认」, 恢复的语义不同, 文案必须如实反映;
+ * - 模板没设该字段 且 未覆盖 → 维持现状, 不出「跟随模板」后缀。
+ *
+ * 导出——理由同三十三期 Task 4.5: 能被单测看见的东西才有人在改坏后发现。
  */
-function StyleControls({
-  shot, onChange, onReset,
+export function StyleControls({
+  shot, templateStyle, onChange, onReset,
 }: {
   shot: LocalShot;
+  /** 模板级默认样式——没有模板或模板未配置时传 `null`/不传。 */
+  templateStyle?: ShotStyle | null;
   onChange: (key: string, value: unknown) => void;
-  /** 「恢复默认」——把这个字段从 style 里删掉, 回到卡片组件自身的缺省值。 */
+  /** 「恢复默认/恢复跟随」——把这个字段从 style 里删掉(既有语义不变: 删字段),
+   * 删掉之后展示值自然落到 `mergeShotStyle` 算出的模板默认或卡片内建缺省。 */
   onReset: (key: string) => void;
 }) {
   const style = shot.style ?? {};
+  const merged = mergeShotStyle(templateStyle, style as ShotStyle);
   return (
     <>
       {SHOT_STYLE_CONTROLS.map((ctrl) => {
-        // 是否已经被用户改过——决定「恢复默认」是否可点(没改过点了也没意义)。
+        // 是否已经被用户改过——决定按钮是否可点(没改过点了也没意义), 也决定
+        // 按钮文案(已覆盖时"恢复"的目标是模板默认/卡片缺省, 见组件顶部注释)。
         const isOverridden = (style as Record<string, unknown>)[ctrl.key] !== undefined;
+        const templateHasField = templateStyle != null
+          && (templateStyle as Record<string, unknown>)[ctrl.key] !== undefined;
+        // 未覆盖且模板设了该字段, 才叫「恢复跟随」——已覆盖时点下去也是回到
+        // 跟随模板(或卡片缺省)的状态, 同一条件即可复用。
+        const resetLabel = templateHasField ? '恢复跟随' : '恢复默认';
+        const labelSuffix = !isOverridden && templateHasField ? ' · 跟随模板' : '';
         if (ctrl.type === 'range') {
           const fallback = ctrl.key === 'speed' || ctrl.key === 'scale' ? 1 : ctrl.min;
-          const raw = (style as Record<string, unknown>)[ctrl.key];
-          const value = typeof raw === 'number' ? raw : fallback;
+          const mergedRaw = (merged as Record<string, unknown>)[ctrl.key];
+          const value = typeof mergedRaw === 'number' ? mergedRaw : fallback;
           return (
             <div key={ctrl.key} className="flex items-end gap-2">
               <label className="flex flex-col gap-1">
-                {`${ctrl.label}（${value}${ctrl.unit ?? ''}）`}
+                {`${ctrl.label}${labelSuffix}（${value}${ctrl.unit ?? ''}）`}
                 <input
                   type="range"
                   min={ctrl.min}
@@ -945,17 +980,17 @@ function StyleControls({
                 disabled={!isOverridden}
                 onClick={() => onReset(ctrl.key)}
               >
-                恢复默认
+                {resetLabel}
               </Button>
             </div>
           );
         }
-        const raw = (style as Record<string, unknown>)[ctrl.key];
-        const value = typeof raw === 'string' ? raw : ctrl.options[0].value;
+        const mergedRaw = (merged as Record<string, unknown>)[ctrl.key];
+        const value = typeof mergedRaw === 'string' ? mergedRaw : ctrl.options[0].value;
         return (
           <div key={ctrl.key} className="flex items-center gap-2">
             <label className="flex items-center gap-1">
-              {ctrl.label}
+              {`${ctrl.label}${labelSuffix}`}
               <select
                 value={value}
                 onChange={(e) => onChange(ctrl.key, e.target.value)}
@@ -973,7 +1008,7 @@ function StyleControls({
               disabled={!isOverridden}
               onClick={() => onReset(ctrl.key)}
             >
-              恢复默认
+              {resetLabel}
             </Button>
           </div>
         );

@@ -768,6 +768,30 @@ tabular-nums。root 15px 让 text-sm 恰为设计稿的 13px 正文。
 重新生成: `npm run gen:template-demos`(每条约 20 秒, 已存在且指纹一致的跳过,
 FORCE=1 强制重渲)。
 
+### 模板级样式预设 (三十六期新增)
+
+模板可以给 `speed`/`accent`/`scale` 三个画面参数设默认值(`Template.defaultShotStyle`),
+不用每一镜都手动调——过去这三个参数只能逐镜设置, 大多数用户从来不碰, 空有能力用不上。
+
+**合并语义**: 逐字段, 镜上显式覆盖优先, 没设的字段用模板默认, 都没设才落到卡片组件
+自身的内建缺省(`speedT`/`resolveAccent`/`scaleStyle` 的那套值)。**唯一合并点**是
+`remotion/src/cards/style.ts` 的 `mergeShotStyle(templateStyle, shotStyle)`——正式渲染
+(`Film.tsx` 渲卡前)、剪辑台样式面板显示的"当前值"、单镜/整片预览三处全部调它, 不各自
+重实现一遍合并规则, 保证三处永远一致。
+
+**模板默认不进 FilmPlan**: `defaultShotStyle` 只存在模板配置里, 不会被写进某一次生成的
+`FilmPlan`(不然改模板默认值对已生成的旧方案没有回溯效果)。渲染时按需从模板现读现合并。
+
+**剪辑台三态**(`film-plan-workbench.tsx` 的 `StyleControls`): 未覆盖且模板设了该字段,
+控件 label 后缀「· 跟随模板」、显示值来自 `mergeShotStyle` 的结果; 一旦在镜上改过("已
+覆盖"), 恢复按钮文案变成「恢复跟随」(点击语义是删掉这一镜的覆盖字段, 回到跟随模板);
+模板没设该字段时维持「恢复默认」文案不变——只显示数值不显示"这个值从哪来"会让用户误以为
+模板预设没生效, 所以来源必须在文案里体现。
+
+**与模板演示视频指纹联动**: `defaultShotStyle` 是配置指纹哈希的一部分(见上一节"模板演示
+视频"), 改动它会让演示视频指纹变化、旧演示自动失效, 用户在模板库里立刻能看到"这条演示要
+重新生成"的信号, 而不是继续看着一条画面参数已经过时的演示。
+
 ### 卡片库: 四张扩到九张 (三十三期新增, 设计见 `docs/superpowers/specs/2026-09-07-card-library-expansion-design.md`)
 
 **背景**: 填槽渲染只有四张卡(statement/stat/contrast/list)时, 所有数字都只能走
