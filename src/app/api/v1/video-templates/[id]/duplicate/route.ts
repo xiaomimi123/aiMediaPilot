@@ -55,6 +55,20 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       showChapterNav: src.showChapterNav,
       researchEnabled: src.researchEnabled,
       builderModel: src.builderModel,
+      /*
+       * 三十六期补漏: 下面 8 个字段此前不在复制清单里 —— 复制「真人出镜+B-roll」
+       * 模板, 副本会丢画幅和整套出镜版面(pip 位置/大小/边距/broll 开关), 静默
+       * 退回默认值。这张清单是手抄的, 每加一列都可能漏 —— 对应测试改成从
+       * "配置字段全集"遍历断言, 再漏会红。
+       */
+      aspect: src.aspect,
+      talkingHeadLayout: src.talkingHeadLayout,
+      textOverlayEnabled: src.textOverlayEnabled,
+      personSide: src.personSide,
+      brollEnabled: src.brollEnabled,
+      pipPosition: src.pipPosition,
+      pipScale: src.pipScale,
+      pipMargin: src.pipMargin,
       defaultShotStyle: src.defaultShotStyle ?? undefined,
     },
   });
