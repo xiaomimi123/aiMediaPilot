@@ -6,6 +6,7 @@ import { Player } from '@remotion/player';
 // webpack 就近解析规则就能找到, 真正的坎是运行时模块实例, 已经用
 // `next.config.js` 的 webpack alias 解决, 见那段顶部注释)。
 import { Film, type FilmInput } from '../../../remotion/src/Film';
+import type { OverlayItem, OverlayPersonSide } from '@/lib/video-production/overlay-plan';
 
 /**
  * 剪辑台预览封装(三十二期 Task 5)。
@@ -61,6 +62,15 @@ export interface PlanPreviewProps {
    * 时传 `null`/不传, 与 `film-plan` GET 返回的 `templateStyle` 字段同形。
    */
   templateStyle?: PreviewShotStyle | null;
+  /**
+   * 文字叠加层实时预览(三十七期 Task 5)——剪辑台编辑区改一个字, 这里就要立刻
+   * 反映(与 `templateStyle` 同一条"改完立刻见效"纪律)。可选, 不传等价于空数组
+   * (`Film.tsx` 的 `overlays` 缺省值), 非出镜链/没有叠加层数据时不传。
+   */
+  overlays?: OverlayItem[];
+  /** 人在画面哪一侧——决定叠加层安全区在哪半边, 与 `film-plan` GET 顶层
+   * `overlayPersonSide` 同形。可选, 不传时落到 `Film.tsx` 的缺省值 `'right'`。 */
+  overlayPersonSide?: OverlayPersonSide;
 }
 
 const DEFAULT_FPS = 30;
@@ -79,7 +89,7 @@ const COMPOSITION_SIZE: Record<'16:9' | '9:16', { width: number; height: number 
  */
 function buildInputProps(props: PlanPreviewProps): { inputProps: FilmInput; durationInFrames: number; fps: number } {
   const fps = props.fps ?? DEFAULT_FPS;
-  const { mode, plan, selected, vpId, aspect, visualStyle, templateStyle } = props;
+  const { mode, plan, selected, vpId, aspect, visualStyle, templateStyle, overlays, overlayPersonSide } = props;
 
   // captions 两种模式都硬编码 []——不是本期漏做, 是范围局限: `FilmPlan`/
   // `PreviewPlan` 这层编辑态数据结构本来就不携带字幕, 字幕是渲染阶段由
@@ -103,6 +113,8 @@ function buildInputProps(props: PlanPreviewProps): { inputProps: FilmInput; dura
         visualStyle,
         sourceVideo: null,
         templateStyle: templateStyle ?? undefined,
+        overlays,
+        overlayPersonSide,
       },
       durationInFrames: Math.max(1, Math.ceil((durMs / 1000) * fps)),
       fps,
@@ -120,6 +132,8 @@ function buildInputProps(props: PlanPreviewProps): { inputProps: FilmInput; dura
       visualStyle,
       sourceVideo: null,
       templateStyle: templateStyle ?? undefined,
+      overlays,
+      overlayPersonSide,
     },
     durationInFrames: Math.max(1, Math.ceil((totalMs / 1000) * fps)),
     fps,

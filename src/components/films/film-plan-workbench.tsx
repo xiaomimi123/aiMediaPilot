@@ -10,6 +10,8 @@ import {
 } from '@/lib/video-production/film-plan-timing';
 import { SHOT_STYLE_CONTROLS } from '@/lib/video-production/card-controls';
 import { PlanPreview, type PreviewPlan } from '@/components/films/plan-preview';
+import { OverlayEditor } from '@/components/films/overlay-editor';
+import type { OverlayItem, OverlayPersonSide } from '@/lib/video-production/overlay-plan';
 // 跨目录 import 独立子项目的合并函数——先例见 `tests/lib/video-production/
 // merge-shot-style.test.ts`(三级 `../`)与本文件 `plan-preview.tsx` 顶部
 // import `Film`/`FilmInput` 的注释, 同一惯例。这是模板默认与逐镜覆盖**唯一**
@@ -80,6 +82,10 @@ interface FilmPlanMeta {
    * 与 `aspect`/`totalMs`/`layout` 并列的顶层字段, 这里按顶层取)。没有模板或
    * 模板未配置该字段时为 `null`。 */
   templateStyle: ShotStyle | null;
+  /** 人在画面哪一侧(三十七期 Task 5)——`film-plan` GET 顶层字段, 喂给
+   * `PlanPreview` 做叠加层安全区判断, 与渲染层同一份兜底枚举(见
+   * `overlay-plan.ts` 的 `resolveOverlayInput`)。 */
+  overlayPersonSide: OverlayPersonSide;
 }
 
 const CARD_LABELS: Record<CardType, string> = {
@@ -308,6 +314,11 @@ export function FilmPlanWorkbench({
   const [meta, setMeta] = useState<FilmPlanMeta | null>(null);
   const [plan, setPlan] = useState<LocalPlan | null>(null);
   const [savedPlan, setSavedPlan] = useState<LocalPlan | null>(null);
+  /** 文字叠加层编辑态(三十七期 Task 5)——独立于 `plan`/`savedPlan`, 因为它是
+   * 另一份存储字段(`vp.overlayPlan`), PATCH 走独立接口, 不跟 `filmPlan` 混在
+   * 同一次 PUT 里。 */
+  const [overlayItems, setOverlayItems] = useState<OverlayItem[]>([]);
+  const [savedOverlayItems, setSavedOverlayItems] = useState<OverlayItem[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
   const [saveCounter, setSaveCounter] = useState(0);
   const [busy, setBusy] = useState('');
@@ -343,11 +354,18 @@ export function FilmPlanWorkbench({
           layout: d.layout === 'pip' || d.layout === 'cutaway' ? d.layout : null,
           alignedActs: d.alignedActs,
           templateStyle: (d.templateStyle as ShotStyle | null) ?? null,
+          overlayPersonSide: (d.overlayPersonSide as OverlayPersonSide) ?? 'right',
         });
         const p = (d.filmPlan ?? { shots: [] }) as LocalPlan;
         setPlan(p);
         setSavedPlan(p);
         setSelected(p.shots.length > 0 ? 0 : null);
+        // overlayPlan 顶层字段(三十七期 Task 3 已加)——`null` 时(没有叠加层数据
+        // 或历史脏数据解析失败, 见 `film-plan/route.ts` GET 注释)按空数组处理。
+        const overlayPlan = d.overlayPlan as { items: OverlayItem[] } | null;
+        const initialOverlayItems = overlayPlan?.items ?? [];
+        setOverlayItems(initialOverlayItems);
+        setSavedOverlayItems(initialOverlayItems);
       } catch {
         if (!cancelled) setLoadError('加载分镜方案失败，请检查网络');
       } finally {
@@ -360,8 +378,9 @@ export function FilmPlanWorkbench({
   }, [productionId]);
 
   const dirty = useMemo(
-    () => JSON.stringify(plan) !== JSON.stringify(savedPlan),
-    [plan, savedPlan],
+    () => JSON.stringify(plan) !== JSON.stringify(savedPlan)
+      || JSON.stringify(overlayItems) !== JSON.stringify(savedOverlayItems),
+    [plan, savedPlan, overlayItems, savedOverlayItems],
   );
 
   // 出镜链(talking-head-broll)两种版式(cutaway/pip)拖柄都互相独立、不联动——
@@ -539,6 +558,33 @@ export function FilmPlanWorkbench({
       const saved = body.data.filmPlan as LocalPlan;
       setPlan(saved);
       setSavedPlan(saved);
+
+      // 文字叠加层(三十七期 Task 5)——与 filmPlan 是两个独立存储字段, film-plan
+      // PUT 成功后接着 PATCH 一次 overlay-plan, 不合并进同一次请求(见
+      // `overlay-plan/route.ts` 顶部关于两个字段分开走不同 HTTP 方法的理由)。
+      // 只在出镜链(唯一渲染 `OverlayEditor` 的模式)才发这次请求——非出镜链
+      // `overlayItems` 恒为空数组, 没有东西要保存。
+      if (isBroll) {
+        const filteredOverlayItems = overlayItems.filter((it) => it.text.trim() !== '');
+        const overlayRes = await fetch(`/api/v1/cockpit/video-productions/${productionId}/overlay-plan`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ plan: { items: filteredOverlayItems } }),
+        });
+        const overlayBody = await overlayRes.json();
+        if (overlayRes.status === 409) {
+          setConflictMsg(overlayBody?.message ?? '任务状态刚刚变化，请刷新后重试');
+          return;
+        }
+        if (!overlayRes.ok || !overlayBody?.success) {
+          const raw: string[] = Array.isArray(overlayBody?.errors) ? overlayBody.errors : [];
+          setPutErrors(raw.length > 0 ? raw : [overlayBody?.message ?? '文字叠加层保存失败']);
+          return;
+        }
+        setOverlayItems(filteredOverlayItems);
+        setSavedOverlayItems(filteredOverlayItems);
+      }
+
       // 缩略图接口按内容哈希缓存, 方案变了但 URL 不变——用保存计数器给 img src
       // 加查询参数破缓存, 否则保存后卡面看起来"没变"。**只在真正保存成功时才
       // 自增**——409/400 都提前 return, 不会走到这里; 缩略图内容并没有变,
@@ -659,6 +705,10 @@ export function FilmPlanWorkbench({
         ))}
       </div>
 
+      {/* 文字叠加编辑区(三十七期 Task 5)——只有出镜链(talking-head-broll)才有
+          叠加层数据, 挂在缩略图条下方、预览区上方: 改完立刻在下面的预览里看见。 */}
+      {isBroll ? <OverlayEditor items={overlayItems} onChange={setOverlayItems} /> : null}
+
       {/* 预览区(三十二期 Task 5)——单镜/整片双模, 选中镜或参数改动会立刻反映在这里。 */}
       {plan.shots.length > 0 ? (
         <div className="mt-3 rounded-md border border-border bg-background p-3">
@@ -696,6 +746,8 @@ export function FilmPlanWorkbench({
               aspect={meta.aspect}
               visualStyle={meta.visualStyle}
               templateStyle={meta.templateStyle}
+              overlays={overlayItems}
+              overlayPersonSide={meta.overlayPersonSide}
             />
           </div>
         </div>
