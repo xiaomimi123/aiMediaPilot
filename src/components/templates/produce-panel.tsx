@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 
@@ -35,6 +35,16 @@ export function ProducePanel({
 }) {
   const router = useRouter();
   const [draftId, setDraftId] = useState(drafts[0]?.id ?? '');
+
+  /*
+   * 挂载即刷新服务端数据。页面虽是 force-dynamic, 但那只管服务端;
+   * Next 14 的**客户端路由缓存**对 dynamic 段还会缓 30 秒 —— 「刚写完稿马上
+   * 切到模板页出片」恰好是最常见的动线, 撞进这 30 秒就会看不到刚写的稿
+   * (2026-09-08 用户实测撞上)。这一页很轻, 多一次 RSC 取数换「稿单永远是新的」。
+   */
+  useEffect(() => {
+    router.refresh();
+  }, [router]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 

@@ -65,7 +65,9 @@ export default async function TemplateDetailPage(props: { params: Promise<{ id: 
     .filter((d) => parseDraftOutput(d.output)?.acts)
     .map((d) => ({
       id: d.id,
-      topic: d.topic,
+      // 只取首行: 从灵感写的稿, topic 是整段灵感原文(带换行和原文链接),
+      // 塞进下拉是一坨认不出的字 —— 用户实测扫不到自己刚写的稿。
+      topic: d.topic.split('\n')[0].trim(),
       createdAt: d.createdAt.toISOString().slice(0, 10),
       producedCount: producedByDraft.get(d.id) ?? 0,
     }))
