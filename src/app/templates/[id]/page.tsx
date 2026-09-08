@@ -6,6 +6,9 @@ import { PageShell } from '@/components/layout/page-shell';
 import { TemplateEditor } from '@/components/templates/template-editor';
 import { ProducePanel } from '@/components/templates/produce-panel';
 import { parseDraftOutput } from '@/lib/cockpit/draft-restore';
+import fs from 'node:fs';
+import path from 'node:path';
+import { templateDemoHash } from '../../../../scripts/generate-template-demos';
 import type { VideoTemplateConfig } from '@/lib/video-template/model';
 
 export const dynamic = 'force-dynamic';
@@ -120,6 +123,45 @@ export default async function TemplateDetailPage(props: { params: Promise<{ id: 
       }
     >
       <ProducePanel templateId={id} deliveryMode={t.deliveryMode} drafts={drafts} />
+      {/*
+        效果演示(三十五期, 按用户反馈放在详情页而不是列表卡片上): 用本模板当前
+        配置走正式渲染链渲的 12 秒样片。文件名带配置指纹 —— 在下面改了画幅/
+        版面等参数并保存后, 指纹对不上, 这里会换成"重新生成"提示, 不显示一个
+        和新配置对不上的旧演示。
+      */}
+      {(() => {
+        const file = `${t.id}.${templateDemoHash(t)}.mp4`;
+        const exists = fs.existsSync(path.join(process.cwd(), 'public', 'template-demos', file));
+        return (
+          <section className="mb-4 rounded-md border border-border bg-card p-4">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="text-sm font-semibold">效果演示</h2>
+              <p className="text-xs text-muted-foreground">
+                用本模板当前配置真实渲染的 12 秒样片
+                {t.deliveryMode === 'talking-head-broll' ? ' · 灰色区域 = 你的口播画面' : ''}
+              </p>
+            </div>
+            {exists ? (
+              <video
+                src={`/template-demos/${file}`}
+                controls
+                autoPlay
+                muted
+                loop
+                playsInline
+                className="mt-3 max-h-[420px] rounded-md border border-border bg-black"
+              />
+            ) : (
+              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                当前配置还没有对应的演示（刚改过参数？）。终端跑{' '}
+                <code className="rounded bg-secondary px-1 py-0.5">npm run gen:template-demos</code>{' '}
+                重新生成，每条约 20 秒。
+              </p>
+            )}
+          </section>
+        );
+      })()}
+
       <TemplateEditor
         templateId={id}
         initial={config}
