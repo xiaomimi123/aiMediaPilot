@@ -34,10 +34,12 @@ export function templateDemoHash(t: {
   deliveryMode: string; visualStyle: string | null; aspect: string | null;
   talkingHeadLayout: string | null; pipPosition: string | null;
   pipScale: number | null; pipMargin: number | null;
+  defaultShotStyle: unknown;
 }): string {
   const key = JSON.stringify([
     t.deliveryMode, t.visualStyle ?? 'card', t.aspect ?? '9:16',
     t.talkingHeadLayout ?? 'cutaway', t.pipPosition ?? 'br', t.pipScale ?? 0.25, t.pipMargin ?? 40,
+    t.defaultShotStyle ?? null,
   ]);
   return createHash('sha1').update(key).digest('hex').slice(0, 8);
 }
@@ -89,6 +91,7 @@ async function main() {
     select: {
       id: true, name: true, deliveryMode: true, visualStyle: true, aspect: true,
       talkingHeadLayout: true, pipPosition: true, pipScale: true, pipMargin: true,
+      defaultShotStyle: true,
     },
   });
   console.log(`${templates.length} 个模板`);
@@ -116,6 +119,7 @@ async function main() {
       captions: DEMO_CAPTIONS,
       aspect,
       visualStyle,
+      templateStyle: (t.defaultShotStyle as FilmInput['templateStyle']) ?? undefined,
       sourceVideo: isTalkingHead
         ? {
             src: '', // renderFilm 拷贝后填

@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { CAPTION_FONT_WHITELIST, defaultCaptionStyle } from '@/lib/video-template/model';
 import type { VideoTemplateConfig } from '@/lib/video-template/model';
+import { ACCENTS } from '@/lib/video-production/shot-plan';
+import type { ShotStyle } from '@/lib/video-production/shot-plan';
 
 /**
  * 模板编辑器。
@@ -23,6 +25,11 @@ const DELIVERY_LABELS: Record<VideoTemplateConfig['deliveryMode'], string> = {
   'talking-head-broll': '真人出镜 + B-roll',
   'illustration-tts': '插画配音',
 };
+
+const ACCENT_LABELS: Record<(typeof ACCENTS)[number], string> = {
+  default: '跟随主题', blue: 'blue', yellow: 'yellow', red: 'red',
+};
+const UNSET = '__unset__' as const;
 
 const ASSET_KINDS = [
   { kind: 'bgm', field: 'bgmPath', label: '背景音乐', accept: 'audio/*', limit: '50MB 以内' },
@@ -98,6 +105,21 @@ export function TemplateEditor({
   const dirty = JSON.stringify(cfg) !== JSON.stringify(saved);
   const set = <K extends keyof VideoTemplateConfig>(k: K, v: VideoTemplateConfig[K]) =>
     setCfg((c) => ({ ...c, [k]: v }));
+
+  /**
+   * `defaultShotStyle` 里单个字段的写入/清除。
+   *
+   * null 与 `{}` 在 UI 上无法区分(都显示成"三个字段都未设置"), 但指纹
+   * (`templateDemoHash`)会把它们算成两个不同的值——清到最后一个字段后
+   * 必须归一写回 `null`, 不能留一个空对象。
+   */
+  const setStyleField = <K extends keyof ShotStyle>(key: K, value: ShotStyle[K] | undefined) =>
+    setCfg((c) => {
+      const next: ShotStyle = { ...(c.defaultShotStyle ?? {}) };
+      if (value === undefined) delete next[key];
+      else next[key] = value;
+      return { ...c, defaultShotStyle: Object.keys(next).length > 0 ? next : null };
+    });
 
   async function save() {
     setBusy('save');
@@ -220,6 +242,75 @@ export function TemplateEditor({
             onChange={(v) => set('visualStyle', v)}
             options={[{ v: 'card' as const, label: '卡片' }, { v: 'illustration' as const, label: '插画' }]}
           />
+        </Row>
+        {/*
+          默认样式(三十六期): 只管全片没有逐镜覆盖时的兜底值——剪辑台(film-plan-
+          workbench)改的是单镜 style, 优先级更高(mergeShotStyle)。三个字段各自
+          独立清除, 清到一个都不剩就把 defaultShotStyle 归一成 null, 不留 {}——
+          两者在这里的 UI 上分不出来, 但指纹会把它们算成两个不同的值。
+        */}
+        <Row
+          label="默认强调色"
+          hint="默认值，剪辑台可逐镜覆盖。改完保存后上方效果演示会提示重新生成。"
+        >
+          <Choice
+            value={cfg.defaultShotStyle?.accent ?? UNSET}
+            onChange={(v) => setStyleField('accent', v === UNSET ? undefined : v)}
+            options={[
+              { v: UNSET, label: '未设置' },
+              ...ACCENTS.map((a) => ({ v: a, label: ACCENT_LABELS[a] })),
+            ]}
+          />
+        </Row>
+        <Row label="默认速度">
+          <div className="flex items-center gap-2">
+            <input
+              type="range"
+              min={0.3}
+              max={3}
+              step={0.1}
+              value={cfg.defaultShotStyle?.speed ?? 1}
+              onChange={(e) => setStyleField('speed', e.target.valueAsNumber)}
+              className="w-40"
+            />
+            <span className="w-14 text-xs text-muted-foreground">
+              {cfg.defaultShotStyle?.speed !== undefined ? `${cfg.defaultShotStyle.speed}x` : '未设置'}
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={cfg.defaultShotStyle?.speed === undefined}
+              onClick={() => setStyleField('speed', undefined)}
+            >
+              未设置
+            </Button>
+          </div>
+        </Row>
+        <Row label="默认缩放">
+          <div className="flex items-center gap-2">
+            <input
+              type="range"
+              min={0.6}
+              max={1.6}
+              step={0.05}
+              value={cfg.defaultShotStyle?.scale ?? 1}
+              onChange={(e) => setStyleField('scale', e.target.valueAsNumber)}
+              className="w-40"
+            />
+            <span className="w-14 text-xs text-muted-foreground">
+              {cfg.defaultShotStyle?.scale !== undefined ? cfg.defaultShotStyle.scale : '未设置'}
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={cfg.defaultShotStyle?.scale === undefined}
+              onClick={() => setStyleField('scale', undefined)}
+            >
+              未设置
+            </Button>
+          </div>
         </Row>
       </Section>
 
