@@ -70,6 +70,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       pipScale: src.pipScale,
       pipMargin: src.pipMargin,
       defaultShotStyle: src.defaultShotStyle ?? undefined,
+      cornerBadge: src.cornerBadge,
     },
   });
   return ok({ template: created });
