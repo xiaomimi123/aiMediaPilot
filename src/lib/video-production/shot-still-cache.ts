@@ -66,7 +66,14 @@ export function stillCacheFileName(
   const hash = crypto
     .createHash('sha1')
     // templateStyle 参与 hash 见 `ShotStillCacheOpts.templateStyle` 注释。
-    .update(JSON.stringify({ shot, visualStyle, aspect, templateStyle: templateStyle ?? null }))
+    // key 排序归一(三十六期终审 minor): 编辑器按操作顺序追加字段, 同值不同序
+    // 会算出不同 hash, 缓存被误判失效白重渲。
+    .update(JSON.stringify({
+      shot, visualStyle, aspect,
+      templateStyle: templateStyle
+        ? Object.fromEntries(Object.entries(templateStyle).sort(([a], [b]) => a.localeCompare(b)))
+        : null,
+    }))
     .digest('hex')
     .slice(0, 12);
   return `${shotIndex}-${hash}.png`;

@@ -31,3 +31,22 @@ describe('templateDemoHash — defaultShotStyle', () => {
     expect(a).toBe(b);
   });
 });
+
+describe('指纹对 key 顺序不敏感(终审补钉)', () => {
+  /*
+   * 编辑器按操作顺序往 defaultShotStyle 里追加字段 —— 先设 speed 再设 accent
+   * 与反过来, 是同一份配置的两种对象字面量。指纹若对 key 顺序敏感, 语义相同的
+   * 配置会被误判"该重渲演示", 白花 20 秒×N。原回归测试用两次相同字面量,
+   * 只验证了函数确定性, 没钉住这个真实风险点。
+   */
+  const base = {
+    deliveryMode: 'ppt-narration', visualStyle: 'card', aspect: '9:16',
+    talkingHeadLayout: null, pipPosition: null, pipScale: null, pipMargin: null,
+  };
+  it('同值不同 key 顺序 → 同 hash', () => {
+    const a = templateDemoHash({ ...base, defaultShotStyle: { accent: 'red', speed: 1.3 } });
+    const b = templateDemoHash({ ...base, defaultShotStyle: { speed: 1.3, accent: 'red' } });
+    expect(a).toBe(b);
+  });
+});
+

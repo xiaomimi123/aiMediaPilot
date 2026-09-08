@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 vi.mock('@/lib/user', () => ({ getOrCreateDefaultUser: vi.fn(async () => ({ id: 'user1' })) }));
@@ -73,10 +74,9 @@ describe('PUT /api/v1/video-templates/[id] — defaultShotStyle', () => {
 
     expect(res.status).toBe(200);
     const written = prismaMock.videoTemplate.update.mock.calls[0][0].data.defaultShotStyle;
-    // Prisma.JsonNull 是一个带 _getNamespace 的特殊标记对象, 不是 JS 的 null ——
-    // 断言它序列化后确实代表"清除"而不是"未提供"。
-    expect(written === null || (written && typeof written === 'object')).toBe(true);
-    expect(written).not.toBeUndefined();
+    // 精确断言 Prisma.JsonNull 本尊(终审收紧: 原断言只排除了 undefined, 太松) ——
+    // 它是 sentinel 对象, 引用相等可断; 写 JS null 会被 Prisma 当"不更新", 必须区分。
+    expect(written).toBe(Prisma.JsonNull);
   });
 });
 

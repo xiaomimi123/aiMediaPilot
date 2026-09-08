@@ -36,10 +36,18 @@ export function templateDemoHash(t: {
   pipScale: number | null; pipMargin: number | null;
   defaultShotStyle: unknown;
 }): string {
+  /*
+   * defaultShotStyle 要按 key 排序归一(三十六期终审 minor): 编辑器按操作顺序
+   * 往对象里追加字段, 先设 speed 再设 accent 与反过来, JSON.stringify 出两个
+   * 不同的串 —— 语义相同的配置会被误判"该重渲", 白花 20 秒×N。
+   */
+  const style = t.defaultShotStyle && typeof t.defaultShotStyle === 'object'
+    ? Object.fromEntries(Object.entries(t.defaultShotStyle as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)))
+    : null;
   const key = JSON.stringify([
     t.deliveryMode, t.visualStyle ?? 'card', t.aspect ?? '9:16',
     t.talkingHeadLayout ?? 'cutaway', t.pipPosition ?? 'br', t.pipScale ?? 0.25, t.pipMargin ?? 40,
-    t.defaultShotStyle ?? null,
+    style,
   ]);
   return createHash('sha1').update(key).digest('hex').slice(0, 8);
 }
