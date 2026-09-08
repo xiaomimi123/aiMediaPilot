@@ -57,6 +57,9 @@ export function OverlayDragLayer({ items, aspect, personSide, onPositionChange }
 
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>, idx: number) {
     e.preventDefault();
+    // 单拖语义(终审 important): draggingRef 只有一个, 第二根手指按下会覆盖第一根的
+    // 追踪状态, 让先拖的那个中途僵住 —— 已有活跃拖拽时直接忽略新的按下。
+    if (draggingRef.current) return;
     draggingRef.current = { idx, pointerId: e.pointerId };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }

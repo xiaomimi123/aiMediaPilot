@@ -580,7 +580,12 @@ export function FilmPlanWorkbench({
         }
         if (!overlayRes.ok || !overlayBody?.success) {
           const raw: string[] = Array.isArray(overlayBody?.errors) ? overlayBody.errors : [];
-          setPutErrors(raw.length > 0 ? raw : [overlayBody?.message ?? '文字叠加层保存失败']);
+          // 保存是两步(先分镜后叠加), 走到这里分镜已经落库 —— 提示必须把话说全,
+          // 只说"叠加失败"会让人以为整次保存都没成, 重填一遍分镜(终审 minor)。
+          setPutErrors([
+            '分镜修改已保存；但文字叠加保存失败——再点一次「保存修改」只会重试叠加部分。',
+            ...(raw.length > 0 ? raw : [overlayBody?.message ?? '']),
+          ].filter(Boolean));
           return;
         }
         setOverlayItems(filteredOverlayItems);
