@@ -103,6 +103,18 @@ function buildInputProps(props: PlanPreviewProps): { inputProps: FilmInput; dura
     const durMs = shot.endMs - shot.startMs;
     // 时间轴归零——见组件顶部注释, 这是"单镜预览"能立刻出画面而不是空播几秒的关键。
     const normalized: PreviewShot = { ...shot, startMs: 0, endMs: durMs };
+    /*
+     * 单镜模式把镜的时间轴归零了, 叠加条目的绝对时间戳也要跟着平移+裁窗 ——
+     * 不然预览第 5 镜时, 叠加还按全片时间轴算, 全部落在窗外, 看起来"拖了没效果"
+     * (T5 交付时标出的缺口)。只保留与本镜时间窗相交的条目, 起止都夹进窗内。
+     */
+    const shiftedOverlays = (props.overlays ?? [])
+      .filter((o) => o.endMs > shot.startMs && o.startMs < shot.endMs)
+      .map((o) => ({
+        ...o,
+        startMs: Math.max(0, o.startMs - shot.startMs),
+        endMs: Math.min(durMs, o.endMs - shot.startMs),
+      }));
     return {
       inputProps: {
         shots: [normalized] as unknown as FilmInput['shots'],
@@ -113,7 +125,7 @@ function buildInputProps(props: PlanPreviewProps): { inputProps: FilmInput; dura
         visualStyle,
         sourceVideo: null,
         templateStyle: templateStyle ?? undefined,
-        overlays,
+        overlays: shiftedOverlays,
         overlayPersonSide,
       },
       durationInFrames: Math.max(1, Math.ceil((durMs / 1000) * fps)),

@@ -43,3 +43,20 @@ describe('定位纯函数', () => {
     expect(overlayPosition('16:9', 'right', item())).toEqual(overlaySlotRect('16:9', 'right', 'left-1'));
   });
 });
+
+describe('箭头的空文本(T5 三规则打架的回归)', () => {
+  /*
+   * 三条规则曾打架: 编辑器强制箭头 text 为空、保存过滤空文本、schema min(1) ——
+   * 结果箭头一保存就被静默丢弃。修法: schema 的非空校验按 kind 分(箭头豁免),
+   * 保存过滤同步豁免箭头。这里钉 schema 侧。
+   */
+  it('两版 schema 都收空文本的 arrow', () => {
+    const arrow = { kind: 'arrow', text: '', slot: 'left-2', startMs: 0, endMs: 3000 };
+    expect(OverlayExtractionSchema.safeParse({ items: [arrow] }).success).toBe(true);
+    expect(OverlayPlanSchema.safeParse({ items: [arrow] }).success).toBe(true);
+  });
+  it('keyword/note 空文本仍拒', () => {
+    expect(OverlayPlanSchema.safeParse({ items: [{ kind: 'keyword', text: ' ', slot: 'left-1', startMs: 0, endMs: 1000 }] }).success).toBe(false);
+    expect(OverlayExtractionSchema.safeParse({ items: [{ kind: 'note', text: '', slot: 'left-1', startMs: 0, endMs: 1000 }] }).success).toBe(false);
+  });
+});

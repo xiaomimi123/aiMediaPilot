@@ -565,7 +565,9 @@ export function FilmPlanWorkbench({
       // 只在出镜链(唯一渲染 `OverlayEditor` 的模式)才发这次请求——非出镜链
       // `overlayItems` 恒为空数组, 没有东西要保存。
       if (isBroll) {
-        const filteredOverlayItems = overlayItems.filter((it) => it.text.trim() !== '');
+        // 箭头的 text 本来就该空(渲染端补 ↓) —— 只丢弃"非箭头且空文本"的条目,
+        // 否则箭头一保存就被静默吃掉(T5 实测的三规则打架, 修在 schema 与这里两处)。
+        const filteredOverlayItems = overlayItems.filter((it) => it.kind === 'arrow' || it.text.trim() !== '');
         const overlayRes = await fetch(`/api/v1/cockpit/video-productions/${productionId}/overlay-plan`, {
           method: 'PATCH',
           headers: { 'content-type': 'application/json' },

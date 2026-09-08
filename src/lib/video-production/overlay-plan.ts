@@ -44,15 +44,31 @@ export interface OverlayItem {
  */
 const overlayBaseFields = {
   kind: z.enum(OVERLAY_KINDS),
-  text: z.string().min(1).max(14),
+  // min 不写在这里: 箭头的 text 留空即可(渲染端补 ↓, 考古版原语义), 但
+  // keyword/note 空文本没有意义 —— 按 kind 的非空校验在下方 superRefine 里做。
+  text: z.string().max(14),
   slot: z.enum(OVERLAY_SLOTS),
   startMs: z.number().nonnegative(),
   endMs: z.number().nonnegative(),
 };
 
 /** LLM 响应契约: 只有语义槽位, 不含坐标 —— 模型不碰坐标的红线在这里。 */
+/**
+ * 按 kind 的非空校验: 箭头 text 留空即可(渲染端补 ↓, 考古版原语义),
+ * keyword/note 空文本没有意义必须拒。放 superRefine 而不是把 min(1) 写死在
+ * text 字段上 —— 三十七期 T5 实测过三条规则打架: 编辑器强制箭头空文本、
+ * 保存过滤空文本、schema min(1), 结果箭头一保存就被静默丢弃。
+ */
+const requireTextUnlessArrow = (
+  it: { kind: string; text: string }, ctx: z.RefinementCtx,
+) => {
+  if (it.kind !== 'arrow' && it.text.trim() === '') {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['text'], message: 'keyword/note 的 text 不能为空' });
+  }
+};
+
 export const OverlayExtractionSchema = z.object({
-  items: z.array(z.object(overlayBaseFields).strict()),
+  items: z.array(z.object(overlayBaseFields).strict().superRefine(requireTextUnlessArrow)),
 });
 
 /** 存储/PATCH 契约: 同一套 base 字段 + 可选 x/y(0~1) —— 拖拽编辑写回的位置覆盖。 */
@@ -62,7 +78,7 @@ export const OverlayPlanSchema = z.object({
       ...overlayBaseFields,
       x: z.number().min(0).max(1).optional(),
       y: z.number().min(0).max(1).optional(),
-    }).strict(),
+    }).strict().superRefine(requireTextUnlessArrow),
   ),
 });
 
