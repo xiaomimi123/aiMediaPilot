@@ -72,6 +72,9 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       pipMargin: cfg.pipMargin,
       textOverlayEnabled: cfg.textOverlayEnabled,
       personSide: cfg.personSide,
+      // cornerBadge 是 String? 列, 不是 Json —— 清除直接写 JS null 即可,
+      // 不需要像 defaultShotStyle 那样用 Prisma.JsonNull。
+      cornerBadge: cfg.cornerBadge,
       brollEnabled: cfg.brollEnabled,
       // defaultShotStyle 请求体里永远是"对象或 null"(schema 非 optional), 不会是
       // undefined —— null 代表用户主动清除预设, 而 Prisma 对可空 Json 写 JS 的 null

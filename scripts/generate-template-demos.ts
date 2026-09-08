@@ -35,6 +35,9 @@ export function templateDemoHash(t: {
   talkingHeadLayout: string | null; pipPosition: string | null;
   pipScale: number | null; pipMargin: number | null;
   defaultShotStyle: unknown;
+  textOverlayEnabled?: boolean | null;
+  personSide?: string | null;
+  cornerBadge?: string | null;
 }): string {
   /*
    * defaultShotStyle 要按 key 排序归一(三十六期终审 minor): 编辑器按操作顺序
@@ -48,6 +51,9 @@ export function templateDemoHash(t: {
     t.deliveryMode, t.visualStyle ?? 'card', t.aspect ?? '9:16',
     t.talkingHeadLayout ?? 'cutaway', t.pipPosition ?? 'br', t.pipScale ?? 0.25, t.pipMargin ?? 40,
     style,
+    // 三十七期: 文字叠加层三字段——改了这三项而不重渲, 演示会显示一份和当前
+    // 配置对不上的旧样片(有没有叠字/角标/人物侧都是看得见的画面差异)。
+    t.textOverlayEnabled ?? false, t.personSide ?? 'right', t.cornerBadge ?? null,
   ]);
   return createHash('sha1').update(key).digest('hex').slice(0, 8);
 }
@@ -100,6 +106,7 @@ async function main() {
       id: true, name: true, deliveryMode: true, visualStyle: true, aspect: true,
       talkingHeadLayout: true, pipPosition: true, pipScale: true, pipMargin: true,
       defaultShotStyle: true,
+      textOverlayEnabled: true, personSide: true, cornerBadge: true,
     },
   });
   console.log(`${templates.length} 个模板`);
@@ -142,6 +149,19 @@ async function main() {
               : null,
           }
         : null,
+      // 三十七期: 出镜模板的演示带上固定示例叠加层——叠加是口播链的特性,
+      // 非出镜模板不加(演示不撒谎)。
+      ...(isTalkingHead
+        ? {
+            overlays: [
+              { kind: 'keyword', text: '24小时', slot: 'left-1', startMs: 500, endMs: 6000 },
+              { kind: 'arrow', text: '', slot: 'left-2', startMs: 1200, endMs: 6000 },
+              { kind: 'keyword', text: '任何平台', slot: 'left-3', startMs: 1800, endMs: 6000 },
+            ] as FilmInput['overlays'],
+            overlayPersonSide: (t.personSide ?? 'right') as 'left' | 'center' | 'right',
+            cornerBadge: t.cornerBadge ?? null,
+          }
+        : {}),
     };
 
     const started = Date.now();

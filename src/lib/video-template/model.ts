@@ -100,6 +100,11 @@ export interface VideoTemplateConfig {
   textOverlayEnabled: boolean;
   /** 拍摄时人在画面哪一侧。文字安全区靠它算, 不做人像识别。 */
   personSide: PersonSide;
+  /**
+   * 右上角常驻小字(三十七期), 与文字叠加层同层但生命周期覆盖全片(如账号/系列声明)。
+   * 支持 `\n` 多行。null = 不显示。
+   */
+  cornerBadge: string | null;
   /** 关掉 = 只有真人 + 文字, 不生成 B-roll。 */
   brollEnabled: boolean;
   /**
@@ -176,6 +181,8 @@ export const VideoTemplateConfigSchema: z.ZodType<VideoTemplateConfig> = z.objec
   textOverlayEnabled: z.boolean(),
   /** 拍摄时人在画面哪一侧 —— 文字安全区靠它算。 */
   personSide: z.enum(PERSON_SIDES),
+  /** 右上角常驻小字(三十七期)。60 字上限(角标是全程常驻, 比逐条叠加更该克制)。null = 不显示。 */
+  cornerBadge: z.string().max(60).nullable(),
   /** 关掉 = 全片只有真人 + 文字, 不跑 B-roll 生成(参考片就是这个形态)。 */
   brollEnabled: z.boolean(),
   /** 模板级默认样式(三十六期)。渲染时与逐镜 style 合并, 逐镜优先。 */
@@ -240,6 +247,7 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     pipMargin: 40,
     textOverlayEnabled: true,
     personSide: 'right',
+    cornerBadge: null,
     brollEnabled: false,
     defaultShotStyle: null,
   },
@@ -268,6 +276,7 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     pipMargin: 40,
     textOverlayEnabled: false,
     personSide: 'right',
+    cornerBadge: null,
     brollEnabled: true,
     defaultShotStyle: null,
   },
@@ -295,6 +304,7 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     pipMargin: 40,
     textOverlayEnabled: false,
     personSide: 'right',
+    cornerBadge: null,
     brollEnabled: true,
     defaultShotStyle: null,
   },
@@ -323,6 +333,7 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     pipMargin: 40,
     textOverlayEnabled: false,
     personSide: 'right',
+    cornerBadge: null,
     brollEnabled: true,
     defaultShotStyle: null,
   },
@@ -368,6 +379,7 @@ export const PRESET_TEMPLATES: readonly VideoTemplateConfig[] = [
     pipMargin: 40,
     textOverlayEnabled: false,
     personSide: 'right',
+    cornerBadge: null,
     brollEnabled: true,
     defaultShotStyle: null,
   },

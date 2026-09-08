@@ -50,3 +50,49 @@ describe('指纹对 key 顺序不敏感(终审补钉)', () => {
   });
 });
 
+/**
+ * 三十七期 Task 4: `textOverlayEnabled`/`personSide`/`cornerBadge` 三字段从
+ * 「旧版遗留」区搬回真人形象与文字叠加节 —— 现在 Remotion 渲染层真的读它们
+ * (TextOverlayLayer)。三者任一变都必须让演示指纹变, 否则改了叠加层配置、
+ * 保存后, 详情页仍显示改之前(叠加层不一样)的旧演示。
+ */
+describe('templateDemoHash — 文字叠加层三字段', () => {
+  const base = {
+    deliveryMode: 'talking-head-broll',
+    visualStyle: 'card' as string | null,
+    aspect: '9:16' as string | null,
+    talkingHeadLayout: 'cutaway' as string | null,
+    pipPosition: 'br' as string | null,
+    pipScale: 0.25 as number | null,
+    pipMargin: 40 as number | null,
+    defaultShotStyle: null,
+    textOverlayEnabled: false,
+    personSide: 'right',
+    cornerBadge: null as string | null,
+  };
+
+  it('textOverlayEnabled 变化 → 指纹变', () => {
+    const before = templateDemoHash({ ...base, textOverlayEnabled: false });
+    const after = templateDemoHash({ ...base, textOverlayEnabled: true });
+    expect(before).not.toBe(after);
+  });
+
+  it('personSide 变化 → 指纹变', () => {
+    const before = templateDemoHash({ ...base, personSide: 'right' });
+    const after = templateDemoHash({ ...base, personSide: 'left' });
+    expect(before).not.toBe(after);
+  });
+
+  it('cornerBadge 变化 → 指纹变', () => {
+    const before = templateDemoHash({ ...base, cornerBadge: null });
+    const after = templateDemoHash({ ...base, cornerBadge: '纯知识经验分享' });
+    expect(before).not.toBe(after);
+  });
+
+  it('三字段全同 → 指纹不变', () => {
+    const a = templateDemoHash({ ...base, textOverlayEnabled: true, personSide: 'left', cornerBadge: '角标' });
+    const b = templateDemoHash({ ...base, textOverlayEnabled: true, personSide: 'left', cornerBadge: '角标' });
+    expect(a).toBe(b);
+  });
+});
+

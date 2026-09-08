@@ -76,6 +76,7 @@ export async function POST(req: Request) {
       talkingHeadLayout: cfg.talkingHeadLayout,
       textOverlayEnabled: cfg.textOverlayEnabled,
       personSide: cfg.personSide,
+      cornerBadge: cfg.cornerBadge,
       brollEnabled: cfg.brollEnabled,
       pipPosition: cfg.pipPosition,
       pipScale: cfg.pipScale,

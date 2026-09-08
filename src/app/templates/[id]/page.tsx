@@ -102,6 +102,7 @@ export default async function TemplateDetailPage(props: { params: Promise<{ id: 
     pipMargin: t.pipMargin ?? 40,
     textOverlayEnabled: t.textOverlayEnabled ?? false,
     personSide: (t.personSide ?? 'right') as VideoTemplateConfig['personSide'],
+    cornerBadge: t.cornerBadge ?? null,
     brollEnabled: t.brollEnabled ?? true,
     defaultShotStyle: (t.defaultShotStyle as VideoTemplateConfig['defaultShotStyle']) ?? null,
   };

@@ -318,8 +318,10 @@ export function TemplateEditor({
         文字叠加和真人形象是**层**, 不是交付方式 —— 所以这一段对每种模式都显示。
         第一版把它做成了第四种交付方式, 那是层级错误: 它只是口播视频的一种形式,
         而真人形象将来要能加到任何模式上。
+        三十七期: textOverlayEnabled/personSide 从「旧版遗留」折叠区搬回本节 ——
+        Remotion 渲染层已经把这层接回来了(TextOverlayLayer), 不再是死参数。
       */}
-      <Section title="B-roll" hint="真人出镜专属：AI 在口播中间切入知识卡。">
+      <Section title="真人形象与文字叠加" hint="真人出镜专属：AI 在口播中间切入知识卡, 或在画面上叠字。">
         {cfg.deliveryMode === 'talking-head-broll' ? (
           <Row
             label="B-roll"
@@ -332,6 +334,45 @@ export function TemplateEditor({
             />
           </Row>
         ) : null}
+        <Row
+          label="文字叠加"
+          hint="开 = 出片时 AI 从口播里提关键词大字叠上画面，剪辑台可逐条改、可拖动位置。多花一次 LLM。"
+        >
+          <Choice
+            value={cfg.textOverlayEnabled ? 'on' : 'off'}
+            onChange={(v) => set('textOverlayEnabled', v === 'on')}
+            options={[{ v: 'on' as const, label: '开' }, { v: 'off' as const, label: '关' }]}
+          />
+        </Row>
+        {cfg.textOverlayEnabled ? (
+          <Row
+            label="人在画面哪侧"
+            hint="文字安全区靠它算：横屏人在右→字在左半边；竖屏→字在上方（人脸占中间，左右都贴脸）。不做人像识别——猜错的代价是字糊在脸上。"
+          >
+            <Choice
+              value={cfg.personSide}
+              onChange={(v) => set('personSide', v)}
+              options={[
+                { v: 'left' as const, label: '人在左' },
+                { v: 'center' as const, label: '人在中间' },
+                { v: 'right' as const, label: '人在右' },
+              ]}
+            />
+          </Row>
+        ) : null}
+        <Row
+          label="常驻角标"
+          hint="右上角全程常驻的小字（如“纯知识经验分享/不售卖任何项目/不招募任何人员”）。留空 = 不显示。"
+        >
+          <textarea
+            value={cfg.cornerBadge ?? ''}
+            maxLength={60}
+            rows={3}
+            placeholder="留空 = 不显示"
+            onChange={(e) => set('cornerBadge', e.target.value === '' ? null : e.target.value)}
+            className={cn(inputCls, 'min-w-64 flex-1 resize-y leading-relaxed')}
+          />
+        </Row>
       </Section>
 
       {/* 三十五期核对: BGM 是**活的** —— worker 两条渲染路径都把 bgmPath/bgmVolume
@@ -479,33 +520,6 @@ export function TemplateEditor({
             options={[{ v: 'on' as const, label: '常驻' }, { v: 'off' as const, label: '不显示' }]}
           />
         </Row>
-        <Row
-          label="文字叠加"
-          hint="暂不支持（旧渲染已下线）：Remotion 产物上不会出现这一层，这个开关目前不生效。出片后自动从口播里提关键词，按「关键词 ↓ 关键词」叠在画面上。会多花一次 LLM。"
-        >
-          <Choice
-            value={cfg.textOverlayEnabled ? 'on' : 'off'}
-            onChange={(v) => set('textOverlayEnabled', v === 'on')}
-            options={[{ v: 'on' as const, label: '开' }, { v: 'off' as const, label: '关' }]}
-          />
-        </Row>
-        {cfg.textOverlayEnabled ? (
-          <Row
-            label="人在画面哪侧"
-            hint="文字安全区靠它算：横屏人在右→字在左半边；竖屏→字在上方（人脸占中间，左右都贴脸）。不做人像识别——猜错的代价是字糊在脸上。"
-          >
-            <Choice
-              value={cfg.personSide}
-              onChange={(v) => set('personSide', v)}
-              options={[
-                { v: 'left' as const, label: '人在左' },
-                { v: 'center' as const, label: '人在中间' },
-                { v: 'right' as const, label: '人在右' },
-              ]}
-            />
-          </Row>
-        ) : null}
-
         <Row label="烧字幕">
           <Choice
             value={caption ? 'on' : 'off'}
