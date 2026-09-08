@@ -750,6 +750,10 @@ export function FilmPlanWorkbench({
               templateStyle={meta.templateStyle}
               overlays={overlayItems}
               overlayPersonSide={meta.overlayPersonSide}
+              editableOverlays={isBroll}
+              onOverlayPositionChange={(idx, pos) => {
+                setOverlayItems((prev) => prev.map((it, i) => (i === idx ? { ...it, x: pos.x, y: pos.y } : it)));
+              }}
             />
           </div>
         </div>

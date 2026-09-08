@@ -768,6 +768,36 @@ tabular-nums。root 15px 让 text-sm 恰为设计稿的 13px 正文。
 重新生成: `npm run gen:template-demos`(每条约 20 秒, 已存在且指纹一致的跳过,
 FORCE=1 强制重渲)。
 
+### 文字叠加（三十七期新增）
+
+真人口播链（`talking-head-broll`）回归「关键词大字/注解/箭头」叠加层，Remotion 时代
+重做：AI 从口播逐字稿里提取草案 → 剪辑台改 → 拖拽定位 → 渲染层用同一份数据出片。
+
+**数据契约**（`src/lib/video-production/overlay-plan.ts`）: `OverlayExtractionSchema`（LLM
+响应契约，只含语义槽位 `slot` 不含坐标）与 `OverlayPlanSchema`（存储/PATCH 契约，同一套
+字段上叠加可选 `x`/`y` 0~1 归一化坐标）。**模型不碰坐标是红线**——模型给不准像素，一旦
+模型碰坐标，用户拖拽覆盖的位置就再分不清是模型编的还是用户拖的。
+
+**编辑/渲染同源定位函数**: `overlayPosition(aspect, personSide, item)`（本体在
+`remotion/src/overlay/position.ts`，主项目 `overlay-plan.ts` 转发）是渲染层
+（`TextOverlayLayer.tsx`）与剪辑台拖拽层（`OverlayDragLayer`）**唯一**的几何真源——
+`item.x/y` 存在则直接用，否则按 `slot` 查默认格位表（五格自上而下，人在右→格子在左半、
+人在左→镜像到右半、竖屏格子整体上移）。两侧永远调同一个函数，不各自重算一遍。
+
+**剪辑台交互**（`src/components/films/overlay-editor.tsx` + `overlay-drag-layer.tsx`）:
+- 逐条编辑区改文本/类型/格位/起止秒；已拖拽过的条目显示「已拖动」+「恢复格位」（删掉
+  `x`/`y` 两键，退回按 `slot` 的默认位置）。
+- 预览 Player 上叠一层拖拽把手（`OverlayDragLayer`，纯 props 组件），Pointer Events 拖动
+  实时换算成容器内 0~1 归一化坐标（clamp），回调 `onPositionChange(idx, {x, y})` →
+  `film-plan-workbench.tsx` 写回 `overlayItems[idx].x/y` → Player 与把手即时跟动。单镜预览
+  模式下画面按镜时间轴平移+裁窗过叠加条目，拖拽层显示位置跟画面一致，但回调坐标映射回
+  原始（未平移）数组下标，保存走既有 PATCH 流程。
+- 角标（`cornerBadge`）全片常驻显示，不套动效、不接入时间轴。
+
+**提取失败不拦片**: `extractOverlayPlan` 提取失败或历史脏数据校验不过时按「没有叠加层」
+处理（`overlays: []`），与 `resolveOverlayInput` 的兜底同一条纪律——这是可选功能，不该
+因为读不出叠加数据就让渲染/体检报错。
+
 ### 模板级样式预设 (三十六期新增)
 
 模板可以给 `speed`/`accent`/`scale` 三个画面参数设默认值(`Template.defaultShotStyle`),

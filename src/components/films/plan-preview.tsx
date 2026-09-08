@@ -7,6 +7,7 @@ import { Player } from '@remotion/player';
 // `next.config.js` 的 webpack alias 解决, 见那段顶部注释)。
 import { Film, type FilmInput } from '../../../remotion/src/Film';
 import type { OverlayItem, OverlayPersonSide } from '@/lib/video-production/overlay-plan';
+import { OverlayDragLayer } from '@/components/films/overlay-drag-layer';
 
 /**
  * 剪辑台预览封装(三十二期 Task 5)。
@@ -71,6 +72,15 @@ export interface PlanPreviewProps {
   /** 人在画面哪一侧——决定叠加层安全区在哪半边, 与 `film-plan` GET 顶层
    * `overlayPersonSide` 同形。可选, 不传时落到 `Film.tsx` 的缺省值 `'right'`。 */
   overlayPersonSide?: OverlayPersonSide;
+  /**
+   * 编辑模式(三十七期 Task 6)——为 true 时在 Player 上叠一层 `OverlayDragLayer`
+   * 拖拽把手。workbench 在 `plan_ready`(剪辑台挂载期间)恒传 true; 其它只读
+   * 展示场景(如以后可能出现的"预览分享页")不传, 默认不出现拖拽把手。
+   */
+  editableOverlays?: boolean;
+  /** 拖拽把手回调, `idx` 是 `overlays`(原始、未平移的完整数组)里的下标。
+   * `editableOverlays=true` 时必传。 */
+  onOverlayPositionChange?: (idx: number, pos: { x: number; y: number }) => void;
 }
 
 const DEFAULT_FPS = 30;
@@ -87,7 +97,16 @@ const COMPOSITION_SIZE: Record<'16:9' | '9:16', { width: number; height: number 
  * 要求 `keyof typeof CARDS`——两边同形但字面量宽窄不同, 断言一次收敛, 不为了
  * 这一层宽松额外重复定义一份严格类型。
  */
-function buildInputProps(props: PlanPreviewProps): { inputProps: FilmInput; durationInFrames: number; fps: number } {
+/** 拖拽层用的叠加条目——比 `OverlayItem` 多一个 `origIdx`, 单镜模式下
+ * `shiftedOverlays` 是过滤+平移过的子集, 拖拽层显示的位置要跟 Player 画面
+ * 一致(用 shifted 数组), 但拖拽回调必须报原始 `overlays` 数组里的下标
+ * (`workbench` 的 `overlayItems[idx]` 才对得上), 所以要单独把 `origIdx` 带出来。
+ * 整片模式没有 filter, `origIdx` 恒等于自身下标。 */
+type DragOverlayItem = OverlayItem & { origIdx: number };
+
+function buildInputProps(props: PlanPreviewProps): {
+  inputProps: FilmInput; durationInFrames: number; fps: number; dragOverlays: DragOverlayItem[];
+} {
   const fps = props.fps ?? DEFAULT_FPS;
   const { mode, plan, selected, vpId, aspect, visualStyle, templateStyle, overlays, overlayPersonSide } = props;
 
@@ -108,12 +127,16 @@ function buildInputProps(props: PlanPreviewProps): { inputProps: FilmInput; dura
      * 不然预览第 5 镜时, 叠加还按全片时间轴算, 全部落在窗外, 看起来"拖了没效果"
      * (T5 交付时标出的缺口)。只保留与本镜时间窗相交的条目, 起止都夹进窗内。
      */
-    const shiftedOverlays = (props.overlays ?? [])
-      .filter((o) => o.endMs > shot.startMs && o.startMs < shot.endMs)
-      .map((o) => ({
+    // origIdx 随着 filter 一起保留——拖拽层显示位置用 shifted(与画面一致),
+    // 但回调必须报原始 `overlays` 数组下标, 见 `DragOverlayItem` 注释。
+    const shiftedOverlays: DragOverlayItem[] = (props.overlays ?? [])
+      .map((o, origIdx) => ({ o, origIdx }))
+      .filter(({ o }) => o.endMs > shot.startMs && o.startMs < shot.endMs)
+      .map(({ o, origIdx }) => ({
         ...o,
         startMs: Math.max(0, o.startMs - shot.startMs),
         endMs: Math.min(durMs, o.endMs - shot.startMs),
+        origIdx,
       }));
     return {
       inputProps: {
@@ -125,15 +148,20 @@ function buildInputProps(props: PlanPreviewProps): { inputProps: FilmInput; dura
         visualStyle,
         sourceVideo: null,
         templateStyle: templateStyle ?? undefined,
+        // FilmInput 的 overlays 不认识 origIdx 这个多余字段, 渲染层用不到——
+        // 但结构上是 OverlayItem 的超集, 直接传不影响渲染。
         overlays: shiftedOverlays,
         overlayPersonSide,
       },
       durationInFrames: Math.max(1, Math.ceil((durMs / 1000) * fps)),
       fps,
+      dragOverlays: shiftedOverlays,
     };
   }
 
   const totalMs = plan.shots.reduce((max, s) => Math.max(max, s.endMs), 0);
+  // 整片模式没有 filter/平移, origIdx 恒等于自身下标。
+  const dragOverlays: DragOverlayItem[] = (overlays ?? []).map((o, idx) => ({ ...o, origIdx: idx }));
   return {
     inputProps: {
       shots: plan.shots as unknown as FilmInput['shots'],
@@ -149,6 +177,7 @@ function buildInputProps(props: PlanPreviewProps): { inputProps: FilmInput; dura
     },
     durationInFrames: Math.max(1, Math.ceil((totalMs / 1000) * fps)),
     fps,
+    dragOverlays,
   };
 }
 
@@ -214,7 +243,7 @@ export function PlanPreview(props: PlanPreviewProps) {
   const [manualFallback, setManualFallback] = React.useState(false);
   if (plan.shots.length === 0) return null;
 
-  const { inputProps, durationInFrames, fps } = buildInputProps(props);
+  const { inputProps, durationInFrames, fps, dragOverlays } = buildInputProps(props);
   const { width, height } = COMPOSITION_SIZE[aspect];
   // 降级态展示哪一镜的静态卡面: 单镜模式就是选中那一镜; 整片模式没有"选中镜"
   // 这个概念对画面的影响, 退而求其次展示第一镜。
@@ -244,6 +273,18 @@ export function PlanPreview(props: PlanPreviewProps) {
    */
   const playerKey = `${mode}:${width}x${height}@${fps}:${durationInFrames}`;
 
+  /*
+   * 拖拽层容器尺寸(三十七期 Task 6)——原来 `<Player>` 自己按画幅分支决定
+   * width/height/aspectRatio(见下方 style 分支的三十六期注释), 拖拽层要
+   * 跟 Player 的实际渲染框重合, 就不能各算各的: 把这套尺寸算法提出来给
+   * 一个外层 `position:relative` 容器用, `<Player>` 退化成 `width:100%;
+   * height:100%` 去填满这个容器, `OverlayDragLayer` 的 `inset:0` 才能精确
+   * 贴合 Player 的画面框。
+   */
+  const previewBoxStyle: React.CSSProperties = height > width
+    ? { height: 560, aspectRatio: `${width} / ${height}`, margin: '0 auto', position: 'relative' }
+    : { width: '100%', aspectRatio: `${width} / ${height}`, position: 'relative' };
+
   if (manualFallback) {
     return (
       <div className="flex flex-col items-center gap-2">
@@ -262,37 +303,41 @@ export function PlanPreview(props: PlanPreviewProps) {
   return (
     <PlayerBoundary fallback={<StaticFallback vpId={vpId} shotIndex={fallbackShotIndex} />}>
       <div className="flex flex-col gap-1">
-        <Player
-          key={playerKey}
-          component={Film}
-          inputProps={inputProps}
-          durationInFrames={durationInFrames}
-          fps={fps}
-          compositionWidth={width}
-          compositionHeight={height}
-          /*
-            尺寸约束要双向(三十六期终审时实测): 只写 width:100% 时, 9:16 的画面会
-            按宽度撑到 ~2100px 高, 被外层裁得只剩中段一条 —— 文字全部在可视区外,
-            看起来像"预览是空白的"。maxHeight 让竖屏受高度约束、横屏仍吃满宽度,
-            aspectRatio 保证两种画幅都不变形。
-          */
-          style={
+        <div style={previewBoxStyle}>
+          <Player
+            key={playerKey}
+            component={Film}
+            inputProps={inputProps}
+            durationInFrames={durationInFrames}
+            fps={fps}
+            compositionWidth={width}
+            compositionHeight={height}
             /*
-             * 按画幅分支(三十六期终审两轮实测):
-             * ① 只写 width:100% —— 竖屏画面按宽撑到 ~2100px 高, 被外层裁得只剩
-             *   中段一条, 文字全部在可视区外, 看起来"预览是空白的";
-             * ② width:auto + maxHeight —— 块级元素的 auto 宽不由 aspectRatio 反推,
-             *   Player 直接塌没。
-             * 竖屏显式给高、宽由 aspectRatio 推; 横屏吃满宽。两种画幅都不变形。
-             */
-            height > width
-              ? { height: 560, aspectRatio: `${width} / ${height}`, margin: '0 auto' }
-              : { width: '100%', aspectRatio: `${width} / ${height}` }
-          }
-          controls
-          loop
-          clickToPlay={false}
-        />
+              尺寸约束(三十六期终审实测, 三十七期 Task 6 挪到外层 `previewBoxStyle`
+              容器上后, Player 自己只需要填满容器): width/height 100% 撑满
+              上面 `previewBoxStyle` 已经按画幅算好的框, 不用再重复分支。
+            */
+            style={{ width: '100%', height: '100%' }}
+            controls
+            loop
+            clickToPlay={false}
+          />
+          {props.editableOverlays ? (
+            <OverlayDragLayer
+              items={dragOverlays}
+              aspect={aspect}
+              personSide={inputProps.overlayPersonSide ?? 'right'}
+              onPositionChange={(idx, pos) => {
+                // dragOverlays[idx] 带着 origIdx——回调必须报原始 `overlays`
+                // 数组下标(单镜模式是 filter 过的子集, 见 `DragOverlayItem` 注释),
+                // 不能直接把 `idx` 透传给上层。
+                const origIdx = dragOverlays[idx]?.origIdx;
+                if (origIdx === undefined) return;
+                props.onOverlayPositionChange?.(origIdx, pos);
+              }}
+            />
+          ) : null}
+        </div>
         <button
           type="button"
           onClick={() => setManualFallback(true)}
