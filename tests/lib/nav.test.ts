@@ -11,8 +11,8 @@ describe('NAV_GROUPS', () => {
     expect(NAV_GROUPS.some((g) => g.items.some((i) => i.href === '/'))).toBe(false);
   });
 
-  it('加上总览与设置一共 12 项 —— 与设计稿一致', () => {
-    expect(NAV_ITEMS.length + 2).toBe(12);
+  it('加上总览与设置一共 13 项 —— 三十八期加了「规划」', () => {
+    expect(NAV_ITEMS.length + 2).toBe(13);
   });
 
   it('每一项都标了它依赖的数据通没通 —— 空的要如实说, 不是藏起来', () => {
@@ -34,9 +34,9 @@ describe('NAV_GROUPS', () => {
 });
 
 describe('NAV_ITEMS', () => {
-  it('工作区四项, 顺序是 选题 → 写稿 → 稿库 → 素材库', () => {
+  it('工作区五项, 顺序是 规划 → 选题 → 写稿 → 稿库 → 素材库(三十八期「规划」放首位)', () => {
     const workbench = NAV_GROUPS.find((g) => g.label === '工作区')!;
-    expect(workbench.items.map((i) => i.label)).toEqual(['选题', '写稿', '稿库', '素材库']);
+    expect(workbench.items.map((i) => i.label)).toEqual(['规划', '选题', '写稿', '稿库', '素材库']);
   });
 
   it('设置不在主导航里 —— 它是配置, 不是日常动作', () => {

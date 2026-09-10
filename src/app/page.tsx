@@ -12,7 +12,15 @@ import { ScoreTrend } from '@/components/overview/score-trend';
 import { LoopStatus } from '@/components/overview/loop-status';
 import { QueuePreview } from '@/components/overview/queue-preview';
 import { buildLoopStatus } from '@/lib/cockpit/feedback-loop';
+import { dayIndexFor } from '@/lib/content-plan/day-index';
 import { cn } from '@/lib/utils';
+
+/** 服务器本地日期 "YYYY-MM-DD"(与 `/plan` 页面同一份算法, 避免 UTC 边界漂移)。 */
+function todayLocal(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 
 /** 指标卡的状态徽章色调 → 样式类, 对照设计稿 `.badge` 的 warn/bad/ok/info。 */
 const BADGE_CLASS: Record<'warn' | 'bad', string> = {
@@ -32,7 +40,7 @@ export const dynamic = 'force-dynamic';
 export default async function OverviewPage() {
   const user = await getOrCreateDefaultUser();
 
-  const [drafts, draftTotal, radarCount, adoptedCount, productions, publishedCount] = await Promise.all([
+  const [drafts, draftTotal, radarCount, adoptedCount, productions, publishedCount, activePlan] = await Promise.all([
     prisma.scriptDraft.findMany({
       where: { userId: user.id, archivedAt: null },
       orderBy: { createdAt: 'desc' },
@@ -48,7 +56,22 @@ export default async function OverviewPage() {
       select: { id: true, status: true, createdAt: true, mode: true, contentId: true },
     }),
     prisma.cockpitContent.count({ where: { userId: user.id, publicationStatus: 'published' } }),
+    prisma.contentPlan.findFirst({ where: { userId: user.id, status: 'active' } }),
   ]);
+
+  // 三十八期: 有活跃规划且今天的 Day 存在且还是 pending → 待办里提醒「今天的内容还没写」。
+  let todayPlanDayPending = false;
+  if (activePlan) {
+    const today = todayLocal();
+    const todayIndex = dayIndexFor(activePlan.startDate, today, activePlan.totalDays);
+    if (todayIndex !== null) {
+      const todayDay = await prisma.contentPlanDay.findUnique({
+        where: { planId_dayIndex: { planId: activePlan.id, dayIndex: todayIndex } },
+        select: { status: true },
+      });
+      todayPlanDayPending = todayDay?.status === 'pending';
+    }
+  }
 
   // 出片队列预览(右栏)只要最近几条 + 标题 —— 标题不在 videoProduction 表上,
   // 单独按 contentId 查一批, 与成片页(/films)取标题的方式一致。
@@ -106,6 +129,7 @@ export default async function OverviewPage() {
     overtimeScripts,
     lowConfidenceFacts: 0,
     radarBacklog: radarCount,
+    todayPlanDayPending,
   });
 
   // 回采数据当前没有任何来源, 如实按 0 算

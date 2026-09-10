@@ -49,6 +49,7 @@ describe('buildTodos', () => {
     overtimeScripts: 0,
     lowConfidenceFacts: 0,
     radarBacklog: 0,
+    todayPlanDayPending: false,
   };
 
   it('worker 没跑且有任务积压 → 第一条就是启动它', () => {
@@ -78,5 +79,20 @@ describe('buildTodos', () => {
 
   it('一切正常时是空数组, 不硬凑待办', () => {
     expect(buildTodos(base)).toEqual([]);
+  });
+
+  it('今天的规划 Day 还是 pending → 出「今天的内容还没写」, 链到 /plan', () => {
+    const t = buildTodos({ ...base, todayPlanDayPending: true });
+    expect(t).toHaveLength(1);
+    expect(t[0]).toEqual({
+      text: '今天的内容还没写',
+      detail: '30 天规划已排好选题，今天这条还没生成脚本',
+      href: '/plan',
+      tone: 'warn',
+    });
+  });
+
+  it('没有活跃规划/今天已生成脚本 → 不出这条待办', () => {
+    expect(buildTodos({ ...base, todayPlanDayPending: false })).toEqual([]);
   });
 });

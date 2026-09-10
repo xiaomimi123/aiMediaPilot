@@ -28,9 +28,9 @@ afterEach(() => {
 });
 
 describe('Sidebar', () => {
-  it('渲染 12 项(总览 + 三组 + 设置), 分组标题也在', () => {
+  it('渲染 13 项(总览 + 三组 + 设置), 分组标题也在', () => {
     render(<Sidebar />);
-    for (const label of ['总览', '选题', '写稿', '稿库', '素材库', '模板', '成片',
+    for (const label of ['总览', '规划', '选题', '写稿', '稿库', '素材库', '模板', '成片',
                          '拆解', '钩子库', '校准', '数据', '设置']) {
       expect(screen.getByText(label)).toBeTruthy();
     }

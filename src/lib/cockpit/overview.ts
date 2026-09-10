@@ -86,6 +86,8 @@ export function buildTodos(input: {
   overtimeScripts: number;
   lowConfidenceFacts: number;
   radarBacklog: number;
+  /** 三十八期: 有活跃的月度内容规划、且今天的 Day 还是 pending(没生成脚本)。 */
+  todayPlanDayPending: boolean;
 }): TodoItem[] {
   const list: TodoItem[] = [];
 
@@ -106,6 +108,15 @@ export function buildTodos(input: {
       text: `${input.overtimeScripts} 份稿子有超时的幕`,
       detail: '某一幕的字数撑爆了它在结构里该占的时长',
       href: '/scripts',
+      tone: 'warn',
+    });
+  }
+
+  if (input.todayPlanDayPending) {
+    list.push({
+      text: '今天的内容还没写',
+      detail: '30 天规划已排好选题，今天这条还没生成脚本',
+      href: '/plan',
       tone: 'warn',
     });
   }
