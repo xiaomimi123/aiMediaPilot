@@ -73,6 +73,28 @@ function remedyFor(
       + `宁可用一句真话, 也不要用编出来的第三条。`;
   }
 
+  /*
+   * 字符串超长(三十八期真实故障): 三十三期曾判定"超长报错能直接改短, 保持 zod
+   * 原文" —— 被实测证伪。用户第一次用月度规划出片, rank 行名超 12 字 + contrast
+   * 文本超 16 字, 修复循环 2 轮救不回来整片失败: 模型看不到**自己写的是什么、
+   * 超了多少**, "String must contain at most 12 character(s)"对它是盲改。
+   * 翻译成带实际值/实际字数/目标字数的裁剪指令, 模型才有下手处。
+   */
+  if (issue.code === 'too_big' && path[0] === 'shots' && path[2] === 'slots') {
+    // 沿 path 取出实际值(可能穿过数组, 如 slots.rows.1.name)
+    let cur: unknown = plan;
+    for (const seg of path) {
+      if (cur == null || typeof cur !== 'object') { cur = undefined; break; }
+      cur = (cur as Record<string | number, unknown>)[seg as string | number];
+    }
+    if (typeof cur === 'string') {
+      const limit = issue.message.match(/at most (\d+)/)?.[1] ?? '?';
+      return `shots.${path[1]}.${path.slice(2).join('.')}: 「${cur}」有 ${cur.length} 个字, `
+        + `上限 ${limit} 字 —— 把它压缩到 ${limit} 字以内(去掉修饰词/换更短的说法), `
+        + `**意思不变、只改这一处**, 其余照旧。`;
+    }
+  }
+
   return null;
 }
 

@@ -183,3 +183,43 @@ describe('describeZodIssues: 有既定处置办法的问题, 报错要说那个�
     expect(text.length).toBeGreaterThan(10);
   });
 });
+
+describe('describeZodIssues: 超长字段的报错要带实际值(三十八期真实故障的回归)', () => {
+  /*
+   * 用户第一次用月度规划出片就撞上: rank 卡 rows[].name 超 12 字、contrast 的
+   * rightText 超 16 字, 修复循环 2 轮救不回来, 整片失败。三十三期曾判定
+   * "超长类报错能直接改短、保持 zod 原文" —— 被这次实测证伪: 模型面对
+   * "String must contain at most 12 character(s)" 两轮都修不好, 因为它看不到
+   * **自己写的是什么、超了多少** —— 修复指令必须带实际值、实际字数、目标字数。
+   */
+  const shot = (card: string, slots: unknown) => ({ shotId: 's1', startMs: 0, endMs: 4000, card, slots });
+
+  it('rank 行名超长: 报出实际值与字数, 给压缩指令', () => {
+    const text = describeZodIssues({
+      shots: [shot('rank', {
+        title: '需求分布',
+        rows: [
+          { name: '四线城市', value: 32 },
+          { name: '自由职业者和小微创业者朋友们', value: 27 },
+        ],
+      })],
+    }).join('\n');
+    expect(text).toContain('自由职业者和小微创业者朋友们'); // 实际值
+    expect(text).toContain('14');                      // 实际字数
+    expect(text).toContain('12');                      // 上限
+    expect(text).toMatch(/压缩|缩短|改短/);            // 可执行指令
+    expect(text).not.toContain('String must contain'); // 不再透传 zod 原文
+  });
+
+  it('contrast 文本超长: 同样带实际值与字数', () => {
+    const long = '这一段右侧文本实在是太长了明显超过十六个字';
+    const text = describeZodIssues({
+      shots: [shot('contrast', {
+        leftLabel: '以前', leftText: '手动回复', rightLabel: '现在', rightText: long,
+      })],
+    }).join('\n');
+    expect(text).toContain(long);
+    expect(text).toContain(String(long.length));
+    expect(text).toMatch(/压缩|缩短|改短/);
+  });
+});
