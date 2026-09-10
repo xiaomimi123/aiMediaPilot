@@ -68,3 +68,6 @@ export * from './voice-section';
 
 // 对标视频拆解 (v5 阶段 D3)
 export * from './teardown';
+
+// 月度内容规划向导 (三十八期 Task 4): 自由文本 → 内容支柱起草
+export * from './content-plan-draft-pillars';
