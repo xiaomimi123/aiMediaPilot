@@ -30,19 +30,50 @@ const stripLegacyConnector = (v: unknown): unknown => {
   return v;
 };
 
+/**
+ * 槽位文本按**显示宽度**限长, 不按字符数(2026-09-10 第二次真实出片失败的教训)。
+ *
+ * 第一次失败修了报错措辞(带上实际值), 第二次失败暴露了更深一层: 模型写了
+ * 「EnterpriseOps-Gym」这样的英文专名, 17 个字符被 max(12) 拒掉, 修复循环里
+ * 模型压不短 —— **专名压短就不是那个名字了, 模型拒绝改是对的**。而 17 个
+ * 半角字符的实际显示宽度只相当于 8 个半汉字, 画面上放得下。限长的本意是
+ * "画面放得下", 所以按宽度算: 全角(CJK/全角标点/emoji)记 1, 半角记 0.5。
+ * 报错信息自带实际值/宽度/上限与压缩指令, 修复循环直接可用。
+ */
+export function displayWidth(s: string): number {
+  let w = 0;
+  for (const ch of s) w += (ch.codePointAt(0) ?? 0) >= 0x2e80 ? 1 : 0.5;
+  return w;
+}
+
+const widthCheck = (max: number) => (v: string, ctx: z.RefinementCtx) => {
+  const w = displayWidth(v);
+  if (w > max) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `「${v}」显示宽度 ${w}(中文/全角按 1, 英文数字按 0.5), 上限 ${max} —— `
+        + `压缩到 ${max} 以内(去掉修饰词/换更短的说法), **意思不变、只改这一处**, 其余照旧。`,
+    });
+  }
+};
+/** 必填文本槽, 显示宽度 ≤ max。 */
+const text = (max: number) => z.string().min(1).superRefine(widthCheck(max));
+/** 可选文本槽(调用处自行 .optional()), 显示宽度 ≤ max。 */
+const textOpt = (max: number) => z.string().superRefine(widthCheck(max));
+
 /** 每种卡片的槽位。`.strict()` 是关键: 多一个字段就解析失败。 */
 const SLOTS = {
   statement: z.object({
-    text: z.string().min(1).max(24),
-    sub: z.string().max(20).optional(),
+    text: text(24),
+    sub: textOpt(20).optional(),
   }).strict(),
 
   stat: z.object({
-    label: z.string().min(1).max(16),
+    label: text(16),
     value: z.number(),
-    prefix: z.string().max(6).optional(),
-    suffix: z.string().max(6).optional(),
-    note: z.string().max(24).optional(),
+    prefix: textOpt(6).optional(),
+    suffix: textOpt(6).optional(),
+    note: textOpt(24).optional(),
   }).strict(),
 
   /*
@@ -66,59 +97,59 @@ const SLOTS = {
    * 具体是哪种关系。等将来有能实测到 85% 以上的做法，再考虑把三个取值放回来。
    */
   contrast: z.preprocess(stripLegacyConnector, z.object({
-    leftLabel: z.string().min(1).max(12),
-    leftText: z.string().min(1).max(16),
-    rightLabel: z.string().min(1).max(12),
-    rightText: z.string().min(1).max(16),
+    leftLabel: text(12),
+    leftText: text(16),
+    rightLabel: text(12),
+    rightText: text(16),
   }).strict()),
 
   list: z.object({
-    title: z.string().min(1).max(16),
+    title: text(16),
     /** 条目数下限 3: 少于 3 条用不着列表, 用 statement 更好。 */
-    items: z.array(z.string().min(1).max(20)).min(3).max(8),
+    items: z.array(text(20)).min(3).max(8),
   }).strict(),
 
   ring: z.object({
-    label: z.string().min(1).max(16),
+    label: text(16),
     value: z.number(),
     max: z.number().positive().default(100),
-    suffix: z.string().max(6).optional(),
-    note: z.string().max(24).optional(),
+    suffix: textOpt(6).optional(),
+    note: textOpt(24).optional(),
   }).strict(),
 
   odometer: z.object({
-    label: z.string().min(1).max(16),
+    label: text(16),
     value: z.number().int(),
-    suffix: z.string().max(6).optional(),
-    note: z.string().max(24).optional(),
+    suffix: textOpt(6).optional(),
+    note: textOpt(24).optional(),
   }).strict(),
 
   curve: z.object({
-    label: z.string().min(1).max(16),
+    label: text(16),
     points: z.array(z.object({
-      at: z.string().min(1).max(8),
+      at: text(8),
       value: z.number(),
     }).strict()).min(3).max(8),
-    suffix: z.string().max(6).optional(),
-    note: z.string().max(24).optional(),
+    suffix: textOpt(6).optional(),
+    note: textOpt(24).optional(),
   }).strict(),
 
   rank: z.object({
-    title: z.string().min(1).max(16),
+    title: text(16),
     rows: z.array(z.object({
-      name: z.string().min(1).max(12),
+      name: text(12),
       value: z.number(),
     }).strict()).min(2).max(6),
-    suffix: z.string().max(6).optional(),
+    suffix: textOpt(6).optional(),
   }).strict(),
 
   entity: z.object({
     chips: z.array(z.object({
-      name: z.string().min(1).max(12),
-      sub: z.string().max(16).optional(),
+      name: text(12),
+      sub: textOpt(16).optional(),
       tone: z.enum(['light', 'dark']),
     }).strict()).min(1).max(3),
-    note: z.string().max(20).optional(),
+    note: textOpt(20).optional(),
   }).strict(),
 } as const;
 

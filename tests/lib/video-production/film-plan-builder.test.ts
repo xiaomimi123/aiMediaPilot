@@ -223,3 +223,36 @@ describe('describeZodIssues: 超长字段的报错要带实际值(三十八期�
     expect(text).toMatch(/压缩|缩短|改短/);
   });
 });
+
+describe('槽位限长按显示宽度而非字符数(第二次真实出片失败的回归)', () => {
+  /*
+   * 模型写了「EnterpriseOps-Gym」(17 字符)当 contrast 标签, 被 max(12) 拒掉,
+   * 修复循环里模型压不短 —— 专名压短就不是那个名字了。17 个半角字符显示宽度
+   * 只有 8.5, 画面放得下; 限长的本意是"画面放得下", 改按宽度算。
+   */
+  const shot = (card: string, slots: unknown) => ({ shotId: 's1', startMs: 0, endMs: 4000, card, slots });
+
+  it('英文专名 EnterpriseOps-Gym(17 字符/宽 8.5)不再被 12 上限拒掉', () => {
+    const text = describeZodIssues({
+      shots: [shot('contrast', {
+        leftLabel: '通用测试集', leftText: '任务成功率 46%',
+        rightLabel: 'EnterpriseOps-Gym', rightText: '任务成功率 71%',
+      })],
+    }).join('\n');
+    expect(text).not.toContain('rightLabel');
+    expect(text).not.toContain('EnterpriseOps-Gym');
+  });
+
+  it('中文超宽仍然拦, 报错带实际值/宽度/上限', () => {
+    const text = describeZodIssues({
+      shots: [shot('contrast', {
+        leftLabel: '这个标签明显超过十二个汉字的宽度了', leftText: '手动回复',
+        rightLabel: '现在', rightText: '自动回复',
+      })],
+    }).join('\n');
+    expect(text).toContain('这个标签明显超过十二个汉字的宽度了');
+    expect(text).toContain('17'); // 17 个汉字宽 17
+    expect(text).toContain('12');
+    expect(text).toMatch(/压缩|缩短|改短/);
+  });
+});
