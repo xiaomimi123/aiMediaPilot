@@ -9,6 +9,10 @@ import { z } from 'zod';
  * pillarName 用 `contentPlanGenerateSchema(pillarNames)` 工厂动态构造 enum ——
  * 把生成时刻的人设快照支柱名加固进 schema, 防止模型编出快照之外、听起来像但不存在
  * 的支柱名(同 validatePillarHit 的精确匹配先例)。
+ *
+ * Task 2/3: 单天换选题(reroll)复用同一份单条形状 —— `contentPlanDayItemSchema`
+ * 单独导出, `contentPlanGenerateSchema` 内部改为组装它, 一份字段定义两处消费,
+ * 不再各写一遍(限长/类型稍有出入就会两边失配)。
  */
 
 export interface ContentPlanDayItem {
@@ -31,8 +35,8 @@ export interface PersonaSnapshot {
   avoid: string;
 }
 
-export function contentPlanGenerateSchema(pillarNames: string[]) {
-  const dayItemSchema = z
+export function contentPlanDayItemSchema(pillarNames: string[]) {
+  return z
     .object({
       dayIndex: z.number().int().min(1).max(30),
       // ''(未挂支柱) 始终允许, 快照支柱名之外的一律拒绝。
@@ -42,10 +46,12 @@ export function contentPlanGenerateSchema(pillarNames: string[]) {
       hookDirection: z.string().min(3).max(120),
     })
     .strict();
+}
 
+export function contentPlanGenerateSchema(pillarNames: string[]) {
   return z
     .object({
-      days: z.array(dayItemSchema).length(30),
+      days: z.array(contentPlanDayItemSchema(pillarNames)).length(30),
     })
     .strict();
 }
