@@ -16,6 +16,8 @@ const prismaMock = vi.hoisted(() => ({
     createMany: vi.fn(),
   },
   $transaction: vi.fn(),
+  // advisory 锁(终审并发修复)走 raw SQL, 事务夹具要认得它
+  $executeRaw: vi.fn(async () => 0),
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
@@ -121,5 +123,13 @@ describe('POST /api/v1/content-plans/generate', () => {
     const res = await POST(req({ weeklyCadence: 3 }));
     expect(res.status).toBe(200);
     expect(prismaMock.contentPlan.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('事务内先拿 advisory 锁 —— 并发双活跃的防线(终审修复的回归)', async () => {
+    prismaMock.contentPlan.findFirst.mockResolvedValue(null);
+    prismaMock.contentPlan.create.mockResolvedValue({ id: 'p1' });
+    llmMock.callStructured.mockResolvedValue({ result: { days: Array.from({ length: 30 }, (_, i) => makeDay(i + 1)) }, usage: {} });
+    await POST(req({ weeklyCadence: 3 }));
+    expect(prismaMock.$executeRaw).toHaveBeenCalled();
   });
 });

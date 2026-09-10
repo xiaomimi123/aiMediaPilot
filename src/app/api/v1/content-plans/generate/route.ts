@@ -3,6 +3,7 @@ import { getDeepSeekTextLLM } from '@/lib/llm/clients';
 import { resolveDeepSeekApiKey } from '@/lib/llm/resolve-key';
 import { getOrCreateDefaultUser } from '@/lib/user';
 import { prisma } from '@/lib/prisma';
+import { localDateString } from '@/lib/content-plan/day-index';
 import { loadPersonaProfile } from '@/lib/persona/profile';
 import { loadCreatorVoice } from '@/lib/persona/voice';
 import { buildPersonaSection } from '@/lib/llm/prompts/persona-section';
@@ -12,9 +13,6 @@ import { contentPlanGenerateSchema, type PersonaSnapshot } from '@/lib/content-p
 
 const TOTAL_DAYS = 30;
 
-function todayISODate(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 export async function POST(req: Request) {
   let body: {
@@ -36,7 +34,7 @@ export async function POST(req: Request) {
     typeof body.defaultTemplateId === 'string' && body.defaultTemplateId.trim() !== ''
       ? body.defaultTemplateId.trim()
       : null;
-  const startDate = typeof body.startDate === 'string' && body.startDate.trim() !== '' ? body.startDate.trim() : todayISODate();
+  const startDate = typeof body.startDate === 'string' && body.startDate.trim() !== '' ? body.startDate.trim() : localDateString();
 
   const user = await getOrCreateDefaultUser();
 
@@ -83,6 +81,14 @@ export async function POST(req: Request) {
   };
 
   const planId = await prisma.$transaction(async (tx) => {
+    /*
+     * 事务级 advisory 锁(终审 important 修复): 「先查 active 再归档再建」在两个
+     * 并发请求下会各自读到"无 active"而各建一条(多标签页/网络重试挡不住)。
+     * Prisma schema 做不了 partial unique(status='active' 时唯一), 用 Postgres
+     * 的 pg_advisory_xact_lock 按 userId 串行化本事务 —— 锁随事务提交自动释放,
+     * 第二个请求会等第一个提交后再进来, 看到已存在的 active 并把它归档。
+     */
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'content-plan:' + user.id}))`;
     // 服务端强制单活跃规划: 生成新规划前先归档旧的 active 规划。
     const existingActive = await tx.contentPlan.findFirst({
       where: { userId: user.id, status: 'active' },

@@ -12,15 +12,10 @@ import { ScoreTrend } from '@/components/overview/score-trend';
 import { LoopStatus } from '@/components/overview/loop-status';
 import { QueuePreview } from '@/components/overview/queue-preview';
 import { buildLoopStatus } from '@/lib/cockpit/feedback-loop';
-import { dayIndexFor } from '@/lib/content-plan/day-index';
+import { dayIndexFor, localDateString } from '@/lib/content-plan/day-index';
 import { cn } from '@/lib/utils';
 
 /** 服务器本地日期 "YYYY-MM-DD"(与 `/plan` 页面同一份算法, 避免 UTC 边界漂移)。 */
-function todayLocal(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
 
 /** 指标卡的状态徽章色调 → 样式类, 对照设计稿 `.badge` 的 warn/bad/ok/info。 */
 const BADGE_CLASS: Record<'warn' | 'bad', string> = {
@@ -62,7 +57,7 @@ export default async function OverviewPage() {
   // 三十八期: 有活跃规划且今天的 Day 存在且还是 pending → 待办里提醒「今天的内容还没写」。
   let todayPlanDayPending = false;
   if (activePlan) {
-    const today = todayLocal();
+    const today = localDateString();
     const todayIndex = dayIndexFor(activePlan.startDate, today, activePlan.totalDays);
     if (todayIndex !== null) {
       const todayDay = await prisma.contentPlanDay.findUnique({

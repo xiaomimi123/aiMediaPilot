@@ -4,7 +4,7 @@ import { PageShell } from '@/components/layout/page-shell';
 import { loadJson } from '@/lib/settings/load';
 import { PlanOnboardingEntry } from '@/components/plan/onboarding-entry';
 import { PlanMain } from '@/components/plan/plan-main';
-import { dayIndexFor } from '@/lib/content-plan/day-index';
+import { dayIndexFor, localDateString } from '@/lib/content-plan/day-index';
 import type { PersonaProfileData } from '@/lib/persona/profile';
 import type { CreatorVoiceData } from '@/lib/persona/voice';
 
@@ -29,11 +29,6 @@ const EMPTY_PROFILE: PersonaProfileData = {
 const EMPTY_VOICE: CreatorVoiceData = { origin: '', identity: '', notIdentity: '', stances: [], energy: '' };
 
 /** 服务器本地日期 "YYYY-MM-DD"(不用 toISOString —— 那是 UTC, 会在时区边界错一天)。 */
-function todayLocal(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
 
 /** startDate + dayIndex(1-based) → "YYYY-MM-DD"，与 dayIndexFor 的算法保持对称。 */
 function dateForDayIndex(startDate: string, dayIndex: number): string {
@@ -71,7 +66,7 @@ export default async function PlanPage() {
     );
   }
 
-  const today = todayLocal();
+  const today = localDateString();
   const todayIndex = dayIndexFor(activePlan.startDate, today, activePlan.totalDays);
   const endDate = dateForDayIndex(activePlan.startDate, activePlan.totalDays);
   const ended = todayIndex === null && today > endDate;

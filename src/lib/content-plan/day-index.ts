@@ -20,3 +20,19 @@ export function dayIndexFor(startDate: string, today: string, totalDays: number)
   if (dayIndex < 1 || dayIndex > totalDays) return null;
   return dayIndex;
 }
+
+/**
+ * 本地时区的 YYYY-MM-DD(三十八期终审 critical 修复)。
+ *
+ * 绝不能用 `toISOString().slice(0,10)` —— 那是 UTC 日期: 北京时间凌晨 0-8 点里
+ * 它比本地日期少一天, 用它当规划 startDate 会让整份 30 天规划从第一天起
+ * 永久错位一天(今日卡显示明天的内容)。而凌晨正是自媒体人常干活的时段。
+ * generate 路由的默认 startDate、/plan 页与总览页的「今天」都必须走这一个函数,
+ * 三处同源才谈不上错位。
+ */
+export function localDateString(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
