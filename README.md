@@ -6,6 +6,27 @@
 
 ---
 
+## 对话式出片（2026-09-15 定向：这才是主入口）
+
+三个半月的真实使用数据（23 条出片任务 0 条走到 master 导出、16 条永远停在
+「预览已就绪」等确认）证明：流水线里每一道"人工确认"闸口都是弃坑点。用户拍板
+转向——**选题和文案在 Claude 对话里直接做，产品只负责把稿子变成片**；面板降级
+为浏览稿库/成片的仓库。
+
+```bash
+npm run produce:one                       # 今日规划选题 → 六幕稿 → 渲染 → master 成片
+npx tsx scripts/produce-one.ts --topic "..."      # 指定题目
+npx tsx scripts/produce-one.ts --script <draftId> # 已有稿直接出片
+npx tsx scripts/produce-one.ts --template <id>    # 指定模板(默认图文口播)
+```
+
+零闸口：自动生成脚本、关闭分镜确认（reviewBeforeRender=false）、预览就绪自动
+确认导出、master 渲完打印成品 mp4 路径。人只在拿到成片后表态。前置：dev server
+与 worker 都在跑（`npm run dev:all`）。真人出镜模板不支持（必须先上传口播视频，
+天生有人工步骤）。详见 `scripts/produce-one.ts` 顶部注释。
+
+---
+
 ## 前端重建 + v5 全量改造 (2026-08-28)
 
 **为什么要重建**: 2026-08-04 的 UI 复刻(`e4c6d87`)把 2194 行手写 `cockpit.css`
