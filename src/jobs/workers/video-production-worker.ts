@@ -767,11 +767,29 @@ export async function handleTalkingHeadBrollRemotion(
     // 转写 + 语音对齐(复用现有 directing 状态值, 语义上这里是"转写+对齐",
     // 与旧渲染层(已删除)同一先例)。
     await setStatus('directing');
-    const audioPath = path.join(vp.productionRoot, 'source-audio.wav');
-    await extractAudio({ videoPath: sourceVideoPath, audioPath });
-    const whisper = new LocalWhisperClient();
-    const transcription = await whisper.transcribe(audioPath);
-    rawTranscript = transcription.segments;
+    /*
+     * 转写纠错覆盖(2026-09-15): ASR 的产物直接烧成字幕, 本地模型难免留错字
+     * ("赛道"→"室看"、"类目第一"→"LAM第一"这类), 而错字上片对口播成片是硬伤。
+     * productionRoot 下若有 transcript-override.json([{startSec,endSec,text}]),
+     * 就用它替代 whisper —— 人工(或上游工具)校对好的逐句转写从这里进入管线,
+     * 后续对齐/字幕/叠字全部吃校对后的文本。没有该文件时行为与原来完全一致。
+     */
+    const overridePath = path.join(vp.productionRoot, 'transcript-override.json');
+    const override = await fs.readFile(overridePath, 'utf-8').then(
+      (raw) => JSON.parse(raw) as TranscriptSegment[],
+      () => null,
+    );
+    if (override && Array.isArray(override) && override.every(
+      (s) => typeof s?.startSec === 'number' && typeof s?.endSec === 'number' && typeof s?.text === 'string',
+    )) {
+      rawTranscript = override;
+    } else {
+      const audioPath = path.join(vp.productionRoot, 'source-audio.wav');
+      await extractAudio({ videoPath: sourceVideoPath, audioPath });
+      const whisper = new LocalWhisperClient();
+      const transcription = await whisper.transcribe(audioPath);
+      rawTranscript = transcription.segments;
+    }
 
     // 取六幕脚本(与旧渲染层已删除的同名 handler 同一条查找链)
     const content = await prisma.cockpitContent.findUnique({ where: { id: vp.contentId } });
@@ -787,7 +805,7 @@ export async function handleTalkingHeadBrollRemotion(
     const alignLLM = new DeepSeekTextLLM({ apiKey: deepseekKey, defaultModel: 'deepseek-reasoner' });
     const { result: alignedResult } = await alignLLM.callStructured({
       systemPrompt: ALIGNER.buildSystemPrompt(),
-      userMessage: ALIGNER.buildUserMessage(transcription.segments, acts),
+      userMessage: ALIGNER.buildUserMessage(rawTranscript, acts),
       responseSchema: ALIGNER.responseSchema,
     });
     aligned = alignedResult.acts;
