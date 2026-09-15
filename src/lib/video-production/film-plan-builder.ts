@@ -1,7 +1,8 @@
 import type { CallStructuredOpts } from '@/lib/llm/vision';
 import { FILM_PLAN, type ActWindow } from '@/lib/video-production/film-plan-prompt';
 import { checkFilmPlanTiming } from '@/lib/video-production/film-plan-timing';
-import { FilmPlanSchema, stripPlanStyle, type FilmPlan } from '@/lib/video-production/shot-plan';
+import { FilmPlanSchema, stripPlanStyle, displayWidth, type FilmPlan } from '@/lib/video-production/shot-plan';
+import { z } from 'zod';
 
 /**
  * 最多修几轮。
@@ -129,6 +130,64 @@ const TRUNCATION_RATIO = 0.95;
  * 那样失败时是它自己按原样重试并最终抛错, 我们**拿不到模型的原始产出, 也就没有机会
  * 把精准的错误喂回去**。修复循环的全部价值在错误措辞上, 所以校验必须由我们自己做。
  */
+/** 单点压缩的响应形状 —— 只有一句话, 模型没有别的可写。 */
+const CompressSchema = z.object({ text: z.string().min(1) }).strict();
+
+/**
+ * 宽度超限的外科手术修复(第三次真实出片失败的修法)。
+ *
+ * 真实故障: 整篇 27 镜方案只剩一条清单项宽 22 超上限 20, 修复循环却让模型
+ * **整篇重写**, 2 轮都收敛不了 —— 模型数中文字数不准(22 压到 21 还是超),
+ * 且整篇重写还可能在别处引入新的超限, 稿子越长越修不完。
+ *
+ * 修法: 宽度问题不进整轮重写。程序沿 zod issue 的 path 摘出那一句, 让模型
+ * **只改这一句**(输出 schema 只有一个 text 字段), 改完由 `displayWidth` 量,
+ * 不合格就地重试(每句最多 3 次); 全篇其余部分一字不动。修不好的留给整轮
+ * 重写兜底 —— 手术失败不比不做手术更糟。
+ *
+ * 直接在 `raw`(模型原始产出)上原地写入 —— 调用方随后重新 safeParse。
+ */
+async function repairWidthIssuesSurgically(
+  raw: unknown,
+  issues: z.ZodIssue[],
+  llm: FilmPlanLLM,
+): Promise<void> {
+  for (const issue of issues) {
+    const limit = (issue as { params?: { widthLimit?: number } }).params?.widthLimit;
+    if (typeof limit !== 'number') continue;
+    // 沿 path 找到父对象与键
+    let parent: unknown = raw;
+    for (const seg of issue.path.slice(0, -1)) {
+      if (parent == null || typeof parent !== 'object') { parent = undefined; break; }
+      parent = (parent as Record<string | number, unknown>)[seg as string | number];
+    }
+    const key = issue.path[issue.path.length - 1] as string | number;
+    if (parent == null || typeof parent !== 'object') continue;
+    const current = (parent as Record<string | number, unknown>)[key];
+    if (typeof current !== 'string') continue;
+
+    let candidate = current;
+    for (let attempt = 0; attempt < 3 && displayWidth(candidate) > limit; attempt += 1) {
+      const { result } = await llm.callStructured({
+        systemPrompt:
+          '你是文案压缩器。把给出的一句话压缩到指定显示宽度以内(中文/全角算 1, 英文/数字算 0.5), '
+          + '意思不变, 保留数字与专有名词, 只返回压缩后的文本。',
+        userMessage: [{
+          type: 'text',
+          text: `把这句压缩到显示宽度 ${limit} 以内:\n「${candidate}」\n当前宽度 ${displayWidth(candidate)}。`
+            + (attempt > 0 ? ' 上一次的压缩仍然超宽, 再删掉一些修饰。' : ''),
+        }],
+        responseSchema: CompressSchema,
+        maxTokens: 200,
+      });
+      candidate = result.text;
+    }
+    if (displayWidth(candidate) <= limit && candidate !== current) {
+      (parent as Record<string | number, unknown>)[key] = candidate;
+    }
+  }
+}
+
 export async function buildFilmPlan(opts: {
   llm: FilmPlanLLM;
   windows: ActWindow[];
@@ -211,7 +270,16 @@ export async function buildFilmPlan(opts: {
       }
     }
 
-    const parsed = FilmPlanSchema.safeParse(result);
+    let parsed = FilmPlanSchema.safeParse(result);
+    if (!parsed.success) {
+      const widthIssues = parsed.error.issues.filter(
+        (i) => (i as { params?: { kind?: string } }).params?.kind === 'display-width',
+      );
+      if (widthIssues.length > 0) {
+        await repairWidthIssuesSurgically(result, widthIssues, opts.llm);
+        parsed = FilmPlanSchema.safeParse(result);
+      }
+    }
     const issues = parsed.success
       ? checkTiming(parsed.data, opts.totalMs)
       : describeZodIssues(result);

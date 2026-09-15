@@ -53,6 +53,9 @@ const widthCheck = (max: number) => (v: string, ctx: z.RefinementCtx) => {
       code: z.ZodIssueCode.custom,
       message: `「${v}」显示宽度 ${w}(中文/全角按 1, 英文数字按 0.5), 上限 ${max} —— `
         + `压缩到 ${max} 以内(去掉修饰词/换更短的说法), **意思不变、只改这一处**, 其余照旧。`,
+      // 机器可读标记: film-plan-builder 的外科手术修复靠它认出"这是宽度问题"
+      // 并拿到上限值 —— 解析报错文案太脆, 文案是给模型看的, params 是给代码看的。
+      params: { kind: 'display-width', widthLimit: max },
     });
   }
 };

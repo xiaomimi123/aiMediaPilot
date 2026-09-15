@@ -256,3 +256,44 @@ describe('槽位限长按显示宽度而非字符数(第二次真实出片失败
     expect(text).toMatch(/压缩|缩短|改短/);
   });
 });
+
+describe('宽度超限走外科手术单点修, 不烧整轮重写(第三次真实出片失败的回归)', () => {
+  /*
+   * 真实故障: 整篇 27 镜方案只有一条清单项宽 22 超上限 20, 修复循环却让模型
+   * **整篇重写** 2 轮都收敛不了 —— 模型数中文字数不准, 22 压到 21 还是超,
+   * 且每轮重写还可能在别处引入新的超限。修法: 宽度类问题由程序摘出那一句,
+   * 让模型只改这一句, 改完由代码量宽度, 不合格就地重试; 全篇其余部分一字不动。
+   */
+  // 工厂而不是共享常量: 手术修复在模型原始产出上**原地写入**(生产里每次调用
+  // 都是新对象, 没问题), 共享常量会让第一条测试把数据改好、第二条测了个寂寞。
+  const overWide = () => ({ shots: [
+    { shotId: 's1', startMs: 0, endMs: 6000, card: 'statement', slots: { text: '一' } },
+    { shotId: 's2', startMs: 6000, endMs: 10000, card: 'list',
+      slots: { title: '会议纪要', items: ['议题先行', '用结构化提问：议题、结论、未定、负责人、时间', '十分钟出稿'] } },
+  ] });
+
+  it('单点修好后整篇其余部分一字不动, 不消耗修复轮', async () => {
+    const llm = fakeLLM([overWide(), { text: '结构化提问五要素' }]);
+    const r = await buildFilmPlan({ llm: llm as any, windows, cardsSection: '卡片说明', factsSection: '', totalMs: 10000 });
+    expect(r.rounds).toBe(0); // 没有烧整轮重写
+    expect((r.plan.shots[1].slots as any).items[1]).toBe('结构化提问五要素');
+    expect((r.plan.shots[1].slots as any).items[0]).toBe('议题先行'); // 其余原样
+    expect(r.plan.shots[0].slots).toEqual({ text: '一' });
+    // 单点修的请求里带着原句和宽度要求
+    expect(llm.seen[1]).toContain('用结构化提问：议题、结论、未定、负责人、时间');
+    expect(llm.seen[1]).toContain('20');
+  });
+
+  it('模型压完还超宽 → 代码量出来, 就地重试同一句', async () => {
+    const llm = fakeLLM([overWide(), { text: '这一句压缩过之后仍然明显超过二十个字宽的上限' }, { text: '五要素提问法' }]);
+    const r = await buildFilmPlan({ llm: llm as any, windows, cardsSection: '卡片说明', factsSection: '', totalMs: 10000 });
+    expect(r.rounds).toBe(0);
+    expect((r.plan.shots[1].slots as any).items[1]).toBe('五要素提问法');
+  });
+
+  it('非宽度问题不走手术路径, 照旧整轮喂回', async () => {
+    const llm = fakeLLM([badValue, good]);
+    const r = await buildFilmPlan({ llm: llm as any, windows, cardsSection: '卡片说明', factsSection: '', totalMs: 10000 });
+    expect(r.rounds).toBe(1);
+  });
+});
