@@ -353,7 +353,7 @@ export const Film: React.FC<FilmInput> = ({
           高亮色从 theme.highlight 取(二十九期 Task 5), 不写死: 跟着 visualStyle
           走, card/illustration 两套配色各自的强调色不同。pipReserve 见上方注释,
           非 pip/贴底以外的调用不传, 行为与之前一致。 */}
-      <Captions items={captions} highlightColor={theme.highlight} pipReserve={pipReserve} />
+      <Captions items={captions} highlightColor={theme.highlight} pipReserve={pipReserve} variant={sourceVideo ? 'footage' : 'card'} />
     </AbsoluteFill>
   );
 };

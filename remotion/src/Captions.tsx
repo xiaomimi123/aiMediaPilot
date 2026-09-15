@@ -2,6 +2,7 @@ import React from 'react';
 import {useCurrentFrame, useVideoConfig} from 'remotion';
 import {safeBox, scaleFont} from './layout/grid';
 import {pickCurrentCaption, splitCaptionIntoChunks, isWordActive} from './caption-logic';
+import {FONT_CN} from './motion/lib';
 import type {CaptionItem} from './Film';
 
 /**
@@ -44,8 +45,16 @@ export const Captions: React.FC<{
    * 调用点不传这个 prop, 这里保持老行为不变。
    */
   pipReserve?: {side: 'left' | 'right'; width: number};
+  /**
+   * 字幕外观分链(2026-09-15, 用户对真实口播成片的样式否决)。
+   * - 'card'(默认): 深字+白微影 —— 为浅色知识卡背景设计, 三条卡片链保持原样;
+   * - 'footage': 白色特粗+黑描边 —— 压在真实出镜画面上的唯一可靠做法, 深字
+   *   浅影在视频画面上又灰又虚(真机成片验收过, 被用户否决)。
+   */
+  variant?: 'card' | 'footage';
 }> = ({
   items,
+  variant = 'card',
   // 默认值只是防御性兜底(理论上所有调用点都会显式传 theme.highlight),
   // 与四张卡片组件的"必填但仍给防御性默认值"同一惯例(见 Film.tsx 顶部注释)。
   highlightColor = '#f2c744',
@@ -89,10 +98,20 @@ export const Captions: React.FC<{
         alignItems: 'flex-end',
         justifyContent: 'center',
         textAlign: 'center',
-        fontSize: scaleFont(width, height, CAPTION_FONT_SIZE_BASE),
-        fontWeight: 700,
-        color: 'rgba(20,24,32,0.92)',
-        textShadow: '0 1px 2px rgba(255,255,255,0.8)',
+        // fontFamily 必须显式给: 渲染环境的默认字体是衬线体, 字幕会渲成"宋体感"
+        // (真机成片踩过) —— 与卡片组件统一用 FONT_CN。
+        fontFamily: FONT_CN,
+        fontSize: scaleFont(width, height, variant === 'footage' ? 50 : CAPTION_FONT_SIZE_BASE),
+        fontWeight: variant === 'footage' ? 900 : 700,
+        color: variant === 'footage' ? '#ffffff' : 'rgba(20,24,32,0.92)',
+        ...(variant === 'footage'
+          ? {
+              WebkitTextStroke: `${scaleFont(width, height, 6)}px rgba(10,12,18,0.9)`,
+              paintOrder: 'stroke' as const,
+              textShadow: '0 2px 10px rgba(0,0,0,0.45)',
+              letterSpacing: '0.02em',
+            }
+          : {textShadow: '0 1px 2px rgba(255,255,255,0.8)'}),
         lineHeight: 1.4,
       }}
     >

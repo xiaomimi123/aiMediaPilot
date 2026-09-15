@@ -65,6 +65,22 @@ const OverlayItemView: React.FC<{
   const isKeyword = kind === 'keyword';
   const fontSize = scaleFont(width, height, KIND_FONT_BASE[kind]);
 
+  /*
+   * 样式改版(2026-09-15, 用户对真实成片的样式否决): 原先 keyword 是蓝字白描边
+   * 裸浮在画面上, 没有底衬, 观感廉价。改成"深字亮底色块"—— 亮黄圆角块 + 微倾斜,
+   * 这是压在任意实拍画面上都清晰、又带综艺花字质感的做法; note 白字加细黑描边
+   * (原来只有阴影, 亮背景上会糊)。箭头保持白色粗体。
+   */
+  const chip = isKeyword
+    ? {
+        background: '#ffd84d',
+        color: '#141820',
+        padding: `${scaleFont(width, height, 8)}px ${scaleFont(width, height, 20)}px`,
+        borderRadius: scaleFont(width, height, 14),
+        boxShadow: '0 6px 24px rgba(0,0,0,0.35)',
+      }
+    : null;
+
   return (
     <div
       data-overlay-idx={index}
@@ -75,19 +91,24 @@ const OverlayItemView: React.FC<{
         // 锚点按 anchor 决定 translate 方向: 'top' 时 (x,y) 就是元素左上角,
         // 不需要额外偏移; 'bottom'(目前只有 bottom-center 槽位)时 (x,y) 是
         // 元素左下角, 用 translateY(-100%) 把元素向上翻上去, 保证底边贴住
-        // 那条坐标线而不是顶边。
-        transform: pos.anchor === 'bottom' ? 'translateY(-100%)' : undefined,
+        // 那条坐标线而不是顶边。倾斜只给 keyword 色块(花字质感), 与锚点位移
+        // 叠乘写在同一个 transform 里。
+        transform: [
+          pos.anchor === 'bottom' ? 'translateY(-100%)' : '',
+          isKeyword ? 'rotate(-2deg)' : '',
+        ].filter(Boolean).join(' ') || undefined,
         fontFamily: FONT_CN,
         fontSize,
-        fontWeight: isKeyword ? 900 : kind === 'note' ? 500 : 700,
-        color: isKeyword ? '#2f6bff' : '#ffffff',
-        // 白描边只给 keyword 蓝大字用(参考 `cards/Stat.tsx` 主数字的描边写法)——
-        // 白描边是为了蓝字压在各种背景(含出镜视频画面)上仍然清晰可辨, 与
-        // `theme.stroke` 无关(那是给卡片数字配色用的, 各主题取值不同, 这里
-        // 刻意写死白色)。
-        WebkitTextStroke: isKeyword ? `${scaleFont(width, height, 3)}px #ffffff` : undefined,
-        paintOrder: isKeyword ? 'stroke' : undefined,
-        textShadow: !isKeyword ? '0 1px 4px rgba(0,0,0,0.55)' : undefined,
+        fontWeight: isKeyword ? 900 : kind === 'note' ? 600 : 700,
+        color: '#ffffff',
+        ...(chip ?? {}),
+        ...(!isKeyword
+          ? {
+              WebkitTextStroke: `${scaleFont(width, height, 3)}px rgba(10,12,18,0.85)`,
+              paintOrder: 'stroke' as const,
+              textShadow: '0 2px 8px rgba(0,0,0,0.5)',
+            }
+          : {}),
         whiteSpace: 'pre-line',
         maxWidth: width * 0.42,
         lineHeight: 1.25,
@@ -131,9 +152,13 @@ export const TextOverlayLayer: React.FC<{
             right: scaleFont(width, height, 28),
             fontFamily: FONT_CN,
             fontSize: scaleFont(width, height, 20),
-            fontWeight: 500,
-            color: '#ffffff',
-            textShadow: '0 1px 3px rgba(0,0,0,0.6)',
+            fontWeight: 600,
+            color: 'rgba(255,255,255,0.92)',
+            // 半透明胶囊底(2026-09-15 样式改版): 裸文字角标在浅色画面上会消失
+            background: 'rgba(10,12,18,0.45)',
+            padding: `${scaleFont(width, height, 6)}px ${scaleFont(width, height, 14)}px`,
+            borderRadius: scaleFont(width, height, 999),
+            letterSpacing: '0.08em',
             whiteSpace: 'pre-line',
             textAlign: 'right',
             lineHeight: 1.4,
