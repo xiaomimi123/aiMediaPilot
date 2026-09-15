@@ -110,7 +110,11 @@ const OverlayItemView: React.FC<{
             }
           : {}),
         whiteSpace: 'pre-line',
-        maxWidth: width * 0.42,
+        // keyword 色块带内边距, 0.42 屏宽会把 7 字标题挤换行(真机抓帧: "不懂技术
+        // 的用户"折行且第二行压住下方注释)。色块放宽到 0.72 并按内容自适应宽,
+        // 想要多行仍用显式 \n(pre-line 保留); note/arrow 维持 0.42。
+        width: isKeyword ? ('max-content' as const) : undefined,
+        maxWidth: width * (isKeyword ? 0.72 : 0.42),
         lineHeight: 1.25,
         ...entrance,
       }}
