@@ -18,6 +18,8 @@ export interface TodayCardDay {
   status: ContentPlanDayStatus;
   scriptDraftId: string | null;
   videoProductionId: string | null;
+  /** 已出片但成片渲染失败 —— 完成态不能庆祝, 要给回修入口。 */
+  filmFailed?: boolean;
 }
 
 export interface TodayCardTemplateOption {
@@ -197,6 +199,19 @@ export function TodayCard({ planId, dayIndex, day, templates, defaultTemplateId,
         <Button size="sm" className="mt-3" disabled={busy !== null} onClick={() => void retrySync()}>
           {busy !== null ? '重试中…' : '重试同步状态'}
         </Button>
+      </section>
+    );
+  }
+
+  if (action.kind === 'done' && state.filmFailed) {
+    return (
+      <section className="rounded-lg border border-bad/40 bg-bad-subtle p-5">
+        <p className="text-sm font-medium text-bad">片子发起了, 但渲染失败了</p>
+        <p className="mt-1.5 text-base font-medium text-fg">{state.topic}</p>
+        <p className="mt-1 text-xs leading-relaxed text-fg-3">脚本没丢。去成片页看失败原因, 点「重新制作」就能重跑。</p>
+        <Link href={`/films/${action.videoProductionId}`} className="mt-3 inline-block text-xs text-brand hover:text-brand-hover">
+          去重新制作 →
+        </Link>
       </section>
     );
   }

@@ -84,6 +84,24 @@ export default async function PlanPage() {
     orderBy: { dayIndex: 'asc' },
   });
 
+  /*
+   * produced 天关联成片的真实状态(2026-09-15): 第 1 天规划里标着「已出片」,
+   * 但那条片实际渲染失败了 —— 规划页在替一条不存在的成片庆祝。规划天的
+   * status 语义是"任务发起到哪一步"(用户拍板: 每日任务到发起出片为止),
+   * 不回写渲染结果; 所以展示层自己查一次成片状态, 失败的标出来。
+   */
+  const producedFilmIds = days
+    .filter((d) => d.status === 'produced' && d.videoProductionId)
+    .map((d) => d.videoProductionId as string);
+  const failedFilmIds = producedFilmIds.length
+    ? new Set(
+        (await prisma.videoProduction.findMany({
+          where: { id: { in: producedFilmIds }, status: 'failed' },
+          select: { id: true },
+        })).map((f) => f.id),
+      )
+    : new Set<string>();
+
   const personaSnapshot = activePlan.personaSnapshot as unknown as {
     pillars: { name: string; description: string }[];
   };
@@ -103,6 +121,7 @@ export default async function PlanPage() {
           status: d.status as 'pending' | 'scripted' | 'produced',
           scriptDraftId: d.scriptDraftId,
           videoProductionId: d.videoProductionId,
+          filmFailed: d.videoProductionId ? failedFilmIds.has(d.videoProductionId) : false,
         }))}
         pillars={personaSnapshot.pillars.map((p) => ({ name: p.name }))}
         templates={templates.map((t) => ({ id: t.id, name: t.name }))}

@@ -8,6 +8,8 @@ export interface PlanListDay {
   pillarName: string;
   topic: string;
   status: ContentPlanDayStatus;
+  /** 已出片但那条成片渲染失败了 —— 不能拿绿色「已出片」替一条不存在的片庆祝。 */
+  filmFailed?: boolean;
 }
 
 const STATUS_BADGE: Record<ContentPlanDayStatus, string> = {
@@ -64,6 +66,8 @@ export function PlanList({ days, todayIndex, pillars }: PlanListProps) {
               <span className="min-w-0 flex-1 truncate text-sm text-fg">{d.topic}</span>
               {isStale ? (
                 <span className="badge-base bg-elevated text-fg-3">已过</span>
+              ) : d.status === 'produced' && d.filmFailed ? (
+                <span className="badge-base bg-bad-subtle text-bad">出片失败</span>
               ) : (
                 <span className={cn('badge-base', STATUS_BADGE[d.status])}>{planDayStatusLabel(d.status)}</span>
               )}

@@ -77,6 +77,7 @@ export function PlanMain({
             status: todayDay.status,
             scriptDraftId: todayDay.scriptDraftId,
             videoProductionId: todayDay.videoProductionId,
+            filmFailed: todayDay.filmFailed,
           }}
           templates={templates}
           defaultTemplateId={defaultTemplateId}

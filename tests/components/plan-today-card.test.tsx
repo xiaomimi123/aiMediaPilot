@@ -216,3 +216,25 @@ describe('TodayCard - produced', () => {
     expect(screen.getByText('看成片 →').closest('a')!.getAttribute('href')).toBe('/films/vp2');
   });
 });
+
+describe('TodayCard - produced 但成片失败', () => {
+  it('不庆祝, 给去成片页重新制作的入口', () => {
+    stubFetch({});
+    render(
+      <TodayCard
+        planId="plan1"
+        dayIndex={3}
+        day={{
+          topic: '选题B', angle: '角度B', hookDirection: '钩子B',
+          status: 'produced', scriptDraftId: 'sd2', videoProductionId: 'vp2',
+          filmFailed: true,
+        }}
+        templates={templates}
+        defaultTemplateId={null}
+      />,
+    );
+    expect(screen.queryByText('今天完成了 🎉')).toBeNull();
+    expect(screen.getByText('片子发起了, 但渲染失败了')).toBeTruthy();
+    expect(screen.getByText('去重新制作 →').closest('a')!.getAttribute('href')).toBe('/films/vp2');
+  });
+});

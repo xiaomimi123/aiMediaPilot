@@ -55,3 +55,16 @@ describe('PlanList', () => {
     expect(screen.queryByText(/一次都没出现/)).toBeNull();
   });
 });
+
+describe('PlanList - 出片失败的诚实展示', () => {
+  /*
+   * 2026-09-15 真实场景: 第 1 天规划里标「已出片」(绿), 但那条片渲染失败了 ——
+   * 规划页在替一条不存在的成片庆祝。produced 天带 filmFailed 时改标「出片失败」。
+   */
+  it('produced 但成片失败 → 徽章是「出片失败」而不是「已出片」', () => {
+    const withFailed = [{ ...days[0], filmFailed: true }, days[1], days[2]];
+    render(<PlanList days={withFailed} todayIndex={3} pillars={pillars} />);
+    expect(screen.getByText('出片失败')).toBeTruthy();
+    expect(screen.queryByText('已出片')).toBeNull();
+  });
+});
