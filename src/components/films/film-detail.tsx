@@ -10,6 +10,7 @@ import {
 import { cn } from '@/lib/utils';
 import { FilmLayoutEditor } from './film-layout-editor';
 import { FilmPlanWorkbench } from './film-plan-workbench';
+import { OverlayStudioPanel } from './overlay-studio-panel';
 import type { SceneLayout } from '@/lib/video/scene-layout';
 import type { FreezeReport } from '@/lib/video/freeze-check';
 
@@ -439,6 +440,15 @@ export function FilmDetail({ initial }: { initial: Film }) {
             productionId={film.id}
             onStatusChange={(status) => setFilm((f) => ({ ...f, status }))}
           />
+        ) : null}
+
+        {/*
+          特效编辑台入口(2026-09-20): 出镜片 + 已有源视频才有意义(编排要真实
+          时长与转写)。转写是否存在由后端把关(报错解释清楚), 前端不预判 ——
+          预判错了会把入口藏起来, 用户连报错都看不到。
+        */}
+        {film.mode === 'talking-head-broll' && film.hasSource ? (
+          <OverlayStudioPanel productionId={film.id} />
         ) : null}
 
         {film.hasPreview || film.hasMaster ? (

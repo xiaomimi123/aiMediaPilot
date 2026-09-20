@@ -44,3 +44,6 @@ scripts/align/__pycache__
 
 # 模板演示视频(本地生成, npm run gen:template-demos)
 /public/template-demos/
+
+# 外部工具(source-available, 禁止再分发, 不入库)
+/tools/overlay-studio/

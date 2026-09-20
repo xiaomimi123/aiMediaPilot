@@ -25,6 +25,24 @@ npx tsx scripts/produce-one.ts --template <id>    # 指定模板(默认图文口
 与 worker 都在跑（`npm run dev:all`）。真人出镜模板不支持（必须先上传口播视频，
 天生有人工步骤）。详见 `scripts/produce-one.ts` 顶部注释。
 
+
+### 口播片的特效层：Overlay Studio（2026-09-20）
+
+自建烧录式叠字被实测否决（样式迭代 = 改代码+重启 worker+重渲）。口播片的特效
+改走外部工具 [overlay-studio](https://github.com/jeszhou/overlay-studio)
+（source-available，免费自用、成片可商用；装在 `tools/overlay-studio/`，已
+gitignore 不入库，绝不 import 其源码——集成层只拉起它、调它的 lint、产它格式
+的 JSON）。
+
+- 成片详情页（真人出镜片）→「特效编辑台」→ 一键：校对转写 → SRT + DeepSeek
+  编排 JSON（结构校验 + Studio 体检双重修复循环）→ 拉起编辑台
+- 用户在 Studio 里逐卡微调 → 导出透明 MOV → 剪映与原片合成（原片一帧不压）
+- 集成层：`src/lib/overlay-studio/`（studio.ts 定位/拉起/lint；arrangement.ts
+  结构契约；arrange.ts 编排构建）+ `overlay-arrange.ts` 提示词
+- 安装：`git clone https://github.com/jeszhou/overlay-studio tools/overlay-studio
+  && cd tools/overlay-studio/motion-playground && npm install`（可用
+  OVERLAY_STUDIO_DIR 覆盖位置）
+
 ---
 
 ## 前端重建 + v5 全量改造 (2026-08-28)
