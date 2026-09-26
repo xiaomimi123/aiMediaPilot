@@ -13,6 +13,10 @@ describe('formatSystemPrompt', () => {
     expect(p).toContain('第4段「冷知识」约 37.4 秒');
     expect(p).toContain('write_script');
   });
+  it('tells the model to name segments in Chinese, never by internal id', () => {
+    const p = formatSystemPrompt({ title: 't', stage: 'draft', targetSec: 60, script: null, persona: null });
+    expect(p).toContain('跟用户说话时用段落的中文名（如「冷知识」），不要说 s1、s4 这类编号');
+  });
   it('says there is no script yet when script is null', () => {
     const p = formatSystemPrompt({ title: '未命名项目', stage: 'draft', targetSec: 60, script: null, persona: null });
     expect(p).toContain('还没有稿子');
