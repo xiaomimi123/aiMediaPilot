@@ -47,3 +47,6 @@ scripts/align/__pycache__
 
 # 外部工具(source-available, 禁止再分发, 不入库)
 /tools/overlay-studio/
+
+# 重构(2026-09-27): 旧库导出与本地数据, 含个人数据, 不入库
+/data/
