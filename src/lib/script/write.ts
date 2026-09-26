@@ -32,7 +32,8 @@ function segmentGuide(targetSec: number): string {
 const SYSTEM_PROMPT = `你是抖音 AI 知识类口播博主的编导，负责写能直接开口念的口播逐字稿。
 要求：
 - 口语、短句，不用书面转折词（然而、综上所述、值得注意的是）。
-- 不编造数字和事实；没把握的写成相对说法（"好几倍""不少人"）。
+- 不编造数字和事实；没有出处的数字直接不写，不要换成"好几倍"这种听起来像事实的说法。
+- 不写用户没提供的第一人称经历、试用结果、小故事（如"我试过一次，它挑出了……"）。需要亲身例子时写「【待补：你的真实经历】」，让用户自己补。
 - 严格按给定的 6 段结构与每段字数写，字数是硬约束。
 - 只输出 JSON：{"title": "视频标题", "segments": [{"role": "段名", "text": "逐字稿"}, ...共 6 段]}。`;
 
@@ -60,13 +61,24 @@ export async function writeScript(opts: {
       })
     ).result;
 
-  let raw = await call(firstMessage(opts.direction, opts.targetSec, opts.personaText));
+  let raw: LlmScript;
+  try {
+    raw = await call(firstMessage(opts.direction, opts.targetSec, opts.personaText));
+  } catch (e) {
+    // 原始报错(多为 zod 的英文 JSON)不给用户看
+    throw new Error('模型这次没按 6 段格式交稿，没写成。再说一次，或者把方向说具体些。', { cause: e });
+  }
   let script = toScript(raw);
   let report = checkDuration(script, opts.targetSec);
   let rounds = 0;
   while (!report.ok && rounds < MAX_REPAIR_ROUNDS) {
     rounds += 1;
-    raw = await call(repairMessage(script, report, opts.targetSec));
+    try {
+      raw = await call(repairMessage(script, report, opts.targetSec));
+    } catch {
+      // 自修这一轮格式坏了: 保留上一版可用的稿子, 如实报超标, 不整个丢掉
+      break;
+    }
     script = toScript(raw);
     report = checkDuration(script, opts.targetSec);
   }

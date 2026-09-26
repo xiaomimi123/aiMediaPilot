@@ -24,6 +24,8 @@ export interface ToolResult {
 
 export interface Tool<I> {
   name: string;
+  /** 给人看的中文名(失败提示用), 不把 write_script 这类内部名露给用户 */
+  label: string;
   description: string;
   input: z.ZodType<I>;
   execute(ctx: ToolContext, input: I): Promise<ToolResult>;

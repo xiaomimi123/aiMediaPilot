@@ -8,15 +8,18 @@ const raw = (lengths: number[]) => ({
   segments: lengths.map((n) => ({ role: 'hook' as const, text: '字'.repeat(n) })),
 });
 
-function fakeLLM(outputs: ReturnType<typeof raw>[]): StructuredLLM & { calls: string[] } {
+function fakeLLM(outputs: (ReturnType<typeof raw> | Error)[]): StructuredLLM & { calls: string[]; systems: string[] } {
   const calls: string[] = [];
-  const fn = vi.fn(async (opts: { userMessage: { type: string; text?: string }[] }) => {
+  const systems: string[] = [];
+  const fn = vi.fn(async (opts: { systemPrompt: string; userMessage: { type: string; text?: string }[] }) => {
     calls.push(opts.userMessage.map((p) => p.text ?? '').join(''));
+    systems.push(opts.systemPrompt);
     const next = outputs.shift();
     if (!next) throw new Error('fake LLM ran out of outputs');
+    if (next instanceof Error) throw next;
     return { result: next, usage: { model: 'fake', promptTokens: 0, completionTokens: 0, estCostUSD: 0 } };
   });
-  return { callStructured: fn as unknown as StructuredLLM['callStructured'], calls };
+  return { callStructured: fn as unknown as StructuredLLM['callStructured'], calls, systems };
 }
 
 describe('toScript', () => {
@@ -51,5 +54,25 @@ describe('writeScript', () => {
     expect(r.rounds).toBe(MAX_REPAIR_ROUNDS);
     expect(r.report.ok).toBe(false);
     expect(llm.calls).toHaveLength(1 + MAX_REPAIR_ROUNDS);
+  });
+
+  it('keeps the last valid draft when a repair round fails', async () => {
+    const llm = fakeLLM([raw(tooLong), new Error('[{"code":"too_small"}]')]);
+    const r = await writeScript({ llm, direction: '让AI挑刺', targetSec: 60, personaText: '' });
+    expect(r.report.ok).toBe(false);
+    expect(r.script.segments[3].text).toHaveLength(187);
+  });
+
+  it('throws a plain-Chinese error when not even a first draft can be produced', async () => {
+    const llm = fakeLLM([new Error('[{"code":"too_small","minimum":6}]')]);
+    await expect(writeScript({ llm, direction: '让AI挑刺', targetSec: 60, personaText: '' })).rejects.toThrow(
+      '模型这次没按 6 段格式交稿，没写成。再说一次，或者把方向说具体些。',
+    );
+  });
+
+  it('forbids inventing first-person experiences in the system prompt', async () => {
+    const llm = fakeLLM([raw(onBudget)]);
+    await writeScript({ llm, direction: '让AI挑刺', targetSec: 60, personaText: '' });
+    expect(llm.systems[0]).toContain('【待补：你的真实经历】');
   });
 });

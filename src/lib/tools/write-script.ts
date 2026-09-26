@@ -10,6 +10,7 @@ const Input = z.object({
 
 export const writeScriptTool: Tool<z.infer<typeof Input>> = {
   name: 'write_script',
+  label: '写稿',
   description: '按方向写一整版 6 段口播稿并保存到项目(会覆盖当前稿子)。只在还没有稿子或用户要求重写时用；局部修改用 patch_script。',
   input: Input,
   async execute(ctx, input) {

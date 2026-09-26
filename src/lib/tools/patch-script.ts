@@ -12,6 +12,7 @@ const Input = z.object({
 
 export const patchScriptTool: Tool<z.infer<typeof Input>> = {
   name: 'patch_script',
+  label: '改稿',
   description: '只替换稿子里指定编号的一段, 其他段落不动。返回改后的时长检查结果；仍超标时 issues 里有具体数值。',
   input: Input,
   async execute(ctx, input) {

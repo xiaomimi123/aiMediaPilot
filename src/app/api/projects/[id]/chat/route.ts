@@ -19,9 +19,21 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (!apiKey) return fail('还没配置 DeepSeek key：在项目根目录的 .env 里填 DEEPSEEK_API_KEY，然后重启 npm run dev', 400);
 
   const encoder = new TextEncoder();
+  let closed = false;
   const stream = new ReadableStream({
+    // 用户关页/刷新: 流被取消, 之后的事件直接丢弃, 这一轮在服务端照常跑完并存库
+    cancel() {
+      closed = true;
+    },
     async start(controller) {
-      const emit = (e: AgentEvent) => controller.enqueue(encoder.encode(encodeSse(e)));
+      const emit = (e: AgentEvent) => {
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(encodeSse(e)));
+        } catch {
+          closed = true;
+        }
+      };
       try {
         await runAgentTurn({
           projectId: project.id,
@@ -35,7 +47,13 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       } catch (e) {
         emit({ type: 'error', message: `这一轮出错了：${e instanceof Error ? e.message : String(e)}。再发一次试试。` });
       } finally {
-        controller.close();
+        if (!closed) {
+          try {
+            controller.close();
+          } catch {
+            // 已被取消
+          }
+        }
       }
     },
   });

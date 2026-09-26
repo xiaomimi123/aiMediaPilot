@@ -4,6 +4,8 @@ import { toToolSpec, type AgentMessage, type ChatModel, type ChatTurnResult, typ
 import { buildSystemPrompt, loadHistory } from './context';
 
 export const MAX_TOOL_CALLS_PER_TURN = 8;
+/** 模型调用硬上限: 工具用满后还要一次文字收尾, 再留一次余量。防止模型失控时无限调用、持续扣费。 */
+export const MAX_MODEL_CALLS_PER_TURN = MAX_TOOL_CALLS_PER_TURN + 2;
 
 export type AgentEvent =
   | { type: 'text'; delta: string }
@@ -21,17 +23,18 @@ async function executeToolCall(call: ToolCall, tools: Tool<any>[], ctx: ToolCont
   try {
     args = JSON.parse(call.arguments || '{}');
   } catch {
-    return { ok: false, summary: `${call.name} 参数不对：不是合法 JSON`, data: { error: '参数必须是合法 JSON，请重新调用' } };
+    return { ok: false, summary: `${tool.label}：编导给的参数不对，已让它重试`, data: { error: '参数必须是合法 JSON，请重新调用' } };
   }
   const parsed = tool.input.safeParse(args);
   if (!parsed.success) {
+    // 原始 zod 报错只回给模型; 用户只看到一句中文
     const detail = parsed.error.issues.map((i) => `${i.path.join('.') || '(根)'}：${i.message}`).join('；');
-    return { ok: false, summary: `${call.name} 参数不对：${detail}`, data: { error: detail } };
+    return { ok: false, summary: `${tool.label}：编导给的参数不对，已让它重试`, data: { error: detail } };
   }
   try {
     return await tool.execute(ctx, parsed.data);
   } catch (e) {
-    return { ok: false, summary: `${call.name} 失败：${errMsg(e)}`, data: { error: errMsg(e) } };
+    return { ok: false, summary: `${tool.label}失败：${errMsg(e)}`, data: { error: errMsg(e) } };
   }
 }
 
@@ -53,7 +56,15 @@ export async function runAgentTurn(opts: {
   toolCtx: ToolContext;
   emit: (e: AgentEvent) => void;
 }): Promise<void> {
-  const { projectId, db, emit } = opts;
+  const { projectId, db } = opts;
+  // 浏览器中途关页/刷新后 emit 会抛错; 吞掉它, 让这一轮照常跑完并把结果存库 —— 不能被误判成"连不上 DeepSeek"
+  const emit = (e: AgentEvent) => {
+    try {
+      opts.emit(e);
+    } catch {
+      // 客户端已断开
+    }
+  };
   await db.chatMessage.create({ data: { projectId, role: 'user', content: opts.userText } });
 
   const messages: AgentMessage[] = [
@@ -62,8 +73,16 @@ export async function runAgentTurn(opts: {
   ];
   const specs = opts.tools.map((t) => toToolSpec(t));
   let used = 0;
+  let modelCalls = 0;
 
   for (;;) {
+    if (modelCalls >= MAX_MODEL_CALLS_PER_TURN) {
+      const message = `这一轮编导调用次数过多（${MAX_MODEL_CALLS_PER_TURN} 次），已强制停止。稿子里已完成的修改保留着，换个说法再发一次。`;
+      await db.chatMessage.create({ data: { projectId, role: 'system', content: message } });
+      emit({ type: 'error', message });
+      return;
+    }
+    modelCalls += 1;
     // 用满上限后不再给工具, 模型只能用文字收尾
     const offerTools = used < MAX_TOOL_CALLS_PER_TURN;
     let turn: ChatTurnResult;

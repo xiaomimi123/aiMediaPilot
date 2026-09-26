@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { runAgentTurn, MAX_TOOL_CALLS_PER_TURN, type AgentEvent } from '@/lib/agent/loop';
+import { runAgentTurn, MAX_TOOL_CALLS_PER_TURN, MAX_MODEL_CALLS_PER_TURN, type AgentEvent } from '@/lib/agent/loop';
 import type { ChatModel, ChatTurnResult } from '@/lib/agent/chat-model';
 import type { Tool } from '@/lib/tools/types';
 import { createFakeDb } from '../../helpers/fake-db';
@@ -21,6 +21,7 @@ function scriptedModel(turns: ChatTurnResult[] | (() => ChatTurnResult)): ChatMo
 
 const echoTool: Tool<{ n: number }> = {
   name: 'echo',
+  label: '回声',
   description: 'echo',
   input: z.object({ n: z.number() }),
   async execute(_ctx, input) {
@@ -68,7 +69,7 @@ describe('runAgentTurn', () => {
     );
     const tool = events.find((e) => e.type === 'tool');
     expect(tool).toMatchObject({ ok: false });
-    expect((tool as { summary: string }).summary).toContain('参数不对');
+    expect((tool as { summary: string }).summary).toBe('回声：编导给的参数不对，已让它重试');
     expect(events.at(-1)).toEqual({ type: 'done' });
   });
 
@@ -83,15 +84,51 @@ describe('runAgentTurn', () => {
   });
 
   it('stops offering tools after MAX_TOOL_CALLS_PER_TURN and asks for a summary', async () => {
-    let calls = 0;
-    const model = scriptedModel(() =>
-      calls++ < 20 ? { text: '', toolCalls: [{ id: `c${calls}`, name: 'echo', arguments: '{"n":1}' }] } : { text: '收尾', toolCalls: [] },
-    );
+    let n = 0;
+    // 真实模型: 给工具就调, 不给工具就只能用文字收尾
+    const model: ChatModel & { seenTools: number[] } = {
+      seenTools: [],
+      async streamTurn(_m, tools, onText) {
+        model.seenTools.push(tools.length);
+        if (tools.length === 0) { onText('收尾'); return { text: '收尾', toolCalls: [] }; }
+        n += 1;
+        return { text: '', toolCalls: [{ id: `c${n}`, name: 'echo', arguments: '{"n":1}' }] };
+      },
+    };
     const { events } = await run(model);
-    const toolEvents = events.filter((e) => e.type === 'tool');
-    expect(toolEvents.filter((e) => (e as { ok: boolean }).ok)).toHaveLength(MAX_TOOL_CALLS_PER_TURN);
+    expect(events.filter((e) => e.type === 'tool')).toHaveLength(MAX_TOOL_CALLS_PER_TURN);
     expect(model.seenTools.at(-1)).toBe(0);
     expect(events.at(-1)).toEqual({ type: 'done' });
+  });
+
+  it('hard-stops a runaway model that keeps calling tools even without tools offered', async () => {
+    let calls = 0;
+    const model: ChatModel = {
+      async streamTurn() {
+        calls += 1;
+        return { text: '', toolCalls: [{ id: `c${calls}`, name: 'echo', arguments: '{"n":1}' }] };
+      },
+    };
+    const { events, messages } = await run(model);
+    expect(calls).toBe(MAX_MODEL_CALLS_PER_TURN);
+    expect(events.at(-1)).toMatchObject({ type: 'error' });
+    expect(messages.at(-1)).toMatchObject({ role: 'system' });
+  });
+
+  it('keeps working and saves results when the client disconnects (emit throws)', async () => {
+    const { db, messages } = createFakeDb();
+    await runAgentTurn({
+      projectId: 'p1', userText: '你好', db,
+      model: scriptedModel([
+        { text: '先改', toolCalls: [{ id: 'c1', name: 'echo', arguments: '{"n":3}' }] },
+        { text: '改好了', toolCalls: [] },
+      ]),
+      tools: [echoTool],
+      toolCtx: { projectId: 'p1', db, llm: {} as never },
+      emit: () => { throw new Error('Invalid state: Controller is already closed'); },
+    });
+    expect(messages.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'assistant']);
+    expect(messages.some((m) => m.role === 'system')).toBe(false);
   });
 
   it('model failure emits human error and keeps user message', async () => {
@@ -104,13 +141,13 @@ describe('runAgentTurn', () => {
 
   it('tool that throws becomes a readable failed result', async () => {
     const boom: Tool<Record<string, never>> = {
-      name: 'boom', description: 'b', input: z.object({}),
+      name: 'boom', label: '爆炸', description: 'b', input: z.object({}),
       async execute() { throw new Error('磁盘满了'); },
     };
     const { events } = await run(
       scriptedModel([{ text: '', toolCalls: [{ id: 'c1', name: 'boom', arguments: '{}' }] }, { text: '抱歉', toolCalls: [] }]),
       [boom],
     );
-    expect(events.find((e) => e.type === 'tool')).toMatchObject({ ok: false, summary: 'boom 失败：磁盘满了' });
+    expect(events.find((e) => e.type === 'tool')).toMatchObject({ ok: false, summary: '爆炸失败：磁盘满了' });
   });
 });
