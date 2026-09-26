@@ -4,7 +4,6 @@ import { homedir } from 'os';
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { importWorks, type IncomingWork } from '../src/lib/works/import';
-import { extractAwemeId, linkWorkByAwemeId } from '../src/lib/works/match';
 
 /**
  * 每晚定时回采抖音作品数据。
@@ -234,36 +233,22 @@ async function main(): Promise<void> {
 
   const prisma = new PrismaClient();
   try {
-    const user = await prisma.user.findFirst({ orderBy: { createdAt: 'asc' } });
-    if (!user) {
-      log('库里没有用户, 无法归属数据');
-      process.exit(1);
-    }
-    const r = await importWorks(prisma, user.id, PLATFORM, works);
+    const r = await importWorks(prisma, PLATFORM, works);
     const publicCount = works.filter((w) => !w.isPrivate).length;
     log(`回采完成: 共 ${r.total} 条(新增 ${r.created} / 更新 ${r.updated}), 其中公开 ${publicCount} 条`);
 
-    /*
-     * 回采之后补一次「登记过的发布 → 回采作品」的关联。
-     *
-     * 常见时序是**先发布登记, 后回采**: 你发完片子马上贴链接, 而那条作品要等
-     * 今晚这一轮才进库。登记那一刻匹配不上, 只能在这里补。
-     */
-    const linked = await backfillLinks(prisma, user.id);
-    if (linked > 0) log(`补上 ${linked} 条「作品 ← 稿子」的关联`);
-
     // 投稿分析 —— 失败不影响主回采(上面的数据已经落库了), 但要吵出来
     try {
-      const n = await collectAnalytics(prisma, user.id);
+      const n = await collectAnalytics(prisma);
       log(`投稿分析: 账号级 1 条快照, 逐条作品 ${n} 条`);
     } catch (e) {
       log(`投稿分析抓取失败(不影响作品列表): ${e instanceof Error ? e.message : String(e)}`);
     }
 
-    // 逐日指标 + 热搜榜 —— 同样各自独立失败
+    // 账号级当前值(粉丝数等) —— 同样独立失败
     try {
-      const r = await collectHome(prisma, user.id);
-      log(`账号趋势: ${r.metrics} 个指标 × ${r.days} 天; 热搜榜 ${r.topics} 条`);
+      const m = await collectHome(prisma);
+      log(`账号指标: ${m} 项`);
     } catch (e) {
       log(`首页数据抓取失败(不影响前面的): ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -273,14 +258,11 @@ async function main(): Promise<void> {
 }
 
 /**
- * 抓投稿分析并落库。
- *
- * 窗口是页面默认的近 90 天, 不是我们挑的 —— 见 ANALYTICS_SCRIPT 的注释。窗口外
- * 的老作品拿不到这组指标, 那就让它空着。
+ * 抓投稿分析并落库。窗口是页面默认的近 90 天, 不是我们挑的。
+ * 逐条作品的分析指标只更新分析那一组字段, 不碰列表接口来的 play/digg。
  */
-async function collectAnalytics(prisma: PrismaClient, userId: string): Promise<number> {
+async function collectAnalytics(prisma: PrismaClient): Promise<number> {
   const end = new Date();
-  // 页面默认窗口是近 90 天 —— 我们没法改它, 只能如实记下这个快照覆盖的是哪一段
   const start = new Date(end.getTime() - 90 * 24 * 3600 * 1000);
   const raw = await runEgo(ANALYTICS_SCRIPT);
   const marker = raw.lastIndexOf('@@RESULT@@');
@@ -291,46 +273,31 @@ async function collectAnalytics(prisma: PrismaClient, userId: string): Promise<n
   const num = (k: string): number => Number(ov[k]?.metric_value ?? 0);
   const windowStart = start.toISOString().slice(0, 10);
   const windowEnd = end.toISOString().slice(0, 10);
-
+  const values = {
+    submissionCount: num('submission_count'),
+    medianPlay: num('median_play_count'),
+    avgLike: num('average_like_count_per_video'),
+    avgComment: num('average_comment_count_per_video'),
+    avgShare: num('average_share_count_per_video'),
+    avgPlayDurationSec: num('average_play_duration'),
+    bounceRate2s: num('bounce_rate_2s'),
+    completionRate5s: num('completion_rate_5s'),
+    coverClickRate: num('cover_click_ratio'),
+    verticals: data.vertical?.primary_verticals ?? [],
+  };
   await prisma.douyinOverviewSnapshot.upsert({
-    where: { userId_windowStart_windowEnd: { userId, windowStart, windowEnd } },
-    update: {
-      submissionCount: num('submission_count'),
-      medianPlay: num('median_play_count'),
-      avgLike: num('average_like_count_per_video'),
-      avgComment: num('average_comment_count_per_video'),
-      avgShare: num('average_share_count_per_video'),
-      avgPlayDurationSec: num('average_play_duration'),
-      bounceRate2s: num('bounce_rate_2s'),
-      completionRate5s: num('completion_rate_5s'),
-      coverClickRate: num('cover_click_ratio'),
-      verticals: data.vertical?.primary_verticals ?? [],
-      fetchedAt: new Date(),
-    },
-    create: {
-      userId, windowStart, windowEnd,
-      submissionCount: num('submission_count'),
-      medianPlay: num('median_play_count'),
-      avgLike: num('average_like_count_per_video'),
-      avgComment: num('average_comment_count_per_video'),
-      avgShare: num('average_share_count_per_video'),
-      avgPlayDurationSec: num('average_play_duration'),
-      bounceRate2s: num('bounce_rate_2s'),
-      completionRate5s: num('completion_rate_5s'),
-      coverClickRate: num('cover_click_ratio'),
-      verticals: data.vertical?.primary_verticals ?? [],
-    },
+    where: { windowStart_windowEnd: { windowStart, windowEnd } },
+    update: { ...values, fetchedAt: new Date() },
+    create: { windowStart, windowEnd, ...values },
   });
 
-  // 逐条作品的分析指标, 按 externalId 打到已有的作品行上 —— 只更新分析那一组
-  // 字段, 不碰列表接口来的 play/digg(两组数字本来就不一样, 互相覆盖会更乱)
   const items: unknown[] = Array.isArray(data.items?.items) ? data.items.items : [];
   let n = 0;
   for (const it of items as Record<string, unknown>[]) {
     const externalId = String(it.item_id ?? '');
     if (!externalId) continue;
     const r = await prisma.publishedWork.updateMany({
-      where: { userId, externalId },
+      where: { platform: PLATFORM, externalId },
       data: {
         anaPlay: Number(it.play_count ?? 0),
         completionRate5s: Number(it.completion_rate_5s ?? 0),
@@ -345,112 +312,27 @@ async function collectAnalytics(prisma: PrismaClient, userId: string): Promise<n
   return n;
 }
 
-/**
- * 抓逐日指标与热搜榜并落库。
- *
- * 逐日指标按 (指标, 日期) upsert —— 接口只回 7 天, 但每晚跑一次就能自己攒长历史。
- * 热搜按 billboardId upsert 并维护 firstSeenAt/peakHotValue: 「热了多久、峰值多高」
- * 比「此刻多热」有用得多。
- */
-async function collectHome(
-  prisma: PrismaClient,
-  userId: string,
-): Promise<{ metrics: number; days: number; topics: number }> {
+/** 抓账号级当前值(粉丝数等)。当前值与日序列口径对不上, 只存当前值与环比, 不换算。 */
+async function collectHome(prisma: PrismaClient): Promise<number> {
   const raw = await runEgo(HOME_SCRIPT);
   const marker = raw.lastIndexOf('@@RESULT@@');
   if (marker < 0) throw new Error('没拿到首页数据');
   const home = JSON.parse(raw.slice(marker + '@@RESULT@@'.length).split('\n')[0]);
 
   let metrics = 0;
-  let days = 0;
   for (const [metric, v] of Object.entries((home.daily?.data ?? {}) as Record<string, unknown>)) {
-    const row = v as {
-      option_list?: { count?: string; date?: string }[];
-      current_count?: string;
-      last_period_incr?: string;
-    };
-    const series = row.option_list ?? [];
-    if (series.length === 0) continue;
-    metrics++;
-
-    // 当前值/环比和日序列对不上(fans 当前 2765、日序列 395), 平台没说明各自定义
-    // —— 单独存, 不换算也不挑一个。
+    const row = v as { option_list?: unknown[]; current_count?: string; last_period_incr?: string };
+    if ((row.option_list ?? []).length === 0) continue;
     const currentCount = Number(row.current_count ?? 0);
     const lastPeriodIncr = Number(row.last_period_incr ?? 0);
     await prisma.douyinMetricSummary.upsert({
-      where: { userId_metric: { userId, metric } },
+      where: { metric },
       update: { currentCount, lastPeriodIncr, fetchedAt: new Date() },
-      create: { userId, metric, currentCount, lastPeriodIncr },
+      create: { metric, currentCount, lastPeriodIncr },
     });
-    for (const p of series) {
-      const date = String(p.date ?? '');
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
-      const count = Number(p.count ?? 0);
-      await prisma.douyinDailyMetric.upsert({
-        where: { userId_metric_date: { userId, metric, date } },
-        update: { count, fetchedAt: new Date() },
-        create: { userId, metric, date, count },
-      });
-      days++;
-    }
+    metrics++;
   }
-
-  let topics = 0;
-  const elements = (home.billboard?.billboard_data?.element_list ?? []) as Record<string, unknown>[];
-  for (const el of elements) {
-    const base = (el.base_data ?? {}) as Record<string, unknown>;
-    const billboardId = String(base.billboard_id ?? '');
-    const title = String(base.title ?? '').trim();
-    if (!billboardId || !title) continue;
-    const hotValue = Number((el.statistics_data as { hot_value?: string })?.hot_value ?? 0);
-    const related: string[] = ((el.related_item_list ?? []) as { sec_item_id?: string }[])
-      .map((r) => r.sec_item_id)
-      .filter((x): x is string => typeof x === 'string' && x.length > 0);
-
-    const existing = await prisma.douyinHotTopic.findUnique({
-      where: { userId_billboardId: { userId, billboardId } },
-      select: { peakHotValue: true },
-    });
-    await prisma.douyinHotTopic.upsert({
-      where: { userId_billboardId: { userId, billboardId } },
-      update: {
-        title,
-        hotValue,
-        peakHotValue: Math.max(hotValue, existing?.peakHotValue ?? 0),
-        relatedItemIds: related,
-        lastSeenAt: new Date(),
-      },
-      create: {
-        userId, billboardId, title,
-        board: String(base.author ?? ''),
-        hotValue, peakHotValue: hotValue,
-        relatedItemIds: related,
-      },
-    });
-    topics++;
-  }
-
-  return { metrics, days, topics };
-}
-
-/**
- * 把登记过的发布链接和回采作品对上。
- *
- * 只处理还没关联的作品 —— 人手动认领过的判断不该被自动匹配覆盖。
- */
-async function backfillLinks(prisma: PrismaClient, userId: string): Promise<number> {
-  const dists = await prisma.distribution.findMany({
-    where: { platform: PLATFORM },
-    select: { url: true, scriptDraftId: true },
-  });
-  let linked = 0;
-  for (const d of dists) {
-    const awemeId = extractAwemeId(d.url);
-    if (!awemeId) continue;
-    const r = await linkWorkByAwemeId(prisma, userId, awemeId, d.scriptDraftId);
-    if (r === 'linked') linked++;
-  }
-  return linked;
+  return metrics;
 }
 
 main().catch((e) => {

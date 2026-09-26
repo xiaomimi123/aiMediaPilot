@@ -2,8 +2,8 @@
 
 来源：https://github.com/Vincentwei1021/video-talkcraft（`scripts/timestamps_cpu.py`）
 许可：PolyForm Noncommercial 1.0.0（见 `LICENSE-video-talkcraft`）
-商用授权：本项目已取得作者书面授权函，覆盖将该脚本用于商业产品——体例与
-`remotion/src/motion/README.md` 一致。
+商用授权：本项目已取得作者书面授权函，覆盖将该脚本用于商业产品（授权说明原文
+见 git tag `v1-final` 中的 `remotion/src/motion/README.md`）。
 
 **本项目未修改 `timestamps_cpu.py`**（原样搬运）。二十九期 Task 5 只用它的
 `--backend whisper` 分支（faster-whisper small/int8，安装最轻、首跑自动下载

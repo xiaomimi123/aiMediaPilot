@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 
 /**
  * 按钮原语。样式只走 Tailwind + theme token, 组件里不写颜色/间距字面值 ——
- * 旧版两套体系并存时, cockpit.css 的裸 `button` 规则会盖掉这里的一切。
+ * 不要再引入第二套全局 CSS —— 旧版就是因为另一套样式的裸 `button` 规则盖掉了这里的一切。
  */
 const buttonVariants = cva(
   'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',

@@ -7,590 +7,123 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ==================== 用户与配置 ====================
-
-model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String?  @unique
-  avatar    String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // L1 prediction: 用户上传 onboarding 填的 "通常多少播放";
-  // ≥3 条 retro 后会被 retro median 自动覆盖。
-  baselinePlays BigInt?
-
-  // Auto-sync (Sub-project D): 最近一次成功 cron tick 的时间戳
-  lastAutoSyncAt DateTime?
-
-  aiConfigs                  AIConfig[]
-  volcTtsConfig              VolcTtsConfig?
-  contentAnalyses            ContentAnalysis[]
-  scriptDrafts               ScriptDraft[]
-  styleSamples               StyleSample[]
-  inspirationVideos          InspirationVideo[]
-  inspirationInsights        InspirationInsight[]
-  topicIdeas                 TopicIdea[]
-  cockpitContents            CockpitContent[]
-  videoProductions           VideoProduction[]
-  videoTemplates             VideoTemplate[]
-  contentAssets              ContentAsset[]
-  cockpitInspirations        CockpitInspiration[]
-  cockpitStageEvents         CockpitStageEvent[]
-  cockpitReviewDays          CockpitReviewDay[]
-  cockpitLiveSessions        CockpitLiveSession[]
-  cockpitScheduleObjectTypes CockpitScheduleObjectType[]
-  cockpitScheduleObjects     CockpitScheduleObject[]
-  cockpitGoalCycles          CockpitGoalCycle[]
-  cockpitInsightRules        CockpitInsightRule[]
-  cockpitPrefs               CockpitPrefs?
-  radarKeywords              RadarKeyword[]
-  radarItems                 RadarItem[]
-  radarRuns                  RadarRun[]
-  radarConfig                RadarConfig?
-  materials                  Material[]
-  hooks                      Hook[]
-  teardowns                  Teardown[]
-  publishedWorks             PublishedWork[]
-}
-
-// Sub-project G: 灵感视频库 — 用户精选爆款 + AI 总结共性
-model InspirationVideo {
-  id           String    @id @default(cuid())
-  userId       String
-  user         User      @relation(fields: [userId], references: [id])
-  platform     String    @default("douyin")
-  awemeId      String
-  videoUrl     String
-  authorName   String?
-  title        String
-  playCount    BigInt?
-  likeCount    BigInt?
-  commentCount BigInt?
-  shareCount   BigInt?
-  collectCount BigInt?
-  duration     Int?
-  publishedAt  DateTime?
-  thumbnailUrl String?
-  userNote     String?
-  rawData      Json?
-  fetchedAt    DateTime  @default(now())
-
-  @@unique([userId, platform, awemeId])
-  @@index([userId, fetchedAt])
-}
-
-model InspirationInsight {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  videoIds    Json // [InspirationVideo.id, ...]
-  output      Json // { titlePatterns, hookTypes, durationStats, recommendedTopics, ... }
-  generatedAt DateTime @default(now())
-
-  @@index([userId, generatedAt])
-}
-
-model ScriptDraft {
-  id         String    @id @default(cuid())
-  userId     String
-  user       User      @relation(fields: [userId], references: [id])
-  topic      String
-  niche      String
-  platform   String    @default("douyin") // 'douyin' | 'xiaohongshu' | 'gongzhonghao'
-  output     Json
-  picked     Json? // D1: 用户选定要发的版本 (titleIdx / hookIdx / reviewed sections)
-  createdAt  DateTime  @default(now())
-  archivedAt DateTime? // 放弃的内容移出看板, 不删数据
-
-  // K2: 链到具体被用于哪条 analysis (NULL = 还没拍/还没分析)
-  analysisId String?
-  analysis   ContentAnalysis? @relation(fields: [analysisId], references: [id], onDelete: SetNull)
-
-  distributions Distribution[]
-
-  @@index([userId, createdAt])
-  @@index([analysisId])
-}
-
-// 工作台: 选题池 (spec §2.2)
-model TopicIdea {
-  id            String   @id @default(cuid())
-  userId        String
-  user          User     @relation(fields: [userId], references: [id])
-  title         String
-  note          String?
-  source        String // 'discover' | 'inspiration' | 'manual'
-  status        String   @default("POOL") // 'POOL' | 'ADOPTED' | 'DISCARDED'
-  scriptDraftId String? // 采纳后链到草稿
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@index([userId, status, createdAt])
-}
-
-// 工作台: 分发登记 (spec §2.3)。抖音主阵地发布仍走 ContentAnalysis.douyinUrl,
-// 这里管其他平台搬运登记; platform 是代码注册表 key (src/lib/pipeline/platforms.ts), 非 enum。
-model Distribution {
-  id            String      @id @default(cuid())
-  scriptDraftId String
-  scriptDraft   ScriptDraft @relation(fields: [scriptDraftId], references: [id], onDelete: Cascade)
-  platform      String
-  url           String
-  publishedAt   DateTime    @default(now())
-  note          String?
-  createdAt     DateTime    @default(now())
-
-  @@index([scriptDraftId])
-}
-
-model AIConfig {
-  id        String   @id @default(cuid())
-  userId    String
-  provider  String // "openai" | "deepseek" | "anthropic" | "zhipu" | "qwen" | "doubao"
-  apiKey    String // 加密存储
-  modelId   String // 具体模型标识
-  isDefault Boolean  @default(false)
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id])
-
-  @@unique([userId, provider])
-}
-
-model VolcTtsConfig {
-  id         String   @id @default(cuid())
-  userId     String
-  apiKey     String // 加密存储 (src/lib/crypto.ts encrypt()) — 替代原来错误假设的 appId+accessToken
-  resourceId String   @default("seed-tts-2.0")
-  voiceType  String   @default("zh_female_vv_uranus_bigtts")
-  createdAt  DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id])
-
-  @@unique([userId])
-}
-
-// ==================== Phase 3 / Direction A: 内容预诊断 ====================
-
-model ContentAnalysis {
-  id     String @id @default(cuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
-
-  // 视频源 (相对路径,根目录 ./uploads/)
-  videoPath        String
-  videoFilename    String
-  videoSizeBytes   Int
-  videoDurationSec Float
-  videoMimeType    String
-
-  // 用户输入草稿 (null → AI 生成; 非 null → AI 评价)
-  draftTitle     String?
-  draftCaption   String?
-  draftCoverPath String?
-
-  // 配置
-  niche String @default("ai-knowledge")
-
-  // 状态机
-  status       ContentAnalysisStatus @default(QUEUED)
-  errorMessage String?
-  retryCount   Int                   @default(0)
-
-  // 进度 (SSE)
-  progress Json?
-
-  // 发前 checklist (Sub-project J): 用户必须 review + 决策才能"可以发了"
-  publishChecklist Json?
-
-  // 预处理产物
-  framesDir       String?
-  hookFramesDir   String? // 钩子专用 6 张帧 (0/0.5/1/1.5/2/2.5s)
-  audioPath       String?
-  transcriptPath  String?
-  coverCandidates Json?
-
-  // AI 结果
-  report Json?
-
-  // 成本审计
-  llmUsage Json?
-
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  startedAt   DateTime?
-  completedAt DateTime?
-
-  // ===== Phase 3 / Direction A v2 =====
-  douyinUrl         String?
-  douyinAwemeId     String?
-  publishedAt       DateTime?
-  retroStatus       RetroStatus?
-  retroErrorMessage String?
-  retroReport       Json?
-  retroStartedAt    DateTime?
-  retroCompletedAt  DateTime?
-
-  actualMetrics ActualMetric[]
-  fromScripts   ScriptDraft[]
-
-  @@index([userId, createdAt])
-  @@index([status])
-  @@index([douyinAwemeId])
-  @@index([retroStatus])
-}
-
-enum ContentAnalysisStatus {
-  QUEUED
-  PREPROCESSING
-  ANALYZING
-  COMPLETED
-  FAILED
-  CANCELLED
-}
-
-enum RetroStatus {
-  SCHEDULED
-  RUNNING
-  COMPLETED
-  FAILED
-  CANCELLED
-}
-
-model ActualMetric {
-  id         String          @id @default(cuid())
-  analysisId String
-  analysis   ContentAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
-
-  snapshotAt       DateTime @default(now())
-  daysAfterPublish Float
-  source           String   @default("douyin-creator-center")
-
-  plays    BigInt
-  likes    BigInt
-  comments BigInt
-  shares   BigInt
-  collects BigInt
-
-  likeRateBp    Int?
-  commentRateBp Int?
-  shareRateBp   Int?
-
-  completionRateBp   Int?
-  retention3sBp      Int?
-  followConversionBp Int?
-
-  topComments Json?
-
-  rawReportPath String?
-
-  createdAt DateTime @default(now())
-
-  @@index([analysisId, snapshotAt])
-}
-
-// 设计说明：日期字段沿用 cockpit 的 ISO 字符串而非 DateTime——纯函数用字符串比较日期（如 `plannedDate < today`），改类型会破坏零改动原则。
-// FollowerSnapshot 不建表：workspace GET 时从 AccountMetric 派生（爬虫已每日写入），PUT 忽略该字段。
-
-model CockpitContent {
-  id                   String  @id // 客户端 crypto.randomUUID()
-  userId               String
-  title                String
-  idea                 String  @default("")
-  contentType          String  @default("")
-  tier                 String  @default("B") // A | B | C
-  platform             String  @default("douyin") // 三期 IA 演化: platform 字段 — douyin|xiaohongshu|bilibili|x|youtube|gongzhonghao
-  intent               String  @default("") // 十期: 内容意图 — ''|reach|trust|convert
-  deliveryMode         String  @default("manual") // manual|ai-faceless，十五期 C
-  stage                String  @default("inbox") // inbox|topic|script|recording|editing|publishing|review|archived
-  publicationStatus    String  @default("draft") // draft|scheduled|published
-  priority             String  @default("normal")
-  tags                 Json    @default("[]")
-  publishedAt          String  @default("") // cockpit 用 ISO date 字符串, 保持原样
-  xhsLink              String  @default("")
-  coverCopy            String  @default("")
-  publishCopy          String  @default("")
-  topic                Json // TopicCard
-  script               Json // ScriptDraft 骨架
-  recordingNotes       String  @default("")
-  editingNotes         String  @default("")
-  recordingActProgress Json? // 十四期: 六幕录制/剪辑进度打勾, act key -> 是否完成, 旧行为 null
-  editingActProgress   Json?
-  metrics              Json // MetricsSnapshot
-  review               Json // Review
-  scriptScore          Json? // 二十二期: 口播稿评分的**软指标缓存**(CachedSoftScore)。硬指标是纯函数每次现算, 不落库。
-  scriptDraftId        String? // → ScriptDraft (AI 稿)
-  analysisId           String? // → ContentAnalysis (L1/复盘链)
-  createdAt            String
-  updatedAt            String
-  user                 User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, stage])
-  @@index([userId, platform])
-  @@index([scriptDraftId])
-  @@index([analysisId])
-}
-
-model VideoProduction {
-  id                 String  @id
-  userId             String
-  contentId          String
-  status             String  @default("queued") // queued|directing|building|assembling|preview_ready|approved|rendering|packaging|done|failed
-  mode               String  @default("ppt-narration") // ppt-narration|talking-head-broll|illustration-tts（交付方式，注意与 worker JobData.mode 的 preview/master 是两个不同概念）
-  srt                String
-  productionRoot     String
-  sourceVideoPath    String? // talking-head-broll: 用户上传的出镜视频本地路径
-  alignedActs        Json? // talking-head-broll/illustration-tts: 对齐阶段产出的真实六幕边界 [{act,startMs,endMs}]
-  rawTranscript      Json? // talking-head-broll: ASR 原始 segments(真实原话, 供字幕烧录), illustration-tts 不填
-  previewPath        String?
-  masterPath         String?
-  templateId         String? // 二十期: 由哪个模板发起; null = 内容详情页旧入口, 包装段整段跳过
-  /// 二十三期: 逐场景版面 [{ shotId, layout }]。
-  /// null = 老行为(全部走顺序挖空), 保证已有任务零迁移。
-  sceneLayouts       Json?
-  voiceOverride      Json? // 二十期收尾(task-10b): illustration-tts 本次任务的临时配音覆盖 { voiceType?, resourceId? }, 优先级高于模板 voicePreset
-  /// 二十三期: 出片后量到的整片静止情况 { frozenSec, totalSec, ratio, ok, segments[], checkedAt, kind }。
-  /// null = 这条片子出在这道关接线之前, 界面上如实说「没量过」而不是显示 0 ——
-  /// 「没测过」和「测过是 0」是两件完全不同的事, 混起来就是界面在撒谎。
-  freezeReport       Json?
-  errorMessage       String?
-  createdAt          String
-  updatedAt          String
-  /// 二十五期: 这条任务走哪套渲染层。'legacy' = 旧的 HTML+GSAP 管线(缺省, 老任务零迁移),
-  /// 'remotion' = 新链路。**先建后拆**: 两套并存, 验收通过后才删旧的。
-  renderer           String  @default("legacy")
-  /// 二十五期: Builder 的填槽产出(FilmPlan)。null = 还没跑到 Builder 或走的是旧链路。
-  filmPlan           Json?
-  /// 三十七期: 与 filmPlan 平级的叠加层计划(关键词大字/注解/箭头)。null = 未开启
-  /// 文字叠加层, 或提取失败(提取失败不拦片, 见 overlay-extraction.ts)。
-  overlayPlan        Json?
-  /// 二十八期终审: 面向用户的非失败提醒(如"本条为无声成片")。null = 没有要说的话。
-  /// 与 errorMessage 分开: errorMessage 语义是"失败", 无声降级不是失败, 混进
-  /// errorMessage 会让用户把正常出片当报错。有声路径/legacy 路径保持 null,
-  /// 不要用一句无关提醒污染没有降级的任务。
-  productionNotice   String?
-  /// 三十一期(生成前剪辑台) Task 1: 产完 FilmPlan 是否先停一步等用户确认, 而不是
-  /// 直接渲染。默认开 —— "渲染前先看一眼分镜"是剪辑台的主形态; 关掉则行为与三十期
-  /// 一致(产完直接渲, 老任务/未来显式关闭的任务零迁移)。只在 mode==='preview' 生效,
-  /// master(正式渲染)从不因为这个开关停下 —— master 本来就要求先有 preview。
-  reviewBeforeRender Boolean @default(true)
-  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, contentId])
-}
-
-/// 内容专属的真实素材(二十一期方向 B) —— 截图/表格/长文。
-/// 挂在内容而非模板上: 每条片子的素材都不一样, 挂模板会变成每条视频塞同一批图。
-model ContentAsset {
-  id          String  @id
-  userId      String
-  contentId   String
-  kind        String // image|table|text
-  description String // 用户写的一句话说明, Builder 靠它判断该在哪一镜用
-  fileName    String? // 图片素材的文件名(相对 assetRoot)
-  filePath    String? // 服务端绝对路径
-  text        String? // 表格/长文的原始内容
-  createdAt   String
-  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, contentId])
-}
-
-/// 素材库(v5 阶段 D1) —— 写稿时按幕检索的具体材料。
-///
-/// 为什么要它: 六幕稿写到需要具体材料的地方, 没有素材 AI 就会开始编 ——
-/// 这是当前最大的失真来源。其中 experience(亲身经历)只有本人能录, 书摘和数据
-/// AI 自己也查得到, 所以那一类才是账号差异化的唯一来源。
-model Material {
-  id        String   @id @default(cuid())
-  userId    String
-  /// quote(书摘) | data(数据) | story(故事) | punchline(金句) | experience(亲身经历)
-  kind      String
-  content   String   @db.Text
-  /// 出处。数据类和书摘类没有出处等于不能用 —— 说错了要掉粉。
-  source    String   @default("")
-  /// 检索用的关键词, 用户自己填或从 content 里提。
-  tags      Json     @default("[]")
-  /// 被写进稿子几次 —— 用得多的素材说明这个方向有货。
-  usedCount Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, kind])
-  @@index([userId, createdAt])
-}
-
-/// 钩子库(v5 阶段 D2) —— 前 3 秒的写法。
-///
-/// 注意这里**没有 predictedRetention 字段**: 发布 0 条时那个数编不出来。排序依据
-/// 是纯函数算的结构分。等中回路(发布 → 回采)通了再加 actualRetention。
-model Hook {
-  id        String   @id @default(cuid())
-  userId    String
-  text      String   @db.Text
-  /// number|question|counter|scene|contrast|other, 存下来是因为用户可以手工改判
-  pattern   String
-  /// 从哪来: manual(手录) | script(从自己的稿子里抽) | teardown(从拆解里抽)
-  origin    String   @default("manual")
-  /// 抽自哪份稿子, 用来回跳
-  scriptId  String?
-  usedCount Int      @default(0)
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, pattern])
-  @@index([userId, createdAt])
-}
-
-/// 对标视频拆解(v5 阶段 D3)。
-///
-/// 输入是**口播转写稿**而不是视频文件: 用户实际的工作方式就是先有转写稿再手工拆
-/// (Obsidian 里那两份「奥一」「王飞雨」就是), 而当前评分体系的维度正是从那两份里
-/// 提炼的 —— 这个板块不是锦上添花, 它是评分标准的来源。
-/// 视频上传 → ASR 那条路要新起一条管线, 还没接。
-model Teardown {
+/// 一条内容 = 一个项目。stage 只前进: draft → scripted → recorded → overlaid → final → published
+model Project {
   id              String   @id @default(cuid())
-  userId          String
-  title           String
-  /// 作者/账号, 可空
-  author          String   @default("")
-  /// 原始链接, 可空
-  url             String   @default("")
-  /// 口播转写全文。走视频上传时先是空串, 转写完成后回填。
-  transcript      String   @db.Text
-  /// 二十三期: 上传的对标视频本地路径。null = 直接贴的转写稿。
-  sourceVideoPath String?
-  /// AI 拆出来的结构: { formula, segments[], hooks[], takeaways[] }
-  result          Json?
-  status          String   @default("pending") // pending|transcribing|analyzing|done|failed
-  errorMessage    String?
+  title           String   @default("未命名项目")
+  stage           String   @default("draft")
+  /// Script | null, 形状见 src/lib/script/model.ts
+  script          Json?
+  targetSec       Int      @default(60)
+  /// 建项目时的人设快照, 事后改人设不影响已有项目的上下文
+  personaSnapshot Json?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId, createdAt])
+  messages       ChatMessage[]
+  files          ProjectFile[]
+  jobs           Job[]
+  publishedWorks PublishedWork[]
+
+  @@index([updatedAt])
 }
 
-/// 已发布作品(v5) —— 从抖音创作者后台回采的真实数据。
-///
-/// **不是校准样本**: 这些作品不是用本系统写的, 没有预测分可以配对。它们是**基线**:
-/// 「这个账号在当前赛道通常什么表现」, 以后新发的片子跟它比。
-/// counted 由 shouldCountByDefault 给默认值, 用户可逐条改判 —— 哪些算数直接决定
-/// 基线, 不该由一个关键词表替用户拍板。
-model PublishedWork {
+model ChatMessage {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// user | assistant | tool | system
+  role       String
+  content    String   @default("") @db.Text
+  toolName   String?
+  toolInput  Json?
+  toolResult Json?
+  createdAt  DateTime @default(now())
+
+  @@index([projectId, createdAt])
+}
+
+/// 阶段 3/4 使用: raw_video | transcript | overlay_json | overlay_mov | final_mp4
+model ProjectFile {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  kind      String
+  path      String
+  meta      Json     @default("{}")
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+
+  @@index([projectId, kind])
+}
+
+/// 阶段 3/4 使用: kind = transcribe | arrange | render; status = queued | running | done | failed | interrupted
+model Job {
   id          String   @id @default(cuid())
-  userId      String
-  platform    String   @default("douyin")
-  /// 平台侧的作品 id, 去重与增量更新用
-  externalId  String
-  title       String   @db.Text
-  /// 完整文案(抖音 desc)。分析文案特征要用全文, 截断了就没法判有没有点痛点。
-  caption     String   @default("") @db.Text
-  /// 话题标签
-  hashtags    Json     @default("[]")
-  url         String   @default("")
-  publishedAt DateTime
-  durationSec Int      @default(0)
-  /// 隐藏/仅自己可见 —— 101 条里 93 条是隐藏的, 它们 0 播放不是内容问题
-  isPrivate   Boolean  @default(false)
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  kind        String
+  status      String   @default("queued")
+  progress    Float    @default(0)
+  /// 给人看的一句话(原因 + 怎么办)
+  userMessage String   @default("")
+  /// 原始报错, 界面上折叠展示
+  errorDetail String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  play    Int @default(0)
-  digg    Int @default(0)
-  comment Int @default(0)
-  collect Int @default(0)
-  share   Int @default(0)
+  @@index([projectId, createdAt])
+}
 
-  /// 是否属于当前赛道(AI 类), 计入分析。默认由关键词判, 用户可逐条改判。
-  counted            Boolean   @default(false)
-  /// --- 二十三期: 抖音「投稿分析」接口(item_analysis/item_performance)的指标 ---
-  /// 注意这一组和上面 play/digg 那一组**来自两个不同的接口, 数字对不上**:
-  /// 同一条作品列表接口报 223,960 播, 分析接口报 4,985 播。抖音没说哪个是
-  /// 「曝光」哪个是「有效播放」, 所以两组都存、各自标明来源, 页面上并列展示 ——
-  /// 挑一个当真相就是在替平台编一个它自己都没给的定义。
+/// 单用户: 只有一行, id 固定为 "me"
+model PersonaProfile {
+  id            String   @id @default("me")
+  audience      String   @default("")
+  targetFans    String   @default("")
+  pillars       Json     @default("[]")
+  angle         String   @default("")
+  avoid         String   @default("")
+  painPoints    Json     @default("[]")
+  offerings     Json     @default("[]")
+  systemSummary String   @default("") @db.Text
+  updatedAt     DateTime @updatedAt
+}
+
+model PublishedWork {
+  id                 String    @id @default(cuid())
+  platform           String    @default("douyin")
+  externalId         String
+  title              String    @db.Text
+  caption            String    @default("") @db.Text
+  hashtags           Json      @default("[]")
+  url                String    @default("")
+  publishedAt        DateTime
+  durationSec        Int       @default(0)
+  isPrivate          Boolean   @default(false)
+  play               Int       @default(0)
+  digg               Int       @default(0)
+  comment            Int       @default(0)
+  collect            Int       @default(0)
+  share              Int       @default(0)
+  /// 以下来自抖音「投稿分析」接口, 与上面 play 等来自不同接口, 数字对不上是正常的
   anaPlay            Int?
-  /// 5 秒完播率 / 2 秒跳出率 / 条均播放时长(秒), 都是 0~1 的比例或秒数
   completionRate5s   Float?
   bounceRate2s       Float?
   avgPlayDurationSec Float?
-  /// 分端播放: { douyin, xigua, yumme }
   playPerClient      Json?
   analyticsFetchedAt DateTime?
+  /// 这条作品是哪个项目发的(阶段 5 的发布登记写入)
+  projectId          String?
+  project            Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  fetchedAt          DateTime  @default(now())
+  createdAt          DateTime  @default(now())
 
-  /// 二十三期: 这条作品是用哪份稿子发的 → ScriptDraft。
-  /// 校准要的是「预测分 vs 实际表现」的配对, 而回采回来的作品和库里的稿子之间
-  /// 原本没有任何对应关系 —— 缺了这个字段, 校准永远接不上, 哪怕你真发了一条
-  /// 系统写的稿子。平台不返回这层关系, 只能由人来认领。
-  scriptDraftId String?
-  /// 最近一次回采时间 —— 数字会随时间涨, 要知道这份快照多旧
-  fetchedAt     DateTime @default(now())
-  createdAt     DateTime @default(now())
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, platform, externalId])
-  @@index([userId, publishedAt])
+  @@unique([platform, externalId])
+  @@index([publishedAt])
 }
 
-model VideoTemplate {
-  id                 String  @id
-  userId             String
-  name               String
-  description        String  @default("")
-  deliveryMode       String // ppt-narration|talking-head-broll|illustration-tts
-  /// 成片画幅 '9:16' | '16:9'。空 = 老模板, 按横屏走(零迁移)。
-  /// 真人出镜不读它 —— 那条按出镜素材反推, 素材是竖的成片就必须是竖的。
-  aspect             String?
-  visualStyle        String  @default("card") // card|illustration
-  palette            Json?
-  voicePreset        Json? // { voiceType?, resourceId? } — 仅 illustration-tts 消费
-  scriptPrompt       Json? // { tone?, targetDurationSec?, hookHint?, extraGuidance? }
-  captionStyle       Json? // null = 不烧字幕
-  bgmPath            String?
-  bgmVolume          Float   @default(0.15)
-  introPath          String?
-  outroPath          String?
-  isPreset           Boolean @default(false)
-  visualTone         String  @default("dark") // light|dark — 二十一期: 参考视频是米白亮底
-  shotPaceSec        Float? // 目标切镜节奏(秒), null = 不约束(老行为)
-  showChapterNav     Boolean @default(false) // 顶部常驻六章进度条
-  researchEnabled    Boolean @default(false) // 写稿前跑 Tavily 素材研究
-  builderModel       String  @default("deepseek-chat") // Builder 用哪个模型: 排版吃能力
-  /// 二十三期 真人出镜的合成方式: cutaway(顺序挖空, 老行为) | pip(画中画, 人一直在)
-  talkingHeadLayout  String  @default("cutaway")
-  /// 二十三期 文字叠加层。**和交付模式正交** —— 图文口播、知识长视频、插画配音
-  /// 都能开, 不是某一种模式专属。第一版错做成了第四种交付模式, 用户指出那是
-  /// 层级错误: 它只是口播视频的一种形式, 而真人形象将来要能加到任何模式上。
-  textOverlayEnabled Boolean @default(false)
-  /// 三十七期: 右上角常驻小字(如账号/系列名), 与文字叠加层同层但生命周期覆盖全片。
-  /// null = 不显示。
-  cornerBadge        String?
-  /// 拍摄时人在画面哪一侧 —— 文字安全区靠它算。不做人像识别(要 matting),
-  /// 猜错的代价是字直接糊在脸上, 所以由人设定。left|center|right
-  personSide         String  @default("right")
-  /// 内容源关掉 = 全片只有真人 + 文字(参考片就是这个形态), 不跑 B-roll 生成
-  brollEnabled       Boolean @default(true)
-  defaultShotStyle   Json? // 三十六期: 模板级默认样式 {accent?,speed?,scale?}, 渲染时与逐镜 style 合并
-  pipPosition        String  @default("br") // tl|tr|bl|br
-  pipScale           Float   @default(0.25) // 小窗宽度占画面宽度
-  pipMargin          Int     @default(40) // 离边缘像素
-  createdAt          String
-  updatedAt          String
-  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-/// 抖音账号级「投稿概览」快照(二十三期)。
-///
-/// 逐条作品的指标挂在 PublishedWork 上, 但账号级的条均值、中位数、封面点击率
-/// 是**按时间窗算出来的**, 挂不到任何一条作品上 —— 换个窗口就是另一组数。
-/// 所以按窗口存快照, 并保留 fetchedAt: 这些数字会随时间涨, 要知道快照多旧。
 model DouyinOverviewSnapshot {
   id                 String   @id @default(cuid())
-  userId             String
-  /// 统计窗口(平台按 yyyyMMdd 传参, 这里存 ISO date 字符串)
   windowStart        String
   windowEnd          String
   submissionCount    Int      @default(0)
@@ -602,369 +135,18 @@ model DouyinOverviewSnapshot {
   bounceRate2s       Float    @default(0)
   completionRate5s   Float    @default(0)
   coverClickRate     Float    @default(0)
-  /// 平台判定的垂类, 如 ["随拍","旅行","时尚"] —— 和你自己认的赛道可能完全不一样
   verticals          Json     @default("[]")
   fetchedAt          DateTime @default(now())
 
-  @@unique([userId, windowStart, windowEnd])
-  @@index([userId, fetchedAt])
+  @@unique([windowStart, windowEnd])
+  @@index([fetchedAt])
 }
 
-/// 抖音账号级逐日指标(二十三期)。
-///
-/// 来源 `/aweme/janus/creator/data/overview/all/`, 11 个指标各带一条 7 天序列。
-///
-/// **按 (指标, 日期) upsert 而不是存快照**: 接口只回最近 7 天, 但每晚回采一次,
-/// 库里就能自己攒出任意长的历史 —— 平台不给的东西, 靠时间攒出来。
-model DouyinDailyMetric {
-  id        String   @id @default(cuid())
-  userId    String
-  /// fans|new_fans|cancel_fans|play|digg|comment|share|profile|account_search|post_search|music_create
-  metric    String
-  /// yyyy-MM-dd
-  date      String
-  count     Int      @default(0)
-  fetchedAt DateTime @default(now())
-
-  @@unique([userId, metric, date])
-  @@index([userId, metric])
-}
-
-/// 逐日指标的「当前值 / 环比」(二十三期)。
-///
-/// 单独存是因为**它和日序列对不上**: fans 的当前值是 2765, 而日序列是 395 —— 平台
-/// 没有说明这两个数各自的定义。不猜、不换算, 两个都摆出来, 让人自己判断。
+/// 账号级当前值(粉丝数等), 首页账号数据用
 model DouyinMetricSummary {
   id             String   @id @default(cuid())
-  userId         String
-  metric         String
+  metric         String   @unique
   currentCount   Int      @default(0)
   lastPeriodIncr Int      @default(0)
   fetchedAt      DateTime @default(now())
-
-  @@unique([userId, metric])
-}
-
-/// 抖音创作者中心首页的热搜榜(二十三期)。
-///
-/// 来源 `/aweme/v1/creator/data/overview/billboard`。这是**抖音自己推给创作者的
-/// 热点**, 比雷达抓外网准得多 —— 它已经是平台判定的、站内正在热的话题。
-///
-/// 按 billboardId upsert 并记 firstSeenAt/lastSeenAt/peakHotValue: 一个话题
-/// 「热了多久、峰值多高」比「此刻多热」有用得多 —— 刚上榜和快过气的当前热度
-/// 可能一样。
-model DouyinHotTopic {
-  id             String    @id @default(cuid())
-  userId         String
-  billboardId    String
-  title          String
-  /// 榜单来源, 如「热搜」
-  board          String    @default("")
-  hotValue       Int       @default(0)
-  peakHotValue   Int       @default(0)
-  /// 平台给的关联作品 id, 拆解时可以按图索骥
-  relatedItemIds Json      @default("[]")
-  firstSeenAt    DateTime  @default(now())
-  lastSeenAt     DateTime  @default(now())
-  /// 采纳进灵感库之后标记, 避免重复推
-  adoptedAt      DateTime?
-
-  @@unique([userId, billboardId])
-  @@index([userId, lastSeenAt])
-}
-
-model CockpitInspiration {
-  id                  String @id
-  userId              String
-  text                String
-  convertedContentIds Json   @default("[]")
-  createdAt           String
-  updatedAt           String
-  user                User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-model CockpitStageEvent {
-  id          String @id
-  userId      String
-  contentId   String
-  stage       String
-  plannedDate String
-  rank        Int
-  completedAt String @default("")
-  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, plannedDate])
-  @@index([contentId])
-}
-
-model CockpitReviewDay {
-  id          String @id
-  userId      String
-  plannedDate String
-  note        String @default("")
-  createdAt   String
-  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-model CockpitLiveSession {
-  id          String @id
-  userId      String
-  title       String
-  plannedDate String
-  startTime   String @default("")
-  endTime     String @default("")
-  platform    String @default("")
-  content     String @default("")
-  createdAt   String
-  updatedAt   String
-  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-model CockpitScheduleObjectType {
-  id          String  @id
-  userId      String
-  kind        String // review|live|custom
-  name        String
-  description String  @default("")
-  color       String
-  archived    Boolean @default(false)
-  createdAt   String
-  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-model CockpitScheduleObject {
-  id          String @id
-  userId      String
-  typeId      String
-  title       String
-  plannedDate String
-  startTime   String @default("")
-  endTime     String @default("")
-  details     String @default("")
-  createdAt   String
-  updatedAt   String
-  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-model CockpitGoalCycle {
-  id               String @id
-  userId           String
-  objective        String @default("")
-  startDate        String
-  endDate          String
-  status           String @default("active") // active|archived
-  outputTarget     Int    @default(0)
-  quotas           Json   @default("[]")
-  followerStart    Int    @default(0)
-  followerTarget   Int    @default(0)
-  qualityMetric    String @default("views")
-  qualityThreshold Float  @default(0)
-  qualityTarget    Int    @default(0)
-  user             User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, status])
-}
-
-model CockpitInsightRule {
-  id              String  @id
-  userId          String
-  text            String
-  sourceContentId String?
-  active          Boolean @default(true)
-  createdAt       String
-  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-model CockpitPrefs {
-  userId          String   @id
-  designStyle     String   @default("editorial")
-  navigationOrder Json     @default("[]")
-  profile         Json // CreatorProfile
-  pageTitles      Json // PageTitles
-  stageColors     Json // Record<ContentStage,string>
-  contentTypes    Json     @default("[]")
-  setupComplete   Boolean  @default(false)
-  lastBackupAt    String   @default("")
-  updatedAt       DateTime @updatedAt // 冲突检测用, 服务端时间
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-// 设计说明：这里是服务端域数据（雷达抓取/运行结果），不进 cockpit workspace state，因此不沿用 cockpit 的 ISO 字符串日期约定——
-// 时间戳一律用 DateTime，id 由服务端 @default(cuid()) 生成（而非客户端传入）。
-
-model RadarKeyword {
-  id        String   @id @default(cuid())
-  userId    String
-  text      String
-  status    String   @default("active") // active|candidate|ignored
-  source    String   @default("manual") // manual|ai
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, text])
-  @@index([userId, status])
-}
-
-model RadarItem {
-  id              String    @id @default(cuid())
-  userId          String
-  url             String
-  titleHash       String // 标题指纹, 去重用
-  title           String
-  sourceSite      String
-  publishedAt     DateTime?
-  collectedAt     DateTime  @default(now())
-  matchedKeywords Json      @default("[]")
-  aiSummary       String    @default("")
-  aiAngle         String    @default("")
-  heatScore       Int       @default(0)
-  heatFactors     Json      @default("{}") // 四维 + 共现
-  status          String    @default("new") // new|adopted|ignored
-  inspirationId   String?
-  runId           String
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, url])
-  @@index([userId, status])
-  @@index([userId, heatScore])
-}
-
-model RadarRun {
-  id           String    @id @default(cuid())
-  userId       String
-  startedAt    DateTime  @default(now())
-  finishedAt   DateTime?
-  keywordsUsed Json      @default("[]")
-  searched     Int       @default(0)
-  read         Int       @default(0)
-  kept         Int       @default(0)
-  errors       Json      @default("[]")
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-model RadarConfig {
-  userId             String  @id
-  tavilyKeyEncrypted String  @default("") // 复用 AIConfig 的 AES-256-GCM 加密
-  dailyLimit         Int     @default(20)
-  enabled            Boolean @default(false)
-  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-// StyleProfile 是 userId 单行配置，学 RadarConfig 先例：不建 User 反向关系。
-// StyleSample 是「定稿即样本」积累路线的沉淀记录，学 ScriptDraft 先例：建 User 关系。
-
-model StyleProfile {
-  userId      String   @id
-  description String   @default("") // 口吻/句式/口头禅/忌讳
-  updatedAt   DateTime @updatedAt
-}
-
-model StyleSample {
-  id                  String   @id @default(cuid())
-  userId              String
-  user                User     @relation(fields: [userId], references: [id])
-  platform            String // 本期只有 'douyin'
-  content             String // 定稿逐字稿纯文本
-  sourceScriptDraftId String? // 溯源
-  createdAt           DateTime @default(now())
-
-  @@index([userId, platform, createdAt])
-}
-
-// PersonaProfile 是 userId 单行配置，学 StyleProfile/RadarConfig 先例：不建 User 反向关系。
-
-model PersonaProfile {
-  userId        String   @id
-  audience      String   @default("") // 目标受众
-  targetFans    String   @default("") // 想吸引的粉丝画像
-  pillars       Json     @default("[]") // PersonaPillar[]
-  angle         String   @default("") // 差异化角度
-  avoid         String   @default("") // 忌讳
-  // 十期: 账号定位体系扩展 — 全部可选, 八期已建档用户新字段为空时行为完全不变
-  painPoints    Json     @default("[]") // PersonaPain[]
-  offerings     Json     @default("[]") // PersonaOffering[]
-  productLogic  String   @default("") // 产品逻辑自述
-  marketInsight Json? // PersonaMarketInsight | null
-  systemSummary String   @default("") // 定位体系摘要
-  updatedAt     DateTime @updatedAt
-}
-
-// 十二期: 人物志 —「你是谁」的结构化自述, 与 PersonaProfile(「你做什么生意」) 分表。
-// 语言层(口吻/句式/口头禅)不在这里, 完全归 StyleProfile —— 两处都写会让 prompt 自相矛盾。
-model CreatorVoice {
-  userId      String   @id
-  origin      String   @default("") // ≤500 来路故事
-  identity    String   @default("") // ≤200 具体身份(非品类标签)
-  notIdentity String   @default("") // ≤200 我不是什么 —— 防 AI 写成专家的护栏
-  stances     Json     @default("[]") // VoiceStance[] 0-5 条立场主张
-  energy      String   @default("") // ≤200 情绪基调
-  updatedAt   DateTime @updatedAt
-}
-
-// 十二期: 个人经历库 —「你凭什么这么说」, 写稿前按关键词检索, 优先于外部搜索资料。
-model CreatorExperience {
-  id        String   @id @default(cuid())
-  userId    String
-  content   String // ≤500 原文(用户随手记的原话, 不改写)
-  topic     String   @default("") // ≤20 AI 提炼主题标签
-  kind      String   @default("") // '' | practice | failure | insight | result
-  keywords  Json     @default("[]") // string[] 3-5 个检索关键词(AI 提取, 可人工编辑)
-  usedCount Int      @default(0) // 被写稿命中引用次数
-  createdAt DateTime @default(now())
-
-  @@index([userId, createdAt])
-}
-
-// 三十八期: 月度内容规划 — 一次问答生成 30 天路线(选题+角度+钩子方向), 之后每天只执行。
-// 一用户同时仅一条 active 规划; 生成新规划服务端强制先 archive 旧的。
-model ContentPlan {
-  id                String    @id @default(cuid())
-  userId            String
-  startDate         String // "YYYY-MM-DD" — 规划第一天
-  totalDays         Int       @default(30)
-  weeklyCadence     Int // 每周计划拍几条, 用户问答里填
-  defaultTemplateId String? // 出片默认用哪个模板, 未选则为 null
-  /// 生成时刻的人设快照 { audience, pillars, angle, avoid } —— 档案事后可改,
-  /// 但规划要可回溯且内部风格一致, 不能让规划生成之后档案变了, 30 天路线里
-  /// 前后风格对不上。
-  personaSnapshot   Json
-  status            String    @default("active") // active | archived
-  archivedAt        DateTime?
-  createdAt         DateTime  @default(now())
-
-  days ContentPlanDay[]
-
-  @@index([userId, status])
-}
-
-model ContentPlanDay {
-  id                String      @id @default(cuid())
-  planId            String
-  plan              ContentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  dayIndex          Int // 1..totalDays —— 不冗余存日期: 实际日期 = startDate + dayIndex 由纯函数
-  // 算出来, 存日期会导致规划的 startDate 和某天的日期两处各自漂移, 对不上。
-  pillarName        String      @default("") // 命中的内容支柱名, ''=未挂支柱
-  topic             String // ≤60
-  angle             String // ≤120
-  hookDirection     String // ≤120 —— 是方向不是完整钩子句, 当天写稿时才细化成句子
-  status            String      @default("pending") // pending -> scripted -> produced, 只前进不回退
-  scriptDraftId     String?
-  videoProductionId String?
-  edited            Boolean     @default(false) // 用户手动改过三字段中任一个
-
-  @@unique([planId, dayIndex])
 }

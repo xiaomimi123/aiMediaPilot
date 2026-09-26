@@ -1,5 +1,5 @@
 services:
-  # 数据库
+  # 唯一的外部依赖: 数据库。新库 mediapilot_v2, 旧库 mediapilot 保留作回退。
   postgres:
     image: postgres:16-alpine
     container_name: mediapilot-postgres
@@ -18,65 +18,5 @@ services:
       timeout: 5s
       retries: 5
 
-  # 缓存 + 队列 (Phase 2 才用到,但 Phase 1 一起启起来也无妨)
-  redis:
-    image: redis:7-alpine
-    container_name: mediapilot-redis
-    command: redis-server --appendonly yes
-    volumes:
-      - redis-data:/data
-    ports:
-      - "6379:6379"
-    restart: unless-stopped
-
-  # 主应用 — 生产部署时使用,本地开发请用 `npm run dev`
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: mediapilot-app
-    profiles: ["prod"]
-    ports:
-      - "3000:3000"
-    environment:
-      - DATABASE_URL=postgresql://mediapilot:${DB_PASSWORD:-mediapilot_dev_pwd}@postgres:5432/mediapilot
-      - REDIS_URL=redis://redis:6379
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-      - NODE_ENV=production
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    volumes:
-      - app-data:/app/data
-    restart: unless-stopped
-
-  # 任务调度 Worker
-  #
-  # 阶段 5.1 修复: 原来写的是 `command: node dist/jobs/worker.js`, 而项目里从来没有
-  # dist/ —— 真实入口是 src/jobs/workers/index.ts, 本地用 tsx 跑。这个 service 因此
-  # 从建起来那天就没成功启动过, 而 worker 不在时任务照常入队然后静静躺着, 这正是
-  # 「视频任务 9 次 / 成功出片 0 次」的直接原因。现在用专门的 worker stage(带 src
-  # 与 tsx), 不再复用只有 Next standalone 产物的 runner。
-  worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: worker
-    container_name: mediapilot-worker
-    profiles: ["prod"]
-    environment:
-      - DATABASE_URL=postgresql://mediapilot:${DB_PASSWORD:-mediapilot_dev_pwd}@postgres:5432/mediapilot
-      - REDIS_URL=redis://redis:6379
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-      - NODE_ENV=production
-    depends_on:
-      - postgres
-      - redis
-    restart: unless-stopped
-
 volumes:
   postgres-data:
-  redis-data:
-  app-data:

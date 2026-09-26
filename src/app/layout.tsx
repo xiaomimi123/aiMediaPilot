@@ -1,31 +1,23 @@
 import type { Metadata } from 'next';
-import { APP_NAME } from '@/lib/constants';
-import { Sidebar } from '@/components/layout/sidebar';
+import Link from 'next/link';
 import './globals.css';
 
-/**
- * 根布局(三十四期 UI 重做)。
- *
- * 字体不再走 next/font/google —— 旧版在这里引 Noto_Serif_SC + Inter, 而这台机器
- * 连不通 Google Fonts: dev server 每次冷启动都刷 48 条
- * `The user aborted a request / Retrying`, 全是字体拉取的重试(2026-09-08 实测)。
- * 新设计中文走系统字体(PingFang SC 必在)、数字走系统等宽栈(SF Mono/ui-monospace),
- * 字体栈定义在 tokens.css 的 --font/--mono, 一个网络请求都没有。
- * 设计交付 README 建议 JetBrains Mono 走 Google Fonts —— 因上述网络原因不采用,
- * 将来要的话下载字体文件走 next/font/local。
- */
-
 export const metadata: Metadata = {
-  title: APP_NAME,
-  description: '自媒体智能管理平台',
+  title: 'MediaPilot',
+  description: '项目 + 编导 agent 的口播出片工作台',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh-CN" suppressHydrationWarning>
-      <body className="flex h-screen overflow-hidden">
-        <Sidebar />
-        {children}
+    <html lang="zh-CN">
+      <body className="flex h-screen overflow-hidden bg-[var(--bg-canvas)] text-[var(--text-primary)]">
+        <nav className="flex w-44 shrink-0 flex-col gap-1 border-r border-[var(--border-subtle)] bg-[var(--bg-base)] p-3">
+          <div className="px-2 py-2 text-sm font-semibold">MediaPilot</div>
+          <Link href="/" className="rounded-md px-2 py-1.5 text-sm hover:bg-[var(--bg-surface-hover)]">
+            项目
+          </Link>
+        </nav>
+        <main className="min-w-0 flex-1 overflow-hidden">{children}</main>
       </body>
     </html>
   );
