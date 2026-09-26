@@ -1,0 +1,48 @@
+import type { Prisma } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
+import { ok, fail } from '@/lib/api';
+import { toProjectView, toMessageView } from '@/lib/project/view';
+import { ScriptSchema } from '@/lib/script/model';
+import { applySegmentEdit } from '@/lib/script/edit';
+
+export const dynamic = 'force-dynamic';
+
+type Ctx = { params: { id: string } };
+
+export async function GET(_req: Request, { params }: Ctx) {
+  const p = await prisma.project.findUnique({ where: { id: params.id } });
+  if (!p) return fail('项目不存在或已删除', 404);
+  const messages = await prisma.chatMessage.findMany({ where: { projectId: p.id }, orderBy: { createdAt: 'asc' } });
+  return ok({ project: toProjectView(p), messages: messages.map(toMessageView) });
+}
+
+export async function PATCH(req: Request, { params }: Ctx) {
+  const body = (await req.json().catch(() => ({}))) as {
+    title?: string;
+    finalize?: boolean;
+    edit?: { segmentId: string; text: string };
+  };
+  const p = await prisma.project.findUnique({ where: { id: params.id } });
+  if (!p) return fail('项目不存在或已删除', 404);
+
+  const data: Prisma.ProjectUpdateInput = {};
+  if (typeof body.title === 'string' && body.title.trim()) data.title = body.title.trim();
+
+  if (body.edit) {
+    const parsed = ScriptSchema.safeParse(p.script);
+    if (!parsed.success) return fail('还没有稿子，先让编导写一版', 400);
+    try {
+      data.script = applySegmentEdit(parsed.data, body.edit.segmentId, body.edit.text) as unknown as Prisma.InputJsonValue;
+    } catch (e) {
+      return fail(e instanceof Error ? e.message : String(e), 400);
+    }
+  }
+
+  if (body.finalize) {
+    if (!ScriptSchema.safeParse(p.script).success) return fail('还没有稿子，不能定稿', 400);
+    data.stage = 'scripted';
+  }
+
+  const updated = await prisma.project.update({ where: { id: p.id }, data });
+  return ok(toProjectView(updated));
+}
