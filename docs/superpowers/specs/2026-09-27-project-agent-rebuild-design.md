@@ -70,7 +70,7 @@
 - 耗时任务在 web 进程内执行，状态落 `Job` 表。服务启动时把残留的 `running` 任务标为 `interrupted`，界面给「重试」，由用户决定是否重跑（热重载打断任务的代价用这条兜住）。
 - 外部依赖：Overlay Studio（`tools/overlay-studio`，node ≥ 22.12，导出时需它的 dev server 在 5177）、ffmpeg、本地 Whisper。全部由设置页「依赖体检」逐项检测并给出补救方法。
 
-### 5.2 数据模型（7 张表）
+### 5.2 数据模型（8 张表）
 
 | 表 | 关键字段 |
 |---|---|
@@ -80,7 +80,8 @@
 | `Job` | `projectId`、`kind`（`transcribe`/`arrange`/`render`）、`status`（`queued`/`running`/`done`/`failed`/`interrupted`）、`progress`、`userMessage`（人话）、`errorDetail`（原文） |
 | `PersonaProfile` | 精简后的定位字段 |
 | `PublishedWork` | 回采作品；新增可空 `projectId` |
-| `DouyinOverviewSnapshot` | 账号级数字（总播放、粉丝等） |
+| `DouyinOverviewSnapshot` | 账号级统计（中位播放、完播率等） |
+| `DouyinMetricSummary` | 账号级当前值（粉丝数等，`metric` 唯一）。实施时发现粉丝数只在这张表里，`DouyinOverviewSnapshot` 没有 |
 
 单用户：去掉 `User` 表与所有 `userId`。
 
@@ -124,7 +125,7 @@ system prompt = 人设定位 + 项目阶段 + 当前稿子（带段落 id 与每
 
 ### 7.1 侧栏三项
 
-- **项目（首页）**：顶部账号真实数据（来自回采快照）；项目列表（进行中 / 已完成）；「新建项目」。回采连续失败时顶部直接提示原因。
+- **项目（首页）**：顶部账号真实数据（来自 `DouyinOverviewSnapshot` 与 `DouyinMetricSummary`）；项目列表（进行中 / 已完成）；「新建项目」。回采连续失败时顶部直接提示原因。
 - **定位**：人设定位档案，可编辑。
 - **设置**：DeepSeek key；依赖体检面板（数据库、Whisper、Studio、ffmpeg、node 22 逐项就绪状态与补救命令）。
 
