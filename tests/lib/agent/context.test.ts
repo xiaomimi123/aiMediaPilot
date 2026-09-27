@@ -26,7 +26,7 @@ describe('formatSystemPrompt', () => {
       title: 't', stage: 'recorded', targetSec: 60, script: null, persona: null,
       transcript: { lines: [{ startSec: 3.2, text: '你敢不敢', adlib: false }, { startSec: 65, text: '顺便说个题外话', adlib: true }], skipped: ['冷知识'] },
     });
-    expect(p).toContain('已录制，等待配特效');
+    expect(p).toContain('已录制，等待出片');
     expect(p).toContain('[0:03] 你敢不敢');
     expect(p).toContain('[1:05] 顺便说个题外话（临场加的）');
     expect(p).toContain('没讲到的段落：冷知识');

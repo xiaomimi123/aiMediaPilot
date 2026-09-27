@@ -94,3 +94,51 @@ export function buildRecordingView(
     transcript: view,
   };
 }
+
+export interface MaterialView {
+  id: string;
+  url: string;
+  mediaType: 'image' | 'video';
+  note: string;
+  originalName: string;
+  durationSec: number | null;
+}
+
+export function toMaterialView(projectId: string, f: { id: string; path: string; meta: unknown }): MaterialView {
+  const m = (f.meta ?? {}) as { note?: unknown; originalName?: unknown; mediaType?: unknown; durationSec?: unknown };
+  return {
+    id: f.id,
+    url: `/api/projects/${projectId}/files/${f.id}`,
+    mediaType: m.mediaType === 'video' ? 'video' : 'image',
+    note: typeof m.note === 'string' ? m.note : '',
+    originalName: typeof m.originalName === 'string' ? m.originalName : f.path.split('/').pop() ?? '',
+    durationSec: typeof m.durationSec === 'number' ? m.durationSec : null,
+  };
+}
+
+export interface FilmView {
+  id: string;
+  version: number;
+  url: string;
+  createdAt: string;
+  summary: string;
+  usage: { materialName: string; atSec: number; durSec: number; clipFromSec?: number; clipToSec?: number; speed?: number }[];
+}
+
+type UsageRow = { materialId: string; atSec: number; durSec: number; clipFromSec?: number; clipToSec?: number; speed?: number };
+
+export function toFilmView(projectId: string, f: { id: string; path: string; createdAt: Date; meta: unknown }, materials: MaterialView[]): FilmView {
+  const m = (f.meta ?? {}) as { filmVersion?: unknown; summary?: unknown; usage?: unknown };
+  const usage = (Array.isArray(m.usage) ? (m.usage as UsageRow[]) : []).map(({ materialId, ...rest }) => ({
+    materialName: materials.find((x) => x.id === materialId)?.originalName ?? '（已删除的素材）',
+    ...rest,
+  }));
+  return {
+    id: f.id,
+    version: Number(m.filmVersion) || 0,
+    url: `/api/projects/${projectId}/files/${f.id}`,
+    createdAt: f.createdAt.toISOString(),
+    summary: typeof m.summary === 'string' ? m.summary : '',
+    usage,
+  };
+}

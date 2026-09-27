@@ -14,6 +14,8 @@ export default async function ProjectPage({ params }: { params: { id: string } }
       initialMessages={bundle.messages}
       initialRecording={bundle.recording}
       initialJobs={bundle.jobs}
+      initialMaterials={bundle.materials}
+      initialFilms={bundle.films}
     />
   );
 }

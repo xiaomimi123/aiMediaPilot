@@ -11,7 +11,8 @@ export const HISTORY_LIMIT = 20;
 const STAGE_LABEL: Record<string, string> = {
   draft: '写稿中',
   scripted: '已定稿，等待录制',
-  recorded: '已录制，等待配特效',
+  recorded: '已录制，等待出片',
+  final: '已出成片',
 };
 
 const RULES = `你是用户的抖音口播编导，和用户一起把一条口播稿磨到能直接开录。

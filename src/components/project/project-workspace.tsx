@@ -1,17 +1,19 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { JobView, MessageView, ProjectView, RecordingView } from '@/lib/project/view';
+import type { FilmView, JobView, MaterialView, MessageView, ProjectView, RecordingView } from '@/lib/project/view';
 import type { AgentEvent } from '@/lib/agent/loop';
 import { cn } from '@/lib/utils';
 import { ScriptPane } from './script-pane';
 import { RecordingPane } from './recording-pane';
 import { ChatPanel } from './chat-panel';
+import { FilmPane } from './film-pane';
 
-type Tab = 'script' | 'recording';
+type Tab = 'script' | 'recording' | 'film';
 const TABS: { key: Tab; label: string }[] = [
   { key: 'script', label: '① 脚本' },
   { key: 'recording', label: '② 口播' },
+  { key: 'film', label: '③ 成片' },
 ];
 const isActive = (j: JobView | undefined) => !!j && (j.status === 'running' || j.status === 'queued');
 
@@ -20,17 +22,23 @@ export function ProjectWorkspace({
   initialMessages,
   initialRecording = null,
   initialJobs = [],
+  initialMaterials = [],
+  initialFilms = [],
 }: {
   initialProject: ProjectView;
   initialMessages: MessageView[];
   initialRecording?: RecordingView | null;
   initialJobs?: JobView[];
+  initialMaterials?: MaterialView[];
+  initialFilms?: FilmView[];
 }) {
   const [project, setProject] = useState(initialProject);
   const [recording, setRecording] = useState(initialRecording);
   const [jobs, setJobs] = useState(initialJobs);
+  const [materials, setMaterials] = useState(initialMaterials);
+  const [films, setFilms] = useState(initialFilms);
   const [notices, setNotices] = useState<MessageView[]>([]);
-  const [tab, setTab] = useState<Tab>(initialProject.stage === 'draft' ? 'script' : 'recording');
+  const [tab, setTab] = useState<Tab>(initialProject.stage === 'draft' ? 'script' : initialProject.stage === 'final' ? 'film' : 'recording');
   const [highlighted, setHighlighted] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const transcribeJob = jobs.find((j) => j.kind === 'transcribe');
@@ -43,6 +51,8 @@ export function ProjectWorkspace({
     setProject(j.data.project);
     setRecording(j.data.recording ?? null);
     setJobs(j.data.jobs ?? []);
+    setMaterials(j.data.materials ?? []);
+    setFilms(j.data.films ?? []);
     setNotices(((j.data.messages ?? []) as MessageView[]).filter((m) => m.role === 'system' && m.toolName?.startsWith('job:')));
   }, [project.id]);
 
@@ -109,7 +119,7 @@ export function ProjectWorkspace({
             ))}
           </div>
           <div className="min-h-0 flex-1">
-            {tab === 'script' ? (
+            {tab === 'script' && (
               <ScriptPane
                 project={project}
                 highlighted={highlighted}
@@ -119,7 +129,8 @@ export function ProjectWorkspace({
                 }}
                 onFinalize={() => patch({ finalize: true })}
               />
-            ) : (
+            )}
+            {tab === 'recording' && (
               <RecordingPane
                 project={project}
                 recording={recording}
@@ -133,6 +144,7 @@ export function ProjectWorkspace({
                 }}
               />
             )}
+            {tab === 'film' && <FilmPane projectId={project.id} materials={materials} films={films} onChanged={() => void refresh()} />}
           </div>
         </div>
         <div className="h-[45%] shrink-0 md:h-auto md:w-[36%] md:min-w-[340px]">

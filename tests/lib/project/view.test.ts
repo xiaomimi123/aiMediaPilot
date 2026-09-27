@@ -56,3 +56,24 @@ describe('toJobView / toMessageView for system rows', () => {
     expect(toMessageView({ id: 'm2', role: 'system', content: '连不上', toolName: null, toolResult: null }).ok).toBeNull();
   });
 });
+
+import { toMaterialView, toFilmView } from '@/lib/project/view';
+
+describe('material / film views', () => {
+  const mat = toMaterialView('p1', { id: 'fm', path: '/x/material-1.mov', meta: { note: '放这', originalName: 'rec.mov', mediaType: 'video', durationSec: 40 } });
+  it('builds a material view with a file url', () => {
+    expect(mat).toEqual({ id: 'fm', url: '/api/projects/p1/files/fm', mediaType: 'video', note: '放这', originalName: 'rec.mov', durationSec: 40 });
+  });
+  it('resolves material names in the usage table', () => {
+    const film = toFilmView(
+      'p1',
+      { id: 'ff', path: '/x/final.v2.mp4', createdAt: new Date('2026-09-28T01:00:00Z'), meta: { filmVersion: 2, summary: '首版', usage: [{ materialId: 'fm', atSec: 5, durSec: 7, speed: 1.5 }, { materialId: 'gone', atSec: 12, durSec: 3 }] } },
+      [mat],
+    );
+    expect(film).toMatchObject({ version: 2, url: '/api/projects/p1/files/ff', summary: '首版' });
+    expect(film.usage).toEqual([
+      { materialName: 'rec.mov', atSec: 5, durSec: 7, speed: 1.5 },
+      { materialName: '（已删除的素材）', atSec: 12, durSec: 3 },
+    ]);
+  });
+});

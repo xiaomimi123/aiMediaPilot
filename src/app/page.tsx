@@ -5,7 +5,7 @@ import { NewProjectButton } from '@/components/project/new-project-button';
 
 export const dynamic = 'force-dynamic';
 
-const STAGE_TEXT: Record<string, string> = { draft: '写稿中', scripted: '已定稿', recorded: '已录制' };
+const STAGE_TEXT: Record<string, string> = { draft: '写稿中', scripted: '已定稿', recorded: '已录制', final: '已出成片' };
 
 export default async function Home() {
   const projects = (await prisma.project.findMany({ orderBy: { updatedAt: 'desc' } })).map(toProjectView);
