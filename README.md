@@ -11,8 +11,9 @@ AI 知识类抖音口播的个人工作台：一条内容 = 一个项目，在�
 - **时长硬约束**：稿子固定 6 段（开场钩子 / 概念A / 概念B / 冷知识 / 知识串联 / 金句收尾），按 5 字/秒估算；超标时 agent 自己修（写稿最多自修 2 轮），修不好会如实告诉你差多少秒。
 - **手改与定稿**：点任意一段直接改，时长即时重算；满意后「定稿」。
 - **② 口播**：全屏提词器照稿录制；把录好的视频拖进来，后台自动转写（本地 faster-whisper），再按原稿只修识别错字；逐句显示并标出「临场加的」和「没讲到」的段落。转写完成后编导对话里会收到通知，编导也能看到转写内容。任务失败或被重启打断时点「重试」，不会自动重跑。
+- **③ 成片**：上传录屏、视频、截图、图片作素材（可写一句说明）；在 Claude Code 里说「给这个项目出片」，按 `.claude/skills/produce-film` 流程用 Remotion 出一条 1080×1920 竖屏成片（人物小窗右上角、内容区动效卡片与素材、底部字幕，风格「极客手账」），登记回项目后可播放、下载、查看素材使用表。
 
-特效编排、合成成片、首页账号数据、定位页、设置页在后续阶段加入。
+首页账号数据、定位页、设置页在后续阶段加入。出片目前在 Claude Code 里完成，网页一键出片（接 Claude API）排在后续路线图里。
 
 ## 快速开始
 
@@ -21,6 +22,7 @@ AI 知识类抖音口播的个人工作台：一条内容 = 一个项目，在�
 ```bash
 docker compose up -d        # 只有一个 Postgres
 npm install
+cd remotion && npm install && cd ..   # 出片用的 Remotion 子工程(独立依赖)
 npx prisma db push          # 首次或改了 schema 后
 npm run dev                 # http://localhost:3000
 ```
@@ -37,6 +39,23 @@ npm run dev                 # http://localhost:3000
 | `PYTHON_BIN` | 本地转写用的 Python（需装 faster-whisper） |
 | `PROJECT_FILES_ROOT` | 项目文件（口播原片、转写）存放目录，默认仓库下 `projects/`（已 gitignore） |
 | `WHISPER_MODEL` | 本地转写模型，默认 `small`；要更准可设 `medium`（更慢） |
+
+## 出片命令行（给 Claude Code 用）
+
+```bash
+npm run -s mp -- project list
+npm run -s mp -- project export <项目id>
+npm run -s mp -- film new <项目id>                 # 建片子骨架 remotion/films/<id>-v<N>/
+npm run -s mp -- film check <片子目录>              # 镜头覆盖 / 素材截取 / 画面数字有出处
+npm run -s mp -- film render <片子目录> [--stills]  # 关键帧或整片(79 秒约 2 分钟)
+npm run -s mp -- film register <片子目录> --summary <这一版改了什么>
+```
+
+组件库在 `remotion/kit/`，每条片子的源码在 `remotion/films/`（不入库）。
+
+## 常见问题
+
+- **dev 运行中新增了 API 路由目录后，别的接口也返回 Next 的 404 页**：重启 `npm run dev`（开发服务器路由表没刷新）。
 
 ## 每晚回采抖音数据
 
@@ -58,9 +77,9 @@ src/components/project/  项目页组件（稿子栏、对话栏）
 src/lib/script/          稿子模型、时长估算、写稿与自修
 src/lib/tools/           agent 工具（与界面无关，将来可套 CLI 给外部 agent）
 src/lib/agent/           对话循环、上下文、DeepSeek 流式模型
-src/lib/overlay-studio/  Overlay Studio 集成层（阶段 4 接入）
+src/lib/film/            出片：资料包、片子骨架、检查规则、素材、登记
+remotion/                出片用的 Remotion 子工程（kit 组件库 + 渲染脚本）
 scripts/                 回采、旧数据导入、字级对齐
-tools/overlay-studio/    外部工具，gitignore，不入库
 ```
 
 ## 测试
