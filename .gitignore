@@ -53,3 +53,8 @@ scripts/align/__pycache__
 
 # 重构阶段 3: 项目文件(口播原片、转写), 本机运行时产物, 可能很大
 /projects/
+
+# 阶段 4: Remotion 子工程依赖与每条片子的源码/产物(源码随项目走, 不入库)
+/remotion/node_modules/
+/remotion/films/*
+!/remotion/films/.gitkeep
