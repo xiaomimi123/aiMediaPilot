@@ -3,7 +3,7 @@ import { ScriptSchema, ROLE_LABEL } from '@/lib/script/model';
 import { checkDuration } from '@/lib/script/duration';
 import { formatPersona, type PersonaLike } from '@/lib/tools/types';
 import type { AgentMessage } from './chat-model';
-import { loadLatestTranscript } from '@/lib/recording/transcript';
+import { loadCurrentTranscript } from '@/lib/recording/transcript';
 import { compareWithScript } from '@/lib/recording/compare';
 
 export const HISTORY_LIMIT = 20;
@@ -64,7 +64,7 @@ export function formatSystemPrompt(p: {
 export async function buildSystemPrompt(db: PrismaClient, projectId: string): Promise<string> {
   const p = await db.project.findUniqueOrThrow({ where: { id: projectId } });
   const parsed = ScriptSchema.safeParse(p.script);
-  const t = await loadLatestTranscript(db, projectId);
+  const t = await loadCurrentTranscript(db, projectId);
   let transcript: { lines: { startSec: number; text: string; adlib: boolean }[]; skipped: string[] } | null = null;
   if (t) {
     const cmp = parsed.success ? compareWithScript(parsed.data, t.data.lines) : null;

@@ -38,3 +38,14 @@ export async function loadLatestTranscript(
     return null;
   }
 }
+
+/** 只返回与最新口播视频同版本的转写: 重传后新视频还没转写完(或失败)时, 不能拿旧录音当现状 */
+export async function loadCurrentTranscript(
+  db: PrismaClient,
+  projectId: string,
+): Promise<{ fileId: string; version: number; data: TranscriptFile } | null> {
+  const video = await db.projectFile.findFirst({ where: { projectId, kind: 'raw_video' }, orderBy: { version: 'desc' } });
+  if (!video) return null;
+  const t = await loadLatestTranscript(db, projectId);
+  return t && t.version === video.version ? t : null;
+}

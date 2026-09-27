@@ -66,4 +66,15 @@ describe('RecordingPane', () => {
     fireEvent.drop(zone, { dataTransfer: { files: [new File(['x'], 'a.mov')] } });
     expect(screen.getByText('上一个视频还在转写，等它完成再传。')).toBeTruthy();
   });
+
+  it('disables 重试 while the retry request is in flight', () => {
+    const job = { id: 'j1', kind: 'transcribe', status: 'failed', progress: 0, userMessage: '坏了', errorDetail: null };
+    const onRetry = vi.fn(() => new Promise<void>(() => {}));
+    render(<RecordingPane project={project} recording={null} job={job} onUploaded={vi.fn()} onRetry={onRetry} />);
+    const btn = screen.getByText('重试') as HTMLButtonElement;
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(btn.disabled).toBe(true);
+  });
 });

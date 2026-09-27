@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
-import { startJob, type JobRun } from './runner';
+import { startExclusiveJob, type JobRun } from './runner';
 import { runTranscribe } from '@/lib/recording/transcribe';
 import { createTranscribeDeps } from '@/lib/recording/deps';
 
@@ -14,7 +14,8 @@ export function isJobKind(k: string): k is JobKind {
   return k in JOB_KINDS;
 }
 
+/** 同类任务已在跑时返回 null(不重复启动) */
 export function launchJob(db: PrismaClient, projectId: string, kind: JobKind) {
   const def = JOB_KINDS[kind];
-  return startJob(db, { projectId, kind, label: def.label, run: def.run });
+  return startExclusiveJob(db, { projectId, kind, label: def.label, run: def.run });
 }

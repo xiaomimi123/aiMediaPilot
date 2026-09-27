@@ -14,6 +14,8 @@ describe('transcribe tool', () => {
     expect(await transcribeTool.execute(ctx(db), {})).toMatchObject({ ok: false, summary: '转写没开始：还没上传口播视频' });
   });
   it('refuses when a transcription is already running', async () => {
+    // "是否已在跑"的判断在 launchJob(加锁)里; 已在跑时它返回 null
+    launchJob.mockResolvedValueOnce(null as never);
     const { db } = createFakeDb({ files: [{ kind: 'raw_video' }], jobs: [{ status: 'running' }] });
     expect(await transcribeTool.execute(ctx(db), {})).toMatchObject({ ok: false, summary: '转写没开始：已经在转写了' });
   });

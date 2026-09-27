@@ -25,6 +25,7 @@ export function RecordingPane({
   const [uploading, setUploading] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
   if (!project.script) {
@@ -94,7 +95,20 @@ export function RecordingPane({
         <div className="mb-4 rounded-lg border border-[var(--border-subtle)] bg-[var(--danger-subtle)] px-4 py-3 text-sm">
           <div className="flex items-start gap-3">
             <p className="flex-1 text-[var(--danger)]">{job.userMessage}</p>
-            <button className="rounded-md border border-[var(--border-strong)] px-3 py-1 text-[var(--text-primary)]" onClick={() => void onRetry(job.id)}>
+            <button
+              disabled={retrying}
+              className="rounded-md border border-[var(--border-strong)] px-3 py-1 text-[var(--text-primary)] disabled:opacity-50"
+              onClick={async () => {
+                // 请求返回前禁用, 防止双击启动两次转写
+                if (retrying) return;
+                setRetrying(true);
+                try {
+                  await onRetry(job.id);
+                } finally {
+                  setRetrying(false);
+                }
+              }}
+            >
               重试
             </button>
           </div>

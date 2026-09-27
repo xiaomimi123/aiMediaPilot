@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { reconcileInterruptedJobs } from '@/lib/jobs/runner';
-import { loadLatestTranscript } from '@/lib/recording/transcript';
+import { loadCurrentTranscript } from '@/lib/recording/transcript';
 import { toProjectView, toMessageView, toJobView, buildRecordingView, type ProjectView, type MessageView, type RecordingView, type JobView } from './view';
 
 export interface ProjectBundle {
@@ -18,16 +18,14 @@ export async function loadProjectBundle(db: PrismaClient, id: string): Promise<P
   const [messages, video, transcript, jobs] = await Promise.all([
     db.chatMessage.findMany({ where: { projectId: id }, orderBy: { createdAt: 'asc' } }),
     db.projectFile.findFirst({ where: { projectId: id, kind: 'raw_video' }, orderBy: { version: 'desc' } }),
-    loadLatestTranscript(db, id),
+    loadCurrentTranscript(db, id),
     db.job.findMany({ where: { projectId: id }, orderBy: { createdAt: 'desc' }, take: 5 }),
   ]);
   const project = toProjectView(p);
-  // 只展示与最新视频同版本的转写; 重传后旧转写不再显示
-  const matching = transcript && video && transcript.version === video.version ? transcript.data : null;
   return {
     project,
     messages: messages.map(toMessageView),
-    recording: buildRecordingView(id, project.script, video, matching),
+    recording: buildRecordingView(id, project.script, video, transcript?.data ?? null),
     jobs: jobs.map(toJobView),
   };
 }

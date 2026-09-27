@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { startJob, reconcileInterruptedJobs, findActiveJob, JobError } from '@/lib/jobs/runner';
+import { startJob, startExclusiveJob, reconcileInterruptedJobs, findActiveJob, JobError } from '@/lib/jobs/runner';
 import { createFakeDb } from '../../helpers/fake-db';
 
 describe('startJob', () => {
@@ -64,5 +64,18 @@ describe('findActiveJob', () => {
     expect(await findActiveJob(db, 'p1', 'transcribe')).not.toBeNull();
     const empty = createFakeDb({ jobs: [{ status: 'failed' }] });
     expect(await findActiveJob(empty.db, 'p1', 'transcribe')).toBeNull();
+  });
+});
+
+describe('startExclusiveJob', () => {
+  it('lets only one of two simultaneous starts through (double-clicked 重试)', async () => {
+    const { db, jobs } = createFakeDb();
+    let open!: () => void;
+    const gate = new Promise<void>((r) => (open = r));
+    const opts = { projectId: 'p1', kind: 'transcribe', label: '转写', run: async () => { await gate; return { notice: 'ok' }; } };
+    const [a, b] = await Promise.all([startExclusiveJob(db, opts), startExclusiveJob(db, opts)]);
+    expect([a, b].filter(Boolean)).toHaveLength(1);
+    expect(jobs).toHaveLength(1);
+    open();
   });
 });

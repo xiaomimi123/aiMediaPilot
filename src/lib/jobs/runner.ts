@@ -81,3 +81,29 @@ export async function reconcileInterruptedJobs(db: PrismaClient, bootAt: Date = 
 export async function findActiveJob(db: PrismaClient, projectId: string, kind: string): Promise<{ id: string } | null> {
   return db.job.findFirst({ where: { projectId, kind, status: { in: ['queued', 'running'] } }, select: { id: true } });
 }
+
+// 进程内按键串行: "查有没有任务在跑"与"建任务"必须一起完成, 否则双击重试/两个标签页同时上传会并发跑两份
+const gl = globalThis as unknown as { __mpJobLocks?: Map<string, Promise<unknown>> };
+const locks: Map<string, Promise<unknown>> = (gl.__mpJobLocks ??= new Map());
+
+export async function withProjectLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prev = locks.get(key) ?? Promise.resolve();
+  const next = prev.catch(() => {}).then(fn);
+  locks.set(key, next);
+  try {
+    return await next;
+  } finally {
+    if (locks.get(key) === next) locks.delete(key);
+  }
+}
+
+/** 同一项目同一种任务已在跑时返回 null(不启动) */
+export async function startExclusiveJob(
+  db: PrismaClient,
+  opts: { projectId: string; kind: string; label: string; run: JobRun },
+): Promise<{ jobId: string; finished: Promise<void> } | null> {
+  return withProjectLock(`${opts.projectId}:${opts.kind}`, async () => {
+    if (await findActiveJob(db, opts.projectId, opts.kind)) return null;
+    return startJob(db, opts);
+  });
+}
