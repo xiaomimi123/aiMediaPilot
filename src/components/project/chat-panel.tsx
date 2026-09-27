@@ -11,12 +11,14 @@ type Line = { key: string; role: MessageView['role']; content: string; ok: boole
 export function ChatPanel({
   projectId,
   initialMessages,
+  incoming = [],
   onTurnStart,
   onTurnEvent,
   onTurnEnd,
 }: {
   projectId: string;
   initialMessages: MessageView[];
+  incoming?: MessageView[];
   onTurnStart: () => void;
   onTurnEvent: (e: AgentEvent) => void;
   onTurnEnd: () => void;
@@ -24,6 +26,14 @@ export function ChatPanel({
   const [lines, setLines] = useState<Line[]>(() => initialMessages.map((m) => ({ key: m.id, role: m.role, content: m.content, ok: m.ok })));
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  // 任务通知(转写完成/失败)由工作区轮询送进来; 只追加没见过的
+  const seen = useRef(new Set(initialMessages.map((m) => m.id)));
+  useEffect(() => {
+    const fresh = incoming.filter((m) => !seen.current.has(m.id));
+    if (fresh.length === 0) return;
+    fresh.forEach((m) => seen.current.add(m.id));
+    setLines((ls) => [...ls, ...fresh.map((m) => ({ key: m.id, role: m.role, content: m.content, ok: m.ok }))]);
+  }, [incoming]);
   const bottom = useRef<HTMLDivElement>(null);
   // 必须用块体: 新版 Chrome 的 scrollIntoView 返回 Promise, 箭头直返会被 React 当成清理函数调用
   useEffect(() => {
@@ -104,7 +114,8 @@ export function ChatPanel({
                 'whitespace-pre-wrap rounded-lg px-3 py-2',
                 l.role === 'user' && 'ml-8 bg-[var(--accent-subtle)]',
                 l.role === 'assistant' && 'mr-8 bg-[var(--bg-surface)]',
-                l.role === 'system' && 'bg-[var(--danger-subtle)] text-[var(--danger)]',
+                l.role === 'system' && l.ok === true && 'border border-[var(--border-subtle)] bg-[var(--info-subtle)] text-[var(--info)]',
+                l.role === 'system' && l.ok !== true && 'bg-[var(--danger-subtle)] text-[var(--danger)]',
               )}
             >
               {l.content}

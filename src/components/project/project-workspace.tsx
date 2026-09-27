@@ -1,14 +1,25 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { JobView, MessageView, ProjectView, RecordingView } from '@/lib/project/view';
 import type { AgentEvent } from '@/lib/agent/loop';
+import { cn } from '@/lib/utils';
 import { ScriptPane } from './script-pane';
+import { RecordingPane } from './recording-pane';
 import { ChatPanel } from './chat-panel';
+
+type Tab = 'script' | 'recording';
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'script', label: '① 脚本' },
+  { key: 'recording', label: '② 口播' },
+];
+const isActive = (j: JobView | undefined) => !!j && (j.status === 'running' || j.status === 'queued');
 
 export function ProjectWorkspace({
   initialProject,
   initialMessages,
+  initialRecording = null,
+  initialJobs = [],
 }: {
   initialProject: ProjectView;
   initialMessages: MessageView[];
@@ -16,14 +27,34 @@ export function ProjectWorkspace({
   initialJobs?: JobView[];
 }) {
   const [project, setProject] = useState(initialProject);
+  const [recording, setRecording] = useState(initialRecording);
+  const [jobs, setJobs] = useState(initialJobs);
+  const [notices, setNotices] = useState<MessageView[]>([]);
+  const [tab, setTab] = useState<Tab>(initialProject.stage === 'draft' ? 'script' : 'recording');
   const [highlighted, setHighlighted] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const transcribeJob = jobs.find((j) => j.kind === 'transcribe');
+  const wasActive = useRef(isActive(transcribeJob));
 
   const refresh = useCallback(async () => {
     const res = await fetch(`/api/projects/${project.id}`);
     const j = await res.json();
-    if (j.success) setProject(j.data.project);
+    if (!j.success) return;
+    setProject(j.data.project);
+    setRecording(j.data.recording ?? null);
+    setJobs(j.data.jobs ?? []);
+    setNotices(((j.data.messages ?? []) as MessageView[]).filter((m) => m.role === 'system' && m.toolName?.startsWith('job:')));
   }, [project.id]);
+
+  // 有任务在跑就每 2 秒拉一次; 任务从"运行中"变成结束时切到口播标签
+  useEffect(() => {
+    const active = isActive(transcribeJob);
+    if (wasActive.current && !active) setTab('recording');
+    wasActive.current = active;
+    if (!active) return;
+    const t = setInterval(() => void refresh(), 2000);
+    return () => clearInterval(t);
+  }, [transcribeJob, refresh]);
 
   const patch = useCallback(
     async (body: object) => {
@@ -60,21 +91,55 @@ export function ProjectWorkspace({
       </div>
       {/* 窄窗口(<768px)上下排: 左右排时对话栏 340px 最小宽度会把页面撑出横向滚动 */}
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <div className="min-h-0 min-w-0 flex-1">
-          <ScriptPane
-            project={project}
-            highlighted={highlighted}
-            onEdit={async (segmentId, text) => {
-              setHighlighted(new Set());
-              await patch({ edit: { segmentId, text } });
-            }}
-            onFinalize={() => patch({ finalize: true })}
-          />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div role="tablist" className="flex gap-1 border-b border-[var(--border-subtle)] px-6 pt-2 text-sm">
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                role="tab"
+                aria-selected={tab === t.key}
+                className={cn(
+                  'rounded-t-md px-3 py-1.5',
+                  tab === t.key ? 'bg-[var(--accent-subtle)] text-[var(--text-primary)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
+                )}
+                onClick={() => setTab(t.key)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="min-h-0 flex-1">
+            {tab === 'script' ? (
+              <ScriptPane
+                project={project}
+                highlighted={highlighted}
+                onEdit={async (segmentId, text) => {
+                  setHighlighted(new Set());
+                  await patch({ edit: { segmentId, text } });
+                }}
+                onFinalize={() => patch({ finalize: true })}
+              />
+            ) : (
+              <RecordingPane
+                project={project}
+                recording={recording}
+                job={transcribeJob ?? null}
+                onUploaded={() => void refresh()}
+                onRetry={async (jobId) => {
+                  const res = await fetch(`/api/projects/${project.id}/jobs/${jobId}/retry`, { method: 'POST' });
+                  const j = await res.json();
+                  if (!j.success) setError(j.message);
+                  await refresh();
+                }}
+              />
+            )}
+          </div>
         </div>
         <div className="h-[45%] shrink-0 md:h-auto md:w-[36%] md:min-w-[340px]">
           <ChatPanel
             projectId={project.id}
             initialMessages={initialMessages}
+            incoming={notices}
             // 发出新消息时清掉上一轮的高亮; 本轮工具改的段落保留到下一轮
             onTurnStart={() => setHighlighted(new Set())}
             onTurnEvent={onTurnEvent}

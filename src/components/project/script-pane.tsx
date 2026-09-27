@@ -31,7 +31,6 @@ export function ScriptPane({
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] px-6 py-3 text-sm">
-        <span className="rounded-md bg-[var(--accent-subtle)] px-2 py-0.5 text-[var(--text-primary)]">① 脚本</span>
         <span className={cn('font-mono', report.ok ? 'text-[var(--success)]' : 'text-[var(--warning)]')}>
           约 {report.totalSec} 秒 / 目标 {report.targetSec} 秒
         </span>
@@ -44,7 +43,7 @@ export function ScriptPane({
             {report.ok ? '定稿' : '时长还超，仍然定稿'}
           </button>
         ) : (
-          <span className="text-[var(--text-secondary)]">已定稿 · 录口播的入口在下一阶段加入</span>
+          <span className="text-[var(--text-secondary)]">已定稿 · 去「② 口播」录制</span>
         )}
       </div>
 

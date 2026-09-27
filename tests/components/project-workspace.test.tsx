@@ -52,4 +52,20 @@ describe('ProjectWorkspace', () => {
       expect(marks[0].parentElement?.textContent).toContain('冷知识');
     });
   });
+  it('polls while a job runs, forwards the job notice to chat and switches to the recording tab when done', async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const running = { id: 'j1', kind: 'transcribe', status: 'running', progress: 0.5, userMessage: '', errorDetail: null };
+    const done = { ...running, status: 'done', progress: 1, userMessage: '转写完成：6 句' };
+    const bundle = (jobs: unknown[], messages: unknown[]) => ({
+      json: async () => ({ success: true, data: { project: toProjectView({ ...base, title: 't', stage: 'recorded' }), messages, recording: null, jobs } }),
+    });
+    const fetchMock = vi.fn(async () => bundle([done], [{ id: 'mJob', role: 'system', content: '转写完成：6 句', toolName: 'job:transcribe', ok: true }]));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    render(<ProjectWorkspace initialProject={toProjectView({ ...base, title: 't' })} initialMessages={[]} initialRecording={null} initialJobs={[running]} />);
+    await vi.advanceTimersByTimeAsync(2100);
+    vi.useRealTimers();
+    await waitFor(() => expect(screen.getByText('转写完成：6 句')).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('tab', { name: '② 口播' }).getAttribute('aria-selected')).toBe('true'));
+  });
 });
