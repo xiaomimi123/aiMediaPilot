@@ -10,8 +10,9 @@ AI 知识类抖音口播的个人工作台：一条内容 = 一个项目，在�
 - **编导对话**：项目页右侧和编导 agent 聊，它会写整稿（`write_script`）或只改某一段（`patch_script`）；工具改过的段落会高亮，直到你发下一条消息。
 - **时长硬约束**：稿子固定 6 段（开场钩子 / 概念A / 概念B / 冷知识 / 知识串联 / 金句收尾），按 5 字/秒估算；超标时 agent 自己修（写稿最多自修 2 轮），修不好会如实告诉你差多少秒。
 - **手改与定稿**：点任意一段直接改，时长即时重算；满意后「定稿」。
+- **② 口播**：全屏提词器照稿录制；把录好的视频拖进来，后台自动转写（本地 faster-whisper），再按原稿只修识别错字；逐句显示并标出「临场加的」和「没讲到」的段落。转写完成后编导对话里会收到通知，编导也能看到转写内容。任务失败或被重启打断时点「重试」，不会自动重跑。
 
-录口播上传、特效编排、合成成片、首页账号数据、定位页、设置页在后续阶段加入。
+特效编排、合成成片、首页账号数据、定位页、设置页在后续阶段加入。
 
 ## 快速开始
 
@@ -33,7 +34,9 @@ npm run dev                 # http://localhost:3000
 | `DATABASE_URL` | `postgresql://mediapilot:<密码>@localhost:5432/mediapilot_v2` |
 | `DEEPSEEK_API_KEY` | 编导 agent 与写稿用（目前只从这里读） |
 | `DB_PASSWORD` | docker-compose 的数据库密码 |
-| `PYTHON_BIN` | 本地 Whisper 用的 Python（阶段 3 起用） |
+| `PYTHON_BIN` | 本地转写用的 Python（需装 faster-whisper） |
+| `PROJECT_FILES_ROOT` | 项目文件（口播原片、转写）存放目录，默认仓库下 `projects/`（已 gitignore） |
+| `WHISPER_MODEL` | 本地转写模型，默认 `small`；要更准可设 `medium`（更慢） |
 
 ## 每晚回采抖音数据
 
