@@ -150,6 +150,8 @@ system prompt = 人设定位 + 项目阶段 + 当前稿子（带段落 id 与每
 
 ## 9. 实施阶段
 
+> **2026-09-28 更新：** 阶段 4（特效编排 / Overlay Studio）已作废，由 `2026-09-28-film-production-design.md`（Remotion 竖屏口播成片，Claude Code 创作）取代；本文中 Overlay Studio、`arrange_overlays` / `patch_overlays` / `render_final`、「③ 特效」相关内容均以新文档为准。
+
 | 阶段 | 内容 | 完成时用户能看到 |
 |---|---|---|
 | 0 | 打 `v1-final` tag；旧文档归档；导出旧稿子与人设 | 仓库留档完成 |
