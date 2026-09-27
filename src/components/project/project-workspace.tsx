@@ -1,12 +1,20 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import type { MessageView, ProjectView } from '@/lib/project/view';
+import type { JobView, MessageView, ProjectView, RecordingView } from '@/lib/project/view';
 import type { AgentEvent } from '@/lib/agent/loop';
 import { ScriptPane } from './script-pane';
 import { ChatPanel } from './chat-panel';
 
-export function ProjectWorkspace({ initialProject, initialMessages }: { initialProject: ProjectView; initialMessages: MessageView[] }) {
+export function ProjectWorkspace({
+  initialProject,
+  initialMessages,
+}: {
+  initialProject: ProjectView;
+  initialMessages: MessageView[];
+  initialRecording?: RecordingView | null;
+  initialJobs?: JobView[];
+}) {
   const [project, setProject] = useState(initialProject);
   const [highlighted, setHighlighted] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);

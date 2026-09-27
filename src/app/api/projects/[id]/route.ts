@@ -1,7 +1,8 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ok, fail } from '@/lib/api';
-import { toProjectView, toMessageView } from '@/lib/project/view';
+import { toProjectView } from '@/lib/project/view';
+import { loadProjectBundle } from '@/lib/project/load';
 import { ScriptSchema } from '@/lib/script/model';
 import { applySegmentEdit } from '@/lib/script/edit';
 
@@ -10,10 +11,9 @@ export const dynamic = 'force-dynamic';
 type Ctx = { params: { id: string } };
 
 export async function GET(_req: Request, { params }: Ctx) {
-  const p = await prisma.project.findUnique({ where: { id: params.id } });
-  if (!p) return fail('项目不存在或已删除', 404);
-  const messages = await prisma.chatMessage.findMany({ where: { projectId: p.id }, orderBy: { createdAt: 'asc' } });
-  return ok({ project: toProjectView(p), messages: messages.map(toMessageView) });
+  const bundle = await loadProjectBundle(prisma, params.id);
+  if (!bundle) return fail('项目不存在或已删除', 404);
+  return ok(bundle);
 }
 
 export async function PATCH(req: Request, { params }: Ctx) {
