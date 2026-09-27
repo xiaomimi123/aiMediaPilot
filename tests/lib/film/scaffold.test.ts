@@ -61,4 +61,22 @@ describe('scaffoldFilm', () => {
     await fs.mkdir(path.join(root, 'p1-v1'));
     await expect(scaffoldFilm(await bundleIn(dir), 1, root)).rejects.toThrow('片子目录已存在');
   });
+
+  it('merges lines shorter than 2 seconds so the skeleton passes film check', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mp-src-'));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mp-films-'));
+    const b = await bundleIn(dir);
+    b.transcript = [
+      { startSec: 0, endSec: 1.2, text: '先说背景' },
+      { startSec: 1.2, endSec: 4, text: '去年我盯了一个赛道' },
+      { startSec: 4, endSec: 4.9, text: '我当时就在想' },
+      { startSec: 4.9, endSec: 7, text: '这事有救' },
+    ];
+    const filmDir = await scaffoldFilm(b, 1, root);
+    const shots = JSON.parse(await fs.readFile(path.join(filmDir, 'shots.json'), 'utf8'));
+    expect(shots.shots.map((s: { fromSec: number; toSec: number }) => [s.fromSec, s.toSec])).toEqual([
+      [0, 4.9],
+      [4.9, 7],
+    ]);
+  });
 });

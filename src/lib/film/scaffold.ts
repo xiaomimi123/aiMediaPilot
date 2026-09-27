@@ -61,6 +61,37 @@ export const COPY = {
 };
 `;
 
+/** 骨架镜头短于这个秒数就并进相邻镜头(film check 的硬下限是 1 秒, 建议 2–8 秒) */
+const SKELETON_MIN_SEC = 2;
+
+/**
+ * 按转写句子切初始镜头, 首尾相接覆盖 0 到原片结束。"先说背景"这类不到 2 秒的短句
+ * 并进前一镜(第一句并进后一镜), 否则骨架本身就过不了 film check。
+ */
+export function skeletonShots(lines: FilmBundle['transcript'], durationSec: number): ShotsFile['shots'] {
+  const segs = lines.map((l, i) => ({
+    from: i === 0 ? 0 : l.startSec,
+    to: i === lines.length - 1 ? durationSec : lines[i + 1].startSec,
+    text: l.text,
+  }));
+  const out: typeof segs = [];
+  for (const seg of segs) {
+    const last = out[out.length - 1];
+    if (last && (seg.to - seg.from < SKELETON_MIN_SEC || last.to - last.from < SKELETON_MIN_SEC)) {
+      last.to = seg.to;
+      last.text = `${last.text} ${seg.text}`;
+    } else out.push({ ...seg });
+  }
+  const tail = out[out.length - 1];
+  if (out.length > 1 && tail.to - tail.from < SKELETON_MIN_SEC) {
+    const prev = out[out.length - 2];
+    prev.to = tail.to;
+    prev.text = `${prev.text} ${tail.text}`;
+    out.pop();
+  }
+  return out.map((seg, i) => ({ id: `s${i + 1}`, fromSec: seg.from, toSec: seg.to, intent: seg.text }));
+}
+
 export async function scaffoldFilm(bundle: FilmBundle, version: number, root = filmsRoot()): Promise<string> {
   if (!bundle.video) throw new Error('这个项目还没有口播视频');
   const dir = path.join(root, `${bundle.project.id}-v${version}`);
@@ -83,15 +114,7 @@ export async function scaffoldFilm(bundle: FilmBundle, version: number, root = f
     captions: bundle.transcript,
     materials,
   };
-  const shots: ShotsFile = {
-    version: 1,
-    shots: bundle.transcript.map((l, i) => ({
-      id: `s${i + 1}`,
-      fromSec: i === 0 ? 0 : l.startSec,
-      toSec: i === bundle.transcript.length - 1 ? bundle.video!.durationSec : bundle.transcript[i + 1].startSec,
-      intent: l.text,
-    })),
-  };
+  const shots: ShotsFile = { version: 1, shots: skeletonShots(bundle.transcript, bundle.video.durationSec) };
   await fs.writeFile(path.join(dir, 'data.json'), JSON.stringify(data, null, 2));
   await fs.writeFile(path.join(dir, 'shots.json'), JSON.stringify(shots, null, 2));
   await fs.writeFile(path.join(dir, 'index.tsx'), INDEX);

@@ -14,7 +14,8 @@
     "import:legacy": "tsx scripts/import-legacy.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "mp": "tsx scripts/mp.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
