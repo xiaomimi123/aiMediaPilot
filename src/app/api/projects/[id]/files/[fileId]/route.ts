@@ -9,7 +9,7 @@ import { parseRange } from '@/lib/files/range';
 export const dynamic = 'force-dynamic';
 
 // mov/m4v 也按 video/mp4 发: Chrome 对 video/quicktime 常拒播, 而 H.264 的 mov 用 mp4 类型能正常播放
-const TYPES: Record<string, string> = { '.mp4': 'video/mp4', '.mov': 'video/mp4', '.m4v': 'video/mp4', '.json': 'application/json' };
+const TYPES: Record<string, string> = { '.mp4': 'video/mp4', '.mov': 'video/mp4', '.m4v': 'video/mp4', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
 export async function GET(req: Request, { params }: { params: { id: string; fileId: string } }) {
   const f = await prisma.projectFile.findFirst({ where: { id: params.fileId, projectId: params.id } });
