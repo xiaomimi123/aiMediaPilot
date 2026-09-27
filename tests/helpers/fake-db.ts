@@ -158,6 +158,22 @@ export function createFakeDb(
         files
           .filter((f) => (!where.id || f.id === where.id) && (!where.projectId || f.projectId === where.projectId) && (!where.kind || f.kind === where.kind))
           .sort((a, b) => b.version - a.version)[0] ?? null,
+      findMany: async ({ where }: { where: { projectId?: string; kind?: string } }) =>
+        files
+          .filter((f) => (!where.projectId || f.projectId === where.projectId) && (!where.kind || f.kind === where.kind))
+          .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+          .map((f) => ({ ...f })),
+      update: async ({ where, data }: { where: { id: string }; data: Partial<FakeFile> }) => {
+        const f = files.find((x) => x.id === where.id);
+        if (!f) throw new Error('not found');
+        Object.assign(f, data);
+        return { ...f };
+      },
+      delete: async ({ where }: { where: { id: string } }) => {
+        const i = files.findIndex((x) => x.id === where.id);
+        if (i < 0) throw new Error('not found');
+        return files.splice(i, 1)[0];
+      },
     },
   };
   return { db: db as unknown as PrismaClient, project, messages, jobs, files };
