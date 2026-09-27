@@ -21,6 +21,16 @@ describe('formatSystemPrompt', () => {
     const p = formatSystemPrompt({ title: 't', stage: 'draft', targetSec: 60, script: null, persona: null });
     expect(p).toContain('【待补：你的真实经历】');
   });
+  it('includes the transcript with adlib marks and skipped segments', () => {
+    const p = formatSystemPrompt({
+      title: 't', stage: 'recorded', targetSec: 60, script: null, persona: null,
+      transcript: { lines: [{ startSec: 3.2, text: '你敢不敢', adlib: false }, { startSec: 65, text: '顺便说个题外话', adlib: true }], skipped: ['冷知识'] },
+    });
+    expect(p).toContain('已录制，等待配特效');
+    expect(p).toContain('[0:03] 你敢不敢');
+    expect(p).toContain('[1:05] 顺便说个题外话（临场加的）');
+    expect(p).toContain('没讲到的段落：冷知识');
+  });
   it('says there is no script yet when script is null', () => {
     const p = formatSystemPrompt({ title: '未命名项目', stage: 'draft', targetSec: 60, script: null, persona: null });
     expect(p).toContain('还没有稿子');

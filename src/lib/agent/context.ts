@@ -3,12 +3,15 @@ import { ScriptSchema, ROLE_LABEL } from '@/lib/script/model';
 import { checkDuration } from '@/lib/script/duration';
 import { formatPersona, type PersonaLike } from '@/lib/tools/types';
 import type { AgentMessage } from './chat-model';
+import { loadLatestTranscript } from '@/lib/recording/transcript';
+import { compareWithScript } from '@/lib/recording/compare';
 
 export const HISTORY_LIMIT = 20;
 
 const STAGE_LABEL: Record<string, string> = {
   draft: '写稿中',
   scripted: '已定稿，等待录制',
+  recorded: '已录制，等待配特效',
 };
 
 const RULES = `你是用户的抖音口播编导，和用户一起把一条口播稿磨到能直接开录。
@@ -27,6 +30,7 @@ export function formatSystemPrompt(p: {
   targetSec: number;
   script: unknown;
   persona: PersonaLike | null;
+  transcript?: { lines: { startSec: number; text: string; adlib: boolean }[]; skipped: string[] } | null;
 }): string {
   const persona = formatPersona(p.persona);
   const parsed = ScriptSchema.safeParse(p.script);
@@ -39,11 +43,18 @@ export function formatSystemPrompt(p: {
     });
     scriptBlock = `${lines.join('\n\n')}\n\n全片约 ${report.totalSec} 秒。${report.ok ? '时长达标。' : `\n当前问题：\n${report.issues.join('\n')}`}`;
   }
+  const mmss = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+  const transcriptBlock = p.transcript
+    ? `【口播转写】（用户实际录下来的话，共 ${p.transcript.lines.length} 句）\n${p.transcript.lines
+        .map((l) => `[${mmss(l.startSec)}] ${l.text}${l.adlib ? '（临场加的）' : ''}`)
+        .join('\n')}${p.transcript.skipped.length ? `\n没讲到的段落：${p.transcript.skipped.join('、')}` : ''}`
+    : '';
   return [
     RULES,
     persona ? `【账号定位】\n${persona}` : '',
     `【项目】${p.title}｜${STAGE_LABEL[p.stage] ?? p.stage}｜目标 ${p.targetSec} 秒`,
     `【当前稿子】\n${scriptBlock}`,
+    transcriptBlock,
   ]
     .filter(Boolean)
     .join('\n\n');
@@ -52,12 +63,23 @@ export function formatSystemPrompt(p: {
 /** 每轮从库里重建, 不依赖聊天记录推断当前状态。 */
 export async function buildSystemPrompt(db: PrismaClient, projectId: string): Promise<string> {
   const p = await db.project.findUniqueOrThrow({ where: { id: projectId } });
+  const parsed = ScriptSchema.safeParse(p.script);
+  const t = await loadLatestTranscript(db, projectId);
+  let transcript: { lines: { startSec: number; text: string; adlib: boolean }[]; skipped: string[] } | null = null;
+  if (t) {
+    const cmp = parsed.success ? compareWithScript(parsed.data, t.data.lines) : null;
+    transcript = {
+      lines: t.data.lines.map((l, i) => ({ startSec: l.startSec, text: l.text, adlib: cmp ? cmp.lines[i].adlib : false })),
+      skipped: cmp ? cmp.segments.filter((s) => s.skipped).map((s) => ROLE_LABEL[s.role]) : [],
+    };
+  }
   return formatSystemPrompt({
     title: p.title,
     stage: p.stage,
     targetSec: p.targetSec,
     script: p.script,
     persona: (p.personaSnapshot as PersonaLike | null) ?? null,
+    transcript,
   });
 }
 
