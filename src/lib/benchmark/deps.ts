@@ -9,13 +9,13 @@ import { createDouyinClient } from './douyin';
 import { createPrismaStore } from './store';
 import type { AnalyzeDeps } from './analyze';
 
-export async function createAnalyzeDeps(db: PrismaClient): Promise<AnalyzeDeps> {
+export async function createAnalyzeDeps(db: PrismaClient, client = createDouyinClient()): Promise<AnalyzeDeps> {
   const key = getDeepSeekKey();
   const persona = await db.personaProfile.findUnique({ where: { id: 'me' } });
   const whisper = new LocalWhisperClient();
   return {
     store: createPrismaStore(db),
-    client: createDouyinClient(),
+    client,
     transcribe: async (p) => (await whisper.transcribe(p)).segments.map((s) => ({ startSec: s.startSec, endSec: s.endSec, text: s.text })),
     llm: key ? new DeepSeekTextLLM({ apiKey: key }) : null,
     personaText: formatPersona(persona as PersonaLike | null),

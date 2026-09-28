@@ -28,7 +28,7 @@ export function createMemoryStore(): BenchmarkStore & { accounts: AccountRow[]; 
       if (hit) return Object.assign(hit, stats);
       const row: VideoRow = {
         id: nextId('v'), awemeId: w.awemeId, accountId, publishedAt: w.publishedAt, ...stats, ratio: null, isHit: false, hitAt: null,
-        status: 'new', analysisStatus: 'none', analysisError: null, transcript: null, analysis: null, analyzedAt: null,
+        status: 'new', analysisStatus: 'none', analysisError: null, analysisStartedAt: null, transcript: null, analysis: null, analyzedAt: null,
       };
       videos.push(row);
       return row;
@@ -49,6 +49,10 @@ export function createMemoryStore(): BenchmarkStore & { accounts: AccountRow[]; 
         .map((v) => ({ ...v })), // 与 Prisma 一致: 返回副本, 不是库里的对象本身
     getVideo: async (id) => {
       const v = videos.find((x) => x.id === id);
+      return v ? { ...v } : null;
+    },
+    findVideoByAweme: async (awemeId) => {
+      const v = videos.find((x) => x.awemeId === awemeId);
       return v ? { ...v } : null;
     },
     updateVideo: async (id, data) => {

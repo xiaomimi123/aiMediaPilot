@@ -2,7 +2,7 @@ import type { ParsedProfile, ParsedWork } from './parse';
 import type { AccountRow, BenchmarkStore, VideoRow } from './store';
 import { computeBaseline, judge } from './rules';
 import { EgoUnavailableError } from '@/lib/ego';
-import { DouyinRejectedError } from './parse';
+import { DouyinLoginError, DouyinRejectedError } from './parse';
 import type { DouyinClient } from './douyin';
 
 /** 写入一个账号本次读到的资料与作品, 重算平时水平与爆款; 返回本次"新"判定的爆款(hitAt 首次设置) */
@@ -65,7 +65,7 @@ export async function runScan(deps: ScanDeps) {
     } catch (e) {
       r.failed++;
       const msg = e instanceof Error ? e.message : String(e);
-      if (e instanceof EgoUnavailableError) {
+      if (e instanceof EgoUnavailableError || e instanceof DouyinLoginError) {
         deps.log(msg);
         r.stopped = true;
         break;

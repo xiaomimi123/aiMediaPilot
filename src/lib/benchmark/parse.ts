@@ -9,6 +9,14 @@ export class DouyinRejectedError extends Error {
   }
 }
 
+/** ego lite 开着但抖音登录掉了: 接口 200 却给网页/空列表。与"风控"区分开, 补救是重新登录 */
+export class DouyinLoginError extends DouyinRejectedError {
+  constructor(message = '抖音没有返回数据，多半是登录过期了：打开 ego lite 重新登录一次抖音。') {
+    super(message);
+    this.name = 'DouyinLoginError';
+  }
+}
+
 export interface ParsedWork {
   awemeId: string;
   desc: string;

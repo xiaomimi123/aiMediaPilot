@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { runScan, type ScanDeps } from '@/lib/benchmark/scan';
-import { DouyinRejectedError, type ParsedWork } from '@/lib/benchmark/parse';
+import { DouyinRejectedError, DouyinLoginError, type ParsedWork } from '@/lib/benchmark/parse';
 import { EgoUnavailableError } from '@/lib/ego';
 import { createMemoryStore } from '../../helpers/benchmark-store';
 
@@ -51,6 +51,15 @@ describe('runScan', () => {
     const r = await runScan(deps);
     expect(r).toMatchObject({ stopped: true, failed: 1 });
     expect(logs.some((l) => l.startsWith('ego lite 没有响应'))).toBe(true);
+  });
+  it('stops at once on a lost login and says to re-login', async () => {
+    const { deps, logs } = await setup(3, async () => {
+      throw new DouyinLoginError();
+    });
+    const r = await runScan(deps);
+    expect(r).toMatchObject({ stopped: true, failed: 1 });
+    expect(logs.some((l) => l.includes('打开 ego lite 重新登录'))).toBe(true);
+    expect(logs.some((l) => l.includes('风控'))).toBe(false);
   });
   it('analyzes at most 5 new hits, highest ratio first', async () => {
     const { deps } = await setup(1, async (sec) => ({ profile: prof(sec), works: [1, 2, 3, 4, 5, 6, 7].map((i) => work(`b${i}`, 1000, i)).concat([1, 2, 3, 4, 5, 6].map((i) => work(`h${i}`, 3000 + i * 1000, 1))) }));

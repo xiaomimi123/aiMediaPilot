@@ -4,7 +4,7 @@ import type { StructuredLLM } from '@/lib/script/write';
 import type { TranscriptLine } from '@/lib/recording/transcript';
 import { proofreadAgainst } from '@/lib/recording/proofread';
 import { EgoUnavailableError } from '@/lib/ego';
-import { DouyinRejectedError } from './parse';
+import { DouyinLoginError, DouyinRejectedError } from './parse';
 import type { DouyinClient } from './douyin';
 import type { BenchmarkStore } from './store';
 
@@ -41,6 +41,7 @@ const SYSTEM_PROMPT = `你是抖音 AI 知识类博主的编导，负责拆解�
 
 export function explainAnalyzeError(e: unknown): string {
   if (e instanceof EgoUnavailableError) return '下载视频时 ego lite 没有响应：打开 ego lite 重新登录一次，再点重试。';
+  if (e instanceof DouyinLoginError) return e.message;
   if (e instanceof DouyinRejectedError) return `抖音没有给视频（${e.message}）。可能作品已删除或设为私密；稍后点重试。`;
   if (e instanceof StepError) return e.message;
   return '拆解中途出错了，点重试再来一次。';
@@ -49,8 +50,9 @@ export function explainAnalyzeError(e: unknown): string {
 export async function analyzeVideo(deps: AnalyzeDeps, videoId: string): Promise<boolean> {
   const v = await deps.store.getVideo(videoId);
   if (!v) return false;
-  await deps.store.updateVideo(videoId, { analysisStatus: 'running', analysisError: null });
-  const file = path.join(deps.tmpDir, `bm-${v.awemeId}.mp4`);
+  await deps.store.updateVideo(videoId, { analysisStatus: 'running', analysisError: null, analysisStartedAt: new Date() });
+  // 每次拆解用不重名的临时文件: 巡检脚本和网页可能同时拆同一条
+  const file = path.join(deps.tmpDir, `bm-${v.awemeId}-${Math.random().toString(36).slice(2, 8)}.mp4`);
   try {
     if (!deps.llm) throw new StepError('没有配置 DeepSeek key，拆解需要它：去设置页填入后点重试。');
     await deps.client.downloadVideo(v.awemeId, file);

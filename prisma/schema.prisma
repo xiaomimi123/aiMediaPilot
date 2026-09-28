@@ -202,6 +202,8 @@ model BenchmarkVideo {
   /// none | running | done | failed
   analysisStatus String           @default("none")
   analysisError  String?
+  /// 本次拆解开始时间; 用来判断 running 是否已被重启打断(巡检脚本在另一个进程里拆)
+  analysisStartedAt DateTime?
   transcript     String?          @db.Text
   analysis       Json?
   analyzedAt     DateTime?

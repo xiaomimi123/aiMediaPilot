@@ -2,7 +2,8 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { runScan } from '../src/lib/benchmark/scan';
 import { createPrismaStore } from '../src/lib/benchmark/store';
-import { createDouyinClient } from '../src/lib/benchmark/douyin';
+import { createDouyinClient, SCAN_SPACE } from '../src/lib/benchmark/douyin';
+import { runEgo } from '../src/lib/ego';
 import { analyzeVideo } from '../src/lib/benchmark/analyze';
 import { createAnalyzeDeps } from '../src/lib/benchmark/deps';
 
@@ -17,10 +18,11 @@ function log(msg: string): void {
 async function main(): Promise<void> {
   const db = new PrismaClient();
   try {
-    const analyzeDeps = await createAnalyzeDeps(db);
+    const client = createDouyinClient((s) => runEgo(s, 3 * 60_000), SCAN_SPACE);
+    const analyzeDeps = await createAnalyzeDeps(db, client);
     const r = await runScan({
       store: createPrismaStore(db),
-      client: createDouyinClient(),
+      client,
       analyze: (id) => analyzeVideo(analyzeDeps, id),
       log,
       sleep: (ms) => new Promise((res) => setTimeout(res, ms)),

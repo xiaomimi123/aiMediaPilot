@@ -42,12 +42,16 @@ export function listQuery(filter: 'hits' | 'all', now = new Date()): VideoQuery 
 
 export const STALE_MESSAGE = '拆解被服务重启打断了，点重试。';
 
-export function staleRunning(v: VideoRow, active: boolean): boolean {
-  return v.analysisStatus === 'running' && !active;
+/** 拆解一条约 1 分钟; 超过 15 分钟还是 running 且本进程队列里没有, 才算被重启打断(巡检脚本在另一个进程里拆的不算) */
+export const STALE_AFTER_MS = 15 * 60_000;
+
+export function staleRunning(v: VideoRow, active: boolean, now = new Date()): boolean {
+  if (v.analysisStatus !== 'running' || active) return false;
+  return !v.analysisStartedAt || now.getTime() - v.analysisStartedAt.getTime() > STALE_AFTER_MS;
 }
 
-export function toVideoView(v: VideoRow, author: string, active: boolean): VideoView {
-  const stale = staleRunning(v, active);
+export function toVideoView(v: VideoRow, author: string, active: boolean, now = new Date()): VideoView {
+  const stale = staleRunning(v, active, now);
   const a = AnalysisSchema.safeParse(v.analysis);
   return {
     id: v.id,

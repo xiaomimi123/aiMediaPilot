@@ -36,6 +36,7 @@ export interface VideoRow {
   status: string;
   analysisStatus: string;
   analysisError: string | null;
+  analysisStartedAt: Date | null;
   transcript: string | null;
   analysis: unknown;
   analyzedAt: Date | null;
@@ -64,6 +65,7 @@ export interface BenchmarkStore {
   /** publishedAt 降序 */
   listVideos(q: VideoQuery): Promise<VideoRow[]>;
   getVideo(id: string): Promise<VideoRow | null>;
+  findVideoByAweme(awemeId: string): Promise<VideoRow | null>;
   updateVideo(id: string, data: Partial<Omit<VideoRow, 'id' | 'awemeId' | 'accountId'>>): Promise<void>;
 }
 
@@ -120,6 +122,7 @@ export function createPrismaStore(db: PrismaClient): BenchmarkStore {
         take: q.take,
       }),
     getVideo: (id) => db.benchmarkVideo.findUnique({ where: { id } }),
+    findVideoByAweme: (awemeId) => db.benchmarkVideo.findUnique({ where: { awemeId } }),
     updateVideo: async (id, data) => {
       await db.benchmarkVideo.update({ where: { id }, data: { ...data, analysis: data.analysis as Prisma.InputJsonValue | undefined } });
     },
