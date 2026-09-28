@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import os from 'node:os';
 import path from 'node:path';
-import { parseCollectLog, readCollectStatus } from '@/lib/douyin/collect-log';
+import { parseCollectLog, readCollectStatus, parseRunLog, SCAN_SPEC } from '@/lib/douyin/collect-log';
 
 const now = new Date('2026-09-28T12:00:00Z');
 const okRun = (d: string) => `[${d}T12:00:06.000Z] 开始回采\n[${d}T12:00:24.000Z] 回采完成: 共 101 条(新增 0 / 更新 101), 其中公开 5 条\n`;
@@ -44,5 +44,18 @@ describe('parseCollectLog', () => {
     const s = await readCollectStatus(now, path.join(os.tmpdir(), 'definitely-missing.log'));
     expect(s.state).toBe('never');
     expect(s.hint).toContain('sh scripts/install-collect-cron.sh');
+  });
+});
+
+describe('parseRunLog with the scan spec', () => {
+  it('uses scan markers and wording', () => {
+    const text = '[2026-09-28T11:30:00.000Z] 开始巡检\n[2026-09-28T11:31:00.000Z] 疑似触发风控，已停止(连续 3 个账号被拒)\n';
+    const s = parseRunLog(text, now, SCAN_SPEC);
+    expect(s.state).toBe('failing');
+    expect(s.hint).toBe('连续 1 次对标巡检失败：疑似触发风控，已停止(连续 3 个账号被拒)');
+  });
+  it('is ok after a completed scan', () => {
+    const text = '[2026-09-28T11:30:00.000Z] 开始巡检\n[2026-09-28T11:33:00.000Z] 巡检完成: 账号 3 个(失败 0) / 新作品 5 条 / 爆款 1 条 / 拆解 1 条\n';
+    expect(parseRunLog(text, now, SCAN_SPEC).state).toBe('ok');
   });
 });

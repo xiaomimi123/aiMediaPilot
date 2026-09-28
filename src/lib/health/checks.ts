@@ -32,6 +32,7 @@ export async function runHealthChecks(deps: {
   env: NodeJS.ProcessEnv;
   cwd: string;
   collect: CollectStatus;
+  scan: CollectStatus;
 }): Promise<HealthItem[]> {
   const items: HealthItem[] = [];
 
@@ -83,6 +84,11 @@ export async function runHealthChecks(deps: {
     deps.collect.state === 'ok'
       ? { key: 'collect', label: '抖音回采', status: 'ok', detail: `上次成功：${new Date(deps.collect.lastSuccessAt!).toLocaleString('zh-CN')}` }
       : { key: 'collect', label: '抖音回采', status: 'warn', detail: deps.collect.hint },
+  );
+  items.push(
+    deps.scan.state === 'ok'
+      ? { key: 'scan', label: '对标巡检', status: 'ok', detail: `上次成功：${new Date(deps.scan.lastSuccessAt!).toLocaleString('zh-CN')}` }
+      : { key: 'scan', label: '对标巡检', status: 'warn', detail: deps.scan.hint },
   );
   return items;
 }

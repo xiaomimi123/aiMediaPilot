@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import { prisma } from '@/lib/prisma';
 import { ok } from '@/lib/api';
 import { runHealthChecks, realExec } from '@/lib/health/checks';
-import { readCollectStatus } from '@/lib/douyin/collect-log';
+import { readCollectStatus, readScanStatus } from '@/lib/douyin/collect-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +16,7 @@ export async function GET() {
     env: process.env,
     cwd: process.cwd(),
     collect: await readCollectStatus(),
+    scan: await readScanStatus(),
   });
   return ok(items);
 }

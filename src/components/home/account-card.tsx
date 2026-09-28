@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { AccountSummary } from '@/lib/account/summary';
 
 const n = (v: number) => v.toLocaleString('en-US');
@@ -15,14 +16,14 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 
 /** 首页账号数据: 只放口径明确的数; 没有的数据如实说明, 不显示 0 */
 export function AccountCard({ summary: s }: { summary: AccountSummary }) {
-  const warn = s.collect.state !== 'ok';
+  const alerts = [s.collect, s.scan].filter((c) => c.state !== 'ok');
   return (
     <section className="mb-6">
-      {warn && (
-        <div role="alert" className="mb-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--warning-subtle)] px-4 py-3 text-sm text-[var(--warning)]">
-          {s.collect.hint}
+      {alerts.map((c) => (
+        <div key={c.hint} role="alert" className="mb-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--warning-subtle)] px-4 py-3 text-sm text-[var(--warning)]">
+          {c.hint}
         </div>
-      )}
+      ))}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="粉丝" value={s.fans === null ? '还没回采到' : n(s.fans)} sub={s.fansDelta === null ? undefined : `较上期 ${s.fansDelta > 0 ? '+' : ''}${s.fansDelta}`} />
         <Stat label="作品" value={`${s.works} 条（公开 ${s.publicWorks} 条）`} />
@@ -39,6 +40,9 @@ export function AccountCard({ summary: s }: { summary: AccountSummary }) {
         </span>
         {s.dataAt && <span> · 数据更新于 {new Date(s.dataAt).toLocaleString('zh-CN')}</span>}
       </p>
+      <Link href="/topics" className="mt-3 inline-block text-sm text-[var(--accent)] hover:underline">
+        {s.hits24h > 0 ? `今天对标里有 ${s.hits24h} 条爆款 →` : '今天对标没有新爆款 →'}
+      </Link>
     </section>
   );
 }

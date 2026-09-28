@@ -16,10 +16,13 @@ export interface AccountSummary {
   hasOverview: boolean;
   dataAt: string | null;
   collect: CollectStatus;
+  /** 近 24 小时新判定的对标爆款数 */
+  hits24h: number;
+  scan: CollectStatus;
 }
 
-export async function buildAccountSummary(db: PrismaClient, collect: CollectStatus): Promise<AccountSummary> {
-  const [fans, snapshot, works, publicWorks, agg, publicAgg] = await Promise.all([
+export async function buildAccountSummary(db: PrismaClient, collect: CollectStatus, scan: CollectStatus): Promise<AccountSummary> {
+  const [fans, snapshot, works, publicWorks, agg, publicAgg, hits24h] = await Promise.all([
     db.douyinMetricSummary.findUnique({ where: { metric: 'fans' } }),
     db.douyinOverviewSnapshot.findFirst({ orderBy: { fetchedAt: 'desc' } }),
     db.publishedWork.count(),
@@ -27,6 +30,7 @@ export async function buildAccountSummary(db: PrismaClient, collect: CollectStat
     db.publishedWork.aggregate({ _sum: { play: true } }),
     // 只看公开作品: 设成仅自己可见的作品不进抖音投稿分析, 混进来会和"近 90 天没有投稿"自相矛盾
     db.publishedWork.aggregate({ where: { isPrivate: false }, _max: { publishedAt: true } }),
+    db.benchmarkVideo.count({ where: { hitAt: { gte: new Date(Date.now() - 86400_000) } } }),
   ]);
   return {
     fans: fans?.currentCount ?? null,
@@ -42,5 +46,7 @@ export async function buildAccountSummary(db: PrismaClient, collect: CollectStat
     hasOverview: snapshot !== null,
     dataAt: fans?.fetchedAt.toISOString() ?? null,
     collect,
+    hits24h,
+    scan,
   };
 }

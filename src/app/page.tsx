@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { toProjectView } from '@/lib/project/view';
 import { AccountCard } from '@/components/home/account-card';
 import { buildAccountSummary } from '@/lib/account/summary';
-import { readCollectStatus } from '@/lib/douyin/collect-log';
+import { readCollectStatus, readScanStatus } from '@/lib/douyin/collect-log';
 import { NewProjectButton } from '@/components/project/new-project-button';
 
 export const dynamic = 'force-dynamic';
@@ -13,7 +13,7 @@ const STAGE_TEXT: Record<string, string> = { draft: '写稿中', scripted: '已�
 export default async function Home() {
   const [projects, summary] = await Promise.all([
     prisma.project.findMany({ orderBy: { updatedAt: 'desc' } }).then((rows) => rows.map(toProjectView)),
-    readCollectStatus().then((c) => buildAccountSummary(prisma, c)),
+    Promise.all([readCollectStatus(), readScanStatus()]).then(([c, sc]) => buildAccountSummary(prisma, c, sc)),
   ]);
   return (
     <div className="h-full overflow-y-auto p-8">

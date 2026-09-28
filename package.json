@@ -11,6 +11,7 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "collect:douyin": "tsx scripts/collect-douyin.ts",
+    "scan:benchmarks": "tsx scripts/scan-benchmarks.ts",
     "import:legacy": "tsx scripts/import-legacy.ts",
     "test": "vitest run",
     "test:watch": "vitest",
