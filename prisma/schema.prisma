@@ -9,16 +9,19 @@ datasource db {
 
 /// 一条内容 = 一个项目。stage 只前进: draft → scripted → recorded → overlaid → final → published
 model Project {
-  id              String   @id @default(cuid())
-  title           String   @default("未命名项目")
-  stage           String   @default("draft")
+  id               String          @id @default(cuid())
+  title            String          @default("未命名项目")
+  stage            String          @default("draft")
   /// Script | null, 形状见 src/lib/script/model.ts
-  script          Json?
-  targetSec       Int      @default(60)
+  script           Json?
+  targetSec        Int             @default(60)
   /// 建项目时的人设快照, 事后改人设不影响已有项目的上下文
-  personaSnapshot Json?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  personaSnapshot  Json?
+  /// 从哪条对标作品建的项目(选题模块)
+  benchmarkVideoId String?
+  benchmarkVideo   BenchmarkVideo? @relation(fields: [benchmarkVideoId], references: [id], onDelete: SetNull)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   messages       ChatMessage[]
   files          ProjectFile[]
@@ -149,4 +152,62 @@ model DouyinMetricSummary {
   currentCount   Int      @default(0)
   lastPeriodIncr Int      @default(0)
   fetchedAt      DateTime @default(now())
+}
+
+/// 对标账号(选题模块)
+model BenchmarkAccount {
+  id            String           @id @default(cuid())
+  secUid        String           @unique
+  nickname      String
+  douyinId      String           @default("")
+  avatarUrl     String           @default("")
+  bio           String           @default("") @db.Text
+  followers     Int              @default(0)
+  totalLikes    Int              @default(0)
+  /// following | candidate | ignored
+  status        String           @default("candidate")
+  /// manual | search | link
+  source        String           @default("manual")
+  searchKeyword String?
+  /// 近 90 天作品点赞中位数; 作品不足 3 条为 null(不判爆款)
+  baselineDigg  Int?
+  lastCheckedAt DateTime?
+  createdAt     DateTime         @default(now())
+  videos        BenchmarkVideo[]
+
+  @@index([status, lastCheckedAt])
+}
+
+/// 对标作品(选题模块)
+model BenchmarkVideo {
+  id             String           @id @default(cuid())
+  awemeId        String           @unique
+  accountId      String
+  account        BenchmarkAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  desc           String           @db.Text
+  url            String
+  publishedAt    DateTime
+  durationSec    Int
+  digg           Int
+  comment        Int
+  collect        Int
+  share          Int
+  /// digg / baselineDigg, 一位小数; 无基线为 null
+  ratio          Float?
+  isHit          Boolean          @default(false)
+  /// 首次判为爆款的时间; 之后跌出爆款也不清空
+  hitAt          DateTime?
+  /// new | seen | ignored | adopted
+  status         String           @default("new")
+  /// none | running | done | failed
+  analysisStatus String           @default("none")
+  analysisError  String?
+  transcript     String?          @db.Text
+  analysis       Json?
+  analyzedAt     DateTime?
+  fetchedAt      DateTime         @default(now())
+  projects       Project[]
+
+  @@index([isHit, publishedAt])
+  @@index([accountId, publishedAt])
 }

@@ -1,0 +1,235 @@
+{
+ "status_code": 0,
+ "has_more": 1,
+ "max_cursor": 1783328782000,
+ "aweme_list": [
+  {
+   "aweme_id": "7600000000000000001",
+   "aweme_type": 0,
+   "is_top": 1,
+   "desc": "（置顶的老作品）",
+   "create_time": 1760000000,
+   "duration": 124667,
+   "statistics": {
+    "digg_count": 20773,
+    "comment_count": 167,
+    "collect_count": 575,
+    "share_count": 329,
+    "play_count": 0
+   },
+   "video": {
+    "play_addr": {
+     "url_list": [
+      "https://v95-a.douyinvod.com/fake/7672814929322035451.mp4",
+      "https://v95-b.douyinvod.com/fake/7672814929322035451.mp4"
+     ]
+    }
+   },
+   "author": {
+    "nickname": "园长说AI",
+    "sec_uid": "MS4wLjABAAAAo9jpySaVTGscShEnsFnqUvUvrycnd8PaeJ8pORefn68"
+   },
+   "share_url": "https://www.iesdouyin.com/share/video/7672814929322035451/"
+  },
+  {
+   "aweme_id": "7690000000000000002",
+   "aweme_type": 68,
+   "is_top": 0,
+   "desc": "图文作品",
+   "create_time": 1789790517,
+   "duration": 179167,
+   "statistics": {
+    "digg_count": 28149,
+    "comment_count": 166,
+    "collect_count": 1059,
+    "share_count": 905,
+    "play_count": 0
+   },
+   "video": {
+    "play_addr": {
+     "url_list": []
+    }
+   },
+   "author": {
+    "nickname": "园长说AI",
+    "sec_uid": "MS4wLjABAAAAo9jpySaVTGscShEnsFnqUvUvrycnd8PaeJ8pORefn68"
+   },
+   "share_url": "https://www.iesdouyin.com/share/video/7686854197597293859/",
+   "images": [
+    {
+     "url_list": [
+      "https://x/1.jpg"
+     ]
+    }
+   ]
+  },
+  {
+   "aweme_id": "7686854197597293859",
+   "aweme_type": 0,
+   "is_top": 0,
+   "desc": "信息洪流时代，我用豆包Agent搭了一个传播学网页 #豆包工作#豆包Agent",
+   "create_time": 1789790517,
+   "duration": 179167,
+   "statistics": {
+    "digg_count": 28149,
+    "comment_count": 166,
+    "collect_count": 1059,
+    "share_count": 905,
+    "play_count": 0
+   },
+   "video": {
+    "play_addr": {
+     "url_list": [
+      "https://v95-a.douyinvod.com/fake/7686854197597293859.mp4",
+      "https://v95-b.douyinvod.com/fake/7686854197597293859.mp4"
+     ]
+    }
+   },
+   "author": {
+    "nickname": "园长说AI",
+    "sec_uid": "MS4wLjABAAAAo9jpySaVTGscShEnsFnqUvUvrycnd8PaeJ8pORefn68"
+   },
+   "share_url": "https://www.iesdouyin.com/share/video/7686854197597293859/"
+  },
+  {
+   "aweme_id": "7685643134576155775",
+   "aweme_type": 0,
+   "is_top": 0,
+   "desc": "别再熬几个星期写研报！十年行业数据直接给它，一人一天就能完成#库库AI #AI办公就要库库干",
+   "create_time": 1789462831,
+   "duration": 149978,
+   "statistics": {
+    "digg_count": 25249,
+    "comment_count": 191,
+    "collect_count": 1122,
+    "share_count": 622,
+    "play_count": 0
+   },
+   "video": {
+    "play_addr": {
+     "url_list": [
+      "https://v95-a.douyinvod.com/fake/7685643134576155775.mp4",
+      "https://v95-b.douyinvod.com/fake/7685643134576155775.mp4"
+     ]
+    }
+   },
+   "author": {
+    "nickname": "园长说AI",
+    "sec_uid": "MS4wLjABAAAAo9jpySaVTGscShEnsFnqUvUvrycnd8PaeJ8pORefn68"
+   },
+   "share_url": "https://www.iesdouyin.com/share/video/7685643134576155775/"
+  },
+  {
+   "aweme_id": "7683110389629848872",
+   "aweme_type": 0,
+   "is_top": 0,
+   "desc": "我用豆包工作给一个新品牌从0到1跑完了整套视觉资产#豆包工作  #AI工具  #品牌设计  #打工人办公神器",
+   "create_time": 1788944487,
+   "duration": 218734,
+   "statistics": {
+    "digg_count": 24951,
+    "comment_count": 117,
+    "collect_count": 870,
+    "share_count": 449,
+    "play_count": 0
+   },
+   "video": {
+    "play_addr": {
+     "url_list": [
+      "https://v95-a.douyinvod.com/fake/7683110389629848872.mp4",
+      "https://v95-b.douyinvod.com/fake/7683110389629848872.mp4"
+     ]
+    }
+   },
+   "author": {
+    "nickname": "园长说AI",
+    "sec_uid": "MS4wLjABAAAAo9jpySaVTGscShEnsFnqUvUvrycnd8PaeJ8pORefn68"
+   },
+   "share_url": "https://www.iesdouyin.com/share/video/7683110389629848872/"
+  },
+  {
+   "aweme_id": "7676745375138516233",
+   "aweme_type": 0,
+   "is_top": 0,
+   "desc": "画面都交给AI了，音乐还要自己找吗#AI找音乐#AI音乐创作#AI搜索音乐",
+   "create_time": 1787536800,
+   "duration": 113400,
+   "statistics": {
+    "digg_count": 12280,
+    "comment_count": 140,
+    "collect_count": 493,
+    "share_count": 129,
+    "play_count": 0
+   },
+   "video": {
+    "play_addr": {
+     "url_list": [
+      "https://v95-a.douyinvod.com/fake/7676745375138516233.mp4",
+      "https://v95-b.douyinvod.com/fake/7676745375138516233.mp4"
+     ]
+    }
+   },
+   "author": {
+    "nickname": "园长说AI",
+    "sec_uid": "MS4wLjABAAAAo9jpySaVTGscShEnsFnqUvUvrycnd8PaeJ8pORefn68"
+   },
+   "share_url": "https://www.iesdouyin.com/share/video/7676745375138516233/"
+  },
+  {
+   "aweme_id": "7676819001574157481",
+   "aweme_type": 0,
+   "is_top": 0,
+   "desc": "#TRAEAI创造力大赛 看见更多普通人的闪光#余秀华说AI是普通人的诗 #vibecoding大赏",
+   "create_time": 1787398710,
+   "duration": 72800,
+   "statistics": {
+    "digg_count": 23417,
+    "comment_count": 160,
+    "collect_count": 894,
+    "share_count": 340,
+    "play_count": 0
+   },
+   "video": {
+    "play_addr": {
+     "url_list": [
+      "https://v95-a.douyinvod.com/fake/7676819001574157481.mp4",
+      "https://v95-b.douyinvod.com/fake/7676819001574157481.mp4"
+     ]
+    }
+   },
+   "author": {
+    "nickname": "园长说AI",
+    "sec_uid": "MS4wLjABAAAAo9jpySaVTGscShEnsFnqUvUvrycnd8PaeJ8pORefn68"
+   },
+   "share_url": "https://www.iesdouyin.com/share/video/7676819001574157481/"
+  },
+  {
+   "aweme_id": "7672814929322035451",
+   "aweme_type": 0,
+   "is_top": 0,
+   "desc": "#即梦AI #即梦百花AIGC推优单元 #即梦Seedance2点5助力百花奖 #百花奖AI获奖作品幕后揭秘",
+   "create_time": 1786501800,
+   "duration": 124667,
+   "statistics": {
+    "digg_count": 20773,
+    "comment_count": 167,
+    "collect_count": 575,
+    "share_count": 329,
+    "play_count": 0
+   },
+   "video": {
+    "play_addr": {
+     "url_list": [
+      "https://v95-a.douyinvod.com/fake/7672814929322035451.mp4",
+      "https://v95-b.douyinvod.com/fake/7672814929322035451.mp4"
+     ]
+    }
+   },
+   "author": {
+    "nickname": "园长说AI",
+    "sec_uid": "MS4wLjABAAAAo9jpySaVTGscShEnsFnqUvUvrycnd8PaeJ8pORefn68"
+   },
+   "share_url": "https://www.iesdouyin.com/share/video/7672814929322035451/"
+  }
+ ]
+}

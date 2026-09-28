@@ -1,0 +1,31 @@
+{
+ "status_code": 0,
+ "aweme_detail": {
+  "aweme_id": "7676819001574157481",
+  "aweme_type": 0,
+  "is_top": 0,
+  "desc": "#TRAEAI创造力大赛 看见更多普通人的闪光#余秀华说AI是普通人的诗 #vibecoding大赏",
+  "create_time": 1787398710,
+  "duration": 72800,
+  "statistics": {
+   "digg_count": 23417,
+   "comment_count": 160,
+   "collect_count": 894,
+   "share_count": 340,
+   "play_count": 0
+  },
+  "video": {
+   "play_addr": {
+    "url_list": [
+     "https://v95-a.douyinvod.com/fake/7676819001574157481.mp4",
+     "https://v95-b.douyinvod.com/fake/7676819001574157481.mp4"
+    ]
+   }
+  },
+  "author": {
+   "nickname": "园长说AI",
+   "sec_uid": "MS4wLjABAAAAo9jpySaVTGscShEnsFnqUvUvrycnd8PaeJ8pORefn68"
+  },
+  "share_url": "https://www.iesdouyin.com/share/video/7676819001574157481/"
+ }
+}
