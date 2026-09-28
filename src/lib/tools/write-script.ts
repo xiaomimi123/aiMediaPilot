@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { writeScript } from '@/lib/script/write';
 import { formatPersona, type PersonaLike, type Tool } from './types';
 import { formatReference, loadReference } from '@/lib/benchmark/adopt';
-import { findCopied } from '@/lib/benchmark/copy-check';
+import { copiedSummary, findCopiedInScript } from '@/lib/benchmark/copy-check';
 
 const Input = z.object({
   direction: z.string().min(1).describe('这条视频讲什么、从什么角度切入、用什么例子'),
@@ -35,10 +35,10 @@ export const writeScriptTool: Tool<z.infer<typeof Input>> = {
         ...(project.title === '未命名项目' ? { title } : {}),
       },
     });
-    const copied = ref ? findCopied(script.segments.map((s) => s.text).join('\n'), ref.transcript) : [];
+    const copied = ref ? findCopiedInScript(script, ref.transcript) : [];
     const summary =
       (report.ok ? `写稿：6 段，约 ${report.totalSec} 秒` : `写稿：约 ${report.totalSec} 秒，自修 ${rounds} 轮后仍超出目标 ${targetSec} 秒`) +
-      (copied.length ? `，有 ${copied.length} 处照抄对标原句` : '');
+      copiedSummary(copied);
     return {
       ok: true,
       summary,
