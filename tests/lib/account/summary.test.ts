@@ -11,7 +11,10 @@ function db(opts: { snapshot?: Record<string, unknown> | null; fans?: { currentC
     douyinOverviewSnapshot: { findFirst: async () => opts.snapshot ?? null },
     publishedWork: {
       count: async ({ where }: { where?: { isPrivate?: boolean } } = {}) => (where?.isPrivate === false ? 5 : 101),
-      aggregate: async () => ({ _sum: { play: 257890 }, _max: { publishedAt: new Date('2026-08-20T08:00:00Z') } }),
+      aggregate: async ({ where }: { where?: { isPrivate?: boolean } } = {}) =>
+        where?.isPrivate === false
+          ? { _sum: { play: 30000 }, _max: { publishedAt: new Date('2026-08-20T08:00:00Z') } }
+          : { _sum: { play: 257890 }, _max: { publishedAt: new Date('2026-08-27T20:00:00Z') } },
     },
   } as unknown as PrismaClient;
 }
@@ -20,6 +23,11 @@ describe('buildAccountSummary', () => {
   it('reports fans, works, plays and the latest publish date', async () => {
     const s = await buildAccountSummary(db({ fans: { currentCount: 2847, lastPeriodIncr: -2, fetchedAt: new Date('2026-09-26T18:50:00Z') } }), collect);
     expect(s).toMatchObject({ fans: 2847, fansDelta: -2, works: 101, publicWorks: 5, totalPlay: 257890, lastPublishedAt: '2026-08-20T08:00:00.000Z', dataAt: '2026-09-26T18:50:00.000Z' });
+  });
+  it('uses public works only for the latest publish date (private ones are not in 投稿分析)', async () => {
+    const s = await buildAccountSummary(db({}), collect);
+    expect(s.lastPublishedAt).toBe('2026-08-20T08:00:00.000Z');
+    expect(s.totalPlay).toBe(257890);
   });
   it('gives null recent90 when there were no submissions in the window (not zeros)', async () => {
     const s = await buildAccountSummary(db({ snapshot: { submissionCount: 0, medianPlay: 0, completionRate5s: 0 } }), collect);

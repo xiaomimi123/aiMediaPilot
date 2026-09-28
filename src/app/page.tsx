@@ -1,6 +1,9 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { toProjectView } from '@/lib/project/view';
+import { AccountCard } from '@/components/home/account-card';
+import { buildAccountSummary } from '@/lib/account/summary';
+import { readCollectStatus } from '@/lib/douyin/collect-log';
 import { NewProjectButton } from '@/components/project/new-project-button';
 
 export const dynamic = 'force-dynamic';
@@ -8,9 +11,13 @@ export const dynamic = 'force-dynamic';
 const STAGE_TEXT: Record<string, string> = { draft: '写稿中', scripted: '已定稿', recorded: '已录制', final: '已出成片' };
 
 export default async function Home() {
-  const projects = (await prisma.project.findMany({ orderBy: { updatedAt: 'desc' } })).map(toProjectView);
+  const [projects, summary] = await Promise.all([
+    prisma.project.findMany({ orderBy: { updatedAt: 'desc' } }).then((rows) => rows.map(toProjectView)),
+    readCollectStatus().then((c) => buildAccountSummary(prisma, c)),
+  ]);
   return (
     <div className="h-full overflow-y-auto p-8">
+      <AccountCard summary={summary} />
       <div className="mb-6 flex items-center">
         <h1 className="text-lg font-semibold">项目</h1>
         <div className="flex-1" />
