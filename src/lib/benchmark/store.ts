@@ -49,6 +49,8 @@ export interface VideoQuery {
   publishedSince?: Date;
   hitSince?: Date;
   analysisStatus?: string;
+  /** 与 publishedSince 连用: 发布早于窗口但拆解过/在拆的作品也算(粘链接进来的老视频) */
+  orAnalyzed?: boolean;
   take?: number;
 }
 
@@ -101,7 +103,11 @@ export function createPrismaStore(db: PrismaClient): BenchmarkStore {
           accountId: q.accountId,
           isHit: q.isHit,
           status: q.statusNot ? { notIn: q.statusNot } : undefined,
-          publishedAt: q.publishedSince ? { gte: q.publishedSince } : undefined,
+          ...(q.publishedSince
+            ? q.orAnalyzed
+              ? { OR: [{ publishedAt: { gte: q.publishedSince } }, { analysisStatus: { not: 'none' } }] }
+              : { publishedAt: { gte: q.publishedSince } }
+            : {}),
           hitAt: q.hitSince ? { gte: q.hitSince } : undefined,
           analysisStatus: q.analysisStatus,
         },

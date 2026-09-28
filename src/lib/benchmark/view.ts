@@ -1,5 +1,5 @@
 import { AnalysisSchema, type Analysis } from './analyze';
-import type { AccountRow, VideoRow } from './store';
+import type { AccountRow, VideoQuery, VideoRow } from './store';
 
 export interface VideoView {
   id: string;
@@ -31,6 +31,13 @@ export interface AccountView {
   status: string;
   lastCheckedAt: string | null;
   lastHitAt: string | null;
+}
+
+/** 选题页列表: 只看爆款 / 全部(近 30 天 + 拆解过的老作品, 如粘链接进来的) */
+export function listQuery(filter: 'hits' | 'all', now = new Date()): VideoQuery {
+  return filter === 'hits'
+    ? { isHit: true, statusNot: ['ignored'], take: 100 }
+    : { statusNot: ['ignored'], publishedSince: new Date(now.getTime() - 30 * 86400_000), orAnalyzed: true, take: 100 };
 }
 
 export const STALE_MESSAGE = '拆解被服务重启打断了，点重试。';

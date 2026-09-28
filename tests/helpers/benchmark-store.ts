@@ -40,7 +40,7 @@ export function createMemoryStore(): BenchmarkStore & { accounts: AccountRow[]; 
             (!q.accountId || v.accountId === q.accountId) &&
             (q.isHit === undefined || v.isHit === q.isHit) &&
             (!q.statusNot || !q.statusNot.includes(v.status)) &&
-            (!q.publishedSince || v.publishedAt >= q.publishedSince) &&
+            (!q.publishedSince || v.publishedAt >= q.publishedSince || (q.orAnalyzed === true && v.analysisStatus !== 'none')) &&
             (!q.hitSince || (v.hitAt !== null && v.hitAt >= q.hitSince)) &&
             (!q.analysisStatus || v.analysisStatus === q.analysisStatus),
         )

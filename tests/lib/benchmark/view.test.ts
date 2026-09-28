@@ -19,3 +19,22 @@ describe('toVideoView', () => {
     expect(v.analysis).toBeNull();
   });
 });
+
+describe('listQuery', () => {
+  it("'all' also includes older works that were analyzed (e.g. pasted links)", async () => {
+    const { listQuery } = await import('@/lib/benchmark/view');
+    const { createMemoryStore } = await import('../../helpers/benchmark-store');
+    const store = createMemoryStore();
+    const acc = await store.upsertAccount({ secUid: 'MS4wA', nickname: 'x', douyinId: '', avatarUrl: '', bio: '', followers: 0, totalLikes: 0 }, { status: 'following', source: 'manual' });
+    const now = new Date('2026-09-28T12:00:00Z');
+    const mk = async (id: string, daysAgo: number, analysisStatus: string) => {
+      const v = await store.upsertVideo(acc.id, { awemeId: id, desc: id, url: 'u', publishedAt: new Date(now.getTime() - daysAgo * 86400_000), durationSec: 1, digg: 1, comment: 0, collect: 0, share: 0, isTop: false, playUrls: [], authorSecUid: '', authorName: '' }, now);
+      await store.updateVideo(v.id, { analysisStatus });
+    };
+    await mk('recent', 3, 'none');
+    await mk('old-pasted', 40, 'done');
+    await mk('old-plain', 40, 'none');
+    const ids = (await store.listVideos(listQuery('all', now))).map((v) => v.awemeId);
+    expect(ids).toEqual(['recent', 'old-pasted']);
+  });
+});

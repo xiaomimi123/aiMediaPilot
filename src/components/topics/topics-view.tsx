@@ -55,7 +55,7 @@ export function TopicsView() {
         <div className="flex gap-4 text-sm">
           {(['hits', 'all'] as const).map((f) => (
             <button key={f} className={filter === f ? 'font-medium text-[var(--text-primary)]' : 'text-[var(--text-tertiary)]'} onClick={() => setFilter(f)}>
-              {f === 'hits' ? '只看爆款' : '全部新作品（30 天）'}
+              {f === 'hits' ? '只看爆款' : '全部（近 30 天 + 拆过的）'}
             </button>
           ))}
         </div>
