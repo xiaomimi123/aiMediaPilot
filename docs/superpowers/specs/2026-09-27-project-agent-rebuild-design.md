@@ -127,7 +127,7 @@ system prompt = 人设定位 + 项目阶段 + 当前稿子（带段落 id 与每
 
 - **项目（首页）**：顶部账号真实数据（来自 `DouyinOverviewSnapshot` 与 `DouyinMetricSummary`）；项目列表（进行中 / 已完成）；「新建项目」。回采连续失败时顶部直接提示原因。
 - **定位**：人设定位档案，可编辑。
-- **设置**：DeepSeek key；依赖体检面板（数据库、Whisper、Studio、ffmpeg、node 22 逐项就绪状态与补救命令）。
+- **设置**：DeepSeek key；依赖体检面板（数据库、Whisper、Studio、ffmpeg、node 22 逐项就绪状态与补救命令）。（2026-09-28 实现：依赖体检为数据库 / DeepSeek key / ffmpeg / 本地转写 / Remotion 子工程 / 回采 6 项；Overlay Studio 与 node 22 随阶段 4 改版已移除。首页"最近发布"只统计公开作品，与抖音投稿分析口径一致。）
 
 ### 7.2 项目页：左稿右聊
 

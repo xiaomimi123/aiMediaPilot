@@ -12,8 +12,11 @@ AI 知识类抖音口播的个人工作台：一条内容 = 一个项目，在�
 - **手改与定稿**：点任意一段直接改，时长即时重算；满意后「定稿」。
 - **② 口播**：全屏提词器照稿录制；把录好的视频拖进来，后台自动转写（本地 faster-whisper），再按原稿只修识别错字；逐句显示并标出「临场加的」和「没讲到」的段落。转写完成后编导对话里会收到通知，编导也能看到转写内容。任务失败或被重启打断时点「重试」，不会自动重跑。
 - **③ 成片**：上传录屏、视频、截图、图片作素材（可写一句说明）；在 Claude Code 里说「给这个项目出片」，按 `.claude/skills/produce-film` 流程用 Remotion 出一条 1080×1920 竖屏成片（人物小窗右上角、内容区动效卡片与素材、底部字幕，风格「极客手账」），登记回项目后可播放、下载、查看素材使用表。
+- **首页账号数据**：顶部显示粉丝、作品数、作品播放合计、最近公开发布（来自每晚回采）；回采失败或超过 36 小时没成功时直接提示原因和补救方法。
+- **定位**：编辑人设档案（受众、差异化角度、忌讳、内容支柱、痛点、产品、定位摘要），编导写稿时读取；只影响之后新建的项目。
+- **设置**：更换 DeepSeek key（写入 `.env`，立即生效）并测试连接；依赖体检逐项检查数据库、DeepSeek key、ffmpeg、本地转写、出片子工程、回采，缺什么给出补救命令。
 
-首页账号数据、定位页、设置页在后续阶段加入。出片目前在 Claude Code 里完成，网页一键出片（接 Claude API）排在后续路线图里。
+出片目前在 Claude Code 里完成，网页一键出片（接 Claude API）排在后续路线图里。
 
 ## 快速开始
 
@@ -72,12 +75,15 @@ npm run collect:douyin                        # 手动跑一次
 ## 目录
 
 ```
-src/app/                 页面与 API（/、/projects/[id]、/api/projects/...）
+src/app/                 页面与 API（/、/projects/[id]、/persona、/settings、/api/...）
 src/components/project/  项目页组件（稿子栏、对话栏）
 src/lib/script/          稿子模型、时长估算、写稿与自修
 src/lib/tools/           agent 工具（与界面无关，将来可套 CLI 给外部 agent）
 src/lib/agent/           对话循环、上下文、DeepSeek 流式模型
 src/lib/film/            出片：资料包、片子骨架、检查规则、素材、登记
+src/lib/douyin/ account/  回采日志解析、首页账号概览
+src/lib/persona/          人设档案 schema
+src/lib/settings/ health/ .env 写入、DeepSeek key 测试、依赖体检
 remotion/                出片用的 Remotion 子工程（kit 组件库 + 渲染脚本）
 scripts/                 回采、旧数据导入、字级对齐
 ```
