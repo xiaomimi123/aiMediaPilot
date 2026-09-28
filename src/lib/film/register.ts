@@ -25,6 +25,12 @@ export async function registerFilm(db: PrismaClient, filmDir: string, summary: s
     }));
 
   const dest = path.join(projectDir(data.projectId), `final.v${data.version}.mp4`);
+  // 同一版本只能登记一次: 重复登记会用新文件覆盖旧成片, 违背"旧版保留"
+  const registered = await db.projectFile.findMany({ where: { projectId: data.projectId, kind: 'final_mp4' } });
+  const clash = registered.some((f) => Number((f.meta as { filmVersion?: unknown })?.filmVersion) === data.version);
+  if (clash || (await fs.stat(dest).catch(() => null))) {
+    throw new Error(`成片 v${data.version} 已经登记过了（旧版不覆盖）。要改就 mp film new 出一个新版本。`);
+  }
   await fs.mkdir(path.dirname(dest), { recursive: true });
   try {
     await fs.rename(mp4, dest);

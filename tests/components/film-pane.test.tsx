@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { FilmPane } from '@/components/project/film-pane';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 const materials = [{ id: 'fm', url: '/api/projects/p1/files/fm', mediaType: 'video' as const, note: '讲安装那段', originalName: 'rec.mov', durationSec: 40 }];
 
 describe('FilmPane', () => {
@@ -28,5 +31,21 @@ describe('FilmPane', () => {
     expect(screen.getByText('冷知识段换成录屏')).toBeTruthy();
     expect(screen.getByText('0:35 起 8 秒 · rec.mov 0:10–0:22 · 1.5 倍速')).toBeTruthy();
     expect(screen.getByText('修改成片：在 Claude Code 里说「改这个项目的成片：……」')).toBeTruthy();
+  });
+
+  it('saves clearing a note that was just saved (compares with the last saved value)', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: { body: string }) => ({ json: async () => ({ success: true, data: {} }) }));
+    vi.stubGlobal('fetch', fetchMock);
+    const blank = [{ ...materials[0], note: '' }];
+    render(<FilmPane projectId="p1" materials={blank} films={[]} onChanged={vi.fn()} />);
+    const input = screen.getByPlaceholderText(/一句说明/) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '讲安装' } });
+    fireEvent.blur(input);
+    await Promise.resolve();
+    fireEvent.change(input, { target: { value: '' } });
+    fireEvent.blur(input);
+    await Promise.resolve();
+    const bodies = fetchMock.mock.calls.map((c) => JSON.parse(c[1]!.body).note);
+    expect(bodies).toEqual(['讲安装', '']);
   });
 });

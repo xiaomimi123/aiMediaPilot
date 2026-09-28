@@ -13,12 +13,14 @@ description: 给 MediaPilot 项目出一条竖屏口播成片(Remotion, 风格 C
 2. **读资料**: `npm run -s mp -- project export <id>`。读稿子、逐句转写、素材说明。
    - 视频素材: `ffmpeg -i <path> -vf fps=1/2,scale=480:-1 /tmp/mat-<id>-%03d.jpg` 抽帧后逐张看; 图片直接看。
 3. **建片子**: `npm run -s mp -- film new <id>` → 得到片子目录 `remotion/films/<id>-v<N>/`。
-   - 修改旧版时: 建新版本后, 从旧版目录复制 `Film.tsx`、`copy.ts`、`shots.json` 过来再改, 旧版不动。
+   - 修改旧版时: 建新版本后, 从旧版目录复制 `Film.tsx`、`copy.ts`、`shots.json` 过来再改, 旧版不动(同一版本不能重复登记)。
+   - `film new` 提示"素材文件不在了, 已跳过"时, 告诉用户哪个素材丢了。
 4. **排镜头表** `shots.json`: 按句子边界切成 2–8 秒的镜头(硬限制 1–12 秒), 首尾相接覆盖 0 到口播结束。每镜 `intent` 写这镜讲什么; 用素材时写 `material: { id, clipFromSec, clipToSec, speed }`。
    - 素材有说明 → 照说明放。没说明 → 看抽帧 + 转写自己判断放哪、截哪段。
    - 视频素材比镜头长: 先加速(≤2 倍), 还放不下就截最相关的一段; 比镜头短: 停在最后一帧或接一张卡。
 5. **写画面**:
-   - 画面上**所有文字**写进 `copy.ts` 的 `COPY`; `Film.tsx` 里不写字面中文。
+   - 画面上**所有文字和数字**写进 `copy.ts` 的 `COPY`; `Film.tsx` 里不写中文字面量和数字文本(film check 会查)。`copy.ts` 只放画面文字, 时间、编号等数据放 `Film.tsx`。
+   - 镜头时间只来自 `shots.json`: `const at = fromShots(shots)`, 每镜写 `<Shot {...at.<镜头id>}>`, 不手写 `from`/`to` 秒数; 镜头表里每个镜头都要用到。
    - 只用 `remotion/kit` 的积木(Note、Kicker、Stat、StepList、Marker、Compare、Quote、Arrow、WindowFrame、MediaIn、Shot)与 `kit/motion/anim` 动效; 构图、节奏、积木搭配针对内容自己设计, 不要每镜同一种卡。
    - 数字只能用稿子或转写里出现过的; 没把握的不写数字。
    - 不替用户编经历、案例、效果数据。

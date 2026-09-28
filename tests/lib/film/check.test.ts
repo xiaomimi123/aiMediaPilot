@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkShots, checkNumbers, numberTokens, toChineseNumber } from '@/lib/film/check';
+import { checkShots, checkNumbers, numberTokens, toChineseNumber, checkFilmSource } from '@/lib/film/check';
 import type { ShotsFile } from '@/lib/film/shots';
 
 const data = {
@@ -71,5 +71,46 @@ describe('numbers', () => {
     expect(checkNumbers("export const COPY = { a: '转化率提升 300%' }", ['半年后干到类目第一'])).toEqual([
       '画面数字 300 在稿子和转写里都找不到（可能是编造的）',
     ]);
+  });
+});
+
+describe('numbers: stricter matching', () => {
+  it('does not accept a digit just because it appears inside a bigger Chinese number', () => {
+    expect(checkNumbers("export const COPY = { a: '效率提升 5 倍' }", ['我做到了五十单'])).toEqual(['画面数字 5 在稿子和转写里都找不到（可能是编造的）']);
+    expect(checkNumbers("export const COPY = { a: '500 单' }", ['营收五百万'])).toEqual(['画面数字 500 在稿子和转写里都找不到（可能是编造的）']);
+  });
+  it('accepts 两 as a form of 2', () => {
+    expect(checkNumbers("export const COPY = { a: '2000 单' }", ['卖了两千单'])).toEqual([]);
+  });
+  it('checks numbers written in Chinese on screen too', () => {
+    expect(checkNumbers("export const COPY = { a: '月入三万' }", ['半年后干到类目第一'])).toEqual(['画面数字 三万 在稿子和转写里都找不到（可能是编造的）']);
+    expect(checkNumbers("export const COPY = { a: '五十多岁' }", ['买它的人有五十多岁'])).toEqual([]);
+  });
+  it('only reads string contents, not keys or identifiers', () => {
+    expect(checkNumbers("export const COPY = { line7: '没有数字' }", ['x'])).toEqual([]);
+  });
+});
+
+describe('checkFilmSource', () => {
+  const shots = { version: 1 as const, shots: [{ id: 'hook', fromSec: 0, toSec: 5, intent: '' }, { id: 'end', fromSec: 5, toSec: 9, intent: '' }] };
+  it('passes when all text comes from COPY and all shots use shots.json timing', () => {
+    const src = `// 注释里的中文不算
+      <Shot {...at.hook}><Big>{COPY.a}</Big></Shot>
+      <Shot {...at.end}><Note>{COPY.b}</Note></Shot>`;
+    expect(checkFilmSource(src, shots)).toEqual([]);
+  });
+  it('flags literal Chinese text and literal numbers in Film.tsx', () => {
+    const src = `<Shot {...at.hook}><Big>月入三万</Big></Shot><Shot {...at.end}><Big>{'提升'}</Big><div>300</div></Shot>`;
+    const issues = checkFilmSource(src, shots);
+    expect(issues).toContain('Film.tsx 里有画面文字，要写进 copy.ts：月入三万');
+    expect(issues).toContain('Film.tsx 里有画面文字，要写进 copy.ts：提升');
+    expect(issues).toContain('Film.tsx 里有画面数字，要写进 copy.ts：300');
+  });
+  it('flags hand-written shot timings and shots that are never used', () => {
+    const src = `<Shot from={0} to={5}><Big>{COPY.a}</Big></Shot>`;
+    const issues = checkFilmSource(src, shots);
+    expect(issues).toContain('Shot 的时间要用 shots.json（写成 <Shot {...at.镜头id}>），不要手写秒数');
+    expect(issues).toContain('镜头 hook 在 Film.tsx 里没有用到');
+    expect(issues).toContain('镜头 end 在 Film.tsx 里没有用到');
   });
 });

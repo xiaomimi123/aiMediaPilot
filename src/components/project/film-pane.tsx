@@ -38,6 +38,8 @@ export function FilmPane({ projectId, materials, films, onChanged }: { projectId
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  // 最近一次保存的说明; 不能拿 props 比(保存后 props 不刷新, 清空说明会被当成"没改"而漏存)
+  const savedNotes = useRef(new Map(materials.map((m) => [m.id, m.note])));
 
   async function send(list: FileList | null) {
     if (!list || list.length === 0 || uploading !== null) return;
@@ -52,9 +54,14 @@ export function FilmPane({ projectId, materials, films, onChanged }: { projectId
   }
 
   async function saveNote(id: string, note: string) {
+    const prev = savedNotes.current.get(id);
+    savedNotes.current.set(id, note);
     const res = await fetch(`/api/projects/${projectId}/materials/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ note }) });
     const j = await res.json();
-    if (!j.success) setError(j.message);
+    if (!j.success) {
+      savedNotes.current.set(id, prev ?? '');
+      setError(j.message);
+    }
   }
 
   async function remove(id: string) {
@@ -111,7 +118,7 @@ export function FilmPane({ projectId, materials, films, onChanged }: { projectId
                   className="mt-1 w-full rounded border border-[var(--border-default)] bg-[var(--bg-inset)] px-2 py-1 text-sm"
                   placeholder="一句说明（可不写），比如：讲安装那段，用 0:10～0:40"
                   defaultValue={m.note}
-                  onBlur={(e) => e.target.value !== m.note && void saveNote(m.id, e.target.value)}
+                  onBlur={(e) => e.target.value !== (savedNotes.current.get(m.id) ?? m.note) && void saveNote(m.id, e.target.value)}
                 />
               </div>
             </li>

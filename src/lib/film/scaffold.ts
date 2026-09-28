@@ -39,18 +39,24 @@ registerRoot(() => (
 `;
 
 const FILM = `import React from 'react';
-import { Frame, Shot, Note, Kicker } from '../../kit';
+import { Frame, Shot, Note, Kicker, fromShots } from '../../kit';
 import data from './data.json';
+import shots from './shots.json';
 import { COPY } from './copy';
+
+/** 镜头时间只来自 shots.json; 画面文字只来自 copy.ts(film check 会查) */
+const at = fromShots(shots);
 
 /** 由 produce-film 流程改写: 只写内容区, 画框/小窗/字幕由 Frame 负责 */
 export const Film: React.FC = () => (
   <Frame video={data.video} captions={data.captions}>
-    <Shot from={0} to={data.durationSec}>
-      <Note>
-        <Kicker>{COPY.kicker}</Kicker>
-      </Note>
-    </Shot>
+    {shots.shots.map((s) => (
+      <Shot key={s.id} {...at[s.id]}>
+        <Note>
+          <Kicker>{COPY.kicker}</Kicker>
+        </Note>
+      </Shot>
+    ))}
   </Frame>
 );
 `;
@@ -94,31 +100,46 @@ export function skeletonShots(lines: FilmBundle['transcript'], durationSec: numb
 
 export async function scaffoldFilm(bundle: FilmBundle, version: number, root = filmsRoot()): Promise<string> {
   if (!bundle.video) throw new Error('这个项目还没有口播视频');
+  if (!(await exists(bundle.video.path))) throw new Error(`口播原片文件不在了：${bundle.video.path}（先在「② 口播」重新上传）`);
   const dir = path.join(root, `${bundle.project.id}-v${version}`);
   if (await exists(dir)) throw new Error(`片子目录已存在：${dir}`);
-  await fs.mkdir(path.join(dir, 'public'), { recursive: true });
-
-  const videoFile = `raw${bundle.video.ext}`;
-  await linkOrCopy(bundle.video.path, path.join(dir, 'public', videoFile));
-  const materials = [];
-  for (const m of bundle.materials) {
-    const file = `m-${m.id}${m.ext}`;
-    await linkOrCopy(m.path, path.join(dir, 'public', file));
-    materials.push({ id: m.id, file, mediaType: m.mediaType, durationSec: m.durationSec, note: m.note, originalName: m.originalName });
+  // 先建在临时目录, 全部成功后再改名; 中途失败不留半截目录(否则下次 film new 会跳过这个版本号)
+  const tmp = `${dir}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    await fs.mkdir(path.join(tmp, 'public'), { recursive: true });
+    const videoFile = `raw${bundle.video.ext}`;
+    await linkOrCopy(bundle.video.path, path.join(tmp, 'public', videoFile));
+    const materials = [];
+    const missingMaterials = [];
+    for (const m of bundle.materials) {
+      if (!(await exists(m.path))) {
+        // 素材丢失: 跳过并注明(spec §6), 不让整次建片失败
+        missingMaterials.push({ id: m.id, originalName: m.originalName });
+        continue;
+      }
+      const file = `m-${m.id}${m.ext}`;
+      await linkOrCopy(m.path, path.join(tmp, 'public', file));
+      materials.push({ id: m.id, file, mediaType: m.mediaType, durationSec: m.durationSec, note: m.note, originalName: m.originalName });
+    }
+    const data = {
+      projectId: bundle.project.id,
+      version,
+      durationSec: bundle.video.durationSec,
+      video: videoFile,
+      captions: bundle.transcript,
+      materials,
+      missingMaterials,
+    };
+    const shots: ShotsFile = { version: 1, shots: skeletonShots(bundle.transcript, bundle.video.durationSec) };
+    await fs.writeFile(path.join(tmp, 'data.json'), JSON.stringify(data, null, 2));
+    await fs.writeFile(path.join(tmp, 'shots.json'), JSON.stringify(shots, null, 2));
+    await fs.writeFile(path.join(tmp, 'index.tsx'), INDEX);
+    await fs.writeFile(path.join(tmp, 'Film.tsx'), FILM);
+    await fs.writeFile(path.join(tmp, 'copy.ts'), COPY_TS);
+    await fs.rename(tmp, dir);
+  } catch (e) {
+    await fs.rm(tmp, { recursive: true, force: true });
+    throw e;
   }
-  const data = {
-    projectId: bundle.project.id,
-    version,
-    durationSec: bundle.video.durationSec,
-    video: videoFile,
-    captions: bundle.transcript,
-    materials,
-  };
-  const shots: ShotsFile = { version: 1, shots: skeletonShots(bundle.transcript, bundle.video.durationSec) };
-  await fs.writeFile(path.join(dir, 'data.json'), JSON.stringify(data, null, 2));
-  await fs.writeFile(path.join(dir, 'shots.json'), JSON.stringify(shots, null, 2));
-  await fs.writeFile(path.join(dir, 'index.tsx'), INDEX);
-  await fs.writeFile(path.join(dir, 'Film.tsx'), FILM);
-  await fs.writeFile(path.join(dir, 'copy.ts'), COPY_TS);
   return dir;
 }

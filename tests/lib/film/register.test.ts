@@ -47,4 +47,11 @@ describe('registerFilm', () => {
     await expect(registerFilm(db, dir, 'x')).rejects.toThrow('没找到成片');
     expect(files).toHaveLength(0);
   });
+  it('refuses to register the same film version twice (keeps the old mp4)', async () => {
+    const { dir, projRoot } = await filmDir();
+    const { db, files } = createFakeDb({ files: [{ kind: 'final_mp4', meta: { filmVersion: 2 } }] });
+    await expect(registerFilm(db, dir, '再登记一次')).rejects.toThrow('成片 v2 已经登记过了');
+    expect(files.filter((f) => f.kind === 'final_mp4')).toHaveLength(1);
+    await expect(fs.access(path.join(projRoot, 'p1', 'final.v2.mp4'))).rejects.toThrow();
+  });
 });

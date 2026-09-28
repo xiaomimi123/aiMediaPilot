@@ -79,4 +79,23 @@ describe('scaffoldFilm', () => {
       [4.9, 7],
     ]);
   });
+
+  it('skips a material whose file is gone and records it, instead of crashing', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mp-src-'));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mp-films-'));
+    const b = await bundleIn(dir);
+    b.materials.push({ id: 'gone', path: path.join(dir, 'nope.png'), ext: '.png', mediaType: 'image', note: '', originalName: '丢了.png', durationSec: null });
+    const filmDir = await scaffoldFilm(b, 1, root);
+    const data = JSON.parse(await fs.readFile(path.join(filmDir, 'data.json'), 'utf8'));
+    expect(data.materials.map((m: { id: string }) => m.id)).toEqual(['fa']);
+    expect(data.missingMaterials).toEqual([{ id: 'gone', originalName: '丢了.png' }]);
+  });
+  it('fails in Chinese without leaving a half-built directory when the recording file is gone', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mp-src-'));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mp-films-'));
+    const b = await bundleIn(dir);
+    await fs.unlink(b.video!.path);
+    await expect(scaffoldFilm(b, 1, root)).rejects.toThrow('口播原片文件不在了');
+    expect(await fs.readdir(root)).toEqual([]);
+  });
 });

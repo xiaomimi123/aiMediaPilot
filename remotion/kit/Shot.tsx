@@ -27,3 +27,8 @@ const Enter: React.FC<{ kind: 'fade' | 'up' | 'left'; children: React.ReactNode 
     <AbsoluteFill style={{ opacity: p, transform, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>{children}</AbsoluteFill>
   );
 };
+
+/** shots.json → { 镜头id: { from, to } }; 画面里写 <Shot {...at.hook}>, 时间只有 shots.json 一份 */
+export function fromShots(file: { shots: { id: string; fromSec: number; toSec: number }[] }): Record<string, { from: number; to: number }> {
+  return Object.fromEntries(file.shots.map((s) => [s.id, { from: s.fromSec, to: s.toSec }]));
+}

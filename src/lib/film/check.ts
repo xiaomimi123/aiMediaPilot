@@ -81,16 +81,110 @@ export function toChineseNumber(n: number): string | null {
   return out;
 }
 
-/** 画面文字(copy.ts 全文)里的每个数字, 必须能在稿子或转写里以阿拉伯数字或中文写法找到 */
+const CN_NUM = '零一二两三四五六七八九十百千万';
+const CN_DIGIT: Record<string, number> = { 零: 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+
+/** 源码里的字符串字面量内容('…' "…" `…`); 只查画面文字, 不查键名和标识符 */
+export function stringLiterals(src: string): string[] {
+  const out: string[] = [];
+  const re = /'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"|`((?:[^`\\]|\\.)*)`/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src))) out.push(m[1] ?? m[2] ?? m[3] ?? '');
+  return out;
+}
+
+/** 简单中文数字 → 数值(支持 万/千/百/十 与 两); 解析不了返回 null */
+export function parseChineseNumber(s: string): number | null {
+  const section = (t: string): number | null => {
+    if (t === '') return 0;
+    let total = 0;
+    let digit = -1;
+    for (const ch of t) {
+      if (ch in CN_DIGIT) digit = CN_DIGIT[ch];
+      else if (ch === '十' || ch === '百' || ch === '千') {
+        const unit = ch === '十' ? 10 : ch === '百' ? 100 : 1000;
+        total += (digit < 0 ? 1 : digit) * unit;
+        digit = -1;
+      } else return null;
+    }
+    return total + (digit > 0 ? digit : 0);
+  };
+  const parts = s.split('万');
+  if (parts.length > 2) return null;
+  const high = parts.length === 2 ? section(parts[0] || '一') : 0;
+  const low = section(parts[parts.length - 1]);
+  if (high === null || low === null) return null;
+  return (high ?? 0) * 10000 + low;
+}
+
+/** 中文写法(含"两"的变体): 2000 → 二千 / 两千 */
+function chineseForms(n: number): string[] {
+  const cn = toChineseNumber(n);
+  if (!cn) return [];
+  const forms = [cn];
+  if (/^二[百千万]/.test(cn)) forms.push(`两${cn.slice(1)}`);
+  if (n === 2) forms.push('两');
+  return forms;
+}
+
+/** src 里出现了完整的中文数字 form(前后都不是数字字符; "五"不能算进"五十"里) */
+function containsWhole(src: string, form: string): boolean {
+  let i = src.indexOf(form);
+  while (i >= 0) {
+    const before = src[i - 1] ?? '';
+    const after = src[i + form.length] ?? '';
+    if (!CN_NUM.includes(before) && !CN_NUM.includes(after)) return true;
+    i = src.indexOf(form, i + 1);
+  }
+  return false;
+}
+
+/**
+ * 画面文字(copy.ts 里的字符串)里的每个数字, 必须能在稿子或转写里找到:
+ * 阿拉伯数字按数值比; 中文写法要完整出现(不许"五"蹭"五十"); 画面上的中文数字(三万)也查。
+ */
 export function checkNumbers(copyText: string, sources: string[]): string[] {
   const src = sources.join('\n').replace(/,/g, '');
   const srcNums = new Set(numberTokens(src));
+  const texts = stringLiterals(copyText);
   const issues: string[] = [];
-  for (const tok of new Set(numberTokens(copyText))) {
+  for (const tok of new Set(texts.flatMap(numberTokens))) {
     if (srcNums.has(tok)) continue;
-    const cn = toChineseNumber(Number(tok));
-    if (cn && src.includes(cn)) continue;
+    if (chineseForms(Number(tok)).some((f) => containsWhole(src, f))) continue;
     issues.push(`画面数字 ${tok} 在稿子和转写里都找不到（可能是编造的）`);
+  }
+  const runs = new Set(texts.flatMap((t) => t.match(/[零一二两三四五六七八九十百千万]{2,}/g) ?? []).filter((r) => /[十百千万]/.test(r)));
+  for (const run of runs) {
+    const n = parseChineseNumber(run);
+    if (n === null) continue;
+    if (containsWhole(src, run) || srcNums.has(String(n)) || chineseForms(n).some((f) => containsWhole(src, f))) continue;
+    issues.push(`画面数字 ${run} 在稿子和转写里都找不到（可能是编造的）`);
+  }
+  return issues;
+}
+
+/**
+ * Film.tsx 的规矩: 画面文字只能来自 COPY; 镜头时间只能来自 shots.json(<Shot {...at.id}>);
+ * shots.json 里的每个镜头都要在画面里用到。否则 check 查的和实际渲染的不是同一份东西。
+ */
+export function checkFilmSource(src: string, shots: ShotsFile): string[] {
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+  const issues: string[] = [];
+  for (const lit of stringLiterals(code)) {
+    if (/[\u4e00-\u9fff]/.test(lit)) issues.push(`Film.tsx 里有画面文字，要写进 copy.ts：${lit}`);
+  }
+  const jsxText = /> *([^<>{}\n]+?) *</g;
+  let m: RegExpExecArray | null;
+  while ((m = jsxText.exec(code))) {
+    const t = m[1].trim();
+    if (/[\u4e00-\u9fff]/.test(t)) issues.push(`Film.tsx 里有画面文字，要写进 copy.ts：${t}`);
+    else if (/^[\d.,%+/#×x-]+$/.test(t) && /\d/.test(t)) issues.push(`Film.tsx 里有画面数字，要写进 copy.ts：${t}`);
+  }
+  if (/<Shot\b[^>]*\b(from|to)=\{/.test(code)) issues.push('Shot 的时间要用 shots.json（写成 <Shot {...at.镜头id}>），不要手写秒数');
+  if (!/\bat\[/.test(code)) {
+    for (const s of shots.shots) {
+      if (!new RegExp(`\\bat\\.${s.id}\\b`).test(code)) issues.push(`镜头 ${s.id} 在 Film.tsx 里没有用到`);
+    }
   }
   return issues;
 }
