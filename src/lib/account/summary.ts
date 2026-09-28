@@ -12,6 +12,8 @@ export interface AccountSummary {
   lastPublishedAt: string | null;
   /** 近 90 天投稿分析; 窗口内没投稿时为 null(如实说明, 不显示一排 0) */
   recent90: { submissionCount: number; medianPlay: number; completionRate5s: number } | null;
+  /** 有没有回采到过投稿分析; false 时不能说"没有投稿", 只能说"还没数据" */
+  hasOverview: boolean;
   dataAt: string | null;
   collect: CollectStatus;
 }
@@ -37,6 +39,7 @@ export async function buildAccountSummary(db: PrismaClient, collect: CollectStat
       snapshot && snapshot.submissionCount > 0
         ? { submissionCount: snapshot.submissionCount, medianPlay: snapshot.medianPlay, completionRate5s: snapshot.completionRate5s }
         : null,
+    hasOverview: snapshot !== null,
     dataAt: fans?.fetchedAt.toISOString() ?? null,
     collect,
   };

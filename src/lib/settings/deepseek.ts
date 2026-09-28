@@ -14,6 +14,7 @@ export async function testDeepSeekKey(key: string, fetcher: typeof fetch = fetch
     if (res.status === 401 || res.status === 403) return { ok: false, message: 'DeepSeek 说这个 key 无效，检查是否复制完整或已被删除。' };
     return { ok: false, message: `DeepSeek 返回了异常（${res.status}），稍后再试。` };
   } catch (e) {
+    if (e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')) return { ok: false, message: '连接 DeepSeek 超时（10 秒），检查网络后再试。' };
     return { ok: false, message: `连不上 DeepSeek（${e instanceof Error ? e.message : String(e)}），检查网络后再试。` };
   }
 }

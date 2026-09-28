@@ -32,7 +32,12 @@ describe('buildAccountSummary', () => {
   it('gives null recent90 when there were no submissions in the window (not zeros)', async () => {
     const s = await buildAccountSummary(db({ snapshot: { submissionCount: 0, medianPlay: 0, completionRate5s: 0 } }), collect);
     expect(s.recent90).toBeNull();
+    expect(s.hasOverview).toBe(true);
     expect(s.fans).toBeNull();
+  });
+  it('says the overview is unknown (not zero) when it was never collected', async () => {
+    const s = await buildAccountSummary(db({ snapshot: null }), collect);
+    expect(s.hasOverview).toBe(false);
   });
   it('keeps recent90 when there were submissions', async () => {
     const s = await buildAccountSummary(db({ snapshot: { submissionCount: 3, medianPlay: 812, completionRate5s: 0.31 } }), collect);

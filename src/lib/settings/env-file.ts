@@ -17,7 +17,12 @@ export function upsertEnvLine(content: string, key: string, value: string): stri
 export async function writeEnvKey(key: string, value: string, file = path.join(process.cwd(), '.env')): Promise<void> {
   const content = await fs.readFile(file, 'utf8').catch(() => '');
   const tmp = `${file}.tmp-${process.pid}`;
-  await fs.writeFile(tmp, upsertEnvLine(content, key, value), { mode: 0o600 });
-  await fs.rename(tmp, file);
+  try {
+    await fs.writeFile(tmp, upsertEnvLine(content, key, value), { mode: 0o600 });
+    await fs.rename(tmp, file);
+  } catch (e) {
+    await fs.unlink(tmp).catch(() => {}); // 临时文件里是完整 key, 失败也不留下
+    throw e;
+  }
   process.env[key] = value;
 }

@@ -24,12 +24,29 @@ const INSTALL = '在项目目录运行 sh scripts/install-collect-cron.sh 装上
 
 export function parseCollectLog(text: string, now: Date): CollectStatus {
   const runs: { startedAt: string; lines: { at: string; msg: string }[] }[] = [];
+  let pendingReason: { at: string; msg: string } | null = null;
   for (const raw of text.split('\n')) {
     const m = /^\[(\d{4}-\d{2}-\d{2}T[\d:.]+Z)\] (.*)$/.exec(raw.trim());
-    if (!m) continue; // npm 输出、shell 报错、堆栈行
+    if (!m) {
+      // npm 输出、shell 报错、堆栈行都跳过; 例外: "未预期的错误"只有首行带时间(类名), 真正原因在下一行
+      const line = raw.trim();
+      if (pendingReason && line && !line.startsWith('at ')) {
+        pendingReason.msg = `未预期的错误：${line}`;
+        pendingReason = null;
+      }
+      continue;
+    }
+    pendingReason = null;
     const [, at, msg] = m;
     if (msg.startsWith('开始回采')) runs.push({ startedAt: at, lines: [] });
-    else if (runs.length) runs[runs.length - 1].lines.push({ at, msg: msg.trim() });
+    else if (runs.length) {
+      const entry = { at, msg: msg.trim() };
+      if (entry.msg.startsWith('未预期的错误')) {
+        entry.msg = '未预期的错误（日志里没有写原因）';
+        pendingReason = entry;
+      }
+      runs[runs.length - 1].lines.push(entry);
+    }
   }
   if (runs.length === 0) return { state: 'never', lastRun: null, lastSuccessAt: null, consecutiveFailures: 0, hint: `还没有回采记录。${INSTALL}` };
 
@@ -50,7 +67,8 @@ export function parseCollectLog(text: string, now: Date): CollectStatus {
   const lastRun: CollectRun = { startedAt: last.startedAt, ok: last.ok, message: last.message };
 
   if (!last.ok) {
-    return { state: 'failing', lastRun, lastSuccessAt, consecutiveFailures, hint: `连续 ${consecutiveFailures} 次回采失败：${last.message}` };
+    const fix = /reach database server|ECONNREFUSED/i.test(last.message) ? '（数据库没启动：打开 Docker Desktop，然后运行 docker compose up -d）' : '';
+    return { state: 'failing', lastRun, lastSuccessAt, consecutiveFailures, hint: `连续 ${consecutiveFailures} 次回采失败：${last.message}${fix}` };
   }
   const hours = (now.getTime() - new Date(lastSuccessAt!).getTime()) / 3600_000;
   if (hours > STALE_HOURS) {

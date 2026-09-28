@@ -38,8 +38,9 @@ export async function runHealthChecks(deps: {
   try {
     await deps.dbPing();
     items.push({ key: 'db', label: '数据库', status: 'ok', detail: 'Postgres 连接正常' });
-  } catch (e) {
-    items.push({ key: 'db', label: '数据库', status: 'fail', detail: `连不上数据库（${e instanceof Error ? e.message : String(e)}）`, fix: '启动 Docker Desktop，然后运行 docker compose up -d' });
+  } catch {
+    // 不把 Prisma 的多行英文报错放到界面上
+    items.push({ key: 'db', label: '数据库', status: 'fail', detail: '连不上数据库', fix: '启动 Docker Desktop，然后运行 docker compose up -d' });
   }
 
   const key = deps.env.DEEPSEEK_API_KEY?.trim();

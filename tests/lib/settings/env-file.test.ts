@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { upsertEnvLine, writeEnvKey } from '@/lib/settings/env-file';
 
 describe('upsertEnvLine', () => {
@@ -23,5 +24,11 @@ describe('writeEnvKey', () => {
     await writeEnvKey('MP_TEST_KEY', 'v1', f);
     expect(await fs.readFile(f, 'utf8')).toBe('A=1\nMP_TEST_KEY=v1\n');
     expect(process.env.MP_TEST_KEY).toBe('v1');
+  });
+});
+
+describe('.env temp file', () => {
+  it('is gitignored (it holds the full key and the repo is public)', () => {
+    expect(execFileSync('git', ['check-ignore', '.env.tmp-12345'], { encoding: 'utf8' }).trim()).toBe('.env.tmp-12345');
   });
 });

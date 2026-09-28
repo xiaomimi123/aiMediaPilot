@@ -35,6 +35,7 @@ describe('runHealthChecks', () => {
       }),
     );
     const by = Object.fromEntries(items.map((i) => [i.key, i]));
+    expect(by.db.detail).toBe('连不上数据库');
     expect(by.db).toMatchObject({ status: 'fail', fix: '启动 Docker Desktop，然后运行 docker compose up -d' });
     expect(by.deepseek).toMatchObject({ status: 'fail', fix: '在下方填入 DeepSeek key' });
     expect(by.ffmpeg).toMatchObject({ status: 'fail', fix: 'brew install ffmpeg' });

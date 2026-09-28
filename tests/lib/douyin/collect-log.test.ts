@@ -22,6 +22,15 @@ describe('parseCollectLog', () => {
     expect(s.lastRun?.message).toBe('常见原因: ego lite 没在运行, 或抖音登录态已过期 —— 打开 ego lite 重新登录一次。');
     expect(s.hint).toContain('连续 2 次回采失败');
   });
+  it('keeps the real reason of an unexpected error from the next stack line', () => {
+    const text =
+      okRun('2026-09-27') +
+      "[2026-09-28T11:00:03.000Z] 开始回采\n[2026-09-28T11:00:24.000Z] 未预期的错误: PrismaClientInitializationError: \nCan't reach database server at `localhost:5432`\n    at $n.handleRequestError (/x.js:1:1)\n";
+    const s = parseCollectLog(text, now);
+    expect(s.lastRun?.message).toBe("未预期的错误：Can't reach database server at `localhost:5432`");
+    expect(s.hint).toContain('docker compose up -d');
+    expect(s.hint).not.toContain('PrismaClientInitializationError');
+  });
   it('ignores npm noise and stack lines', () => {
     const text = 'shell-init: error retrieving current directory\n\n> mediapilot@0.1.0 collect:douyin\n> tsx scripts/collect-douyin.ts\n\n' + okRun('2026-09-28');
     expect(parseCollectLog(text, now).state).toBe('ok');

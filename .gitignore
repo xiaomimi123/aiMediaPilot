@@ -7,6 +7,8 @@ dist
 .env
 .env.local
 .env*.local
+# 设置页写 .env 的临时文件(含完整 key, 仓库公开)
+.env.tmp-*
 prisma/migrations/dev.db*
 .superpowers/
 # Claude Code local permission settings — may contain machine-specific paths

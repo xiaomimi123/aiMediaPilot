@@ -17,6 +17,8 @@ describe('deepseek key helpers', () => {
     expect(await testDeepSeekKey('sk-x', res(200))).toEqual({ ok: true, message: '连接成功，这个 key 可以用。' });
     expect((await testDeepSeekKey('sk-x', res(401))).message).toBe('DeepSeek 说这个 key 无效，检查是否复制完整或已被删除。');
     const down = (async () => { throw new Error('ENOTFOUND'); }) as unknown as typeof fetch;
+    const slow = (async () => { throw new DOMException('The operation was aborted due to timeout', 'TimeoutError'); }) as unknown as typeof fetch;
+    expect((await testDeepSeekKey('sk-x', slow)).message).toBe('连接 DeepSeek 超时（10 秒），检查网络后再试。');
     expect((await testDeepSeekKey('sk-x', down)).message).toBe('连不上 DeepSeek（ENOTFOUND），检查网络后再试。');
   });
 });
