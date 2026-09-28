@@ -15,6 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="px-2 py-2 text-sm font-semibold">MediaPilot</div>
           {[
             { href: '/', label: '项目' },
+            { href: '/topics', label: '选题' },
             { href: '/persona', label: '定位' },
             { href: '/settings', label: '设置' },
           ].map((l) => (
