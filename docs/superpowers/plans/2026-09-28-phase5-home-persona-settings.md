@@ -76,6 +76,7 @@ tests/lib/settings/*.test.ts, tests/lib/health/checks.test.ts, tests/components/
 
 ```ts
 import { describe, expect, it } from 'vitest';
+import os from 'node:os';
 import path from 'node:path';
 import { parseCollectLog, readCollectStatus } from '@/lib/douyin/collect-log';
 
@@ -770,6 +771,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```ts
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { upsertEnvLine, writeEnvKey } from '@/lib/settings/env-file';
 
