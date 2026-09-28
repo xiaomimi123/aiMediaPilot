@@ -1,6 +1,7 @@
 import React from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { C, FONT, ZONE } from './tokens';
+import { balanceLines, displayWidth } from './text';
 
 export type CaptionLine = { startSec: number; endSec: number; text: string };
 
@@ -25,6 +26,9 @@ export const Captions: React.FC<{ lines: CaptionLine[]; highlights?: string[] }>
   const t = frame / fps;
   const line = lines.find((l) => t >= l.startSec && t < l.endSec);
   if (!line) return null;
+  // 按宽度拆成长度接近的两行(不再出现单字孤行); 特别长的句子缩小字号
+  const long = displayWidth(line.text) > 36;
+  const rows = balanceLines(line.text, long ? 20 : 18);
   return (
     <div style={{ position: 'absolute', ...ZONE.captions, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div
@@ -34,18 +38,16 @@ export const Captions: React.FC<{ lines: CaptionLine[]; highlights?: string[] }>
           color: '#fff',
           fontFamily: FONT,
           fontWeight: 700,
-          fontSize: 50,
+          fontSize: long ? 44 : 50,
           lineHeight: 1.3,
           padding: '14px 30px',
           borderRadius: 22,
           textAlign: 'center',
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical',
-          overflow: 'hidden',
         }}
       >
-        {mark(line.text, highlights)}
+        {rows.map((r, i) => (
+          <div key={i}>{mark(r, highlights)}</div>
+        ))}
       </div>
     </div>
   );

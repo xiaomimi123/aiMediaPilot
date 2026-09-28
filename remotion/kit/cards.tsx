@@ -1,6 +1,7 @@
 import React from 'react';
 import { interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
 import { C, FONT, MONO } from './tokens';
+import { shouldCountUp } from './text';
 
 const useT = () => {
   const frame = useCurrentFrame();
@@ -27,7 +28,8 @@ export const Stat: React.FC<{ value: string; label?: string; at?: number }> = ({
   const m = /^(\D*)(\d+(?:\.\d+)?)(.*)$/.exec(value);
   const p = ease(t, at, 0.8);
   let shown = value;
-  if (m) {
+  // 比例/排名/年份不滚动(否则会闪出 #0、8/10 这类不存在的数)
+  if (m && shouldCountUp(value)) {
     const decimals = (m[2].split('.')[1] ?? '').length;
     shown = `${m[1]}${(Number(m[2]) * p).toFixed(decimals)}${m[3]}`;
   }
