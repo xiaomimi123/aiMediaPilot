@@ -25,9 +25,9 @@ export function AccountCard({ summary: s }: { summary: AccountSummary }) {
         </div>
       ))}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="粉丝" value={s.fans === null ? '还没回采到' : n(s.fans)} sub={s.fansDelta === null ? undefined : `较上期 ${s.fansDelta > 0 ? '+' : ''}${s.fansDelta}`} />
-        <Stat label="作品" value={`${s.works} 条（公开 ${s.publicWorks} 条）`} />
-        <Stat label="作品播放合计" value={n(s.totalPlay)} sub="作品列表接口口径" />
+        <Stat label="粉丝" value={s.fans === null ? '还没回采到' : n(s.fans)} sub={s.fansDelta ? `较上次回采 ${s.fansDelta > 0 ? '+' : ''}${s.fansDelta}` : undefined} />
+        <Stat label="获赞" value={s.likes === null ? '还没回采到' : n(s.likes)} sub="主页显示" />
+        <Stat label="公开作品" value={`${s.publicWorks} 条`} sub={`播放合计 ${n(s.publicPlay)}`} />
         <Stat label="最近公开发布" value={day(s.lastPublishedAt)} />
       </div>
       <p className="mt-2 text-xs text-[var(--text-tertiary)]">

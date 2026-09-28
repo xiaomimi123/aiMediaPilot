@@ -6,7 +6,7 @@ import type { AccountSummary } from '@/lib/account/summary';
 
 afterEach(cleanup);
 const base: AccountSummary = {
-  fans: 2847, fansDelta: -2, works: 101, publicWorks: 5, totalPlay: 257890, lastPublishedAt: '2026-08-20T08:00:00.000Z',
+  fans: 408, fansDelta: 3, likes: 2453, publicWorks: 5, publicPlay: 30000, lastPublishedAt: '2026-08-20T08:00:00.000Z',
   recent90: null, hasOverview: true, dataAt: '2026-09-26T18:50:00.000Z',
   collect: { state: 'ok', lastRun: null, lastSuccessAt: '2026-09-28T12:00:00.000Z', consecutiveFailures: 0, hint: '' },
   hits24h: 0,
@@ -16,10 +16,12 @@ const base: AccountSummary = {
 describe('AccountCard', () => {
   it('shows real numbers and says plainly when there were no recent submissions', () => {
     render(<AccountCard summary={base} />);
-    expect(screen.getByText('2,847')).toBeTruthy();
-    expect(screen.getByText('较上期 -2')).toBeTruthy();
-    expect(screen.getByText('101 条（公开 5 条）')).toBeTruthy();
-    expect(screen.getByText('257,890')).toBeTruthy();
+    expect(screen.getByText('408')).toBeTruthy();
+    expect(screen.getByText('较上次回采 +3')).toBeTruthy();
+    expect(screen.getByText('2,453')).toBeTruthy();
+    expect(screen.getByText('5 条')).toBeTruthy();
+    expect(screen.getByText('播放合计 30,000')).toBeTruthy();
+    expect(screen.queryByText(/101/)).toBeNull();
     expect(screen.getByText('近 90 天没有公开投稿，投稿分析暂无数据')).toBeTruthy();
   });
   it('shows a warning banner with the reason when collection is failing', () => {
@@ -40,7 +42,7 @@ describe('AccountCard', () => {
     expect(screen.getAllByRole('alert').map((a) => a.textContent).join()).toContain('对标巡检失败');
   });
   it('shows placeholders instead of zeros when fans are unknown', () => {
-    render(<AccountCard summary={{ ...base, fans: null, fansDelta: null }} />);
-    expect(screen.getByText('还没回采到')).toBeTruthy();
+    render(<AccountCard summary={{ ...base, fans: null, fansDelta: null, likes: null }} />);
+    expect(screen.getAllByText('还没回采到')).toHaveLength(2);
   });
 });

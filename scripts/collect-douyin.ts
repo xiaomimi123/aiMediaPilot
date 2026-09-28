@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
-import { runEgo } from '../src/lib/ego';
+import { readResult, runEgo } from '../src/lib/ego';
+import { parseSelfProfile, saveSelfProfile, SELF_PROFILE_SCRIPT } from '../src/lib/douyin/profile';
 import { importWorks, type IncomingWork } from '../src/lib/works/import';
 
 /**
@@ -207,7 +208,17 @@ async function main(): Promise<void> {
       log(`投稿分析抓取失败(不影响作品列表): ${e instanceof Error ? e.message : String(e)}`);
     }
 
-    // 账号级当前值(粉丝数等) —— 同样独立失败
+    // 粉丝/获赞/作品数(「我的资料」, 与主页一致) —— 独立失败
+    try {
+      const r = readResult(await runEgo(SELF_PROFILE_SCRIPT)) as { status: number; body: string };
+      const p = parseSelfProfile(JSON.parse(r.body));
+      await saveSelfProfile(prisma, p);
+      log(`账号资料: 粉丝 ${p.followers} / 获赞 ${p.totalLikes} / 作品 ${p.awemeCount}`);
+    } catch (e) {
+      log(`账号资料抓取失败(不影响前面的): ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    // 创作者后台数据概览(口径不明, 首页不再用它的 fans) —— 同样独立失败
     try {
       const m = await collectHome(prisma);
       log(`账号指标: ${m} 项`);
