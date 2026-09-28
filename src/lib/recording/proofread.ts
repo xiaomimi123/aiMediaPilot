@@ -38,19 +38,18 @@ export type ProofreadResult = { lines: TranscriptLine[]; status: 'done' | 'skipp
 
 const ProofreadSchema = z.object({ lines: z.array(z.string()) });
 
-const SYSTEM_PROMPT = `你是口播转写的校对员。给你一份语音识别结果（逐行，带行号）和博主的原稿。
+const SYSTEM_PROMPT = `你是口播转写的校对员。给你一份语音识别结果（逐行，带行号）和一份参考文本（博主的原稿，或视频自己的文案）。
 只修正识别错的字词：同音字、专有名词、英文名、数字写法。
-不改说话人的原话、口头禅、语气词和临场发挥，不把原话改回原稿，不增删句子。
+不改说话人的原话、口头禅、语气词和临场发挥，不把原话改回参考文本，不增删句子。
 只输出 JSON：{"lines": ["第1行校对后", "第2行校对后", ...]}，行数必须与输入完全一致。`;
 
-export async function proofreadLines(llm: StructuredLLM, script: Script | null, lines: TranscriptLine[]): Promise<ProofreadResult> {
-  if (!script || lines.length === 0) return { lines, status: 'skipped', changed: 0 };
-  const scriptText = script.segments.map((s) => `${ROLE_LABEL[s.role]}：${s.text}`).join('\n');
+export async function proofreadAgainst(llm: StructuredLLM, reference: { label: string; text: string }, lines: TranscriptLine[]): Promise<ProofreadResult> {
+  if (!reference.text.trim() || lines.length === 0) return { lines, status: 'skipped', changed: 0 };
   const input = lines.map((l, i) => `${i + 1}. ${l.text}`).join('\n');
   try {
     const { result } = await llm.callStructured({
       systemPrompt: SYSTEM_PROMPT,
-      userMessage: [{ type: 'text', text: `【原稿】\n${scriptText}\n\n【识别结果，共 ${lines.length} 行】\n${input}` }],
+      userMessage: [{ type: 'text', text: `【${reference.label}】\n${reference.text}\n\n【识别结果，共 ${lines.length} 行】\n${input}` }],
       responseSchema: ProofreadSchema,
     });
     if (result.lines.length !== lines.length) return { lines, status: 'failed', changed: 0 };
@@ -64,4 +63,9 @@ export async function proofreadLines(llm: StructuredLLM, script: Script | null, 
   } catch {
     return { lines, status: 'failed', changed: 0 };
   }
+}
+
+export async function proofreadLines(llm: StructuredLLM, script: Script | null, lines: TranscriptLine[]): Promise<ProofreadResult> {
+  if (!script) return { lines, status: 'skipped', changed: 0 };
+  return proofreadAgainst(llm, { label: '原稿', text: script.segments.map((s) => `${ROLE_LABEL[s.role]}：${s.text}`).join('\n') }, lines);
 }
