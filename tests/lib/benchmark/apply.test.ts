@@ -35,4 +35,10 @@ describe('applyAccountWorks', () => {
     expect(again).toMatchObject({ status: 'following', source: 'manual', followers: 99 });
     expect(store.accounts).toHaveLength(1);
   });
+  it('upsertAccount does not wipe known profile fields with empty ones (pasted video link)', async () => {
+    const store = createMemoryStore();
+    await store.upsertAccount(profile, { status: 'following', source: 'manual' });
+    await store.upsertAccount({ ...profile, followers: 0, totalLikes: 0, avatarUrl: '', bio: '', douyinId: '' }, { status: 'candidate', source: 'link' });
+    expect(store.accounts[0]).toMatchObject({ followers: 1, totalLikes: 2, douyinId: 'x' });
+  });
 });

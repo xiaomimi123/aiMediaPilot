@@ -1,4 +1,4 @@
-import type { AccountRow, BenchmarkStore, VideoRow } from '@/lib/benchmark/store';
+import { nonEmptyProfile, type AccountRow, type BenchmarkStore, type VideoRow } from '@/lib/benchmark/store';
 
 let seq = 0;
 const nextId = (p: string) => `${p}${++seq}`;
@@ -14,7 +14,7 @@ export function createMemoryStore(): BenchmarkStore & { accounts: AccountRow[]; 
     upsertAccount: async (p, init) => {
       const hit = accounts.find((a) => a.secUid === p.secUid);
       const profile = { nickname: p.nickname, douyinId: p.douyinId, avatarUrl: p.avatarUrl, bio: p.bio, followers: p.followers, totalLikes: p.totalLikes };
-      if (hit) return Object.assign(hit, profile);
+      if (hit) return Object.assign(hit, nonEmptyProfile(p));
       const row: AccountRow = { id: nextId('a'), secUid: p.secUid, ...profile, status: init.status, source: init.source, searchKeyword: init.searchKeyword ?? null, baselineDigg: null, lastCheckedAt: null, createdAt: new Date() };
       accounts.push(row);
       return row;

@@ -76,6 +76,11 @@ const profileData = (p: ParsedProfile) => ({
   totalLikes: p.totalLikes,
 });
 
+/** 更新已有账号时只用非空值: 粘作品链接时只知道博主名, 不能把巡检拿到的粉丝/头像清成 0 和空 */
+export function nonEmptyProfile(p: ParsedProfile): Partial<ReturnType<typeof profileData>> {
+  return Object.fromEntries(Object.entries(profileData(p)).filter(([, v]) => v !== '' && v !== 0));
+}
+
 const statsData = (w: ParsedWork) => ({ desc: w.desc, url: w.url, durationSec: w.durationSec, digg: w.digg, comment: w.comment, collect: w.collect, share: w.share });
 
 export function createPrismaStore(db: PrismaClient): BenchmarkStore {
@@ -85,7 +90,7 @@ export function createPrismaStore(db: PrismaClient): BenchmarkStore {
     upsertAccount: (p, init) =>
       db.benchmarkAccount.upsert({
         where: { secUid: p.secUid },
-        update: profileData(p),
+        update: nonEmptyProfile(p),
         create: { secUid: p.secUid, ...profileData(p), status: init.status, source: init.source, searchKeyword: init.searchKeyword ?? null },
       }),
     updateAccount: async (id, data) => {
