@@ -43,6 +43,18 @@ describe('formatSystemPrompt', () => {
     expect(p).toContain('目标受众：职场新人');
     expect(p).toContain('忌讳：不卖课');
   });
+  it('adds the benchmark reference block and the no-copy rule', () => {
+    const p = formatSystemPrompt({
+      title: 't', stage: 'draft', targetSec: 60, script: null, persona: null,
+      reference: { author: '园长说AI', ratio: 4.5, transcript: '原话', analysis: null },
+    });
+    expect(p).toContain('【参考的对标作品】');
+    expect(p).toContain('只借三样：选题、开头钩子的写法、标题思路');
+    expect(p).toContain('copied');
+  });
+  it('omits the reference block when there is none', () => {
+    expect(formatSystemPrompt({ title: 't', stage: 'draft', targetSec: 60, script: null, persona: null })).not.toContain('【参考的对标作品】');
+  });
 });
 
 describe('loadHistory', () => {

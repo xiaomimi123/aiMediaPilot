@@ -27,4 +27,21 @@ describe('write_script tool', () => {
     await writeScriptTool.execute({ projectId: 'p1', db, llm }, { direction: '让AI挑刺' });
     expect(project.title).toBe('我自己的标题');
   });
+  it('passes the benchmark reference to the writer and reports copied sentences', async () => {
+    const firstMessages: string[] = [];
+    const copyLlm: StructuredLLM = {
+      callStructured: (async (o: { userMessage: { text: string }[] }) => {
+        firstMessages.push(o.userMessage[0].text);
+        return { result: { title: 't', segments: onBudget.map((n, i) => ({ role: 'x', text: i === 0 ? '很多人对AI的印象还停留在聊天写代码' : '字'.repeat(n) })) }, usage: {} };
+      }) as unknown as StructuredLLM['callStructured'],
+    };
+    const { db } = createFakeDb({
+      project: { benchmarkVideoId: 'bv1' },
+      benchmarkVideo: { id: 'bv1', transcript: '很多人对AI的印象还停留在聊天写代码的线上工具', analysis: null, ratio: 3, account: { nickname: '园长说AI' } },
+    });
+    const r = await writeScriptTool.execute({ projectId: 'p1', db, llm: copyLlm }, { direction: '讲 AI 帮人' });
+    expect(firstMessages[0]).toContain('【参考的对标作品】');
+    expect((r.data as { copied: string[] }).copied).toEqual(['很多人对AI的印象还停留在聊天写代码']);
+    expect(r.summary).toContain('有 1 处照抄对标原句');
+  });
 });

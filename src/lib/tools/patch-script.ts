@@ -4,6 +4,8 @@ import { ScriptSchema, ROLE_LABEL } from '@/lib/script/model';
 import { applySegmentEdit } from '@/lib/script/edit';
 import { checkDuration, estimateSec } from '@/lib/script/duration';
 import type { Tool } from './types';
+import { loadReference } from '@/lib/benchmark/adopt';
+import { findCopied } from '@/lib/benchmark/copy-check';
 
 const Input = z.object({
   segmentId: z.string().min(1).describe('要改的段落编号, 如 s4'),
@@ -32,11 +34,13 @@ export const patchScriptTool: Tool<z.infer<typeof Input>> = {
     });
     const report = checkDuration(next, project.targetSec);
     const seg = report.segments.find((s) => s.id === input.segmentId)!;
+    const ref = await loadReference(ctx.db, project.benchmarkVideoId ?? null);
+    const copied = ref ? findCopied(next.segments.map((s) => s.text).join('\n'), ref.transcript) : [];
     return {
       ok: true,
-      summary: `改稿：第${seg.index}段「${ROLE_LABEL[seg.role]}」${estimateSec(before!.text)}s → ${seg.estSec}s`,
+      summary: `改稿：第${seg.index}段「${ROLE_LABEL[seg.role]}」${estimateSec(before!.text)}s → ${seg.estSec}s${copied.length ? `，有 ${copied.length} 处照抄对标原句` : ''}`,
       segmentIds: [input.segmentId],
-      data: { durationOk: report.ok, totalSec: report.totalSec, issues: report.issues },
+      data: { durationOk: report.ok, totalSec: report.totalSec, issues: report.issues, copied },
     };
   },
 };

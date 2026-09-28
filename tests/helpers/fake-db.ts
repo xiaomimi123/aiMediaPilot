@@ -11,6 +11,7 @@ export interface FakeProject {
   script: unknown;
   targetSec: number;
   personaSnapshot: unknown;
+  benchmarkVideoId?: string | null;
   updatedAt: Date;
 }
 export interface FakeMessage {
@@ -52,6 +53,7 @@ export function createFakeDb(
     persona?: Record<string, unknown> | null;
     jobs?: Partial<FakeJob>[];
     files?: Partial<FakeFile>[];
+    benchmarkVideo?: { id: string; transcript: string | null; analysis: unknown; ratio: number | null; account: { nickname: string } };
   } = {},
 ) {
   let seq = 0;
@@ -63,6 +65,7 @@ export function createFakeDb(
     script: null,
     targetSec: 60,
     personaSnapshot: null,
+    benchmarkVideoId: null,
     updatedAt: new Date(),
     ...seed.project,
   };
@@ -97,6 +100,9 @@ export function createFakeDb(
     (!w.updatedAt || j.updatedAt < w.updatedAt.lt);
 
   const db = {
+    benchmarkVideo: {
+      findUnique: async ({ where }: { where: { id: string } }) => (seed.benchmarkVideo && seed.benchmarkVideo.id === where.id ? { ...seed.benchmarkVideo } : null),
+    },
     project: {
       findUniqueOrThrow: async ({ where }: { where: { id: string } }) => {
         if (where.id !== project.id) throw new Error('not found');

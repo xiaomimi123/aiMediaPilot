@@ -5,6 +5,7 @@ import { formatPersona, type PersonaLike } from '@/lib/tools/types';
 import type { AgentMessage } from './chat-model';
 import { loadCurrentTranscript } from '@/lib/recording/transcript';
 import { compareWithScript } from '@/lib/recording/compare';
+import { formatReference, loadReference, type Reference } from '@/lib/benchmark/adopt';
 
 export const HISTORY_LIMIT = 20;
 
@@ -23,6 +24,7 @@ const RULES = `你是用户的抖音口播编导，和用户一起把一条口�
 - 时长是硬约束。工具返回 durationOk=false 时，按 issues 里的数值继续用 patch_script 修；同一段最多再修 2 次，仍超标就如实告诉用户差多少秒，并问他要不要删内容。
 - 不编造数字和事实；没有出处的数字直接不写。
 - 不替用户编第一人称经历、试用结果、小故事。需要亲身例子时写「【待补：你的真实经历】」，或者直接问用户。
+- 系统提示里有对标参考时：只借三样：选题、开头钩子的写法、标题思路。不照抄原句，用用户的角度讲；工具返回 copied 非空时，用 patch_script 把这些句子换成用户自己的说法。
 - 回复用中文，简短。`;
 
 export function formatSystemPrompt(p: {
@@ -32,6 +34,7 @@ export function formatSystemPrompt(p: {
   script: unknown;
   persona: PersonaLike | null;
   transcript?: { lines: { startSec: number; text: string; adlib: boolean }[]; skipped: string[] } | null;
+  reference?: Reference | null;
 }): string {
   const persona = formatPersona(p.persona);
   const parsed = ScriptSchema.safeParse(p.script);
@@ -54,6 +57,7 @@ export function formatSystemPrompt(p: {
     RULES,
     persona ? `【账号定位】\n${persona}` : '',
     `【项目】${p.title}｜${STAGE_LABEL[p.stage] ?? p.stage}｜目标 ${p.targetSec} 秒`,
+    p.reference ? `【参考的对标作品】\n${formatReference(p.reference)}` : '',
     `【当前稿子】\n${scriptBlock}`,
     transcriptBlock,
   ]
@@ -81,6 +85,7 @@ export async function buildSystemPrompt(db: PrismaClient, projectId: string): Pr
     script: p.script,
     persona: (p.personaSnapshot as PersonaLike | null) ?? null,
     transcript,
+    reference: await loadReference(db, p.benchmarkVideoId ?? null),
   });
 }
 

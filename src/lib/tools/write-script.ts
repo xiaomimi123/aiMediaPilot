@@ -2,6 +2,8 @@ import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { writeScript } from '@/lib/script/write';
 import { formatPersona, type PersonaLike, type Tool } from './types';
+import { formatReference, loadReference } from '@/lib/benchmark/adopt';
+import { findCopied } from '@/lib/benchmark/copy-check';
 
 const Input = z.object({
   direction: z.string().min(1).describe('这条视频讲什么、从什么角度切入、用什么例子'),
@@ -17,11 +19,13 @@ export const writeScriptTool: Tool<z.infer<typeof Input>> = {
     const project = await ctx.db.project.findUniqueOrThrow({ where: { id: ctx.projectId } });
     const targetSec = input.targetSec ?? project.targetSec;
     const persona = (project.personaSnapshot as PersonaLike | null) ?? null;
+    const ref = await loadReference(ctx.db, project.benchmarkVideoId ?? null);
     const { title, script, report, rounds } = await writeScript({
       llm: ctx.llm,
       direction: input.direction,
       targetSec,
       personaText: formatPersona(persona),
+      reference: ref ? formatReference(ref) : undefined,
     });
     await ctx.db.project.update({
       where: { id: ctx.projectId },
@@ -31,14 +35,15 @@ export const writeScriptTool: Tool<z.infer<typeof Input>> = {
         ...(project.title === '未命名项目' ? { title } : {}),
       },
     });
-    const summary = report.ok
-      ? `写稿：6 段，约 ${report.totalSec} 秒`
-      : `写稿：约 ${report.totalSec} 秒，自修 ${rounds} 轮后仍超出目标 ${targetSec} 秒`;
+    const copied = ref ? findCopied(script.segments.map((s) => s.text).join('\n'), ref.transcript) : [];
+    const summary =
+      (report.ok ? `写稿：6 段，约 ${report.totalSec} 秒` : `写稿：约 ${report.totalSec} 秒，自修 ${rounds} 轮后仍超出目标 ${targetSec} 秒`) +
+      (copied.length ? `，有 ${copied.length} 处照抄对标原句` : '');
     return {
       ok: true,
       summary,
       segmentIds: script.segments.map((s) => s.id),
-      data: { title, durationOk: report.ok, totalSec: report.totalSec, issues: report.issues },
+      data: { title, durationOk: report.ok, totalSec: report.totalSec, issues: report.issues, copied },
     };
   },
 };
