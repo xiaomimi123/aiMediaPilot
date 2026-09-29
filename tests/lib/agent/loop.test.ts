@@ -150,4 +150,32 @@ describe('runAgentTurn', () => {
     );
     expect(events.find((e) => e.type === 'tool')).toMatchObject({ ok: false, summary: '爆炸失败：磁盘满了' });
   });
+
+  it('retries once without tools when the model cannot call tools', async () => {
+    let calls = 0;
+    const model: ChatModel & { seen: number[] } = {
+      seen: [],
+      async streamTurn(_m, tools, onText) {
+        calls++;
+        model.seen.push(tools.length);
+        if (tools.length) throw Object.assign(new Error('model does not support tools'), { status: 400 });
+        onText('只能聊天的回答');
+        return { text: '只能聊天的回答', toolCalls: [] };
+      },
+    };
+    const { events } = await run(model);
+    expect(calls).toBe(2);
+    expect(model.seen).toEqual([1, 0]);
+    expect(events[0]).toEqual({ type: 'text', delta: '（当前模型只能聊天，不能帮你操作产品，换一个能当编导的模型。）\n' });
+    expect(events.at(-1)).toEqual({ type: 'done' });
+  });
+
+  it('carries a tool detail when the tool returns text', async () => {
+    const withText: Tool<Record<string, never>> = {
+      name: 'status', label: '概况', description: 's', input: z.object({}),
+      async execute() { return { ok: true, summary: '概况', data: { text: '粉丝 408' } }; },
+    };
+    const { events } = await run(scriptedModel([{ text: '', toolCalls: [{ id: 'c', name: 'status', arguments: '{}' }] }, { text: '好', toolCalls: [] }]), [withText]);
+    expect(events.find((e) => e.type === 'tool')).toMatchObject({ detail: '粉丝 408' });
+  });
 });
