@@ -293,3 +293,19 @@ model WritingLesson {
 
   @@index([status, confirmedAt])
 }
+
+/// 大模型配置(多条, 同时只有一条 isActive)
+model ModelProvider {
+  id        String   @id @default(cuid())
+  name      String
+  /// openai | anthropic
+  kind      String
+  baseUrl   String
+  apiKey    String   @default("")
+  model     String
+  isActive  Boolean  @default(false)
+  /// ModelTestResult
+  lastTest  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
