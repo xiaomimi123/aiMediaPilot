@@ -26,8 +26,8 @@ export interface ModelConfig {
 /** 只预填接口地址与类型; 模型名由用户填(各家更新快, 不写死) */
 export const PRESETS: { key: string; name: string; kind: ProviderKind; baseUrl: string; keyOptional?: boolean; note?: string }[] = [
   { key: 'deepseek', name: 'DeepSeek', kind: 'openai', baseUrl: 'https://api.deepseek.com/v1' },
-  { key: 'qwen', name: '通义千问', kind: 'openai', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
-  { key: 'kimi', name: 'Kimi', kind: 'openai', baseUrl: 'https://api.moonshot.cn/v1' },
+  { key: 'qwen', name: '通义千问', kind: 'openai', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', note: '国内站地址; 国际站用 https://dashscope-intl.aliyuncs.com/compatible-mode/v1' },
+  { key: 'kimi', name: 'Kimi', kind: 'openai', baseUrl: 'https://api.moonshot.cn/v1', note: '国内站地址; 国际站用 https://api.moonshot.ai/v1' },
   { key: 'glm', name: '智谱 GLM', kind: 'openai', baseUrl: 'https://open.bigmodel.cn/api/paas/v4' },
   { key: 'doubao', name: '豆包（火山方舟）', kind: 'openai', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', note: '模型名填方舟里的接入点 ID 或模型 ID' },
   { key: 'openrouter', name: 'OpenRouter', kind: 'openai', baseUrl: 'https://openrouter.ai/api/v1' },

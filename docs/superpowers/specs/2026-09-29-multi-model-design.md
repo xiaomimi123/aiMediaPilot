@@ -98,3 +98,11 @@ model ModelProvider {
 ## 8. 不做
 
 按用途分配模型；失败自动切换备用模型；Gemini 原生接口；视觉；用量与费用统计。
+
+## 9. 预设核对与真机实测（2026-09-29，实施后）
+
+- 预设地址核对：通义千问（国内站 `dashscope.aliyuncs.com/compatible-mode/v1`，国际站 `dashscope-intl…`）、Kimi（国内站 `api.moonshot.cn/v1`，国际站 `api.moonshot.ai/v1`）、智谱 GLM（`open.bigmodel.cn/api/paas/v4`）、豆包（`ark.cn-beijing.volces.com/api/v3`）与官方文档一致；两个分国内/国际站的在预设说明里注明。DeepSeek、OpenRouter、Ollama、Claude 为各自公开的标准地址。
+- 迁移：首次启动从 `.env` 建出"DeepSeek（deepseek-chat）"并设为当前；设置页「测试」三项全过 → 能当编导；体检"当前模型"为绿；接口返回不含 key。
+- 本机未装 Ollama，本地模型验收跳过。
+- Claude 真机：待用户提供 key 后补。
+
