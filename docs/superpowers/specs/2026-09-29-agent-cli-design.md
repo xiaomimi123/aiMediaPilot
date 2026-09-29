@@ -117,7 +117,7 @@ agents/hermes/mediapilot/SKILL.md    Hermes 用的说明(安装时复制)
 
 全部为空且任务都成功 → 只输出"昨晚一切正常，没有新爆款。粉丝 N（±M）"。
 
-定时：`mp agents install-hermes` 调 `hermes cron create`（名称"MediaPilot 每日简报"，默认每天 8:30，工作目录项目根、skill `mediapilot`、投递到微信）；同名任务已存在则 `hermes cron edit` 更新。
+定时：`mp agents install-hermes` 在 `~/.hermes/scripts/` 写一个脚本 `mediapilot-brief.sh`（进入项目目录执行 `MP_AGENT=hermes npm run -s mp -- brief`），再调 `hermes cron create "30 8 * * *" --name "MediaPilot 每日简报" --script mediapilot-brief.sh --no-agent --deliver <目标>`：**不经过大模型，脚本输出原样投递**（不花模型费用，也不可能编造）。投递目标默认 `all`（与用户现有定时任务一致），可用 `--deliver` 指定。同名任务已存在则先删后建。
 
 ## 8. 出错处理
 
