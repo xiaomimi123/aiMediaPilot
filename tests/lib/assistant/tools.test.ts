@@ -29,6 +29,13 @@ describe('commandToTool', () => {
     const r = await commandToTool(cmd({ run: async () => { throw new CliError('quota', '今天搜索次数用完了'); } })).execute(ctx, {});
     expect(r).toEqual({ ok: false, summary: '近期对标爆款失败：今天搜索次数用完了', data: { error: '今天搜索次数用完了' } });
   });
+  it('accepts numeric flag values', async () => {
+    const t = commandToTool(cmd({}));
+    const parsed = t.input.safeParse({ flags: { days: 1 } });
+    expect(parsed.success).toBe(true);
+    const r = await t.execute(ctx, parsed.success ? parsed.data : {});
+    expect(r.data).toMatchObject({ json: { days: '1' } });
+  });
   it('rejects bad flag values with the command error', async () => {
     const r = await commandToTool(cmd({ run: async (_c, p) => needArg(p, 0, '项目') })).execute(ctx, {});
     expect(r.ok).toBe(false);
@@ -43,5 +50,12 @@ describe('buildAssistantTools', () => {
     expect(names).toContain('status');
     expect(names).toContain('chat');
     expect(names).toContain('load_skill');
+  });
+  it('never exposes heavy-tier or agents commands, even new ones', () => {
+    const extra = [cmd({ path: ['film', 'preview'], tier: 'heavy' }), cmd({ path: ['agents', 'install-foo'], tier: 'write' })];
+    const names = buildAssistantTools([...ALL_COMMANDS, ...extra], '/nonexistent').map((t) => t.name);
+    expect(names).not.toContain('film_preview');
+    expect(names).not.toContain('agents_install-foo');
+    for (const c of ALL_COMMANDS.filter((c) => c.tier === 'heavy')) expect(names).not.toContain(c.path.join('_'));
   });
 });

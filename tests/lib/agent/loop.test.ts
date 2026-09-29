@@ -163,7 +163,8 @@ describe('runAgentTurn', () => {
         return { text: '只能聊天的回答', toolCalls: [] };
       },
     };
-    const { events } = await run(model);
+    const { events, messages } = await run(model);
+    expect(messages.at(-1)).toMatchObject({ role: 'assistant', content: '（当前模型只能聊天，不能帮你操作产品，换一个能当编导的模型。）\n只能聊天的回答' });
     expect(calls).toBe(2);
     expect(model.seen).toEqual([1, 0]);
     expect(events[0]).toEqual({ type: 'text', delta: '（当前模型只能聊天，不能帮你操作产品，换一个能当编导的模型。）\n' });

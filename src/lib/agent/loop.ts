@@ -109,7 +109,8 @@ export async function runAgentTurn(opts: {
     }
 
     if (turn.toolCalls.length === 0) {
-      await scope.save({ role: 'assistant', content: turn.text });
+      // 降级提示也存进回复, 刷新后仍看得到
+      await scope.save({ role: 'assistant', content: (toolsDisabled ? TOOLS_UNSUPPORTED_NOTE : '') + turn.text });
       emit({ type: 'done' });
       return;
     }

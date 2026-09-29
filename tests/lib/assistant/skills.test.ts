@@ -20,6 +20,14 @@ describe('skills', () => {
     expect(r.summary).toBe('已使用 skill：daily-kickoff');
     expect((r.data as { text: string }).text).toContain('status');
   });
+  it('keeps every built-in skill within the per-turn tool budget', async () => {
+    // 每轮最多 8 次工具(含 load_skill 本身); skill 步骤里写明的调用上限之和不能超
+    for (const s of await listSkills(SKILLS_DIR)) {
+      const body = (await loadSkillTool(SKILLS_DIR).execute(ctx, { name: s.name })).data as { text: string };
+      const budget = Number(/工具预算：(\d+)/.exec(body.text)?.[1]);
+      expect(budget, s.name).toBeLessThanOrEqual(7);
+    }
+  });
   it('lists skills when the name is unknown', async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mp-sk-'));
     await fs.mkdir(path.join(dir, 'a'));
