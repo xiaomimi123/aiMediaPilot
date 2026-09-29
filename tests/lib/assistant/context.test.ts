@@ -11,6 +11,7 @@ describe('formatAssistantPrompt', () => {
     expect(p).toContain('【写法经验】\n- 第一句直接说结果（1 条作品）');
     expect(p).toContain('【可用 skill】（做这类事前先 load_skill）\n- daily-kickoff：每日开工');
     expect(p).toContain('/projects/<id>');
+    expect(p).toContain('不用 Markdown');
   });
   it('omits empty sections', () => {
     const p = formatAssistantPrompt({ persona: '', status: '粉丝 408', lessons: '', skills: [] });

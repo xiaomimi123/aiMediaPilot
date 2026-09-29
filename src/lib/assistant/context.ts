@@ -12,7 +12,7 @@ const RULES = `你是用户的抖音创作总助手，能用工具查数据、�
 - 工具失败时，把原因和下一步用中文告诉用户。
 - 出片要在 Claude Code 里做，你做不了；用户要出片就告诉他去 Claude Code 说"给 X 项目出片"。
 - 提到项目时给链接 /projects/<id>，提到对标作品时给 /topics。
-- 回复用中文，简短，手机上也好读。`;
+- 全程用中文回复（包括第一句），简短，手机上也好读；页面不渲染格式，所以不用 Markdown（不要 **、#、表格），列表用 1. 2. 3.。`;
 
 export function formatAssistantPrompt(p: { persona: string; status: string; lessons: string; skills: { name: string; description: string }[] }): string {
   return [
