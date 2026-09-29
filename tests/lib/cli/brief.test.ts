@@ -32,6 +32,18 @@ describe('buildBrief', () => {
       ].join('\n'),
     );
   });
+  it('loadBriefInput tolerates a retro with a null diagnosis', async () => {
+    const { loadBriefInput } = await import('@/lib/cli/brief');
+    const db = {
+      benchmarkVideo: { findMany: async () => [] },
+      retro: { findMany: async () => [{ diagnosis: null, narrative: '开头掉人多。后面还行', project: { title: 'U盘' } }] },
+      project: { findMany: async () => [] },
+      douyinMetricSummary: { findUnique: async () => null },
+      writingLesson: { count: async () => 0 },
+    } as never;
+    const i = await loadBriefInput(db, new Date('2026-09-29T00:00:00Z'));
+    expect(i.retros).toEqual([{ title: 'U盘', line: '开头掉人多' }]);
+  });
   it('never says all is well when a task failed', () => {
     const t = buildBrief({ ...base, collect: { ...ok, state: 'failing', hint: '连续 2 次回采失败：数据库没启动' } });
     expect(t).not.toContain('一切正常');

@@ -50,6 +50,9 @@ export function agentFromEnv(env: { MP_AGENT?: string }): Agent {
   return env.MP_AGENT === 'hermes' ? 'hermes' : 'claude-code';
 }
 
+/** 开关型参数: 永远不带值, 放在位置参数前面也不会吞掉它(agent 常把 --json 写在前面) */
+export const BOOLEAN_FLAGS = new Set(['json', 'stills']);
+
 export function parseArgv(argv: string[]): Parsed {
   const positionals: string[] = [];
   const flags: Record<string, string | true> = {};
@@ -60,6 +63,10 @@ export function parseArgv(argv: string[]): Parsed {
       break;
     }
     if (a.startsWith('--') && a.length > 2) {
+      if (BOOLEAN_FLAGS.has(a.slice(2))) {
+        flags[a.slice(2)] = true;
+        continue;
+      }
       const next = argv[i + 1];
       if (next !== undefined && !next.startsWith('--')) {
         flags[a.slice(2)] = next;

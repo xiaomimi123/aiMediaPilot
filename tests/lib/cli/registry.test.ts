@@ -18,6 +18,10 @@ describe('parseArgv', () => {
   it('reads flags and positionals', () => {
     expect(parseArgv(['p1', '--days', '7', '--json'])).toEqual({ positionals: ['p1'], flags: { days: '7', json: true } });
   });
+  it('boolean flags never swallow the next positional', () => {
+    expect(parseArgv(['--json', 'p1'])).toEqual({ positionals: ['p1'], flags: { json: true } });
+    expect(parseArgv(['--stills', 'dir'])).toEqual({ positionals: ['dir'], flags: { stills: true } });
+  });
   it('treats everything after -- as positionals', () => {
     expect(parseArgv(['p1', '--', '--别这样写', '好吗']).positionals).toEqual(['p1', '--别这样写', '好吗']);
   });

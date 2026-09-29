@@ -50,8 +50,8 @@ export async function loadBriefInput(db: PrismaClient, now: Date): Promise<Brief
       return { author: h.account.nickname, ratio: h.ratio, topic: a.success ? a.data.topic : h.desc.replace(/#\S+/g, '').trim().slice(0, 24) };
     }),
     retros: retros.map((r) => {
-      const d = r.diagnosis as unknown as Diagnosis;
-      const bad = d.stages?.find((s) => s.verdict === 'bad');
+      const d = r.diagnosis as unknown as Diagnosis | null;
+      const bad = d?.stages?.find((s) => s.verdict === 'bad');
       return { title: r.project.title, line: bad ? `${bad.label}比平时差` : (r.narrative ?? '').split(/[。！]/)[0] || '已出复盘' };
     }),
     pendingLinks,

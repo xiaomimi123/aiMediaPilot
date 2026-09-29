@@ -46,8 +46,21 @@ describe('hermes install', () => {
     expect(script).toContain(`cd "${d.projectDir}"`);
     expect(script).toContain('MP_AGENT=hermes npm run -s mp -- brief');
     expect(script).toContain('export PATH="/opt/homebrew/bin:$PATH"');
-    expect(d.calls.at(-1)).toEqual(['hermes', 'cron', 'create', '30 8 * * *', '--name', 'MediaPilot 每日简报', '--script', 'mediapilot-brief.sh', '--no-agent', '--deliver', 'all']);
+    expect(d.calls.find((c) => c[2] === 'create')).toEqual(['hermes', 'cron', 'create', '30 8 * * *', '--name', 'MediaPilot 每日简报', '--script', 'mediapilot-brief.sh', '--no-agent', '--deliver', 'all']);
     expect(r).toMatchObject({ backup: null, jobReplaced: false });
+  });
+  it('stops before touching anything when hermes is missing', async () => {
+    const d = await deps();
+    d.exec = vi.fn(async () => ({ code: 127, stdout: '', stderr: 'spawn hermes ENOENT' }));
+    await expect(installHermes(d, { hour: 8, minute: 30, deliver: 'all' })).rejects.toThrow('找不到 hermes 命令');
+    await expect(fs.stat(path.join(d.hermesHome, 'skills', 'mediapilot'))).rejects.toThrow();
+  });
+  it('lists disabled jobs too, and creates the new job before removing the old one', async () => {
+    const d = await deps(LIST);
+    await installHermes(d, { hour: 8, minute: 30, deliver: 'all' });
+    const verbs = d.calls.map((c) => c.slice(1, 3).join(' '));
+    expect(d.calls).toContainEqual(['hermes', 'cron', 'list', '--all']);
+    expect(verbs.indexOf('cron create')).toBeLessThan(verbs.indexOf('cron remove'));
   });
   it('backs up an existing skill dir and replaces an existing job', async () => {
     const d = await deps(LIST);
@@ -57,7 +70,7 @@ describe('hermes install', () => {
     expect(r.backup).toMatch(/mediapilot\.bak-/);
     expect(await fs.readFile(path.join(r.backup!, 'SKILL.md'), 'utf8')).toBe('old');
     expect(d.calls).toContainEqual(['hermes', 'cron', 'remove', '9a8b7c6d5e4f']);
-    expect(d.calls.at(-1)?.[3]).toBe('0 9 * * *');
+    expect(d.calls.find((c) => c[2] === 'create')?.[3]).toBe('0 9 * * *');
     expect(r.jobReplaced).toBe(true);
   });
 });

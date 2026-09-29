@@ -11,6 +11,11 @@ describe('finalizeScript', () => {
     await finalizeScript(db, 'p1');
     expect(project.stage).toBe('scripted');
   });
+  it('never moves a project backwards', async () => {
+    const { db, project } = createFakeDb({ project: { script, stage: 'recorded' } });
+    await finalizeScript(db, 'p1');
+    expect(project.stage).toBe('recorded');
+  });
   it('refuses without a script', async () => {
     const { db } = createFakeDb();
     await expect(finalizeScript(db, 'p1')).rejects.toThrow('还没有稿子，不能定稿');

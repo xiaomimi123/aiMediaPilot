@@ -29,6 +29,10 @@ export function findJobId(listOutput: string, name: string): string | null {
 }
 
 export async function installHermes(d: HermesDeps, opts: { hour: number; minute: number; deliver: string }) {
+  // 先确认 hermes 能用, 再动任何文件
+  const list = await d.exec('hermes', ['cron', 'list', '--all']);
+  if (list.code !== 0) throw new CliError('failed', `找不到 hermes 命令或它没响应（${(list.stderr || list.stdout).trim().slice(0, 120) || '无输出'}）。先确认终端里能运行 hermes。`);
+  const existing = findJobId(list.stdout, BRIEF_JOB_NAME);
   const skillDir = path.join(d.hermesHome, 'skills', 'mediapilot');
   let backup: string | null = null;
   if (await fs.stat(skillDir).catch(() => null)) {
@@ -47,11 +51,10 @@ MP_AGENT=hermes npm run -s mp -- brief
 `;
   await fs.writeFile(path.join(scriptsDir, BRIEF_SCRIPT), script, { mode: 0o755 });
 
-  const list = await d.exec('hermes', ['cron', 'list']);
-  const existing = findJobId(list.stdout, BRIEF_JOB_NAME);
-  if (existing) await d.exec('hermes', ['cron', 'remove', existing]);
+  // 先建新的, 成功了再删旧的: 建失败时旧任务还在
   const r = await d.exec('hermes', ['cron', 'create', `${opts.minute} ${opts.hour} * * *`, '--name', BRIEF_JOB_NAME, '--script', BRIEF_SCRIPT, '--no-agent', '--deliver', opts.deliver]);
-  if (r.code !== 0) throw new CliError('failed', `Hermes 定时任务没建上：${(r.stderr || r.stdout).trim().slice(0, 200)}`);
+  if (r.code !== 0) throw new CliError('failed', `Hermes 定时任务没建上（旧任务保留）：${(r.stderr || r.stdout).trim().slice(0, 200)}`);
+  if (existing) await d.exec('hermes', ['cron', 'remove', existing]);
   return { skillDir, backup, jobReplaced: !!existing };
 }
 
@@ -59,7 +62,7 @@ function realExec(cmd: string, args: string[]): Promise<{ code: number; stdout: 
   return new Promise((resolve) => {
     execFile(cmd, args, { timeout: 60_000 }, (err, stdout, stderr) => {
       const e = err as (NodeJS.ErrnoException & { code?: number | string }) | null;
-      resolve({ code: !e ? 0 : typeof e.code === 'number' ? e.code : 1, stdout: String(stdout), stderr: String(stderr) });
+      resolve({ code: !e ? 0 : typeof e.code === 'number' ? e.code : 127, stdout: String(stdout), stderr: String(stderr) || (e ? e.message : '') });
     });
   });
 }
