@@ -20,6 +20,8 @@ export interface MessageView {
   content: string;
   toolName: string | null;
   ok: boolean | null;
+  /** 工具的原始输出(可展开查看) */
+  detail?: string | null;
 }
 
 export function toProjectView(p: { id: string; title: string; stage: string; targetSec: number; script: unknown; updatedAt: Date }): ProjectView {
@@ -42,7 +44,8 @@ export function toMessageView(m: { id: string; role: string; content: string; to
     (m.role === 'tool' || m.role === 'system') && m.toolResult && typeof m.toolResult === 'object'
       ? Boolean((m.toolResult as { ok?: unknown }).ok)
       : null;
-  return { id: m.id, role: m.role as MessageView['role'], content: m.content, toolName: m.toolName, ok };
+  const text = m.toolResult && typeof m.toolResult === 'object' ? (m.toolResult as { data?: { text?: unknown } | null }).data?.text : undefined;
+  return { id: m.id, role: m.role as MessageView['role'], content: m.content, toolName: m.toolName, ok, detail: typeof text === 'string' ? text : null };
 }
 
 export interface JobView {
