@@ -123,3 +123,13 @@ model AssistantMessage {
 ## 11. 不做
 
 用户自己写 / 编辑 skill；导入 Claude Code / Hermes 的 skill；助手自己总结 skill；悬浮窗；长期记忆（子项目 3）；联网搜索；出片；语音。
+
+## 12. 真机实测（2026-09-29，实施后，当前模型 DeepSeek）
+
+- "今天做什么"：先 `load_skill daily-kickoff`，再调 status / topics_hits / publish_candidates / lessons_list，给出 3 条建议，数字均来自工具。
+- "找个选题开工"：`topics_suggest` 因近 14 天只有 1 条爆款失败，助手如实转告并建议先多关注对标账号，没有建项目。
+- 指定对标作品开工：topics_show → project_new → chat，编导写出 6 段约 60.8 秒首版，【待补】处留给用户；回复里的 `/projects/<id>` 可点，进项目页能看到稿子。
+- "最近数据怎么样"：没有已发布作品的复盘时直说数据不足，不编原因。
+- 初版回复带了 Markdown `**` 和一句英文开场：系统提示改为"全程中文、不用 Markdown"；data-diagnosis 的触发说明补上"最近数据怎么样"。
+- 只能聊天的模型：本机没有这类模型，降级重试只由单元测试覆盖。
+- 窄屏：对话列表收成下拉框，无横向溢出；项目页编导对话框外观不变。
