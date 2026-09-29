@@ -32,6 +32,7 @@ export async function runHealthChecks(deps: {
   env: NodeJS.ProcessEnv;
   cwd: string;
   collect: CollectStatus;
+  model: { label: string; grade: 'able_agent' | 'analysis_only' | 'unusable' | null } | null;
   scan: CollectStatus;
 }): Promise<HealthItem[]> {
   const items: HealthItem[] = [];
@@ -44,11 +45,17 @@ export async function runHealthChecks(deps: {
     items.push({ key: 'db', label: '数据库', status: 'fail', detail: '连不上数据库', fix: '启动 Docker Desktop，然后运行 docker compose up -d' });
   }
 
-  const key = deps.env.DEEPSEEK_API_KEY?.trim();
+  const mdl = deps.model;
   items.push(
-    key
-      ? { key: 'deepseek', label: 'DeepSeek key', status: 'ok', detail: `已配置（sk-…${key.slice(-4)}），可在下方测试连接` }
-      : { key: 'deepseek', label: 'DeepSeek key', status: 'fail', detail: '没有配置，编导和写稿都用不了', fix: '在下方填入 DeepSeek key' },
+    !mdl
+      ? { key: 'model', label: '当前模型', status: 'fail', detail: '没有可用的模型，编导和写稿都用不了', fix: '在下方「模型」里添加一个' }
+      : mdl.grade === 'able_agent'
+        ? { key: 'model', label: '当前模型', status: 'ok', detail: `${mdl.label}，能当编导` }
+        : mdl.grade === 'analysis_only'
+          ? { key: 'model', label: '当前模型', status: 'warn', detail: `${mdl.label} 只能做分析，编导写稿改稿用不了`, fix: '换一个能当编导的模型' }
+          : mdl.grade === 'unusable'
+            ? { key: 'model', label: '当前模型', status: 'fail', detail: `${mdl.label} 最近测试不可用`, fix: '在下方「模型」里重新测试或换一个' }
+            : { key: 'model', label: '当前模型', status: 'warn', detail: `${mdl.label} 还没测试过`, fix: '在下方「模型」里点测试' },
   );
 
   const ff = await deps.exec('ffmpeg', ['-version'], TIMEOUT);

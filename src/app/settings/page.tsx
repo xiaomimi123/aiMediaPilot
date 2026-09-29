@@ -1,6 +1,4 @@
-import { getDeepSeekKey } from '@/lib/env';
-import { maskKey } from '@/lib/settings/deepseek';
-import { DeepSeekKey } from '@/components/settings/deepseek-key';
+import { ModelsCard } from '@/components/settings/models-card';
 import { HealthPanel } from '@/components/settings/health-panel';
 import { NightlyTasks } from '@/components/settings/nightly-tasks';
 
@@ -12,8 +10,8 @@ export default function SettingsPage() {
       <h1 className="mb-4 text-lg font-semibold">设置</h1>
       <div className="max-w-3xl space-y-4">
         <HealthPanel />
+        <ModelsCard />
         <NightlyTasks />
-        <DeepSeekKey initialMasked={maskKey(getDeepSeekKey())} />
       </div>
     </div>
   );
