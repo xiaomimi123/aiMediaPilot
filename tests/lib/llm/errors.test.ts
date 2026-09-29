@@ -13,6 +13,9 @@ describe('explainModelError', () => {
     expect(explainModelError(Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:11434'), { code: 'ECONNREFUSED' }), 'Ollama（qwen2.5）')).toBe('连不上本地模型 Ollama（qwen2.5）：先运行 Ollama，再重试。');
     expect(explainModelError(new Error('getaddrinfo ENOTFOUND api.x.com'), L)).toContain('连不上 Kimi（moonshot-v1-8k）：检查网络和接口地址');
   });
+  it('explains a model that cannot call tools', () => {
+    expect(explainModelError(Object.assign(new Error('registry.ollama.ai/library/gemma:2b does not support tools'), { status: 400 }), 'Ollama（gemma）')).toBe('Ollama（gemma）不支持工具调用：写稿改稿用不了，换一个能当编导的模型。');
+  });
   it('recognizes status text inside plain messages', () => {
     expect(explainModelError(new Error('401 Unauthorized'), L)).toContain('key 无效');
   });

@@ -1,12 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import type { PrismaClient } from '@prisma/client';
-import { ensureMigrated, maskKey, toModelView, updateModel, activateModel, ModelInputSchema, PRESETS } from '@/lib/llm/providers';
+import { Prisma, type PrismaClient } from '@prisma/client';
+import { ensureMigrated, maskKey, toModelView, updateModel, activateModel, createModel, ModelInputSchema, PRESETS } from '@/lib/llm/providers';
 
 type Row = { id: string; name: string; kind: string; baseUrl: string; apiKey: string; model: string; isActive: boolean; lastTest: unknown };
 
-function fakeDb(rows: Row[] = []) {
+function fakeDb(rows: Row[] = [], flags = new Set<string>()) {
   let seq = 0;
+  const updates: Record<string, unknown>[] = [];
   const db = {
+    appSetting: {
+      findUnique: async ({ where }: { where: { key: string } }) => (flags.has(where.key) ? { key: where.key, value: '1' } : null),
+      create: async ({ data }: { data: { key: string } }) => {
+        if (flags.has(data.key)) throw new Prisma.PrismaClientKnownRequestError('dup', { code: 'P2002', clientVersion: '5' });
+        flags.add(data.key);
+        return data;
+      },
+    },
     modelProvider: {
       count: async () => rows.length,
       findMany: async () => rows.map((r) => ({ ...r })),
@@ -17,7 +26,10 @@ function fakeDb(rows: Row[] = []) {
         rows.push(r);
         return r;
       },
-      update: async ({ where, data }: { where: { id: string }; data: Partial<Row> }) => Object.assign(rows.find((r) => r.id === where.id)!, data),
+      update: async ({ where, data }: { where: { id: string }; data: Partial<Row> }) => {
+        updates.push(data as Record<string, unknown>);
+        return Object.assign(rows.find((r) => r.id === where.id)!, data);
+      },
       updateMany: async ({ data }: { data: Partial<Row> }) => {
         rows.forEach((r) => Object.assign(r, data));
         return { count: rows.length };
@@ -25,7 +37,7 @@ function fakeDb(rows: Row[] = []) {
     },
     $transaction: async (ops: Promise<unknown>[]) => Promise.all(ops),
   } as unknown as PrismaClient;
-  return { db, rows };
+  return { db, rows, updates, flags };
 }
 
 const row = (o: Partial<Row>): Row => ({ id: 'a', name: 'DeepSeek', kind: 'openai', baseUrl: 'https://api.deepseek.com/v1', apiKey: 'sk-1234567890abcd', model: 'deepseek-chat', isActive: false, lastTest: null, ...o });
@@ -37,6 +49,30 @@ describe('providers', () => {
     expect(rows[0]).toMatchObject({ name: 'DeepSeek', kind: 'openai', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat', apiKey: 'sk-abc', isActive: true });
     expect(await ensureMigrated(db, { DEEPSEEK_API_KEY: 'sk-abc' })).toBe(false);
     expect(rows).toHaveLength(1);
+  });
+  it('migrates only once even after the model is deleted', async () => {
+    const { db, rows } = fakeDb();
+    await ensureMigrated(db, { DEEPSEEK_API_KEY: 'sk-abc' });
+    rows.length = 0;
+    expect(await ensureMigrated(db, { DEEPSEEK_API_KEY: 'sk-abc' })).toBe(false);
+    expect(rows).toHaveLength(0);
+  });
+  it('two concurrent first loads create one model', async () => {
+    const { db, rows } = fakeDb();
+    await Promise.all([ensureMigrated(db, { DEEPSEEK_API_KEY: 'sk-abc' }), ensureMigrated(db, { DEEPSEEK_API_KEY: 'sk-abc' })]);
+    expect(rows).toHaveLength(1);
+  });
+  it('clears the old test result when a model is edited', async () => {
+    const { db, updates } = fakeDb([row({ lastTest: { grade: 'able_agent' } })]);
+    await updateModel(db, 'a', { name: 'DS', kind: 'openai', baseUrl: 'https://api.deepseek.com/v1', model: 'other', apiKey: '' });
+    expect(updates.at(-1)?.lastTest).toBe(Prisma.DbNull);
+  });
+  it('makes the first model current when none is active', async () => {
+    const { db, rows } = fakeDb();
+    await createModel(db, { name: 'Kimi', kind: 'openai', baseUrl: 'https://api.moonshot.cn/v1', model: 'k', apiKey: 'x' });
+    expect(rows[0].isActive).toBe(true);
+    await createModel(db, { name: 'GLM', kind: 'openai', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'g', apiKey: 'y' });
+    expect(rows[1].isActive).toBe(false);
   });
   it('does nothing without a .env key', async () => {
     const { db, rows } = fakeDb();

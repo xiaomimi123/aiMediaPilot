@@ -66,9 +66,14 @@ export function toAnthropicMessages(messages: AgentMessage[]): { system: string;
   return { system: system.join('\n\n'), messages: out };
 }
 
-function client(c: Cfg) {
-  return new Anthropic({ apiKey: c.apiKey || 'none', baseURL: c.baseUrl });
+/**
+ * authToken 必须显式置空: 否则 SDK 会自动读环境变量 ANTHROPIC_AUTH_TOKEN 并一起发出去 ——
+ * 用户填的是第三方中转站时, 这个 token 就泄露给了中转站。
+ */
+export function makeAnthropicClient(c: Cfg) {
+  return new Anthropic({ apiKey: c.apiKey || 'none', authToken: null, baseURL: c.baseUrl });
 }
+const client = makeAnthropicClient;
 
 export function createAnthropicChat(c: Cfg, deps: { stream?: AnthropicStreamFn } = {}): ChatModel {
   const stream: AnthropicStreamFn =

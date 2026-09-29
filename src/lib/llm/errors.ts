@@ -3,6 +3,7 @@ export function explainModelError(e: unknown, label: string): string {
   const err = e as { status?: number; code?: string; message?: string };
   const msg = err?.message ?? String(e);
   const status = err?.status ?? Number(/\b(40[1-4]|429|5\d\d)\b/.exec(msg)?.[1] ?? 0);
+  if (/does not support tools|tools? (is|are) not supported|不支持.{0,6}工具|function call(ing)? (is )?not supported/i.test(msg)) return `${label}不支持工具调用：写稿改稿用不了，换一个能当编导的模型。`;
   if (status === 401 || status === 403) return `${label}拒绝了请求：key 无效或没有权限，去设置页检查这个模型的 key。`;
   if (status === 402) return `${label}余额不足：去厂商后台充值后再试。`;
   if (status === 429) return `${label}请求太频繁或额度用完：等一会儿再试，或换一个模型。`;

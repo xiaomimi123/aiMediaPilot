@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 
 export type ProviderKind = 'openai' | 'anthropic';
 
@@ -77,15 +77,17 @@ export async function getActiveConfig(db: PrismaClient): Promise<ModelConfig | n
 }
 
 export async function createModel(db: PrismaClient, input: ModelInput): Promise<ModelConfig> {
-  const r = await db.modelProvider.create({ data: { name: input.name, kind: input.kind, baseUrl: input.baseUrl, model: input.model, apiKey: input.apiKey ?? '' } });
+  // 还没有当前模型时, 新加的这个直接设为当前(否则到处提示"去添加", 而用户明明刚加过)
+  const hasActive = !!(await db.modelProvider.findFirst({ where: { isActive: true } }));
+  const r = await db.modelProvider.create({ data: { name: input.name, kind: input.kind, baseUrl: input.baseUrl, model: input.model, apiKey: input.apiKey ?? '', isActive: !hasActive } });
   return toConfig(r);
 }
 
 export async function updateModel(db: PrismaClient, id: string, input: ModelInput): Promise<ModelConfig> {
   const r = await db.modelProvider.update({
     where: { id },
-    // key 留空 = 不改; 改了地址/模型要重新测试
-    data: { name: input.name, kind: input.kind, baseUrl: input.baseUrl, model: input.model, ...(input.apiKey ? { apiKey: input.apiKey } : {}), lastTest: undefined },
+    // key 留空 = 不改; 改了地址/模型, 旧的测试结果作废
+    data: { name: input.name, kind: input.kind, baseUrl: input.baseUrl, model: input.model, ...(input.apiKey ? { apiKey: input.apiKey } : {}), lastTest: Prisma.DbNull },
   });
   return toConfig(r);
 }
@@ -102,10 +104,23 @@ export async function saveTestResult(db: PrismaClient, id: string, r: ModelTestR
   await db.modelProvider.update({ where: { id }, data: { lastTest: r as unknown as Prisma.InputJsonValue } });
 }
 
-/** 表为空且 .env 有 DeepSeek key → 建一条并设为当前; 只做一次 */
+const MIGRATED_FLAG = 'models.migrated_from_env';
+
+/**
+ * 表为空且 .env 有 DeepSeek key → 建一条并设为当前。
+ * 只做一次: 用 AppSetting 主键当锁 —— 并发的两次首次加载只有一个能写进标记; 用户之后删光模型也不会被自动加回来。
+ */
 export async function ensureMigrated(db: PrismaClient, env: { DEEPSEEK_API_KEY?: string }): Promise<boolean> {
   const key = env.DEEPSEEK_API_KEY?.trim();
-  if (!key || (await db.modelProvider.count()) > 0) return false;
+  if (!key) return false;
+  if (await db.appSetting.findUnique({ where: { key: MIGRATED_FLAG } })) return false;
+  try {
+    await db.appSetting.create({ data: { key: MIGRATED_FLAG, value: new Date().toISOString() } });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') return false;
+    throw e;
+  }
+  if ((await db.modelProvider.count()) > 0) return false;
   await db.modelProvider.create({ data: { name: 'DeepSeek', kind: 'openai', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat', apiKey: key, isActive: true } });
   return true;
 }

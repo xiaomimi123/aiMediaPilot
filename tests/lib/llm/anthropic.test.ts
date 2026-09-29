@@ -69,6 +69,16 @@ describe('createAnthropicChat', () => {
   });
 });
 
+describe('anthropic client', () => {
+  it('never forwards ANTHROPIC_AUTH_TOKEN from the environment to a relay', async () => {
+    const { makeAnthropicClient } = await import('@/lib/llm/anthropic');
+    process.env.ANTHROPIC_AUTH_TOKEN = 'secret-env-token';
+    const c = makeAnthropicClient({ ...cfg, baseUrl: 'https://relay.example.com' });
+    expect((c as unknown as { authToken: unknown }).authToken).toBeNull();
+    delete process.env.ANTHROPIC_AUTH_TOKEN;
+  });
+});
+
 describe('createAnthropicLLM', () => {
   it('forces a tool call and validates its input with the schema', async () => {
     const create = vi.fn(async () => ({ content: [{ type: 'tool_use', id: 'x', name: 'respond', input: { city: '北京', country: '中国' } }], usage: { input_tokens: 10, output_tokens: 5 } }));

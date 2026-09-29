@@ -309,3 +309,10 @@ model ModelProvider {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+/// 应用级键值(如"已从 .env 迁移过模型"这类只做一次的标记)
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
