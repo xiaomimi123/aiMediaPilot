@@ -9,7 +9,7 @@ description: 给 MediaPilot 项目出一条竖屏口播成片(Remotion, 风格 C
 
 ## 流程(每一步都要做, 不许跳)
 
-1. **找项目**: `npm run -s mp -- project list`。用户说的项目名对不上就问。
+1. **找项目**: `npm run -s mp -- project list`(不熟悉命令时先 `npm run -s mp -- help`)。用户说的项目名对不上就问。
 2. **读资料**: `npm run -s mp -- project export <id>`。读稿子、逐句转写、素材说明。
    - 视频素材: `ffmpeg -i <path> -vf fps=1/2,scale=480:-1 /tmp/mat-<id>-%03d.jpg` 抽帧后逐张看; 图片直接看。
 3. **建片子**: `npm run -s mp -- film new <id>` → 得到片子目录 `remotion/films/<id>-v<N>/`。

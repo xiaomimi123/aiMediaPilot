@@ -143,3 +143,12 @@ agents/hermes/mediapilot/SKILL.md    Hermes 用的说明(安装时复制)
 ## 10. 不做
 
 MCP 服务；真正的安全隔离；微信写稿 / 出片；Hermes 触发访问抖音的操作；多用户。
+
+## 11. 真机实测（2026-09-29，实施后）
+
+- `mp help`：Claude Code 身份 34 条命令，Hermes 身份 17 条。
+- Hermes 身份下 9 个读命令加 `--json` 均为一行合法 JSON；`topics suggest` 在近 14 天只有 1 条爆款时如实返回"数据太少"。
+- Hermes 调 `chat` / `tasks run` / `lessons retire` / `script finalize` / `topics search` 均退出码 2。
+- 前半程：`project new` → `mp chat` 写稿（约 6 秒，回复流式输出、工具结果走 stderr，编导留了【待补：你的真实经历】）→ `project show`；`script finalize` 在无稿时正确拒绝。
+- 实施中发现：Hermes 定时任务跑在非登录 shell，简报脚本需写入当前 node 目录到 PATH。
+- Hermes 安装与微信投递：待用户同意后执行。
