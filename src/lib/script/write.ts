@@ -37,8 +37,8 @@ const SYSTEM_PROMPT = `你是抖音 AI 知识类口播博主的编导，负责�
 - 严格按给定的 6 段结构与每段字数写，字数是硬约束。
 - 只输出 JSON：{"title": "视频标题", "segments": [{"role": "段名", "text": "逐字稿"}, ...共 6 段]}。`;
 
-function firstMessage(direction: string, targetSec: number, personaText: string, reference = ''): string {
-  return `${personaText ? `【账号定位】\n${personaText}\n\n` : ''}【这条讲什么】\n${direction}${reference ? `\n\n【参考的对标作品】（只借选题、开头钩子的写法、标题思路；不得照抄原句，连续 12 字相同即算照抄）\n${reference}` : ''}\n\n【目标时长】${targetSec} 秒，按口语 ${CHARS_PER_SEC} 字/秒\n\n【6 段结构与字数】\n${segmentGuide(targetSec)}`;
+function firstMessage(direction: string, targetSec: number, personaText: string, reference = '', lessons = ''): string {
+  return `${personaText ? `【账号定位】\n${personaText}\n\n` : ''}${lessons ? `【写法经验】（来自用户自己的复盘，写稿遵守）\n${lessons}\n\n` : ''}【这条讲什么】\n${direction}${reference ? `\n\n【参考的对标作品】（只借选题、开头钩子的写法、标题思路；不得照抄原句，连续 12 字相同即算照抄）\n${reference}` : ''}\n\n【目标时长】${targetSec} 秒，按口语 ${CHARS_PER_SEC} 字/秒\n\n【6 段结构与字数】\n${segmentGuide(targetSec)}`;
 }
 
 function repairMessage(script: Script, report: DurationReport, targetSec: number): string {
@@ -52,6 +52,7 @@ export async function writeScript(opts: {
   targetSec: number;
   personaText: string;
   reference?: string;
+  lessons?: string;
 }): Promise<{ title: string; script: Script; report: DurationReport; rounds: number }> {
   const call = async (text: string) =>
     (
@@ -64,7 +65,7 @@ export async function writeScript(opts: {
 
   let raw: LlmScript;
   try {
-    raw = await call(firstMessage(opts.direction, opts.targetSec, opts.personaText, opts.reference));
+    raw = await call(firstMessage(opts.direction, opts.targetSec, opts.personaText, opts.reference, opts.lessons));
   } catch (e) {
     // 原始报错(多为 zod 的英文 JSON)不给用户看
     throw new Error('模型这次没按 6 段格式交稿，没写成。再说一次，或者把方向说具体些。', { cause: e });

@@ -53,6 +53,7 @@ export function createFakeDb(
     persona?: Record<string, unknown> | null;
     jobs?: Partial<FakeJob>[];
     files?: Partial<FakeFile>[];
+    lessons?: { text: string; evidence: unknown[] }[];
     benchmarkVideo?: { id: string; transcript: string | null; analysis: unknown; ratio: number | null; account: { nickname: string } };
   } = {},
 ) {
@@ -100,6 +101,9 @@ export function createFakeDb(
     (!w.updatedAt || j.updatedAt < w.updatedAt.lt);
 
   const db = {
+    writingLesson: {
+      findMany: async () => (seed.lessons ?? []).map((l, i) => ({ id: `L${i}`, text: l.text, evidence: l.evidence, status: 'active', confirmedAt: new Date() })),
+    },
     benchmarkVideo: {
       findUnique: async ({ where }: { where: { id: string } }) => (seed.benchmarkVideo && seed.benchmarkVideo.id === where.id ? { ...seed.benchmarkVideo } : null),
     },

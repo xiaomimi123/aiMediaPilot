@@ -2,6 +2,9 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { readResult, runEgo } from '../src/lib/ego';
 import { parseSelfProfile, saveSelfProfile, SELF_PROFILE_SCRIPT } from '../src/lib/douyin/profile';
+import { collectWorkMetrics } from '../src/lib/retro/collect-step';
+import { saveWorkMetrics } from '../src/lib/retro/metrics-store';
+import { runDueRetros } from '../src/lib/retro/generate';
 import { importWorks, type IncomingWork } from '../src/lib/works/import';
 
 /**
@@ -216,6 +219,20 @@ async function main(): Promise<void> {
       log(`账号资料: 粉丝 ${p.followers} / 获赞 ${p.totalLikes} / 作品 ${p.awemeCount}`);
     } catch (e) {
       log(`账号资料抓取失败(不影响前面的): ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    // 每条作品的完整指标(完播/跳出/平均观看) + 30 天内每日快照 —— 独立失败
+    try {
+      log(await collectWorkMetrics({ runScript: (sc) => runEgo(sc), save: (rows) => saveWorkMetrics(prisma, rows, new Date()) }));
+    } catch (e) {
+      log(`作品指标抓取失败(不影响前面的): ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    // 到期复盘(发布第 3 天生成、第 7 天更新) —— 独立失败
+    try {
+      log(await runDueRetros(prisma));
+    } catch (e) {
+      log(`复盘生成失败(不影响前面的): ${e instanceof Error ? e.message : String(e)}`);
     }
 
     // 创作者后台数据概览(口径不明, 首页不再用它的 fans) —— 同样独立失败

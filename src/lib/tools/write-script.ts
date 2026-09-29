@@ -4,6 +4,7 @@ import { writeScript } from '@/lib/script/write';
 import { formatPersona, type PersonaLike, type Tool } from './types';
 import { formatReference, loadReference } from '@/lib/benchmark/adopt';
 import { copiedSummary, findCopiedInScript } from '@/lib/benchmark/copy-check';
+import { formatLessons, loadActiveLessons } from '@/lib/retro/lessons';
 
 const Input = z.object({
   direction: z.string().min(1).describe('这条视频讲什么、从什么角度切入、用什么例子'),
@@ -20,12 +21,14 @@ export const writeScriptTool: Tool<z.infer<typeof Input>> = {
     const targetSec = input.targetSec ?? project.targetSec;
     const persona = (project.personaSnapshot as PersonaLike | null) ?? null;
     const ref = await loadReference(ctx.db, project.benchmarkVideoId ?? null);
+    const lessons = await loadActiveLessons(ctx.db);
     const { title, script, report, rounds } = await writeScript({
       llm: ctx.llm,
       direction: input.direction,
       targetSec,
       personaText: formatPersona(persona),
       reference: ref ? formatReference(ref) : undefined,
+      lessons: lessons.length ? formatLessons(lessons) : undefined,
     });
     await ctx.db.project.update({
       where: { id: ctx.projectId },

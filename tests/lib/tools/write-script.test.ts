@@ -44,4 +44,17 @@ describe('write_script tool', () => {
     expect((r.data as { copied: unknown[] }).copied).toEqual([{ segmentId: 's1', segment: '开场钩子', text: '很多人对AI的印象还停留在聊天写代码' }]);
     expect(r.summary).toContain('「开场钩子」有 1 处照抄对标原句');
   });
+  it('passes active writing lessons to the writer', async () => {
+    const msgs: string[] = [];
+    const spy: StructuredLLM = {
+      callStructured: (async (o: { userMessage: { text: string }[] }) => {
+        msgs.push(o.userMessage[0].text);
+        return { result: { title: 't', segments: onBudget.map((n) => ({ role: 'x', text: '字'.repeat(n) })) }, usage: {} };
+      }) as unknown as StructuredLLM['callStructured'],
+    };
+    const { db } = createFakeDb({ lessons: [{ text: '第一句直接说结果', evidence: [{}, {}] }] });
+    await writeScriptTool.execute({ projectId: 'p1', db, llm: spy }, { direction: 'x' });
+    expect(msgs[0]).toContain('【写法经验】');
+    expect(msgs[0]).toContain('第一句直接说结果（2 条作品）');
+  });
 });

@@ -55,6 +55,10 @@ describe('formatSystemPrompt', () => {
   it('omits the reference block when there is none', () => {
     expect(formatSystemPrompt({ title: 't', stage: 'draft', targetSec: 60, script: null, persona: null })).not.toContain('【参考的对标作品】');
   });
+  it('adds active writing lessons from the user own retros', () => {
+    const p = formatSystemPrompt({ title: 't', stage: 'draft', targetSec: 60, script: null, persona: null, lessons: [{ text: '第一句直接说结果', evidenceCount: 1 }] });
+    expect(p).toContain('【写法经验】（来自你自己的复盘）\n- 第一句直接说结果（证据少：1 条作品）');
+  });
 });
 
 describe('loadHistory', () => {

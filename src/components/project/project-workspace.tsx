@@ -8,12 +8,14 @@ import { ScriptPane } from './script-pane';
 import { RecordingPane } from './recording-pane';
 import { ChatPanel } from './chat-panel';
 import { FilmPane } from './film-pane';
+import { PublishPane } from './publish-pane';
 
-type Tab = 'script' | 'recording' | 'film';
+type Tab = 'script' | 'recording' | 'film' | 'publish';
 const TABS: { key: Tab; label: string }[] = [
   { key: 'script', label: '① 脚本' },
   { key: 'recording', label: '② 口播' },
   { key: 'film', label: '③ 成片' },
+  { key: 'publish', label: '④ 发布与复盘' },
 ];
 const isActive = (j: JobView | undefined) => !!j && (j.status === 'running' || j.status === 'queued');
 
@@ -38,7 +40,9 @@ export function ProjectWorkspace({
   const [materials, setMaterials] = useState(initialMaterials);
   const [films, setFilms] = useState(initialFilms);
   const [notices, setNotices] = useState<MessageView[]>([]);
-  const [tab, setTab] = useState<Tab>(initialProject.stage === 'draft' ? 'script' : initialProject.stage === 'final' ? 'film' : 'recording');
+  const [tab, setTab] = useState<Tab>(
+    initialProject.stage === 'draft' ? 'script' : initialProject.stage === 'final' ? 'film' : initialProject.stage === 'published' ? 'publish' : 'recording',
+  );
   const [highlighted, setHighlighted] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const transcribeJob = jobs.find((j) => j.kind === 'transcribe');
@@ -144,6 +148,7 @@ export function ProjectWorkspace({
                 }}
               />
             )}
+            {tab === 'publish' && <PublishPane projectId={project.id} />}
             {tab === 'film' && <FilmPane projectId={project.id} materials={materials} films={films} onChanged={() => void refresh()} />}
           </div>
         </div>

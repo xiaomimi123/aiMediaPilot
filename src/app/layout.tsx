@@ -16,6 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {[
             { href: '/', label: '项目' },
             { href: '/topics', label: '选题' },
+            { href: '/retro', label: '复盘' },
             { href: '/persona', label: '定位' },
             { href: '/settings', label: '设置' },
           ].map((l) => (

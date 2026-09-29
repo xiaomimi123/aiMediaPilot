@@ -6,6 +6,7 @@ import type { AgentMessage } from './chat-model';
 import { loadCurrentTranscript } from '@/lib/recording/transcript';
 import { compareWithScript } from '@/lib/recording/compare';
 import { formatReference, loadReference, type Reference } from '@/lib/benchmark/adopt';
+import { formatLessons, loadActiveLessons, type LessonForPrompt } from '@/lib/retro/lessons';
 
 export const HISTORY_LIMIT = 20;
 
@@ -14,6 +15,7 @@ const STAGE_LABEL: Record<string, string> = {
   scripted: '已定稿，等待录制',
   recorded: '已录制，等待出片',
   final: '已出成片',
+  published: '已发布',
 };
 
 const RULES = `你是用户的抖音口播编导，和用户一起把一条口播稿磨到能直接开录。
@@ -26,6 +28,7 @@ const RULES = `你是用户的抖音口播编导，和用户一起把一条口�
 - 不替用户编第一人称经历、试用结果、小故事。需要亲身例子时写「【待补：你的真实经历】」，或者直接问用户。
 - 用户还没定选题、让你帮忙找时：调用 suggest_topics，把 3 个选题连同理由和参考的对标简短列给用户；用户选定后再 write_script。不要自己编热点。
 - 系统提示里有对标参考时：只借三样：选题、开头钩子的写法、标题思路。不照抄原句，用用户的角度讲；工具返回 copied 非空时，按 copied 里标明的段落（segmentId）用 patch_script 把这些句子换成用户自己的说法；copied 为空之前不要说已经改好。
+- 有【写法经验】时：写稿遵守；和用户这次的要求冲突时听用户的。
 - 回复用中文，简短。`;
 
 export function formatSystemPrompt(p: {
@@ -36,6 +39,7 @@ export function formatSystemPrompt(p: {
   persona: PersonaLike | null;
   transcript?: { lines: { startSec: number; text: string; adlib: boolean }[]; skipped: string[] } | null;
   reference?: Reference | null;
+  lessons?: LessonForPrompt[];
 }): string {
   const persona = formatPersona(p.persona);
   const parsed = ScriptSchema.safeParse(p.script);
@@ -57,6 +61,7 @@ export function formatSystemPrompt(p: {
   return [
     RULES,
     persona ? `【账号定位】\n${persona}` : '',
+    p.lessons?.length ? `【写法经验】（来自你自己的复盘）\n${formatLessons(p.lessons)}` : '',
     `【项目】${p.title}｜${STAGE_LABEL[p.stage] ?? p.stage}｜目标 ${p.targetSec} 秒`,
     p.reference ? `【参考的对标作品】\n${formatReference(p.reference)}` : '',
     `【当前稿子】\n${scriptBlock}`,
@@ -87,6 +92,7 @@ export async function buildSystemPrompt(db: PrismaClient, projectId: string): Pr
     persona: (p.personaSnapshot as PersonaLike | null) ?? null,
     transcript,
     reference: await loadReference(db, p.benchmarkVideoId ?? null),
+    lessons: await loadActiveLessons(db),
   });
 }
 

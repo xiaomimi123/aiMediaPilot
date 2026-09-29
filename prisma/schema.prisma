@@ -20,6 +20,9 @@ model Project {
   /// 从哪条对标作品建的项目(选题模块)
   benchmarkVideoId String?
   benchmarkVideo   BenchmarkVideo? @relation(fields: [benchmarkVideoId], references: [id], onDelete: SetNull)
+  /// 发布文案 { titles, hashtags, coverText }
+  publishKit       Json?
+  retro            Retro?
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 
@@ -93,21 +96,21 @@ model PersonaProfile {
 }
 
 model PublishedWork {
-  id                 String    @id @default(cuid())
-  platform           String    @default("douyin")
+  id                 String               @id @default(cuid())
+  platform           String               @default("douyin")
   externalId         String
-  title              String    @db.Text
-  caption            String    @default("") @db.Text
-  hashtags           Json      @default("[]")
-  url                String    @default("")
+  title              String               @db.Text
+  caption            String               @default("") @db.Text
+  hashtags           Json                 @default("[]")
+  url                String               @default("")
   publishedAt        DateTime
-  durationSec        Int       @default(0)
-  isPrivate          Boolean   @default(false)
-  play               Int       @default(0)
-  digg               Int       @default(0)
-  comment            Int       @default(0)
-  collect            Int       @default(0)
-  share              Int       @default(0)
+  durationSec        Int                  @default(0)
+  isPrivate          Boolean              @default(false)
+  play               Int                  @default(0)
+  digg               Int                  @default(0)
+  comment            Int                  @default(0)
+  collect            Int                  @default(0)
+  share              Int                  @default(0)
   /// 以下来自抖音「投稿分析」接口, 与上面 play 等来自不同接口, 数字对不上是正常的
   anaPlay            Int?
   completionRate5s   Float?
@@ -115,11 +118,29 @@ model PublishedWork {
   avgPlayDurationSec Float?
   playPerClient      Json?
   analyticsFetchedAt DateTime?
+  /// 以下来自创作者中心 work_list(2026-09-29 起, 覆盖老作品); 缺失为 null
+  viewCount          Int?
+  likeCount          Int?
+  commentCount       Int?
+  shareCount         Int?
+  favoriteCount      Int?
+  subscribeCount     Int?
+  homepageVisitCount Int?
+  completionRate     Float?
+  bounceRate2sWl     Float?
+  completionRate5sWl Float?
+  avgViewSec         Float?
+  avgViewProportion  Float?
+  fanViewProportion  Float?
+  metricsUpdatedAt   DateTime?
+  /// 用户点过"不是我发的"的关联候选, 不再提示
+  matchDismissed     Boolean              @default(false)
+  snapshots          WorkMetricSnapshot[]
   /// 这条作品是哪个项目发的(阶段 5 的发布登记写入)
   projectId          String?
-  project            Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  fetchedAt          DateTime  @default(now())
-  createdAt          DateTime  @default(now())
+  project            Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  fetchedAt          DateTime             @default(now())
+  createdAt          DateTime             @default(now())
 
   @@unique([platform, externalId])
   @@index([publishedAt])
@@ -180,36 +201,95 @@ model BenchmarkAccount {
 
 /// 对标作品(选题模块)
 model BenchmarkVideo {
-  id             String           @id @default(cuid())
-  awemeId        String           @unique
-  accountId      String
-  account        BenchmarkAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  desc           String           @db.Text
-  url            String
-  publishedAt    DateTime
-  durationSec    Int
-  digg           Int
-  comment        Int
-  collect        Int
-  share          Int
+  id                String           @id @default(cuid())
+  awemeId           String           @unique
+  accountId         String
+  account           BenchmarkAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  desc              String           @db.Text
+  url               String
+  publishedAt       DateTime
+  durationSec       Int
+  digg              Int
+  comment           Int
+  collect           Int
+  share             Int
   /// digg / baselineDigg, 一位小数; 无基线为 null
-  ratio          Float?
-  isHit          Boolean          @default(false)
+  ratio             Float?
+  isHit             Boolean          @default(false)
   /// 首次判为爆款的时间; 之后跌出爆款也不清空
-  hitAt          DateTime?
+  hitAt             DateTime?
   /// new | seen | ignored | adopted
-  status         String           @default("new")
+  status            String           @default("new")
   /// none | running | done | failed
-  analysisStatus String           @default("none")
-  analysisError  String?
+  analysisStatus    String           @default("none")
+  analysisError     String?
   /// 本次拆解开始时间; 用来判断 running 是否已被重启打断(巡检脚本在另一个进程里拆)
   analysisStartedAt DateTime?
-  transcript     String?          @db.Text
-  analysis       Json?
-  analyzedAt     DateTime?
-  fetchedAt      DateTime         @default(now())
-  projects       Project[]
+  transcript        String?          @db.Text
+  analysis          Json?
+  analyzedAt        DateTime?
+  fetchedAt         DateTime         @default(now())
+  projects          Project[]
 
   @@index([isHit, publishedAt])
   @@index([accountId, publishedAt])
+}
+
+/// 作品每日指标快照(发布 30 天内的公开作品)
+model WorkMetricSnapshot {
+  id                String        @id @default(cuid())
+  workId            String
+  work              PublishedWork @relation(fields: [workId], references: [id], onDelete: Cascade)
+  /// Asia/Shanghai 本地日期 YYYY-MM-DD
+  day               String
+  viewCount         Int?
+  likeCount         Int?
+  commentCount      Int?
+  shareCount        Int?
+  favoriteCount     Int?
+  subscribeCount    Int?
+  completionRate    Float?
+  completionRate5s  Float?
+  bounceRate2s      Float?
+  avgViewSec        Float?
+  avgViewProportion Float?
+  metricsUpdatedAt  DateTime?
+  takenAt           DateTime      @default(now())
+
+  @@unique([workId, day])
+}
+
+/// 复盘报告(一个项目一份)
+model Retro {
+  id             String    @id @default(cuid())
+  projectId      String    @unique
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workId         String
+  /// 发布后第几天生成
+  dayN           Int
+  diagnosis      Json
+  narrative      String?   @db.Text
+  narrativeError String?
+  dataAsOf       DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+/// 写法经验(编导的经验本)
+model WritingLesson {
+  id           String    @id @default(cuid())
+  text         String
+  /// topic | hook | opening | middle | ending | interaction | title
+  stage        String
+  /// [{ projectId, workId, metric, value, baseline }]
+  evidence     Json      @default("[]")
+  /// candidate | active | retired | rejected
+  status       String    @default("candidate")
+  retroId      String?
+  /// 最近一次复盘点名"没应验"
+  contradicted Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  confirmedAt  DateTime?
+
+  @@index([status, confirmedAt])
 }
