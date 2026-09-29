@@ -99,7 +99,7 @@ function findCommand(cmds: Command[], positionals: string[]): { cmd: Command; re
   return best;
 }
 
-export async function execute(cmds: Command[], argv: string[], env: { agent: Agent }, deps: { db: PrismaClient; now?: Date }): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+export async function execute(cmds: Command[], argv: string[], env: { agent: Agent }, deps: { db: PrismaClient; now?: Date; live?: { stdout(chunk: string): void; stderr(chunk: string): void } }): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const parsed = parseArgv(argv);
   const json = parsed.flags.json === true;
   let stdout = '';
@@ -123,10 +123,13 @@ export async function execute(cmds: Command[], argv: string[], env: { agent: Age
     agent: env.agent,
     now: deps.now ?? new Date(),
     progress: (line) => {
-      stderr += `${line}\n`;
+      if (deps.live) deps.live.stderr(`${line}\n`);
+      else stderr += `${line}\n`;
     },
     write: (chunk) => {
-      if (!json) stdout += chunk;
+      if (json) return;
+      if (deps.live) deps.live.stdout(chunk);
+      else stdout += chunk;
     },
   };
   try {
