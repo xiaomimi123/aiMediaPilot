@@ -19,6 +19,7 @@
     "mp": "tsx scripts/mp.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.129.0",
     "@prisma/client": "^5.22.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",

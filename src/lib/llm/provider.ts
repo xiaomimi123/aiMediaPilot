@@ -3,6 +3,7 @@ import type { ChatModel } from '@/lib/agent/chat-model';
 import type { StructuredLLM } from '@/lib/script/write';
 import { ensureMigrated, getActiveConfig, type ModelConfig } from './providers';
 import { createOpenAICompatibleChat, createOpenAICompatibleLLM } from './openai-compatible';
+import { createAnthropicChat, createAnthropicLLM } from './anthropic';
 
 export const NO_MODEL_MESSAGE = '还没有可用的模型：去设置页添加一个。';
 
@@ -16,7 +17,7 @@ export interface ActiveModel {
 export function buildModel(c: ModelConfig): ActiveModel {
   const label = `${c.name}（${c.model}）`;
   const base = { baseUrl: c.baseUrl, apiKey: c.apiKey, model: c.model, label };
-  if (c.kind === 'anthropic') throw new Error('Claude 适配还没做');
+  if (c.kind === 'anthropic') return { chat: createAnthropicChat(base), llm: createAnthropicLLM(base), label, config: c };
   return { chat: createOpenAICompatibleChat(base), llm: createOpenAICompatibleLLM(base), label, config: c };
 }
 
