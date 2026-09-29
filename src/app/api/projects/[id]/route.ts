@@ -5,6 +5,7 @@ import { toProjectView } from '@/lib/project/view';
 import { loadProjectBundle } from '@/lib/project/load';
 import { ScriptSchema } from '@/lib/script/model';
 import { applySegmentEdit } from '@/lib/script/edit';
+import { finalizeScript } from '@/lib/script/finalize';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,11 +39,8 @@ export async function PATCH(req: Request, { params }: Ctx) {
     }
   }
 
-  if (body.finalize) {
-    if (!ScriptSchema.safeParse(p.script).success) return fail('还没有稿子，不能定稿', 400);
-    data.stage = 'scripted';
-  }
-
-  const updated = await prisma.project.update({ where: { id: p.id }, data });
+  if (body.finalize && !ScriptSchema.safeParse(p.script).success) return fail('还没有稿子，不能定稿', 400);
+  let updated = await prisma.project.update({ where: { id: p.id }, data });
+  if (body.finalize) updated = await finalizeScript(prisma, p.id);
   return ok(toProjectView(updated));
 }

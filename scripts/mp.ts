@@ -1,112 +1,26 @@
 import 'dotenv/config';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { prisma } from '@/lib/prisma';
-import { buildFilmBundle } from '@/lib/film/bundle';
-import { nextFilmVersion, scaffoldFilm } from '@/lib/film/scaffold';
-import { registerFilm } from '@/lib/film/register';
-import { ShotsFileSchema } from '@/lib/film/shots';
-import { checkShots, checkNumbers, checkFilmSource, type FilmData } from '@/lib/film/check';
-import { ScriptSchema } from '@/lib/script/model';
+import { execute, agentFromEnv } from '@/lib/cli/registry';
+import { ALL_COMMANDS } from '@/lib/cli';
 
 /**
- * Claude Code 出片用的命令行。说明见 .claude/skills/produce-film/SKILL.md。
- * 渲染一律经这里调用 remotion/scripts/render.ts, 主项目从不 import remotion/。
+ * MediaPilot 命令行: 给人(中文)、给 Claude Code / Hermes(--json)用。
+ * 命令定义在 src/lib/cli/; 说明见 .claude/skills/mediapilot/SKILL.md 与 produce-film skill。
  */
-const ROOT = process.cwd();
-const TSX = path.join(ROOT, 'node_modules', '.bin', 'tsx');
-const RENDER = path.join(ROOT, 'remotion', 'scripts', 'render.ts');
-
-function flag(args: string[], name: string): string | undefined {
-  const i = args.indexOf(name);
-  return i >= 0 ? args[i + 1] : undefined;
-}
-
-async function readFilm(filmDir: string) {
-  const data = JSON.parse(await fs.readFile(path.join(filmDir, 'data.json'), 'utf8')) as FilmData & { projectId: string };
-  const shots = ShotsFileSchema.parse(JSON.parse(await fs.readFile(path.join(filmDir, 'shots.json'), 'utf8')));
-  return { data, shots };
-}
-
-function run(cmd: string, args: string[], cwd = ROOT): number {
-  return spawnSync(cmd, args, { cwd, stdio: 'inherit' }).status ?? 1;
-}
-
-async function main() {
-  const [group, cmd, ...rest] = process.argv.slice(2);
-
-  if (group === 'project' && cmd === 'list') {
-    const rows = await prisma.project.findMany({ orderBy: { updatedAt: 'desc' } });
-    for (const p of rows) console.log(`${p.id}\t${p.stage}\t${p.title}`);
-    return;
-  }
-  if (group === 'project' && cmd === 'export') {
-    console.log(JSON.stringify(await buildFilmBundle(prisma, rest[0]), null, 2));
-    return;
-  }
-  if (group === 'film' && cmd === 'new') {
-    const bundle = await buildFilmBundle(prisma, rest[0]);
-    const version = await nextFilmVersion(prisma, rest[0]);
-    console.log(await scaffoldFilm(bundle, version));
-    return;
-  }
-  if (group === 'film' && cmd === 'check') {
-    const filmDir = path.resolve(rest[0]);
-    const issues: string[] = [];
-    // 只编译组件库 + 这一条片子: 旧版本或半成品坏了不该挡住新片子的检查
-    const tsconfig = path.join(filmDir, 'tsconfig.check.json');
-    await fs.writeFile(tsconfig, JSON.stringify({ extends: '../../tsconfig.json', include: ['../../kit', '.'] }, null, 2));
-    if (run('npx', ['tsc', '--noEmit', '-p', tsconfig]) !== 0) issues.push('类型检查没通过（见上方报错）');
-    const { data, shots } = await readFilm(filmDir);
-    const missing = (data as unknown as { missingMaterials?: { originalName: string }[] }).missingMaterials ?? [];
-    for (const m of missing) console.log(`! 素材文件不在了，已跳过：${m.originalName}`);
-    issues.push(...checkFilmSource(await fs.readFile(path.join(filmDir, 'Film.tsx'), 'utf8'), shots));
-    const publicFiles = new Set(await fs.readdir(path.join(filmDir, 'public')));
-    issues.push(...checkShots(shots, data, publicFiles));
-    const p = await prisma.project.findUniqueOrThrow({ where: { id: data.projectId } });
-    // 只取稿子正文; JSON.stringify 会把段落编号 s1..s6 也算进"出处", 让 1–6 永远通过
-    const parsed = ScriptSchema.safeParse(p.script);
-    const scriptText = parsed.success ? parsed.data.segments.map((x) => x.text).join('\n') : '';
-    const copy = await fs.readFile(path.join(filmDir, 'copy.ts'), 'utf8');
-    issues.push(...checkNumbers(copy, [scriptText, data.captions.map((c) => c.text).join('\n')]));
-    if (issues.length) {
-      for (const i of issues) console.log(`✗ ${i}`);
-      process.exit(1);
-    }
-    console.log('film check 通过');
-    return;
-  }
-  if (group === 'film' && cmd === 'render') {
-    const filmDir = path.resolve(rest[0]);
-    if (rest.includes('--stills')) {
-      const { shots } = await readFilm(filmDir);
-      const secs = shots.shots.map((s) => Math.round(Math.min(s.fromSec + 1.2, (s.fromSec + s.toSec) / 2) * 10) / 10);
-      process.exit(run(TSX, [RENDER, filmDir, '--stills', secs.join(',')]));
-    }
-    await fs.mkdir(path.join(filmDir, 'out'), { recursive: true });
-    process.exit(run(TSX, [RENDER, filmDir, '--out', path.join(filmDir, 'out', 'final.mp4')]));
-  }
-  if (group === 'film' && cmd === 'register') {
-    const summary = flag(rest, '--summary');
-    if (!summary) throw new Error('要写 --summary（这一版改了什么）');
-    const r = await registerFilm(prisma, path.resolve(rest[0]), summary);
-    console.log(`已登记成片 v${r.version}`);
-    return;
-  }
-  console.log(`用法:
-  mp project list
-  mp project export <项目id>
-  mp film new <项目id>
-  mp film check <片子目录>
-  mp film render <片子目录> [--stills]
-  mp film register <片子目录> --summary <这一版改了什么>`);
-  process.exit(1);
+async function main(): Promise<number> {
+  const r = await execute(ALL_COMMANDS, process.argv.slice(2), { agent: agentFromEnv({ MP_AGENT: process.env.MP_AGENT }) }, { db: prisma });
+  if (r.stderr) process.stderr.write(r.stderr);
+  if (r.stdout) process.stdout.write(r.stdout);
+  return r.exitCode;
 }
 
 main()
-  .catch((e) => {
-    console.error(`✗ ${e instanceof Error ? e.message : String(e)}`);
-    process.exit(1);
+  .then(async (code) => {
+    await prisma.$disconnect();
+    process.exit(code);
   })
-  .finally(() => prisma.$disconnect());
+  .catch(async (e) => {
+    process.stderr.write(`✗ ${e instanceof Error ? e.message : String(e)}\n`);
+    await prisma.$disconnect();
+    process.exit(1);
+  });
