@@ -1,14 +1,12 @@
 import { runAgentTurn, type AgentEvent } from '@/lib/agent/loop';
-import { createDeepSeekChatModel } from '@/lib/agent/chat-model';
-import { DeepSeekTextLLM } from '@/lib/llm/deepseek';
-import { getDeepSeekKey } from '@/lib/env';
+import { getActiveModel, NO_MODEL_MESSAGE } from '@/lib/llm/provider';
 import { SCRIPT_TOOLS } from '@/lib/tools';
 import { CliError, needArg, type Command, type CommandCtx } from '../registry';
 
 /** 与网页对话同一套循环、同一份记录; 编导回复流式写 stdout, 工具结果写 stderr */
 export async function runChat(ctx: CommandCtx, projectId: string, text: string, deps: { turn?: typeof runAgentTurn } = {}) {
-  const key = getDeepSeekKey();
-  if (!key) throw new CliError('no_deepseek_key', '没有配置 DeepSeek key：去设置页填入后再试。');
+  const m = await getActiveModel(ctx.db);
+  if (!m) throw new CliError('no_model', NO_MODEL_MESSAGE);
   if (!(await ctx.db.project.findUnique({ where: { id: projectId }, select: { id: true } }))) throw new CliError('not_found', '找不到这个项目。');
   let reply = '';
   const tools: { name: string; ok: boolean; summary: string }[] = [];
@@ -17,9 +15,9 @@ export async function runChat(ctx: CommandCtx, projectId: string, text: string, 
     projectId,
     userText: text,
     db: ctx.db,
-    model: createDeepSeekChatModel(key),
+    model: m.chat,
     tools: SCRIPT_TOOLS,
-    toolCtx: { projectId, db: ctx.db, llm: new DeepSeekTextLLM({ apiKey: key }) },
+    toolCtx: { projectId, db: ctx.db, llm: m.llm },
     emit: (e: AgentEvent) => {
       if (e.type === 'text') {
         reply += e.delta;

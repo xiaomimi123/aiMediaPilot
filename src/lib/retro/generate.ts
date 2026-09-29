@@ -1,8 +1,7 @@
 import { z } from 'zod';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import type { StructuredLLM } from '@/lib/script/write';
-import { DeepSeekTextLLM } from '@/lib/llm/deepseek';
-import { getDeepSeekKey } from '@/lib/env';
+import { getActiveModel, NO_MODEL_MESSAGE } from '@/lib/llm/provider';
 import { ScriptSchema, ROLE_LABEL } from '@/lib/script/model';
 import { loadCurrentTranscript } from '@/lib/recording/transcript';
 import { AnalysisSchema } from '@/lib/benchmark/analyze';
@@ -88,7 +87,7 @@ export async function generateRetro(deps: RetroDeps, projectId: string): Promise
   let narrativeError: string | null = null;
   let lessons: { text: string; stage: string; evidence: unknown[] }[] = [];
   let contradictedIds: string[] = [];
-  if (!deps.llm) narrativeError = '没有配置 DeepSeek key，编导解读需要它：去设置页填入后点重试。';
+  if (!deps.llm) narrativeError = `${NO_MODEL_MESSAGE.replace('。', '')}，然后点重试。`;
   else {
     try {
       const { result } = await deps.llm.callStructured({
@@ -163,10 +162,10 @@ const toMetricSet = (w: {
   avgViewSec: w.avgViewSec,
 });
 
-export function createRetroDeps(db: PrismaClient): RetroDeps {
-  const key = getDeepSeekKey();
+export async function createRetroDeps(db: PrismaClient): Promise<RetroDeps> {
+  const active = await getActiveModel(db);
   return {
-    llm: key ? new DeepSeekTextLLM({ apiKey: key }) : null,
+    llm: active?.llm ?? null,
     now: () => new Date(),
     async load(projectId) {
       const work = await db.publishedWork.findFirst({ where: { projectId }, orderBy: { publishedAt: 'desc' } });
@@ -229,7 +228,7 @@ export async function runDueRetros(db: PrismaClient): Promise<string> {
     works.filter((w) => w.project).map((w) => ({ projectId: w.projectId!, publishedAt: w.publishedAt, retroDayN: w.project!.retro?.dayN ?? null })),
     new Date(),
   );
-  const deps = createRetroDeps(db);
+  const deps = await createRetroDeps(db);
   let done = 0;
   const waiting: string[] = [];
   for (const id of due) {

@@ -13,15 +13,14 @@ import { createDouyinClient } from '@/lib/benchmark/douyin';
 import { createPrismaStore } from '@/lib/benchmark/store';
 import { takeSearchQuota, SEARCH_DAILY_LIMIT } from '@/lib/benchmark/quota';
 import { createTaskDeps, isTaskKey, startManualRun } from '@/lib/tasks/nightly';
-import { getDeepSeekKey } from '@/lib/env';
-import { DeepSeekTextLLM } from '@/lib/llm/deepseek';
+import { getActiveModel, NO_MODEL_MESSAGE } from '@/lib/llm/provider';
 import { CliError, needArg, type Command, type CommandCtx } from '../registry';
 
 
-function llmOrThrow() {
-  const key = getDeepSeekKey();
-  if (!key) throw new CliError('no_deepseek_key', '没有配置 DeepSeek key：去设置页填入后再试。');
-  return new DeepSeekTextLLM({ apiKey: key });
+async function llmOrThrow(db: CommandCtx['db']) {
+  const m = await getActiveModel(db);
+  if (!m) throw new CliError('no_model', NO_MODEL_MESSAGE);
+  return m.llm;
 }
 
 /** lib 里抛的普通 Error(如"找不到这个项目")转成 not_found / failed */
@@ -160,7 +159,7 @@ export const WRITE_COMMANDS: Command[] = [
     hermes: false,
     usage: 'mp publish kit <项目>',
     summary: '生成发布文案',
-    run: (ctx, p) => wrap(() => makePublishKit(ctx.db, needArg(p, 0, '项目'), llmOrThrow())),
+    run: (ctx, p) => wrap(async () => makePublishKit(ctx.db, needArg(p, 0, '项目'), await llmOrThrow(ctx.db))),
     format(d) {
       const k = d as { titles: string[]; hashtags: string[]; coverText: string[] };
       return [...k.titles.map((t, i) => `标题${i + 1}：${t}`), `话题：${k.hashtags.join(' ')}`, `封面字：${k.coverText.join(' / ')}`].join('\n');
@@ -196,7 +195,7 @@ export const WRITE_COMMANDS: Command[] = [
     usage: 'mp retro run <项目>',
     summary: '生成复盘',
     async run(ctx, p) {
-      const r = await generateRetro(createRetroDeps(ctx.db), needArg(p, 0, '项目'));
+      const r = await generateRetro(await createRetroDeps(ctx.db), needArg(p, 0, '项目'));
       if (!r.ok) throw new CliError('failed', r.reason);
       return { done: true };
     },

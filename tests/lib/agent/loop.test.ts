@@ -134,7 +134,7 @@ describe('runAgentTurn', () => {
   it('model failure emits human error and keeps user message', async () => {
     const model: ChatModel = { async streamTurn() { throw new Error('401 Unauthorized'); } };
     const { events, messages } = await run(model);
-    expect(events).toEqual([{ type: 'error', message: '编导暂时连不上 DeepSeek（401 Unauthorized）。检查 .env 里的 DEEPSEEK_API_KEY 和网络后再发一次。' }]);
+    expect(events).toEqual([{ type: 'error', message: '编导这一轮没连上：模型拒绝了请求：key 无效或没有权限，去设置页检查这个模型的 key。' }]);
     expect(messages[0]).toMatchObject({ role: 'user', content: '你好' });
     expect(messages.at(-1)).toMatchObject({ role: 'system' });
   });

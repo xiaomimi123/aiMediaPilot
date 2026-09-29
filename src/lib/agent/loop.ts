@@ -2,6 +2,7 @@ import type { PrismaClient, Prisma } from '@prisma/client';
 import type { Tool, ToolContext, ToolResult } from '@/lib/tools/types';
 import { toToolSpec, type AgentMessage, type ChatModel, type ChatTurnResult, type ToolCall } from './chat-model';
 import { buildSystemPrompt, loadHistory } from './context';
+import { explainModelError } from '@/lib/llm/errors';
 
 export const MAX_TOOL_CALLS_PER_TURN = 8;
 /** 模型调用硬上限: 工具用满后还要一次文字收尾, 再留一次余量。防止模型失控时无限调用、持续扣费。 */
@@ -89,7 +90,7 @@ export async function runAgentTurn(opts: {
     try {
       turn = await opts.model.streamTurn(messages, offerTools ? specs : [], (delta) => emit({ type: 'text', delta }));
     } catch (e) {
-      const message = `编导暂时连不上 DeepSeek（${errMsg(e)}）。检查 .env 里的 DEEPSEEK_API_KEY 和网络后再发一次。`;
+      const message = `编导这一轮没连上：${explainModelError(e, opts.model.label ?? '模型')}`;
       await db.chatMessage.create({ data: { projectId, role: 'system', content: message } });
       emit({ type: 'error', message });
       return;

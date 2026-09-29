@@ -1,5 +1,4 @@
 import type OpenAI from 'openai';
-import { createOpenAICompatibleChat } from '@/lib/llm/openai-compatible';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { Tool } from '@/lib/tools/types';
 
@@ -29,9 +28,4 @@ export interface ChatModel {
 export function toToolSpec(tool: Tool<unknown>): ToolSpec {
   const { $schema: _drop, ...parameters } = zodToJsonSchema(tool.input, { $refStrategy: 'none' }) as Record<string, unknown>;
   return { name: tool.name, description: tool.description, parameters };
-}
-
-/** @deprecated 过渡用, 调用点改为 getActiveModel 后删除 */
-export function createDeepSeekChatModel(apiKey: string, model = 'deepseek-chat'): ChatModel {
-  return createOpenAICompatibleChat({ baseUrl: 'https://api.deepseek.com/v1', apiKey, model, label: `DeepSeek（${model}）` });
 }

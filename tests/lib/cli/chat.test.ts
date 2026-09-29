@@ -3,6 +3,12 @@ import type { PrismaClient } from '@prisma/client';
 import { runChat } from '@/lib/cli/commands/chat';
 import type { CommandCtx } from '@/lib/cli/registry';
 
+let noModel = false;
+vi.mock('@/lib/llm/provider', async (orig) => ({
+  ...(await orig<object>()),
+  getActiveModel: vi.fn(async () => (noModel ? null : { chat: { label: 'X', streamTurn: vi.fn() }, llm: {}, label: 'X', config: {} })),
+}));
+
 function ctx(): CommandCtx & { out: string; err: string } {
   const c = { out: '', err: '' } as CommandCtx & { out: string; err: string };
   Object.assign(c, {
@@ -17,7 +23,7 @@ function ctx(): CommandCtx & { out: string; err: string } {
 
 describe('runChat', () => {
   it('streams the reply and reports tool results', async () => {
-    process.env.DEEPSEEK_API_KEY = 'sk-test-aaaaaaaaaaaaaaaaaaaa';
+    noModel = false;
     const turn = vi.fn(async (o: { emit: (e: unknown) => void }) => {
       o.emit({ type: 'tool', name: 'write_script', ok: true, summary: '写稿：6 段，约 58 秒', segmentIds: [] });
       o.emit({ type: 'text', delta: '写好了，' });
@@ -31,12 +37,12 @@ describe('runChat', () => {
     expect(c.err).toContain('✓ 写稿：6 段，约 58 秒');
   });
   it('fails when the agent reports an error', async () => {
-    process.env.DEEPSEEK_API_KEY = 'sk-test-aaaaaaaaaaaaaaaaaaaa';
+    noModel = false;
     const turn = vi.fn(async (o: { emit: (e: unknown) => void }) => o.emit({ type: 'error', message: '连不上 DeepSeek' }));
     await expect(runChat(ctx(), 'p1', 'x', { turn: turn as never })).rejects.toThrow('连不上 DeepSeek');
   });
-  it('needs a DeepSeek key', async () => {
-    delete process.env.DEEPSEEK_API_KEY;
-    await expect(runChat(ctx(), 'p1', 'x')).rejects.toMatchObject({ code: 'no_deepseek_key' });
+  it('needs an active model', async () => {
+    noModel = true;
+    await expect(runChat(ctx(), 'p1', 'x')).rejects.toMatchObject({ code: 'no_model' });
   });
 });

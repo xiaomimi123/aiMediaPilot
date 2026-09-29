@@ -10,10 +10,9 @@ import { createTaskDeps, getSchedule, isTaskRunning, manualRunsLeft, NIGHTLY_TAS
 import { ScriptSchema, ROLE_LABEL } from '@/lib/script/model';
 import { checkDuration } from '@/lib/script/duration';
 import { loadCurrentTranscript } from '@/lib/recording/transcript';
-import { getDeepSeekKey } from '@/lib/env';
-import { DeepSeekTextLLM } from '@/lib/llm/deepseek';
+import { getActiveModel, NO_MODEL_MESSAGE } from '@/lib/llm/provider';
 import { formatPersona, type PersonaLike } from '@/lib/tools/types';
-import { CliError, needArg, type Command } from '../registry';
+import { CliError, needArg, type Command, type CommandCtx } from '../registry';
 
 export interface StatusData {
   fans: number | null;
@@ -58,10 +57,10 @@ export function formatRetro(s: PublishState): string {
   ].join('\n');
 }
 
-function llmOrThrow() {
-  const key = getDeepSeekKey();
-  if (!key) throw new CliError('no_deepseek_key', '没有配置 DeepSeek key：去设置页填入后再试。');
-  return new DeepSeekTextLLM({ apiKey: key });
+async function llmOrThrow(db: CommandCtx['db']) {
+  const m = await getActiveModel(db);
+  if (!m) throw new CliError('no_model', NO_MODEL_MESSAGE);
+  return m.llm;
 }
 
 export const READ_COMMANDS: Command[] = [
@@ -146,7 +145,7 @@ export const READ_COMMANDS: Command[] = [
     summary: '让编导从对标爆款里挑 3 个选题',
     async run(ctx) {
       const persona = await ctx.db.personaProfile.findUnique({ where: { id: 'me' } });
-      const r = await suggestTopics({ store: createPrismaStore(ctx.db), llm: llmOrThrow(), personaText: formatPersona(persona as PersonaLike | null), myTopTitles: await loadMyTopTitles(ctx.db), now: ctx.now });
+      const r = await suggestTopics({ store: createPrismaStore(ctx.db), llm: await llmOrThrow(ctx.db), personaText: formatPersona(persona as PersonaLike | null), myTopTitles: await loadMyTopTitles(ctx.db), now: ctx.now });
       if (!r.ok) throw new CliError('failed', r.reason);
       return r.topics;
     },

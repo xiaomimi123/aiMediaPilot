@@ -8,7 +8,7 @@ import { DouyinLoginError, DouyinRejectedError } from '@/lib/benchmark/parse';
  */
 export type Tier = 'read' | 'write' | 'douyin' | 'heavy';
 export type Agent = 'claude-code' | 'hermes';
-export type ErrorCode = 'not_found' | 'bad_args' | 'forbidden' | 'db_down' | 'no_deepseek_key' | 'ego_unavailable' | 'douyin_rejected' | 'quota' | 'running' | 'failed';
+export type ErrorCode = 'not_found' | 'bad_args' | 'forbidden' | 'db_down' | 'no_model' | 'ego_unavailable' | 'douyin_rejected' | 'quota' | 'running' | 'failed';
 
 export class CliError extends Error {
   constructor(

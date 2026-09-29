@@ -54,7 +54,7 @@ export async function analyzeVideo(deps: AnalyzeDeps, videoId: string): Promise<
   // 每次拆解用不重名的临时文件: 巡检脚本和网页可能同时拆同一条
   const file = path.join(deps.tmpDir, `bm-${v.awemeId}-${Math.random().toString(36).slice(2, 8)}.mp4`);
   try {
-    if (!deps.llm) throw new StepError('没有配置 DeepSeek key，拆解需要它：去设置页填入后点重试。');
+    if (!deps.llm) throw new StepError('还没有可用的模型：去设置页添加一个，然后点重试。');
     await deps.client.downloadVideo(v.awemeId, file);
     let lines: TranscriptLine[];
     try {
@@ -74,7 +74,7 @@ export async function analyzeVideo(deps: AnalyzeDeps, videoId: string): Promise<
       });
       analysis = result;
     } catch (e) {
-      throw new StepError('DeepSeek 这次没按格式交回拆解，点重试再来一次。', { cause: e });
+      throw new StepError('模型这次没按格式交回拆解，点重试再来一次。', { cause: e });
     }
     await deps.store.updateVideo(videoId, { analysisStatus: 'done', analysisError: null, transcript, analysis, analyzedAt: new Date() });
     return true;
