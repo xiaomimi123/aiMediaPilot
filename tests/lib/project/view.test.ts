@@ -84,3 +84,10 @@ describe('toMessageView detail', () => {
     expect(toMessageView({ id: 'm', role: 'user', content: 'x', toolName: null, toolResult: null }).detail).toBeNull();
   });
 });
+
+describe('toMessageView proposal', () => {
+  it('exposes the note proposal id', () => {
+    expect(toMessageView({ id: 'm', role: 'system', content: '要把这个项目存进 Obsidian 吗？', toolName: 'note:proposal', toolResult: { ok: true, proposalId: 'np1' } }).proposalId).toBe('np1');
+    expect(toMessageView({ id: 'm', role: 'user', content: 'x', toolName: null, toolResult: null }).proposalId).toBeNull();
+  });
+});

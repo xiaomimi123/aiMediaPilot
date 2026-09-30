@@ -57,7 +57,7 @@ export function ProjectWorkspace({
     setJobs(j.data.jobs ?? []);
     setMaterials(j.data.materials ?? []);
     setFilms(j.data.films ?? []);
-    setNotices(((j.data.messages ?? []) as MessageView[]).filter((m) => m.role === 'system' && m.toolName?.startsWith('job:')));
+    setNotices(((j.data.messages ?? []) as MessageView[]).filter((m) => m.role === 'system' && (m.toolName?.startsWith('job:') || m.toolName === 'note:proposal')));
   }, [project.id]);
 
   // 有任务在跑就每 2 秒拉一次; 任务从"运行中"变成结束时切到口播标签
@@ -131,7 +131,11 @@ export function ProjectWorkspace({
                   setHighlighted(new Set());
                   await patch({ edit: { segmentId, text } });
                 }}
-                onFinalize={() => patch({ finalize: true })}
+                onFinalize={async () => {
+                  await patch({ finalize: true });
+                  // 定稿会提议存进 Obsidian: 拉一次对话拿到确认卡片
+                  await refresh();
+                }}
               />
             )}
             {tab === 'recording' && (
@@ -148,7 +152,7 @@ export function ProjectWorkspace({
                 }}
               />
             )}
-            {tab === 'publish' && <PublishPane projectId={project.id} />}
+            {tab === 'publish' && <PublishPane projectId={project.id} onChanged={() => void refresh()} />}
             {tab === 'film' && <FilmPane projectId={project.id} materials={materials} films={films} onChanged={() => void refresh()} />}
           </div>
         </div>

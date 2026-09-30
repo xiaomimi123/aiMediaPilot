@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PublishPane } from '@/components/project/publish-pane';
 
 afterEach(() => {
@@ -21,5 +21,14 @@ describe('PublishPane', () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ json: async () => ({ success: true, data: state(new Date().toISOString()) }) })));
     render(<PublishPane projectId="p1" />);
     await waitFor(() => expect(screen.getByText(/发布后第 3 天会自动复盘/)).toBeTruthy());
+  });
+  it('tells the workspace to refresh after a retro run (to pick up the Obsidian card)', async () => {
+    const five = new Date(Date.now() - 5 * 86400_000).toISOString();
+    vi.stubGlobal('fetch', vi.fn(async () => ({ json: async () => ({ success: true, data: state(five) }) })));
+    const onChanged = vi.fn();
+    render(<PublishPane projectId="p1" onChanged={onChanged} />);
+    await waitFor(() => expect(screen.getByText('现在复盘')).toBeTruthy());
+    fireEvent.click(screen.getByText('现在复盘'));
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
   });
 });

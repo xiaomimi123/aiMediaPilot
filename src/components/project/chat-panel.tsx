@@ -6,10 +6,11 @@ import type { MessageView } from '@/lib/project/view';
 import { parseSseBuffer } from '@/lib/agent/sse';
 import type { AgentEvent } from '@/lib/agent/loop';
 import { cn } from '@/lib/utils';
+import { NoteProposalCard } from './note-proposal-card';
 
-type Line = { key: string; role: MessageView['role']; content: string; ok: boolean | null; detail: string | null; open?: boolean };
+type Line = { key: string; role: MessageView['role']; content: string; ok: boolean | null; detail: string | null; open?: boolean; proposalId?: string | null };
 
-const toLine = (m: MessageView): Line => ({ key: m.id, role: m.role, content: m.content, ok: m.ok, detail: m.detail ?? null });
+const toLine = (m: MessageView): Line => ({ key: m.id, role: m.role, content: m.content, ok: m.ok, detail: m.detail ?? null, proposalId: m.proposalId ?? null });
 
 /** 回复里的 /projects/<id> 与 /topics 渲染成可点链接 */
 export function linkify(text: string): (string | { href: string; label: string })[] {
@@ -149,7 +150,9 @@ export function ChatPanel({
           <p className="text-[var(--text-tertiary)]">{emptyHint}</p>
         )}
         {lines.map((l) =>
-          l.role === 'tool' ? (
+          l.proposalId ? (
+            <NoteProposalCard key={l.key} proposalId={l.proposalId} />
+          ) : l.role === 'tool' ? (
             <div key={l.key} className={cn('border-l-2 pl-2 text-xs', l.ok ? 'border-[var(--accent)] text-[var(--text-secondary)]' : 'border-[var(--danger)] text-[var(--danger)]')}>
               <div
                 className={cn(l.detail && 'cursor-pointer')}

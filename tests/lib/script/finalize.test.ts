@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { finalizeScript } from '@/lib/script/finalize';
 import { createFakeDb } from '../../helpers/fake-db';
 import { SEGMENT_ROLES } from '@/lib/script/model';
@@ -19,5 +19,18 @@ describe('finalizeScript', () => {
   it('refuses without a script', async () => {
     const { db } = createFakeDb();
     await expect(finalizeScript(db, 'p1')).rejects.toThrow('还没有稿子，不能定稿');
+  });
+  it('proposes a note only when moving draft → scripted', async () => {
+    const propose = vi.fn(async () => {});
+    const { db } = createFakeDb({ project: { script } });
+    await finalizeScript(db, 'p1', propose);
+    await finalizeScript(db, 'p1', propose);
+    expect(propose).toHaveBeenCalledTimes(1);
+    expect(propose).toHaveBeenCalledWith('p1');
+  });
+  it('still finalizes when proposing fails', async () => {
+    const { db, project } = createFakeDb({ project: { script } });
+    await finalizeScript(db, 'p1', async () => { throw new Error('boom'); });
+    expect(project.stage).toBe('scripted');
   });
 });

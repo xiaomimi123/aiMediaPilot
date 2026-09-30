@@ -58,3 +58,11 @@ describe('ChatPanel settings link', () => {
     expect(screen.getByRole('link', { name: '打开设置页' }).getAttribute('href')).toBe('/settings');
   });
 });
+
+describe('ChatPanel note proposals', () => {
+  it('renders a note proposal line as a card', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ json: async () => ({ success: true, data: { id: 'np1', projectId: 'p1', trigger: 'finalize', path: 'MediaPilot/项目/x.md', content: 'x', status: 'pending', error: null, createdAt: '2026-09-30T00:00:00.000Z' } }) })));
+    render(<ChatPanel projectId="p1" initialMessages={[{ id: 'm', role: 'system', content: '要把这个项目存进 Obsidian 吗？', toolName: 'note:proposal', ok: true, proposalId: 'np1' }]} onTurnStart={noop} onTurnEvent={noop} onTurnEnd={noop} />);
+    await waitFor(() => expect(screen.getByText('存进 Obsidian')).toBeTruthy());
+  });
+});

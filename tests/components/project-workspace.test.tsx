@@ -17,10 +17,27 @@ describe('ProjectWorkspace', () => {
   it('title input follows the project after it is renamed server-side', async () => {
     Element.prototype.scrollIntoView = vi.fn();
     const renamed = toProjectView({ ...base, title: '让AI当杠精', stage: 'scripted' });
-    vi.stubGlobal('fetch', vi.fn(async () => ({ json: async () => ({ success: true, data: renamed }) })));
+    // 定稿后工作区会刷新一次整包(为了拿到存进 Obsidian 的卡片)
+    vi.stubGlobal('fetch', vi.fn(async (_u: string, init?: { method?: string }) => ({ json: async () => ({ success: true, data: init?.method === 'PATCH' ? renamed : { project: renamed, messages: [] } }) })));
     render(<ProjectWorkspace initialProject={toProjectView({ ...base, title: '未命名项目' })} initialMessages={[]} />);
     fireEvent.click(screen.getByText('定稿'));
     await waitFor(() => expect((screen.getByDisplayValue('让AI当杠精') as HTMLInputElement).value).toBe('让AI当杠精'));
+  });
+
+  it('shows the save-to-Obsidian card right after finalizing', async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const scripted = toProjectView({ ...base, title: 't', stage: 'scripted' });
+    const card = { id: 'mNote', role: 'system', content: '要把这个项目存进 Obsidian 吗？', toolName: 'note:proposal', ok: true, proposalId: 'np1' };
+    const proposal = { id: 'np1', projectId: 'p1', trigger: 'finalize', path: 'MediaPilot/项目/t.md', content: '# t', status: 'pending', error: null, createdAt: '2026-09-30T00:00:00.000Z' };
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: { method?: string }) => ({
+      json: async () => ({
+        success: true,
+        data: url.startsWith('/api/notes/proposals/') ? proposal : init?.method === 'PATCH' ? scripted : { project: scripted, messages: [card] },
+      }),
+    })));
+    render(<ProjectWorkspace initialProject={toProjectView({ ...base, title: 't' })} initialMessages={[]} />);
+    fireEvent.click(screen.getByText('定稿'));
+    await waitFor(() => expect(screen.getByText('存进 Obsidian')).toBeTruthy());
   });
 
   it('second turn: clears the previous turn highlight, keeps the new one after the reply text', async () => {

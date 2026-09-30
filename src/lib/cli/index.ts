@@ -5,5 +5,6 @@ import { WRITE_COMMANDS } from './commands/write';
 import { CHAT_COMMAND } from './commands/chat';
 import { BRIEF_COMMAND } from './commands/brief';
 import { AGENTS_COMMAND } from './hermes';
+import { NOTES_COMMANDS } from './commands/notes';
 
-export const ALL_COMMANDS: Command[] = [...FILM_COMMANDS, ...READ_COMMANDS, ...WRITE_COMMANDS, CHAT_COMMAND, BRIEF_COMMAND, AGENTS_COMMAND];
+export const ALL_COMMANDS: Command[] = [...FILM_COMMANDS, ...READ_COMMANDS, ...NOTES_COMMANDS, ...WRITE_COMMANDS, CHAT_COMMAND, BRIEF_COMMAND, AGENTS_COMMAND];

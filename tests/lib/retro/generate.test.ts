@@ -40,6 +40,13 @@ describe('generateRetro', () => {
     expect(saved[0]).toMatchObject({ narrative: null, narrativeError: '编导解读没写出来，点重试。' });
     expect(saved[0].diagnosis.stages.length).toBeGreaterThan(0);
   });
+  it('proposes a note after saving, and a failed proposal does not fail the retro', async () => {
+    const proposeNote = vi.fn(async () => { throw new Error('vault gone'); });
+    const { d, saved } = deps({ proposeNote });
+    expect(await generateRetro(d, 'p1')).toEqual({ ok: true });
+    expect(saved).toHaveLength(1);
+    expect(proposeNote).toHaveBeenCalledWith('p1');
+  });
   it('keeps at most 3 valid lessons and passes contradicted ids', async () => {
     const lessons = [1, 2, 3, 4].map((i) => ({ text: `经验${i}`, stage: i === 2 ? 'bogus' : 'hook', evidenceMetric: 'bounceRate2s' }));
     const { d, saved } = deps({}, { summary: 's', lessons, contradicts: ['L1', 'not-a-lesson'] });

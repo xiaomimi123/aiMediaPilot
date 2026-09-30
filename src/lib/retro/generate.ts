@@ -5,6 +5,7 @@ import { getActiveModel, NO_MODEL_MESSAGE } from '@/lib/llm/provider';
 import { ScriptSchema, ROLE_LABEL } from '@/lib/script/model';
 import { loadCurrentTranscript } from '@/lib/recording/transcript';
 import { AnalysisSchema } from '@/lib/benchmark/analyze';
+import { proposeSafely } from '@/lib/notes/proposals';
 import { assignSegments, diagnose, type Diagnosis, type MetricSet } from './diagnose';
 
 export const LESSON_STAGES = ['topic', 'hook', 'opening', 'middle', 'ending', 'interaction', 'title'] as const;
@@ -46,6 +47,8 @@ export interface RetroDeps {
     contradictedIds: string[];
   }): Promise<void>;
   now(): Date;
+  /** 复盘后提议存进 Obsidian */
+  proposeNote?(projectId: string): Promise<void>;
 }
 
 const SYSTEM_PROMPT = `你是抖音 AI 知识类博主的编导，读一份复盘诊断，给博主解读并提炼写法经验。
@@ -124,6 +127,8 @@ export async function generateRetro(deps: RetroDeps, projectId: string): Promise
     }
   }
   await deps.save({ projectId, workId: input.workId, dayN, diagnosis, narrative, narrativeError, dataAsOf: input.metricsUpdatedAt, lessons, contradictedIds });
+  // 复盘后提议存进 Obsidian; 失败不影响复盘
+  await deps.proposeNote?.(projectId).catch(() => {});
   return { ok: true };
 }
 
@@ -167,6 +172,7 @@ export async function createRetroDeps(db: PrismaClient): Promise<RetroDeps> {
   return {
     llm: active?.llm ?? null,
     now: () => new Date(),
+    proposeNote: (id) => proposeSafely(db, id, 'retro'),
     async load(projectId) {
       const work = await db.publishedWork.findFirst({ where: { projectId }, orderBy: { publishedAt: 'desc' } });
       if (!work) return null;
