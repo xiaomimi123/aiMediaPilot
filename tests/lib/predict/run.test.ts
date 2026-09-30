@@ -117,4 +117,9 @@ describe('runPrediction', () => {
     const { d } = deps({ load: async () => input({ baselineViews: null, publicWorks: 1 }) });
     expect((await runPrediction(d, 'p1', 'draft')).summary).toContain('公开作品少于 3 条，再发 2 条就能预测数字');
   });
+  it('does not save a prediction if the work got linked while scoring', async () => {
+    const { d, saved } = deps({ isPublished: async () => true });
+    await expect(runPrediction(d, 'p1', 'final')).rejects.toThrow('已经有数据了，这时再预测不算数');
+    expect(saved).toEqual([]);
+  });
 });

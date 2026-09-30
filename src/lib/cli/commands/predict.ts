@@ -29,8 +29,11 @@ export const PREDICT_COMMANDS: Command[] = [
     usage: 'mp predict run <项目>',
     summary: '按当前稿子做一次草稿预测',
     async run(ctx, p) {
+      const id = needArg(p, 0, '项目');
+      // 命令行是另一个进程, 和页面上的预测互相看不见锁: 先查有没有正在跑的
+      if (await ctx.db.job.findFirst({ where: { projectId: id, kind: { startsWith: 'predict_' }, status: { in: ['queued', 'running'] } } })) throw new CliError('running', '正在预测');
       try {
-        const r = await runPrediction(await createPredictDeps(ctx.db), needArg(p, 0, '项目'), 'draft');
+        const r = await runPrediction(await createPredictDeps(ctx.db), id, 'draft');
         return { text: formatPrediction({ id: r.id, kind: 'draft', createdAt: new Date().toISOString(), formulaVersion: r.formulaVersion, scores: r.scores, result: r.result, check: null }) };
       } catch (e) {
         if (e instanceof PredictRefused) throw new CliError('bad_args', e.message);

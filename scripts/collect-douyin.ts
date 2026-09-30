@@ -232,9 +232,14 @@ async function main(): Promise<void> {
     // 到期复盘(发布第 3 天生成、第 7 天更新) —— 独立失败
     try {
       log(await runDueRetros(prisma));
-      log(`预测落后提醒: ${await postLagAlerts(prisma, new Date())} 条`);
     } catch (e) {
       log(`复盘生成失败(不影响前面的): ${e instanceof Error ? e.message : String(e)}`);
+    }
+    // 预测落后提醒 —— 独立失败, 不受复盘影响
+    try {
+      log(`预测落后提醒: ${await postLagAlerts(prisma, new Date())} 条`);
+    } catch (e) {
+      log(`预测落后提醒失败(不影响前面的): ${e instanceof Error ? e.message : String(e)}`);
     }
 
     // 创作者后台数据概览(口径不明, 首页不再用它的 fans) —— 同样独立失败

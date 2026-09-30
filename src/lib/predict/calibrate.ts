@@ -67,11 +67,14 @@ export function proposeParams(p: FormulaParams, target: Target, recent: Sample[]
   const rs = recent.slice(-3).map((s) => ratioOf(s, target)!).filter((r) => r > 0);
   const g = geomean(rs);
   if (target === 'views') {
-    const d = clamp(Math.log2(g), -Math.log2(1 + CAP), Math.log2(1 + CAP));
+    // viewOffset 以 viewBase 为底: 单次最多让中枢变 30%
+    const cap = Math.log(1 + CAP) / Math.log(p.viewBase);
+    const d = clamp(Math.log(g) / Math.log(p.viewBase), -cap, cap);
     return { ...p, viewOffset: p.viewOffset + d };
   }
   const old = p.metricOffset[target];
-  const next = clamp((1 + old) * g - 1, old - CAP, old + CAP);
+  // 下限 -0.9: 再怎么调也不会把预测压成 0 或负数
+  const next = clamp(clamp((1 + old) * g - 1, old - CAP, old + CAP), -0.9, 3);
   return { ...p, metricOffset: { ...p.metricOffset, [target]: next } };
 }
 

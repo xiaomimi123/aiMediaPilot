@@ -13,12 +13,12 @@ export function isBehind(days: number, views: number, center: number): boolean {
 export async function findLagging(db: PrismaClient, now: Date) {
   const since = new Date(now.getTime() - 3 * 86400_000);
   const works = await db.publishedWork.findMany({ where: { projectId: { not: null }, isPrivate: false, publishedAt: { gte: since } }, include: { project: true } });
-  const out: { projectId: string; title: string; days: number; views: number; center: number }[] = [];
+  const out: { workId: string; projectId: string; title: string; days: number; views: number; center: number }[] = [];
   for (const w of works) {
     const p = (await db.prediction.findFirst({ where: { projectId: w.projectId!, kind: 'recorded' }, orderBy: { createdAt: 'desc' } })) ?? (await db.prediction.findFirst({ where: { projectId: w.projectId!, kind: 'final' }, orderBy: { createdAt: 'desc' } }));
     const center = (p?.result as unknown as PredictionResult | undefined)?.center ?? null;
     const days = (now.getTime() - w.publishedAt.getTime()) / 86400_000;
-    if (center !== null && w.viewCount !== null && isBehind(days, w.viewCount, center)) out.push({ projectId: w.projectId!, title: w.project!.title, days, views: w.viewCount, center });
+    if (center !== null && w.viewCount !== null && isBehind(days, w.viewCount, center)) out.push({ workId: w.id, projectId: w.projectId!, title: w.project!.title, days, views: w.viewCount, center });
   }
   return out;
 }
@@ -28,9 +28,11 @@ export async function postLagAlerts(db: PrismaClient, now: Date): Promise<number
   today.setHours(0, 0, 0, 0);
   let n = 0;
   for (const l of await findLagging(db, now)) {
-    if (await db.chatMessage.findFirst({ where: { projectId: l.projectId, toolName: LAG_TOOL, createdAt: { gte: today } } })) continue;
+    // 按作品去重: 同一项目关联了两条作品时各提醒一次
+    const toolName = `${LAG_TOOL}:${l.workId}`;
+    if (await db.chatMessage.findFirst({ where: { projectId: l.projectId, toolName, createdAt: { gte: today } } })) continue;
     await db.chatMessage.create({
-      data: { projectId: l.projectId, role: 'system', toolName: LAG_TOOL, toolResult: { ok: false }, content: `比预期落后：发布第 ${Math.floor(l.days)} 天播放 ${l.views.toLocaleString('en-US')}，预测中枢约 ${l.center.toLocaleString('en-US')}。` },
+      data: { projectId: l.projectId, role: 'system', toolName, toolResult: { ok: false }, content: `比预期落后：发布第 ${Math.floor(l.days)} 天播放 ${l.views.toLocaleString('en-US')}，预测中枢约 ${l.center.toLocaleString('en-US')}。` },
     });
     n++;
   }

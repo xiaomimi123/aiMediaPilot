@@ -57,3 +57,15 @@ describe('proposal history', () => {
     expect(shouldPropose('hook5s', 'pr9', [{ target: 'views', newest: 'pr9' }])).toBe(true);
   });
 });
+
+describe('adjustment bounds', () => {
+  it('never lets a metric offset reach zero predictions', () => {
+    let p = DEFAULT_PARAMS;
+    for (let i = 0; i < 6; i++) p = proposeParams(p, 'hook5s', [sample(0.1, 2000), sample(0.1, 2000), sample(0.1, 2000)]);
+    expect(p.metricOffset.hook5s).toBeGreaterThanOrEqual(-0.9);
+  });
+  it('caps the view shift by 30% whatever the view base is', () => {
+    const v = proposeParams({ ...DEFAULT_PARAMS, viewBase: 3 }, 'views', [sample(0.5, 100), sample(0.5, 100), sample(0.5, 100)]);
+    expect(3 ** v.viewOffset).toBeCloseTo(1 / 1.3);
+  });
+});
