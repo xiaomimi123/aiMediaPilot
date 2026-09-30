@@ -47,6 +47,15 @@ describe('generateRetro', () => {
     expect(saved).toHaveLength(1);
     expect(proposeNote).toHaveBeenCalledWith('p1');
   });
+  it('checks predictions after saving, and a failure does not fail the retro', async () => {
+    const checkPredictions = vi.fn(async () => { throw new Error('db'); });
+    const { d } = deps({ checkPredictions });
+    expect(await generateRetro(d, 'p1')).toEqual({ ok: true });
+    const call = checkPredictions.mock.calls[0] as unknown[];
+    expect(call[0]).toBe('p1');
+    expect(typeof call[1]).toBe('number');
+    expect(call[2]).toHaveProperty('stages');
+  });
   it('keeps at most 3 valid lessons and passes contradicted ids', async () => {
     const lessons = [1, 2, 3, 4].map((i) => ({ text: `经验${i}`, stage: i === 2 ? 'bogus' : 'hook', evidenceMetric: 'bounceRate2s' }));
     const { d, saved } = deps({}, { summary: 's', lessons, contradicts: ['L1', 'not-a-lesson'] });
