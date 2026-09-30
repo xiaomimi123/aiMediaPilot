@@ -19,20 +19,20 @@ export const TOOLS_UNSUPPORTED_NOTE = '（当前模型只能聊天，不能帮�
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function executeToolCall(call: ToolCall, tools: Tool<any>[], ctx: ToolContext): Promise<ToolResult> {
+async function executeToolCall(call: ToolCall, tools: Tool<any>[], ctx: ToolContext, agentName: string): Promise<ToolResult> {
   const tool = tools.find((t) => t.name === call.name);
   if (!tool) return { ok: false, summary: `没有叫 ${call.name} 的工具`, data: { error: `可用工具：${tools.map((t) => t.name).join('、')}` } };
   let args: unknown;
   try {
     args = JSON.parse(call.arguments || '{}');
   } catch {
-    return { ok: false, summary: `${tool.label}：编导给的参数不对，已让它重试`, data: { error: '参数必须是合法 JSON，请重新调用' } };
+    return { ok: false, summary: `${tool.label}：${agentName}给的参数不对，已让它重试`, data: { error: '参数必须是合法 JSON，请重新调用' } };
   }
   const parsed = tool.input.safeParse(args);
   if (!parsed.success) {
     // 原始 zod 报错只回给模型; 用户只看到一句中文
     const detail = parsed.error.issues.map((i) => `${i.path.join('.') || '(根)'}：${i.message}`).join('；');
-    return { ok: false, summary: `${tool.label}：编导给的参数不对，已让它重试`, data: { error: detail } };
+    return { ok: false, summary: `${tool.label}：${agentName}给的参数不对，已让它重试`, data: { error: detail } };
   }
   try {
     return await tool.execute(ctx, parsed.data);
@@ -52,6 +52,8 @@ function safeJson(s: string): Prisma.InputJsonValue {
 export async function runAgentTurn(opts: {
   projectId?: string;
   scope?: ConversationScope;
+  /** 报错里怎么称呼自己(项目对话是编导, 总助手是助手) */
+  agentName?: string;
   userText: string;
   db: PrismaClient;
   model: ChatModel;
@@ -62,6 +64,7 @@ export async function runAgentTurn(opts: {
 }): Promise<void> {
   const scope = opts.scope ?? (opts.projectId ? projectScope(opts.db, opts.projectId) : null);
   if (!scope) throw new Error('runAgentTurn 需要 projectId 或 scope');
+  const agentName = opts.agentName ?? '编导';
   // 浏览器中途关页/刷新后 emit 会抛错; 吞掉它, 让这一轮照常跑完并把结果存库 —— 不能被误判成"连不上 DeepSeek"
   const emit = (e: AgentEvent) => {
     try {
@@ -83,7 +86,7 @@ export async function runAgentTurn(opts: {
 
   for (;;) {
     if (modelCalls >= MAX_MODEL_CALLS_PER_TURN) {
-      const message = `这一轮编导调用次数过多（${MAX_MODEL_CALLS_PER_TURN} 次），已强制停止。稿子里已完成的修改保留着，换个说法再发一次。`;
+      const message = `这一轮${agentName}调用次数过多（${MAX_MODEL_CALLS_PER_TURN} 次），已强制停止。稿子里已完成的修改保留着，换个说法再发一次。`;
       await scope.save({ role: 'system', content: message });
       emit({ type: 'error', message });
       return;
@@ -102,7 +105,7 @@ export async function runAgentTurn(opts: {
         emit({ type: 'text', delta: TOOLS_UNSUPPORTED_NOTE });
         continue;
       }
-      const message = `编导这一轮没连上：${explained}`;
+      const message = `${agentName}这一轮没连上：${explained}`;
       await scope.save({ role: 'system', content: message });
       emit({ type: 'error', message });
       return;
@@ -127,7 +130,7 @@ export async function runAgentTurn(opts: {
       const result: ToolResult =
         used > MAX_TOOL_CALLS_PER_TURN
           ? { ok: false, summary: '本轮工具调用次数已到上限', data: { error: `本轮最多调用 ${MAX_TOOL_CALLS_PER_TURN} 次工具，已停止。请把目前的进展和剩下的问题如实告诉用户。` } }
-          : await executeToolCall(call, opts.tools, opts.toolCtx);
+          : await executeToolCall(call, opts.tools, opts.toolCtx, agentName);
       await scope.save({
         role: 'tool',
         content: result.summary,

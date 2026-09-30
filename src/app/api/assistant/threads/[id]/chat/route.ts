@@ -38,6 +38,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       try {
         await runAgentTurn({
           scope: assistantScope(prisma, thread.id),
+          agentName: '助手',
           userText: text,
           db: prisma,
           model: m.chat,

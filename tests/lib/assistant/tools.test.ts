@@ -36,6 +36,10 @@ describe('commandToTool', () => {
     const r = await t.execute(ctx, parsed.success ? parsed.data : {});
     expect(r.data).toMatchObject({ json: { days: '1' } });
   });
+  it('uses the reply when the command prints nothing (mp chat streams it)', async () => {
+    const r = await commandToTool(cmd({ run: async () => ({ reply: '稿子写好了\n第二行', tools: [] }), format: () => '' })).execute(ctx, {});
+    expect(r).toMatchObject({ ok: true, summary: '近期对标爆款：稿子写好了', data: { text: '稿子写好了\n第二行' } });
+  });
   it('rejects bad flag values with the command error', async () => {
     const r = await commandToTool(cmd({ run: async (_c, p) => needArg(p, 0, '项目') })).execute(ctx, {});
     expect(r.ok).toBe(false);

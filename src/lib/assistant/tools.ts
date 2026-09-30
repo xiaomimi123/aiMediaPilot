@@ -29,7 +29,9 @@ export function commandToTool(cmd: Command, now: () => Date = () => new Date()):
       const cctx: CommandCtx = { db: ctx.db, agent: 'claude-code', now: now(), progress: () => {}, write: () => {} };
       try {
         const data = await cmd.run(cctx, { positionals: input.args ?? [], flags: toFlags(input.flags) });
-        const text = cmd.format ? cmd.format(data) : JSON.stringify(data);
+        // mp chat 的回复在命令行里是流式打印的(format 为空): 工具里改用回复原文
+        const reply = (data as { reply?: unknown } | null)?.reply;
+        const text = (cmd.format ? cmd.format(data) : '') || (typeof reply === 'string' ? reply : JSON.stringify(data));
         return { ok: true, summary: `${cmd.summary}：${firstLine(text) || '完成'}`, data: { text, json: data } };
       } catch (e) {
         const err = toCliError(e);
