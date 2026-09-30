@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { PrismaClient } from '@prisma/client';
-import { createProposal, decideProposal, PROPOSAL_PROMPT, ProposalConflict } from '@/lib/notes/proposals';
+import { createProposal, decideProposal, notePathFor, PROPOSAL_PROMPT, ProposalConflict } from '@/lib/notes/proposals';
 import { START } from '@/lib/notes/note';
 import { makeVault } from './fixture';
 import { pastBlocksFrom } from '@/lib/notes/proposals';
@@ -16,8 +16,8 @@ function proposalDb(stage = 'scripted') {
   let seq = 0;
   const db = {
     noteProposal: {
-      updateMany: async ({ where, data }: { where: { projectId: string; status: string }; data: Partial<Row> }) => {
-        const hit = rows.filter((r) => r.projectId === where.projectId && r.status === where.status);
+      updateMany: async ({ where, data }: { where: { projectId?: string; id?: string; status: string }; data: Partial<Row> }) => {
+        const hit = rows.filter((r) => (!where.projectId || r.projectId === where.projectId) && (!where.id || r.id === where.id) && r.status === where.status);
         hit.forEach((r) => Object.assign(r, data));
         return { count: hit.length };
       },
@@ -35,6 +35,7 @@ function proposalDb(stage = 'scripted') {
     },
     project: { findUnique: async () => ({ id: 'cmabc123456', stage }) },
     chatMessage: { create: async ({ data }: { data: (typeof chat)[number] }) => void chat.push(data) },
+    $transaction: async (ops: Promise<unknown>[]) => Promise.all(ops),
   } as unknown as PrismaClient;
   return { db, rows, chat };
 }
@@ -85,5 +86,28 @@ describe('retro history', () => {
     expect(day7).toContain('### 第 3 天 · 播放 1');
     expect(day7).toContain('### 第 7 天 · 播放 9');
     expect(pastBlocksFrom(null)).toEqual([]);
+  });
+});
+
+describe('proposal safety', () => {
+  it('lets only one of two simultaneous confirmations write', async () => {
+    const v = await makeVault({});
+    const { db } = proposalDb();
+    const id = await createProposal(db, base);
+    const cfg = { vault: v, readFolders: [] };
+    const rs = await Promise.allSettled([decideProposal(db, id, 'accept', cfg, '2026-09-30'), decideProposal(db, id, 'accept', cfg, '2026-09-30')]);
+    expect(rs.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(rs.filter((r) => r.status === 'rejected' && r.reason instanceof ProposalConflict)).toHaveLength(1);
+  });
+  it('keeps writing to the note of a renamed project', () => {
+    expect(notePathFor('新名字', 'MediaPilot/项目/旧名字.md')).toBe('MediaPilot/项目/旧名字.md');
+    expect(notePathFor('新名字', null)).toBe('MediaPilot/项目/新名字.md');
+  });
+  it('recovers a write that was interrupted long ago', async () => {
+    const v = await makeVault({});
+    const { db, rows } = proposalDb();
+    const id = await createProposal(db, base);
+    Object.assign(rows.find((r) => r.id === id)!, { status: 'writing', updatedAt: new Date(Date.now() - 10 * 60_000) });
+    expect((await decideProposal(db, id, 'accept', { vault: v, readFolders: [] }, '2026-09-30')).status).toBe('written');
   });
 });

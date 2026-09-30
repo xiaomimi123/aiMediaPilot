@@ -62,14 +62,17 @@ export function buildRegion(src: NoteSource): string {
 
 const FRONT = /^---\n([\s\S]*?)\n---\n?/;
 
+/** 两个标记都在且顺序正确才算产品写的区块; 被挪乱的按用户自己的笔记处理 */
+const hasRegion = (file: string) => file.includes(START) && file.includes(END) && file.indexOf(START) < file.indexOf(END);
+
 export function ownerOf(file: string): string | null {
-  if (!file.includes(START) || !file.includes(END)) return null;
+  if (!hasRegion(file)) return null;
   return /^mediapilot_id:\s*(\S+)/m.exec(FRONT.exec(file)?.[1] ?? '')?.[1] ?? null;
 }
 
 export function renderFile(existing: string | null, meta: { projectId: string; stage: string; today: string }, region: string): string {
   const block = `${START}\n${region}\n${END}`;
-  if (!existing || !existing.includes(START) || !existing.includes(END)) {
+  if (!existing || !hasRegion(existing)) {
     return `---\nmediapilot_id: ${meta.projectId}\nstage: ${meta.stage}\nupdated: ${meta.today}\ntags: [mediapilot]\n---\n${block}\n`;
   }
   const replaced = existing.slice(0, existing.indexOf(START)) + block + existing.slice(existing.indexOf(END) + END.length);
@@ -94,7 +97,13 @@ export async function writeProjectNote(cfg: NotesConfig, relPath: string, meta: 
   const full = path.join(cfg.vault, rel);
   await fs.mkdir(path.dirname(full), { recursive: true });
   const tmp = `${full}.mp-tmp`;
-  await fs.writeFile(tmp, renderFile(existing, meta, region));
-  await fs.rename(tmp, full);
+  try {
+    await fs.writeFile(tmp, renderFile(existing, meta, region));
+    await fs.rename(tmp, full);
+  } catch (e) {
+    // 写失败不留临时文件在用户库里
+    await fs.rm(tmp, { force: true }).catch(() => {});
+    throw e;
+  }
   return rel;
 }

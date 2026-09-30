@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ProposalView } from '@/lib/notes/proposals';
 
-const DONE: Record<string, string> = { written: '已存进 Obsidian', rejected: '已不要', expired: '已过期' };
+const DONE: Record<string, string> = { written: '已存进 Obsidian', rejected: '已不要', expired: '已过期', writing: '正在写入…' };
 
 export function NoteProposalCard({ proposalId }: { proposalId: string }) {
   const [p, setP] = useState<ProposalView | null>(null);
@@ -11,12 +11,16 @@ export function NoteProposalCard({ proposalId }: { proposalId: string }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => {
-    void fetch(`/api/notes/proposals/${proposalId}`)
+  const reload = useCallback(async () => {
+    const j = await fetch(`/api/notes/proposals/${proposalId}`)
       .then((r) => r.json())
-      .then((j) => (j.success ? setP(j.data) : setErr(j.message)))
-      .catch(() => setErr('读取提议失败'));
+      .catch(() => ({ success: false, message: '读取提议失败' }));
+    if (j.success) setP(j.data);
+    else setErr(j.message);
   }, [proposalId]);
+  useEffect(() => {
+    void reload();
+  }, [reload]);
 
   const decide = async (action: 'accept' | 'reject') => {
     setBusy(true);
@@ -24,8 +28,14 @@ export function NoteProposalCard({ proposalId }: { proposalId: string }) {
       .then((r) => r.json())
       .catch(() => ({ success: false, message: '服务没有响应' }));
     setBusy(false);
-    if (j.success) setP(j.data);
-    else setErr(j.message);
+    if (j.success) {
+      setErr(null);
+      setP(j.data);
+    } else {
+      setErr(j.message);
+      // 已被处理(过期 / 另一个页面点过): 拿最新状态, 不留过时的按钮
+      await reload();
+    }
   };
 
   if (!p) return <div className="text-xs text-[var(--text-tertiary)]">{err ?? '读取提议…'}</div>;

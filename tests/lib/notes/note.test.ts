@@ -98,4 +98,17 @@ describe('note file', () => {
     expect(rel).toBe('MediaPilot/项目/为什么说AI....md');
     expect(await fs.readFile(path.join(v, rel), 'utf8')).toContain('R');
   });
+  it('treats swapped markers as the user own note and writes beside it', async () => {
+    const swapped = `---\nmediapilot_id: cmabc123456\n---\n${END}\n我的内容\n${START}\n`;
+    expect(ownerOf(swapped)).toBeNull();
+    const v = await makeVault({ 'MediaPilot/项目/乱.md': swapped });
+    const rel = await writeProjectNote({ vault: v, readFolders: [] }, 'MediaPilot/项目/乱.md', meta, 'R');
+    expect(rel).toBe('MediaPilot/项目/乱-123456.md');
+    expect(await fs.readFile(path.join(v, 'MediaPilot/项目/乱.md'), 'utf8')).toBe(swapped);
+  });
+  it('leaves no temp file behind when the write fails', async () => {
+    const v = await makeVault({ 'MediaPilot/项目/坏.md/占位.txt': 'x' });
+    await expect(writeProjectNote({ vault: v, readFolders: [] }, 'MediaPilot/项目/坏.md', meta, 'R')).rejects.toThrow();
+    expect((await fs.readdir(path.join(v, 'MediaPilot/项目'))).filter((f) => f.endsWith('.mp-tmp'))).toEqual([]);
+  });
 });

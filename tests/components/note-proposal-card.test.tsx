@@ -34,4 +34,28 @@ describe('NoteProposalCard', () => {
     await waitFor(() => expect(screen.getByText('已过期')).toBeTruthy());
     expect(screen.queryByText('存进 Obsidian')).toBeNull();
   });
+  it('refreshes after a conflict instead of keeping stale buttons', async () => {
+    let gets = 0;
+    vi.stubGlobal('fetch', vi.fn(async (_u: string, init?: RequestInit) => ({
+      json: async () => (init?.method === 'POST' ? { success: false, message: '这个提议已经处理过了' } : { success: true, data: view(gets++ === 0 ? {} : { status: 'expired' }) }),
+    })));
+    render(<NoteProposalCard proposalId="np1" />);
+    await waitFor(() => expect(screen.getByText('存进 Obsidian')).toBeTruthy());
+    fireEvent.click(screen.getByText('存进 Obsidian'));
+    await waitFor(() => expect(screen.getByText('已过期')).toBeTruthy());
+    expect(screen.queryByText('存进 Obsidian')).toBeNull();
+  });
+  it('clears an earlier error after a later success', async () => {
+    let posts = 0;
+    vi.stubGlobal('fetch', vi.fn(async (_u: string, init?: RequestInit) => ({
+      json: async () => (init?.method === 'POST' ? (posts++ === 0 ? { success: false, message: '服务没有响应' } : { success: true, data: view({ status: 'written' }) }) : { success: true, data: view() }),
+    })));
+    render(<NoteProposalCard proposalId="np1" />);
+    await waitFor(() => expect(screen.getByText('存进 Obsidian')).toBeTruthy());
+    fireEvent.click(screen.getByText('存进 Obsidian'));
+    await waitFor(() => expect(screen.getByText('服务没有响应')).toBeTruthy());
+    fireEvent.click(screen.getByText('存进 Obsidian'));
+    await waitFor(() => expect(screen.getByText('已存进 Obsidian')).toBeTruthy());
+    expect(screen.queryByText('服务没有响应')).toBeNull();
+  });
 });
