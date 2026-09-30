@@ -3,13 +3,26 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { PredictionsData } from '@/app/api/projects/[id]/predictions/route';
 import { DIM_LABEL, type Dim } from '@/lib/predict/formula';
-import { confidenceText, dragItems, KIND_LABEL } from '@/lib/predict/view';
+import { confidenceText, dragItems, KIND_LABEL, noNumbersText } from '@/lib/predict/view';
 import { cn } from '@/lib/utils';
 
 const V: Record<string, string> = { good: '好', even: '平', bad: '差', na: '—' };
 const M: Record<string, string> = { hook2s: '开头 2 秒跳出', hook5s: '前 5 秒完播', middle: '平均观看', ending: '完播率', like: '点赞率', favorite: '收藏率', share: '分享率', subscribe: '吸粉率' };
 
-export function PredictionPanel({ projectId, onHighlight, onAskEditor, onChanged }: { projectId: string; onHighlight: (segmentId: string) => void; onAskEditor: (text: string) => void; onChanged: () => void }) {
+export function PredictionPanel({
+  projectId,
+  reloadKey,
+  onHighlight,
+  onAskEditor,
+  onChanged,
+}: {
+  projectId: string;
+  /** 变化时重新读(编导测过、定稿后等面板外触发的预测) */
+  reloadKey?: string | number;
+  onHighlight: (segmentId: string) => void;
+  onAskEditor: (text: string) => void;
+  onChanged: () => void;
+}) {
   const [d, setD] = useState<PredictionsData | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const base = `/api/projects/${projectId}/predictions`;
@@ -20,7 +33,7 @@ export function PredictionPanel({ projectId, onHighlight, onAskEditor, onChanged
   }, [base]);
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, reloadKey]);
   // 预测在后台跑: 每 3 秒看一次, 跑完通知工作区刷新(拿到对话里的通知)
   useEffect(() => {
     if (!d?.running) return;
@@ -72,7 +85,7 @@ export function PredictionPanel({ projectId, onHighlight, onAskEditor, onChanged
       ) : (
         <div className="space-y-3">
           {r.center === null ? (
-            <p className="text-xs text-[var(--text-secondary)]">公开作品少于 3 条，暂不预测数字，先看打分和拖后腿的地方。</p>
+            <p className="text-xs text-[var(--text-secondary)]">{`${noNumbersText(r)}，先看打分和拖后腿的地方。`}</p>
           ) : (
             <div>
               <div>{`中枢约 ${r.center.toLocaleString('en-US')}，最可能 ${top!.label}（${top!.prob}%）`}</div>
@@ -95,11 +108,14 @@ export function PredictionPanel({ projectId, onHighlight, onAskEditor, onChanged
               <li key={s.dim}>
                 <span className={cn('font-medium', s.score <= 2 && 'text-[var(--danger)]')}>{`${DIM_LABEL[s.dim as Dim]} ${s.score} 分`}</span>
                 {`：${s.reason}`}
-                {s.quote && (
-                  <button className="ml-1 text-[var(--accent)] underline" onClick={() => s.segmentId && onHighlight(s.segmentId)}>
-                    {`「${s.quote}」`}
-                  </button>
-                )}
+                {s.quote &&
+                  (s.segmentId ? (
+                    <button className="ml-1 text-[var(--accent)] underline" onClick={() => onHighlight(s.segmentId!)}>
+                      {`「${s.quote}」`}
+                    </button>
+                  ) : (
+                    <span className="ml-1 text-[var(--text-secondary)]">{`「${s.quote}」`}</span>
+                  ))}
               </li>
             ))}
           </ul>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { backtestError, buildCheck, detectBias, proposeParams, type Sample } from '@/lib/predict/calibrate';
+import { backtestError, buildCheck, detectBias, proposeParams, shouldPropose, type Sample } from '@/lib/predict/calibrate';
 import { computePrediction, DEFAULT_PARAMS } from '@/lib/predict/formula';
 
 const scores = { hook: 3, pace: 3, ending: 3, interaction: 3, topic: 3 };
@@ -46,5 +46,14 @@ describe('calibration', () => {
     const better = proposeParams(DEFAULT_PARAMS, 'hook5s', samples);
     expect(backtestError(better, samples, 'hook5s')!).toBeLessThan(backtestError(DEFAULT_PARAMS, samples, 'hook5s')!);
     expect(backtestError(DEFAULT_PARAMS, samples, 'like')).toBeNull();
+  });
+});
+
+describe('proposal history', () => {
+  it('does not re-propose from the same newest sample once decided', () => {
+    expect(shouldPropose('views', 'pr9', [])).toBe(true);
+    expect(shouldPropose('views', 'pr9', [{ target: 'views', newest: 'pr9' }])).toBe(false);
+    expect(shouldPropose('views', 'pr10', [{ target: 'views', newest: 'pr9' }])).toBe(true);
+    expect(shouldPropose('hook5s', 'pr9', [{ target: 'views', newest: 'pr9' }])).toBe(true);
   });
 });

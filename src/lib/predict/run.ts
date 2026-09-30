@@ -13,7 +13,7 @@ import { median } from '@/lib/benchmark/rules';
 import { getActiveModel, NO_MODEL_MESSAGE } from '@/lib/llm/provider';
 import { explainModelError } from '@/lib/llm/errors';
 import { JobError, withProjectLock, type JobRun } from '@/lib/jobs/runner';
-import { computePrediction, type FormulaParams, type PredictionResult } from './formula';
+import { computePrediction, DIMS, type FormulaParams, type PredictionResult } from './formula';
 import { calibratedCount, ensureActiveFormula } from './store';
 import { scoreMap, scoreScript, type DimScore, type ScoreInput } from './score';
 import { summarize, type PredictKind } from './view';
@@ -34,6 +34,8 @@ export interface PredictInput {
   baselineViews: number | null;
   calibratedCount: number;
   formula: { version: number; params: FormulaParams };
+  /** 有播放数据的公开作品数 */
+  publicWorks?: number;
 }
 
 export interface PredictDeps {
@@ -42,20 +44,28 @@ export interface PredictDeps {
   modelLabel: string;
   save(row: { projectId: string; kind: PredictKind; formulaVersion: number; inputHash: string; scores: DimScore[]; result: PredictionResult }): Promise<{ id: string }>;
   trimDrafts(projectId: string): Promise<void>;
+  /** 同一段文字之前打过的分(文字没变就复用, 结果不再随模型波动) */
+  findScores?(projectId: string, inputHash: string): Promise<DimScore[] | null>;
 }
 
-async function scoreWithRetry(deps: PredictDeps, input: ScoreInput): Promise<DimScore[]> {
+const isFormatError = (e: unknown) => e instanceof z.ZodError || /json|schema|format|parse|格式|expected/i.test(e instanceof Error ? e.message : String(e));
+
+/** 同一篇打 3 次取每项中位数(模型打分有波动); 成功不到 2 次再来一轮; 仍不够才失败 */
+async function scoreStable(deps: PredictDeps, input: ScoreInput): Promise<DimScore[]> {
+  const ok: DimScore[][] = [];
   let last: unknown;
-  for (let i = 0; i < 2; i++) {
-    try {
-      return await scoreScript(deps.llm!, input);
-    } catch (e) {
-      last = e;
+  for (let round = 0; round < 2 && ok.length < 2; round++) {
+    const rs = await Promise.allSettled([0, 1, 2].map(() => scoreScript(deps.llm!, input)));
+    for (const r of rs) {
+      if (r.status === 'fulfilled') ok.push(r.value);
+      else last = r.reason;
     }
   }
-  const explained = explainModelError(last, deps.modelLabel);
-  // 连不上 / key 错等给出模型原因; 其余(格式不对)统一说没按格式打分
-  throw new PredictRefused(/出错了：/.test(explained) || last instanceof z.ZodError ? '模型没按格式打分，再点一次试试' : explained);
+  if (ok.length < 2) throw new PredictRefused(isFormatError(last) ? '模型没按格式打分，再点一次试试' : explainModelError(last, deps.modelLabel));
+  return DIMS.map((dim) => {
+    const xs = ok.map((run) => run.find((s) => s.dim === dim)!).sort((a, b) => a.score - b.score);
+    return xs[Math.floor((xs.length - 1) / 2)];
+  });
 }
 
 export async function runPrediction(deps: PredictDeps, projectId: string, kind: PredictKind) {
@@ -64,11 +74,14 @@ export async function runPrediction(deps: PredictDeps, projectId: string, kind: 
     if (input.published) throw new PredictRefused(PUBLISHED_REFUSAL);
     const useTranscript = kind === 'recorded';
     if (useTranscript ? !input.transcript?.length : !input.segments?.length) throw new PredictRefused(useTranscript ? '还没有转写，不能按口播预测' : '还没有稿子，不能预测');
-    if (!deps.llm) throw new PredictRefused(NO_MODEL_MESSAGE);
-    const scoreInput: ScoreInput = { segments: useTranscript ? null : input.segments, transcript: useTranscript ? input.transcript : null, persona: input.persona, benchmark: input.benchmark };
-    const scores = await scoreWithRetry(deps, scoreInput);
-    const result = computePrediction({ scores: scoreMap(scores), baselines: input.baselines, baselineViews: input.baselineViews, benchmarkHit: input.benchmarkHit, calibratedCount: input.calibratedCount, params: input.formula.params });
     const inputHash = createHash('sha256').update(JSON.stringify(useTranscript ? input.transcript : input.segments)).digest('hex').slice(0, 12);
+    const scoreInput: ScoreInput = { segments: useTranscript ? null : input.segments, transcript: useTranscript ? input.transcript : null, persona: input.persona, benchmark: input.benchmark };
+    let scores = (await deps.findScores?.(projectId, inputHash)) ?? null;
+    if (!scores) {
+      if (!deps.llm) throw new PredictRefused(NO_MODEL_MESSAGE);
+      scores = await scoreStable(deps, scoreInput);
+    }
+    const result = computePrediction({ scores: scoreMap(scores), baselines: input.baselines, baselineViews: input.baselineViews, benchmarkHit: input.benchmarkHit, calibratedCount: input.calibratedCount, params: input.formula.params, publicWorks: input.publicWorks });
     const { id } = await deps.save({ projectId, kind, formulaVersion: input.formula.version, inputHash, scores, result });
     if (kind === 'draft') await deps.trimDrafts(projectId);
     return { id, summary: summarize(kind, scores, result), scores, result, formulaVersion: input.formula.version };
@@ -100,12 +113,17 @@ export async function createPredictDeps(db: PrismaClient, llm?: StructuredLLM | 
         baselines: computeBaseline(history.map(toMetricSet)).medians,
         baselineViews: views.length >= 3 ? Math.round(median(views)) : null,
         calibratedCount: await calibratedCount(db),
+        publicWorks: views.length,
         formula: await ensureActiveFormula(db),
       };
     },
     async save(row) {
       const r = await db.prediction.create({ data: { ...row, scores: row.scores as unknown as Prisma.InputJsonValue, result: row.result as unknown as Prisma.InputJsonValue } });
       return { id: r.id };
+    },
+    async findScores(projectId, inputHash) {
+      const prev = await db.prediction.findFirst({ where: { projectId, inputHash }, orderBy: { createdAt: 'desc' } });
+      return prev ? (prev.scores as unknown as DimScore[]) : null;
     },
     async trimDrafts(projectId) {
       const old = await db.prediction.findMany({ where: { projectId, kind: 'draft' }, orderBy: { createdAt: 'desc' }, skip: MAX_DRAFTS, select: { id: true } });

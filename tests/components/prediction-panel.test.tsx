@@ -56,4 +56,19 @@ describe('PredictionPanel', () => {
     await waitFor(() => expect(screen.getByText(/已发布，不再预测/)).toBeTruthy());
     expect(screen.queryByText('预测')).toBeNull();
   });
+  it('reloads when the workspace says predictions may have changed', async () => {
+    const f = vi.fn(async () => ({ json: async () => ({ success: true, data: data() }) }));
+    vi.stubGlobal('fetch', f);
+    const { rerender } = render(<PredictionPanel projectId="p1" reloadKey="a" onHighlight={() => {}} onAskEditor={() => {}} onChanged={() => {}} />);
+    await waitFor(() => expect(f).toHaveBeenCalledTimes(1));
+    rerender(<PredictionPanel projectId="p1" reloadKey="b" onHighlight={() => {}} onAskEditor={() => {}} onChanged={() => {}} />);
+    await waitFor(() => expect(f).toHaveBeenCalledTimes(2));
+  });
+  it('shows quotes without a segment as plain text', async () => {
+    const plain = { ...view, kind: 'recorded', scores: scores.map((s) => (s.dim === 'hook' ? { ...s, segmentId: null } : s)) };
+    vi.stubGlobal('fetch', vi.fn(async () => ({ json: async () => ({ success: true, data: data({ latest: plain }) }) })));
+    render(<PredictionPanel projectId="p1" onHighlight={() => {}} onAskEditor={() => {}} onChanged={() => {}} />);
+    await waitFor(() => expect(screen.getByText('「大家好」')).toBeTruthy());
+    expect(screen.getByText('「大家好」').tagName).not.toBe('BUTTON');
+  });
 });

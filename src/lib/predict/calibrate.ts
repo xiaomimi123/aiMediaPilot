@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import type { Diagnosis, MetricKey, Verdict } from '@/lib/retro/diagnose';
 import { bucketIndex, centerOf, compositeOf, METRIC_DIM, METRIC_KEYS, predictMetric, type Dim, type FormulaParams, type PredictionResult } from './formula';
 import { ensureActiveFormula } from './store';
@@ -37,10 +37,16 @@ export function buildCheck(
 }
 
 export interface Sample {
+  /** 锁定预测的 id(用于判断提议是否基于新样本) */
+  id?: string;
   scores: Record<Dim, number>;
   result: PredictionResult;
   check: Omit<CheckView, 'dayN'>;
 }
+
+/** 同一指标、同一最新样本已经提议过(无论采纳还是不要)就不再提; 要等新样本 */
+export const shouldPropose = (target: Target, newest: string, history: { target: string; newest?: string }[]) =>
+  !history.some((h) => h.target === target && h.newest === newest);
 
 const ratioOf = (s: Sample, t: Target) => (t === 'views' ? s.check.viewRatio : s.check.ratios[t] ?? null);
 
@@ -116,16 +122,18 @@ async function loadSamples(db: PrismaClient): Promise<Sample[]> {
   }
   return [...byProject.values()]
     .sort((a, b) => (a.project.publishedWorks[0]?.publishedAt.getTime() ?? 0) - (b.project.publishedWorks[0]?.publishedAt.getTime() ?? 0))
-    .map((r) => ({ scores: toMap(r.scores), result: r.result as unknown as PredictionResult, check: { ratios: r.check!.ratios as CheckView['ratios'], viewRatio: r.check!.viewRatio, bucketHit: r.check!.bucketHit, verdicts: r.check!.verdicts as CheckView['verdicts'] } }));
+    .map((r) => ({ id: r.id, scores: toMap(r.scores), result: r.result as unknown as PredictionResult, check: { ratios: r.check!.ratios as CheckView['ratios'], viewRatio: r.check!.viewRatio, bucketHit: r.check!.bucketHit, verdicts: r.check!.verdicts as CheckView['verdicts'] } }));
 }
 
 export async function maybeProposeFormula(db: PrismaClient): Promise<number | null> {
   if (await db.predictionFormula.findFirst({ where: { status: 'proposed' } })) return null;
   const active = await ensureActiveFormula(db);
   const samples = await loadSamples(db);
+  const newest = samples.at(-1)?.id ?? '';
+  const history = (await db.predictionFormula.findMany({ where: { reason: { not: Prisma.DbNull } }, select: { reason: true } })).map((f) => f.reason as { target: string; newest?: string });
   for (const target of [...METRIC_KEYS, 'views'] as Target[]) {
     const direction = detectBias(samples, target);
-    if (!direction) continue;
+    if (!direction || !shouldPropose(target, newest, history)) continue;
     const next = proposeParams(active.params, target, samples);
     const oldError = backtestError(active.params, samples, target);
     const newError = backtestError(next, samples, target);
@@ -133,7 +141,7 @@ export async function maybeProposeFormula(db: PrismaClient): Promise<number | nu
     const max = await db.predictionFormula.findFirst({ orderBy: { version: 'desc' } });
     const version = (max?.version ?? 0) + 1;
     await db.predictionFormula.create({
-      data: { version, params: next as unknown as Prisma.InputJsonValue, status: 'proposed', reason: { target, label: TARGET_LABEL[target], direction, samples: samples.length, oldError, newError } },
+      data: { version, params: next as unknown as Prisma.InputJsonValue, status: 'proposed', reason: { target, label: TARGET_LABEL[target], direction, samples: samples.length, oldError, newError, newest } },
     });
     return version;
   }

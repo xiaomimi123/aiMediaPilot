@@ -21,4 +21,8 @@ describe('prediction view', () => {
     expect(t).toContain('开头钩子 2 分：hook 理由');
     expect(t).toContain('置信度低');
   });
+  it('says how many more works are needed for numbers', () => {
+    const none = computePrediction({ scores: { hook: 2, pace: 3, ending: 1, interaction: 4, topic: 3 }, baselines: {}, baselineViews: null, benchmarkHit: false, calibratedCount: 0, params: DEFAULT_PARAMS, publicWorks: 0 });
+    expect(summarize('draft', scores, none)).toContain('再发 3 条就能预测数字');
+  });
 });

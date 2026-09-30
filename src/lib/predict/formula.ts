@@ -47,6 +47,8 @@ export interface PredictionResult {
   buckets: Bucket[];
   confidence: Confidence;
   calibratedCount: number;
+  /** 有播放数据的公开作品数(不足 3 条时提示还差几条) */
+  publicWorks?: number;
 }
 
 export function predictMetric(key: MetricKey, score: number, baseline: number | null, p: FormulaParams): number | null {
@@ -110,6 +112,7 @@ export function computePrediction(i: {
   benchmarkHit: boolean;
   calibratedCount: number;
   params: FormulaParams;
+  publicWorks?: number;
 }): PredictionResult {
   const { composite, bonus } = compositeOf(i.scores, i.params, i.benchmarkHit);
   const confidence = confidenceOf(i.calibratedCount);
@@ -129,5 +132,6 @@ export function computePrediction(i: {
     buckets: center === null ? [] : bucketsFor(i.baselineViews!, center, sigmaOf(confidence)),
     confidence,
     calibratedCount: i.calibratedCount,
+    ...(i.publicWorks !== undefined ? { publicWorks: i.publicWorks } : {}),
   };
 }

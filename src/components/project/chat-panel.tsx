@@ -92,11 +92,12 @@ export function ChatPanel({
 
   const sentIds = useRef(new Set<string>());
   useEffect(() => {
-    if (!pendingSend || sentIds.current.has(pendingSend.id)) return;
+    // 正在回上一条时先等着, 结束后再发(不丢)
+    if (!pendingSend || busy || sentIds.current.has(pendingSend.id)) return;
     sentIds.current.add(pendingSend.id);
     void send(pendingSend.text);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingSend?.id]);
+  }, [pendingSend?.id, busy]);
 
   async function send(textOverride?: string) {
     const text = (textOverride ?? input).trim();

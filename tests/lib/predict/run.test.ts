@@ -56,14 +56,14 @@ describe('runPrediction', () => {
     await expect(runPrediction(deps({ load: async () => input({ segments: null }) }).d, 'p1', 'recorded')).rejects.toThrow('还没有转写，不能按口播预测');
     await expect(runPrediction(deps({ llm: null }).d, 'p1', 'draft')).rejects.toThrow(PredictRefused);
   });
-  it('retries the model once', async () => {
-    const call = vi.fn().mockRejectedValueOnce(new Error('bad json')).mockResolvedValueOnce({ result: { scores: five }, usage: {} });
+  it('retries a round when fewer than two of three scorings succeed', async () => {
+    const call = vi.fn().mockRejectedValueOnce(new Error('bad json')).mockRejectedValueOnce(new Error('bad json')).mockResolvedValue({ result: { scores: five }, usage: {} });
     const { d, saved } = deps({}, call);
     await runPrediction(d, 'p1', 'draft');
-    expect(call).toHaveBeenCalledTimes(2);
+    expect(call).toHaveBeenCalledTimes(6);
     expect(saved).toHaveLength(1);
   });
-  it('fails without saving when scoring fails twice', async () => {
+  it('fails without saving when scoring keeps failing', async () => {
     const call = vi.fn(async () => { throw new Error('schema mismatch'); });
     const { d, saved } = deps({}, call);
     await expect(runPrediction(d, 'p1', 'draft')).rejects.toThrow('模型没按格式打分');
@@ -73,22 +73,48 @@ describe('runPrediction', () => {
     const call = vi.fn(async () => { throw Object.assign(new Error('401 Unauthorized'), { status: 401 }); });
     await expect(runPrediction(deps({}, call).d, 'p1', 'draft')).rejects.toThrow('DeepSeek拒绝了请求');
   });
+  it('does not call an unknown model error a format error', async () => {
+    const call = vi.fn(async () => { throw new Error('socket hang up somewhere odd'); });
+    const e = (await runPrediction(deps({}, call).d, 'p1', 'draft').catch((x) => x)) as Error;
+    expect(e.message).toContain('socket hang up');
+    expect(e.message).not.toContain('没按格式');
+  });
+  it('takes the per-dimension median of three scorings', async () => {
+    const withHook = (score: number) => ({ result: { scores: five.map((s) => (s.dim === 'hook' ? { ...s, score, reason: `hook=${score}` } : s)) }, usage: {} });
+    const call = vi.fn().mockResolvedValueOnce(withHook(2)).mockResolvedValueOnce(withHook(5)).mockResolvedValueOnce(withHook(3));
+    const r = await runPrediction(deps({}, call).d, 'p1', 'draft');
+    expect(call).toHaveBeenCalledTimes(3);
+    expect(r.scores.find((s) => s.dim === 'hook')).toMatchObject({ score: 3, reason: 'hook=3' });
+  });
+  it('reuses scores when the text has not changed', async () => {
+    const call = vi.fn(async () => ({ result: { scores: five }, usage: {} }));
+    const kept = five.map((s) => ({ ...s, score: 4 }));
+    const findScores = vi.fn(async () => kept as never);
+    const r = await runPrediction(deps({ findScores }, call).d, 'p1', 'final');
+    expect(call).not.toHaveBeenCalled();
+    expect(r.scores).toEqual(kept);
+    expect(findScores).toHaveBeenCalledWith('p1', expect.stringMatching(/^[0-9a-f]{12}$/));
+  });
   it('runs predictions for one project one at a time', async () => {
     let active = 0;
     let maxActive = 0;
-    const call = vi.fn(async () => {
-      active++;
-      maxActive = Math.max(maxActive, active);
-      await new Promise((r) => setTimeout(r, 10));
-      active--;
-      return { result: { scores: five }, usage: {} };
+    const { d } = deps({
+      load: async () => {
+        active++;
+        maxActive = Math.max(maxActive, active);
+        return input();
+      },
+      save: async () => {
+        await new Promise((r) => setTimeout(r, 10));
+        active--;
+        return { id: 'x' };
+      },
     });
-    const { d } = deps({}, call);
     await Promise.all([runPrediction(d, 'p1', 'draft'), runPrediction(d, 'p1', 'draft')]);
     expect(maxActive).toBe(1);
   });
   it('says numbers need more works when there is no view baseline', async () => {
-    const { d } = deps({ load: async () => input({ baselineViews: null }) });
-    expect((await runPrediction(d, 'p1', 'draft')).summary).toContain('公开作品少于 3 条，暂不预测数字');
+    const { d } = deps({ load: async () => input({ baselineViews: null, publicWorks: 1 }) });
+    expect((await runPrediction(d, 'p1', 'draft')).summary).toContain('公开作品少于 3 条，再发 2 条就能预测数字');
   });
 });
