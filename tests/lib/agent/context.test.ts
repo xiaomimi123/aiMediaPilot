@@ -76,3 +76,12 @@ describe('loadHistory', () => {
     ]);
   });
 });
+
+describe('editor rules for notes', () => {
+  it('tells the editor to search notes, cite them in the reply and never fill 待补 from them', () => {
+    const p = formatSystemPrompt({ title: 't', stage: 'draft', targetSec: 60, script: null, persona: null });
+    expect(p).toContain('search_notes');
+    expect(p).toContain('[[笔记名]]');
+    expect(p).toContain('propose_note');
+  });
+});
