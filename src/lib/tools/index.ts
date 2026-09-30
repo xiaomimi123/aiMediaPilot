@@ -4,6 +4,7 @@ import { patchScriptTool } from './patch-script';
 import { transcribeTool } from './transcribe';
 import { suggestTopicsTool } from './suggest-topics';
 import { searchNotesTool, readNoteTool, proposeNoteTool } from './notes';
+import { predictTool } from './predict';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const SCRIPT_TOOLS: Tool<any>[] = [writeScriptTool, patchScriptTool, transcribeTool, suggestTopicsTool, searchNotesTool, readNoteTool, proposeNoteTool];
+export const SCRIPT_TOOLS: Tool<any>[] = [writeScriptTool, patchScriptTool, transcribeTool, suggestTopicsTool, searchNotesTool, readNoteTool, proposeNoteTool, predictTool];
