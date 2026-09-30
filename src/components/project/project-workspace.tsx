@@ -44,6 +44,8 @@ export function ProjectWorkspace({
     initialProject.stage === 'draft' ? 'script' : initialProject.stage === 'final' ? 'film' : initialProject.stage === 'published' ? 'publish' : 'recording',
   );
   const [highlighted, setHighlighted] = useState<Set<string>>(new Set());
+  // 预测面板「让编导按这个改」: 交给对话框当用户消息发出
+  const [pendingSend, setPendingSend] = useState<{ id: string; text: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const transcribeJob = jobs.find((j) => j.kind === 'transcribe');
   const wasActive = useRef(isActive(transcribeJob));
@@ -131,6 +133,9 @@ export function ProjectWorkspace({
                   setHighlighted(new Set());
                   await patch({ edit: { segmentId, text } });
                 }}
+                onHighlight={(id) => setHighlighted(new Set([id]))}
+                onAskEditor={(text) => setPendingSend({ id: String(Date.now()), text })}
+                onPredictionChanged={() => void refresh()}
                 onFinalize={async () => {
                   await patch({ finalize: true });
                   // 定稿会提议存进 Obsidian: 拉一次对话拿到确认卡片
@@ -161,6 +166,7 @@ export function ProjectWorkspace({
             projectId={project.id}
             initialMessages={initialMessages}
             incoming={notices}
+            pendingSend={pendingSend}
             // 发出新消息时清掉上一轮的高亮; 本轮工具改的段落保留到下一轮
             onTurnStart={() => setHighlighted(new Set())}
             onTurnEvent={onTurnEvent}

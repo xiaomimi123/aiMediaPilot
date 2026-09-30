@@ -66,3 +66,13 @@ describe('ChatPanel note proposals', () => {
     await waitFor(() => expect(screen.getByText('存进 Obsidian')).toBeTruthy());
   });
 });
+
+describe('ChatPanel pendingSend', () => {
+  it('sends a message handed in from outside', async () => {
+    const f = vi.fn(async () => ({ ok: false, body: null, status: 500, json: async () => ({ message: 'x' }) }));
+    vi.stubGlobal('fetch', f);
+    render(<ChatPanel projectId="p1" initialMessages={[]} pendingSend={{ id: 'a1', text: '按预测的建议改' }} onTurnStart={noop} onTurnEvent={noop} onTurnEnd={noop} />);
+    await waitFor(() => expect(f).toHaveBeenCalled());
+    expect(JSON.parse(String((f.mock.calls[0] as unknown as [string, RequestInit])[1].body))).toEqual({ text: '按预测的建议改' });
+  });
+});

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { ROLE_LABEL } from '@/lib/script/model';
 import type { ProjectView } from '@/lib/project/view';
+import { PredictionPanel } from './prediction-panel';
 import { cn } from '@/lib/utils';
 
 export function ScriptPane({
@@ -10,11 +11,17 @@ export function ScriptPane({
   highlighted,
   onEdit,
   onFinalize,
+  onHighlight = () => {},
+  onAskEditor = () => {},
+  onPredictionChanged = () => {},
 }: {
   project: ProjectView;
   highlighted: Set<string>;
   onEdit: (segmentId: string, text: string) => Promise<void>;
   onFinalize: () => Promise<void>;
+  onHighlight?: (segmentId: string) => void;
+  onAskEditor?: (text: string) => void;
+  onPredictionChanged?: () => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
@@ -48,6 +55,7 @@ export function ScriptPane({
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto p-6">
+        <PredictionPanel projectId={project.id} onHighlight={onHighlight} onAskEditor={onAskEditor} onChanged={onPredictionChanged} />
         {script.segments.map((s, i) => {
           const r = report.segments[i];
           const isEditing = editing === s.id;

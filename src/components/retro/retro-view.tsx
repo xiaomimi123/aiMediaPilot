@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import type { LessonView } from '@/lib/retro/view';
 import { LessonCard } from './lesson-card';
+import { FormulaCard } from './formula-card';
 
 type Item = { projectId: string; title: string; publishedAt: string; retroDayN: number | null; verdicts: Record<string, string> };
 const V: Record<string, string> = { good: '好', even: '平', bad: '差', na: '—' };
@@ -47,6 +48,7 @@ export function RetroView() {
         )}
       </section>
       <section className="min-w-0 space-y-3">
+        <FormulaCard onChanged={() => void load()} />
         <h2 className="text-sm font-medium">写法库（生效的最多 10 条进编导）</h2>
         {lessons.length === 0 ? <p className="text-sm text-[var(--text-secondary)]">还没有写法经验。复盘里编导提的经验，你采纳后会出现在这里。</p> : lessons.map((l) => <LessonCard key={l.id} lesson={l} onChanged={() => void load()} />)}
       </section>

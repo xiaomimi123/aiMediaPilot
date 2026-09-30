@@ -55,6 +55,7 @@ export function ChatPanel({
   emptyHint = '说说这条想讲什么，比如：「让 AI 当反方挑刺，帮你检查方案漏洞，60 秒」。',
   busyText = '编导在想…',
   quickPrompts = [],
+  pendingSend = null,
 }: {
   projectId: string;
   initialMessages: MessageView[];
@@ -69,6 +70,8 @@ export function ChatPanel({
   emptyHint?: string;
   busyText?: string;
   quickPrompts?: string[];
+  /** 外部交来的消息(如预测面板的改稿建议), id 变化时发出 */
+  pendingSend?: { id: string; text: string } | null;
 }) {
   const [lines, setLines] = useState<Line[]>(() => initialMessages.map(toLine));
   const [input, setInput] = useState('');
@@ -86,6 +89,14 @@ export function ChatPanel({
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: 'end' });
   }, [lines]);
+
+  const sentIds = useRef(new Set<string>());
+  useEffect(() => {
+    if (!pendingSend || sentIds.current.has(pendingSend.id)) return;
+    sentIds.current.add(pendingSend.id);
+    void send(pendingSend.text);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingSend?.id]);
 
   async function send(textOverride?: string) {
     const text = (textOverride ?? input).trim();
