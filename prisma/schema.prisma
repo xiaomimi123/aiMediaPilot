@@ -30,6 +30,7 @@ model Project {
   files          ProjectFile[]
   jobs           Job[]
   publishedWorks PublishedWork[]
+  noteProposals  NoteProposal[]
 
   @@index([updatedAt])
 }
@@ -340,4 +341,24 @@ model AssistantMessage {
   createdAt  DateTime        @default(now())
 
   @@index([threadId, createdAt])
+}
+
+/// 存进 Obsidian 的提议(用户确认才写)
+model NoteProposal {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// finalize | retro | manual
+  trigger   String
+  /// 库内相对路径, 如 MediaPilot/项目/xxx.md
+  path      String
+  /// 标记区块内的内容(预览即写入内容)
+  content   String   @db.Text
+  /// pending | written | rejected | expired
+  status    String   @default("pending")
+  error     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, status])
 }
