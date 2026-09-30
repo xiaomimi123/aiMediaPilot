@@ -19,13 +19,17 @@ export interface ProposalView {
   createdAt: string;
 }
 
-export const toProposalView = (r: { id: string; projectId: string; trigger: string; path: string; content: string; status: string; error: string | null; createdAt: Date }): ProposalView => ({
+/** 写入中断(服务重启)超过这么久, 就当作没写, 按钮重新出现 */
+export const STALE_WRITING_MS = 120_000;
+const isStaleWriting = (r: { status: string; updatedAt?: Date }) => r.status === 'writing' && !!r.updatedAt && Date.now() - r.updatedAt.getTime() > STALE_WRITING_MS;
+
+export const toProposalView = (r: { id: string; projectId: string; trigger: string; path: string; content: string; status: string; error: string | null; createdAt: Date; updatedAt?: Date }): ProposalView => ({
   id: r.id,
   projectId: r.projectId,
   trigger: r.trigger,
   path: r.path,
   content: r.content,
-  status: r.status,
+  status: isStaleWriting(r) ? 'pending' : r.status,
   error: r.error,
   createdAt: r.createdAt.toISOString(),
 });
@@ -60,7 +64,7 @@ export const notePathFor = (title: string, lastWrittenPath: string | null) => la
 export async function createProposal(db: PrismaClient, p: { projectId: string; trigger: ProposalTrigger; path: string; content: string }): Promise<string> {
   // 作废旧提议与新建放在一起完成, 不会同时出现两张待确认卡片
   const [, row] = await db.$transaction([
-    db.noteProposal.updateMany({ where: { projectId: p.projectId, status: 'pending' }, data: { status: 'expired' } }),
+    db.noteProposal.updateMany({ where: { projectId: p.projectId, status: { in: ['pending', 'writing'] } }, data: { status: 'expired' } }),
     db.noteProposal.create({ data: p }),
   ]);
   await db.chatMessage.create({ data: { projectId: p.projectId, role: 'system', content: PROPOSAL_PROMPT, toolName: 'note:proposal', toolResult: { ok: true, proposalId: row.id } } });
@@ -85,15 +89,18 @@ export async function proposeSafely(db: PrismaClient, projectId: string, trigger
 export async function decideProposal(db: PrismaClient, id: string, action: 'accept' | 'reject', cfg: NotesConfig, today: string): Promise<ProposalView> {
   let p = await db.noteProposal.findUnique({ where: { id } });
   if (!p) throw new Error('找不到这个提议');
-  // 写到一半服务重启: 2 分钟后当作没写, 可以再点
-  if (p.status === 'writing' && Date.now() - p.updatedAt.getTime() > 120_000) p = await db.noteProposal.update({ where: { id }, data: { status: 'pending' } });
+  // 写到一半服务重启: 2 分钟后当作没写, 可以再点(带条件, 不会和正在进行的抢占打架)
+  if (isStaleWriting(p)) {
+    await db.noteProposal.updateMany({ where: { id, status: 'writing', updatedAt: { lt: new Date(Date.now() - STALE_WRITING_MS) } }, data: { status: 'pending' } });
+    p = (await db.noteProposal.findUnique({ where: { id } }))!;
+  }
   if (p.status !== 'pending') throw new ProposalConflict('这个提议已经处理过了');
   // 先抢占: 两个页面同时点确认时只有一个能继续
   const claimed = await db.noteProposal.updateMany({ where: { id, status: 'pending' }, data: { status: action === 'reject' ? 'rejected' : 'writing' } });
   if (claimed.count === 0) throw new ProposalConflict('这个提议已经处理过了');
   if (action === 'reject') return toProposalView(await db.noteProposal.update({ where: { id }, data: { error: null } }));
-  const project = await db.project.findUnique({ where: { id: p.projectId } });
   try {
+    const project = await db.project.findUnique({ where: { id: p.projectId } });
     const rel = await writeProjectNote(cfg, p.path, { projectId: p.projectId, stage: project?.stage ?? 'draft', today }, p.content);
     return toProposalView(await db.noteProposal.update({ where: { id }, data: { status: 'written', path: rel, error: null } }));
   } catch (e) {

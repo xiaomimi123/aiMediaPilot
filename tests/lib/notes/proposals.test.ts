@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { PrismaClient } from '@prisma/client';
-import { createProposal, decideProposal, notePathFor, PROPOSAL_PROMPT, ProposalConflict } from '@/lib/notes/proposals';
+import { createProposal, decideProposal, notePathFor, PROPOSAL_PROMPT, ProposalConflict, toProposalView } from '@/lib/notes/proposals';
 import { START } from '@/lib/notes/note';
 import { makeVault } from './fixture';
 import { pastBlocksFrom } from '@/lib/notes/proposals';
@@ -16,8 +16,8 @@ function proposalDb(stage = 'scripted') {
   let seq = 0;
   const db = {
     noteProposal: {
-      updateMany: async ({ where, data }: { where: { projectId?: string; id?: string; status: string }; data: Partial<Row> }) => {
-        const hit = rows.filter((r) => (!where.projectId || r.projectId === where.projectId) && (!where.id || r.id === where.id) && r.status === where.status);
+      updateMany: async ({ where, data }: { where: { projectId?: string; id?: string; status: string | { in: string[] } }; data: Partial<Row> }) => {
+        const hit = rows.filter((r) => (!where.projectId || r.projectId === where.projectId) && (!where.id || r.id === where.id) && (typeof where.status === 'string' ? r.status === where.status : (where.status as { in: string[] }).in.includes(r.status)));
         hit.forEach((r) => Object.assign(r, data));
         return { count: hit.length };
       },
@@ -109,5 +109,25 @@ describe('proposal safety', () => {
     const id = await createProposal(db, base);
     Object.assign(rows.find((r) => r.id === id)!, { status: 'writing', updatedAt: new Date(Date.now() - 10 * 60_000) });
     expect((await decideProposal(db, id, 'accept', { vault: v, readFolders: [] }, '2026-09-30')).status).toBe('written');
+  });
+  it('shows a long-stuck write as pending so the buttons come back', () => {
+    const row = { id: 'np1', projectId: 'p', trigger: 'finalize', path: 'MediaPilot/项目/a.md', content: 'x', status: 'writing', error: null, createdAt: new Date(), updatedAt: new Date(Date.now() - 10 * 60_000) };
+    expect(toProposalView(row).status).toBe('pending');
+    expect(toProposalView({ ...row, updatedAt: new Date() }).status).toBe('writing');
+  });
+  it('expires a stuck write when a newer proposal arrives', async () => {
+    const { db, rows } = proposalDb();
+    const a = await createProposal(db, base);
+    rows.find((r) => r.id === a)!.status = 'writing';
+    await createProposal(db, base);
+    expect(rows.find((r) => r.id === a)!.status).toBe('expired');
+  });
+  it('puts the proposal back when the project lookup fails after claiming', async () => {
+    const { db, rows } = proposalDb();
+    const id = await createProposal(db, base);
+    (db as unknown as { project: { findUnique: () => Promise<never> } }).project.findUnique = async () => { throw new Error('db down'); };
+    const v = await decideProposal(db, id, 'accept', { vault: null, readFolders: [] }, '2026-09-30');
+    expect(v.status).toBe('pending');
+    expect(rows.find((r) => r.id === id)!.status).toBe('pending');
   });
 });

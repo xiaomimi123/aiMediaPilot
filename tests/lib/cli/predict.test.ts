@@ -22,4 +22,18 @@ describe('mp predict', () => {
     const db = { job: { findFirst: async () => ({ id: 'j1' }) } } as never;
     await expect(run.run({ db, agent: 'claude-code', now: new Date(), progress: () => {}, write: () => {} }, { positionals: ['p1'], flags: {} })).rejects.toThrow('正在预测');
   });
+  it('holds a job row while running so the page sees it', async () => {
+    const run = PREDICT_COMMANDS.find((c) => c.path.join(' ') === 'predict run')!;
+    const jobs: { kind: string; status: string }[] = [];
+    const db = {
+      job: {
+        findFirst: async () => null,
+        create: async ({ data }: { data: { kind: string; status: string } }) => (jobs.push({ ...data }), { id: 'j1' }),
+        update: async ({ data }: { data: { status: string } }) => Object.assign(jobs[0], data),
+      },
+      project: { findUniqueOrThrow: async () => { throw new Error('no project'); } },
+    } as never;
+    await expect(run.run({ db, agent: 'claude-code', now: new Date(), progress: () => {}, write: () => {} }, { positionals: ['p1'], flags: {} })).rejects.toThrow();
+    expect(jobs).toEqual([{ kind: 'predict_draft', status: 'failed', projectId: 'p1', progress: 0 }].map(({ kind, status }) => expect.objectContaining({ kind, status })));
+  });
 });

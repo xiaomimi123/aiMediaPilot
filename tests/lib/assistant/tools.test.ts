@@ -40,6 +40,10 @@ describe('commandToTool', () => {
     const r = await commandToTool(cmd({ run: async () => ({ reply: '稿子写好了\n第二行', tools: [] }), format: () => '' })).execute(ctx, {});
     expect(r).toMatchObject({ ok: true, summary: '近期对标爆款：稿子写好了', data: { text: '稿子写好了\n第二行' } });
   });
+  it('does not dump JSON when an empty-format command has an empty reply', async () => {
+    const r = await commandToTool(cmd({ run: async () => ({ reply: '', tools: ['write_script'] }), format: () => '' })).execute(ctx, {});
+    expect(r).toMatchObject({ ok: true, summary: '近期对标爆款：完成', data: { text: '' } });
+  });
   it('rejects bad flag values with the command error', async () => {
     const r = await commandToTool(cmd({ run: async (_c, p) => needArg(p, 0, '项目') })).execute(ctx, {});
     expect(r.ok).toBe(false);

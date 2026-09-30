@@ -21,6 +21,12 @@ export function NoteProposalCard({ proposalId }: { proposalId: string }) {
   useEffect(() => {
     void reload();
   }, [reload]);
+  // 别的页面正在写: 过一会儿再看结果
+  useEffect(() => {
+    if (p?.status !== 'writing') return;
+    const t = setTimeout(() => void reload(), 3000);
+    return () => clearTimeout(t);
+  }, [p, reload]);
 
   const decide = async (action: 'accept' | 'reject') => {
     setBusy(true);
