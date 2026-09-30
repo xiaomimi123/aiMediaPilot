@@ -54,7 +54,8 @@ export async function getNotesConfig(db: PrismaClient, configPath?: string): Pro
   return { vault: await detectVault(configPath), readFolders, detected: true };
 }
 
-const badFolder = (f: string) => !f || path.isAbsolute(f) || f.split(/[\\/]/).some((seg) => seg === '..' || seg.startsWith('.'));
+// 只允许库的顶层文件夹(与设置页一致); 嵌套路径可能穿过符号链接
+const badFolder = (f: string) => !f || path.isAbsolute(f) || /[\\/]/.test(f) || f === '..' || f.startsWith('.');
 
 export async function saveNotesConfig(db: PrismaClient, input: { vault?: string; readFolders?: string[] }): Promise<void> {
   if (input.vault !== undefined) {

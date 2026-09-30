@@ -152,7 +152,7 @@ export function ProjectWorkspace({
                 }}
               />
             )}
-            {tab === 'publish' && <PublishPane projectId={project.id} />}
+            {tab === 'publish' && <PublishPane projectId={project.id} onChanged={() => void refresh()} />}
             {tab === 'film' && <FilmPane projectId={project.id} materials={materials} films={films} onChanged={() => void refresh()} />}
           </div>
         </div>

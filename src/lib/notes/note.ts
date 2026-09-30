@@ -24,7 +24,8 @@ const L: Record<string, string> = { active: '已采纳', candidate: '待决定',
 const n = (v: number | null) => (v === null ? '—' : v.toLocaleString('en-US'));
 
 export function noteFileName(title: string): string {
-  const safe = title.replace(/[/\\:*?"<>|]/g, '').replace(/\s+/g, ' ').trim() || '未命名项目';
+  // 去掉开头的点: 否则成了隐藏文件, Obsidian 和检索都看不到
+  const safe = title.replace(/[/\\:*?"<>|]/g, '').replace(/\s+/g, ' ').trim().replace(/^\.+/, '').trim() || '未命名项目';
   return `${WRITE_FOLDER}/项目/${safe}.md`;
 }
 
@@ -80,7 +81,8 @@ const readOrNull = (p: string) => fs.readFile(p, 'utf8').catch(() => null);
 export async function writeProjectNote(cfg: NotesConfig, relPath: string, meta: { projectId: string; stage: string; today: string }, region: string): Promise<string> {
   if (!cfg.vault || (await checkVault(cfg.vault))) throw new NotesError(VAULT_MISSING);
   const norm = path.posix.normalize(relPath);
-  if (!norm.startsWith(`${WRITE_FOLDER}/`) || norm.includes('..') || !norm.endsWith('.md')) throw new NotesError('只能写进 MediaPilot 文件夹');
+  // 按路径段判断: 标题里的省略号(...)是合法文件名
+  if (!norm.startsWith(`${WRITE_FOLDER}/`) || norm.split('/').some((s) => s === '..' || s === '.' || s.startsWith('.')) || !norm.endsWith('.md')) throw new NotesError('只能写进 MediaPilot 文件夹');
   let rel = norm;
   let existing = await readOrNull(path.join(cfg.vault, rel));
   // 同名文件属于别人(用户手建或别的项目): 换带项目 id 的文件名, 不动原文件

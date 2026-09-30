@@ -36,7 +36,7 @@ function Copy({ text }: { text: string }) {
   );
 }
 
-export function PublishPane({ projectId }: { projectId: string }) {
+export function PublishPane({ projectId, onChanged }: { projectId: string; onChanged?: () => void }) {
   const [s, setS] = useState<State | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -58,6 +58,8 @@ export function PublishPane({ projectId }: { projectId: string }) {
     setBusy(null);
     if (!j.success) setMsg(j.message);
     await load();
+    // 复盘会提议存进 Obsidian: 让工作区拉一次对话拿到卡片
+    onChanged?.();
   };
 
   if (!s) return <div className="p-6 text-sm text-[var(--text-secondary)]">{msg ?? '读取中…'}</div>;

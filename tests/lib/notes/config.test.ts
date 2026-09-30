@@ -49,4 +49,8 @@ describe('notes config', () => {
     const v = await makeVault({ '5-灵感/a.md': 'a', '_模板/t.md': 't', '1-项目/p.md': 'p' });
     expect(await listTopFolders(v)).toEqual(['1-项目', '5-灵感']);
   });
+  it('only accepts top-level folders', async () => {
+    const { db } = settingsDb();
+    await expect(saveNotesConfig(db, { readFolders: ['5-灵感/子目录'] })).rejects.toThrow('文件夹名不对');
+  });
 });

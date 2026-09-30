@@ -54,4 +54,15 @@ describe('notes vault', () => {
     await expect(searchNotes({ vault: '/nonexistent/vault', readFolders: [] }, 'x')).rejects.toThrow(NotesError);
     await expect(searchNotes({ vault: null, readFolders: [] }, 'x')).rejects.toThrow('没找到 Obsidian 库：去设置页填库路径');
   });
+  it('ignores nested readFolders and survives an unreadable file', async () => {
+    const v = await makeVault(FILES);
+    await fs.symlink(path.join(v, '2-领域'), path.join(v, '链接'));
+    expect((await searchNotes({ vault: v, readFolders: ['链接/人生'] }, '私人')).length).toBe(0);
+    const bad = path.join(v, '5-灵感/坏.md');
+    await fs.writeFile(bad, 'AI 剪辑');
+    await fs.chmod(bad, 0o000);
+    const hits = await searchNotes(cfgOf(v), '剪辑');
+    await fs.chmod(bad, 0o644);
+    expect(hits.map((h) => h.path)).toContain('5-灵感/AI 剪辑翻车.md');
+  });
 });

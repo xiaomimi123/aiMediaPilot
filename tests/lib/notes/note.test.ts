@@ -91,4 +91,11 @@ describe('note file', () => {
     await expect(writeProjectNote({ vault: v, readFolders: [] }, 'MediaPilot/../x.md', meta, 'R')).rejects.toThrow('只能写进 MediaPilot 文件夹');
     await expect(writeProjectNote({ vault: null, readFolders: [] }, 'MediaPilot/项目/a.md', meta, 'R')).rejects.toThrow('没找到 Obsidian 库：去设置页填库路径');
   });
+  it('saves titles with ellipses and never makes hidden files', async () => {
+    expect(noteFileName('.NET 入门')).toBe('MediaPilot/项目/NET 入门.md');
+    const v = await makeVault({});
+    const rel = await writeProjectNote({ vault: v, readFolders: [] }, noteFileName('为什么说AI...'), meta, 'R');
+    expect(rel).toBe('MediaPilot/项目/为什么说AI....md');
+    expect(await fs.readFile(path.join(v, rel), 'utf8')).toContain('R');
+  });
 });

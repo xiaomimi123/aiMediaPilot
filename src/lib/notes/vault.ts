@@ -18,7 +18,8 @@ async function vaultRoot(cfg: NotesConfig): Promise<string> {
   return fs.realpath(cfg.vault);
 }
 
-const roots = (cfg: NotesConfig) => [...new Set([...cfg.readFolders, WRITE_FOLDER])];
+// 只认顶层文件夹: 旧配置里若有嵌套路径一律忽略
+const roots = (cfg: NotesConfig) => [...new Set([...cfg.readFolders, WRITE_FOLDER])].filter((r) => r && !/[\\/]/.test(r) && !r.startsWith('.'));
 const toPosix = (p: string) => p.split(path.sep).join('/');
 
 /** 相对路径 → 绝对路径; 必须是可读文件夹里、非隐藏、非符号链接的 .md */
@@ -81,7 +82,10 @@ export async function searchNotes(cfg: NotesConfig, query: string, limit = 8): P
   if (!words.length) return [];
   const scored: (NoteHit & { score: number; t: number })[] = [];
   for (const rel of await listReadableNotes(cfg)) {
-    const { text, mtime } = await readCached(path.join(vault, rel));
+    // 扫描途中被改名/删除或没权限的文件跳过, 不让整个检索失败
+    const got = await readCached(path.join(vault, rel)).catch(() => null);
+    if (!got) continue;
+    const { text, mtime } = got;
     const title = path.basename(rel, '.md');
     const { front, body } = splitFrontmatter(text);
     const tags = [...body.matchAll(/(^|\s)#([^\s#]+)/g)].map((m) => m[2]).join(' ');
