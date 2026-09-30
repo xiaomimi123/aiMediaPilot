@@ -22,6 +22,8 @@ export interface MessageView {
   ok: boolean | null;
   /** 工具的原始输出(可展开查看) */
   detail?: string | null;
+  /** 存进 Obsidian 的提议(对话里渲染成确认卡片) */
+  proposalId?: string | null;
 }
 
 export function toProjectView(p: { id: string; title: string; stage: string; targetSec: number; script: unknown; updatedAt: Date }): ProjectView {
@@ -44,8 +46,9 @@ export function toMessageView(m: { id: string; role: string; content: string; to
     (m.role === 'tool' || m.role === 'system') && m.toolResult && typeof m.toolResult === 'object'
       ? Boolean((m.toolResult as { ok?: unknown }).ok)
       : null;
+  const pid = m.toolResult && typeof m.toolResult === 'object' ? (m.toolResult as { proposalId?: unknown }).proposalId : undefined;
   const text = m.toolResult && typeof m.toolResult === 'object' ? (m.toolResult as { data?: { text?: unknown } | null }).data?.text : undefined;
-  return { id: m.id, role: m.role as MessageView['role'], content: m.content, toolName: m.toolName, ok, detail: typeof text === 'string' ? text : null };
+  return { id: m.id, role: m.role as MessageView['role'], content: m.content, toolName: m.toolName, ok, detail: typeof text === 'string' ? text : null, proposalId: typeof pid === 'string' ? pid : null };
 }
 
 export interface JobView {
