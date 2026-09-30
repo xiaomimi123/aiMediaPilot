@@ -33,4 +33,11 @@ describe('finalizeScript', () => {
     await finalizeScript(db, 'p1', async () => { throw new Error('boom'); });
     expect(project.stage).toBe('scripted');
   });
+  it('starts a locked prediction after finalizing, and a failure does not undo it', async () => {
+    const predict = vi.fn(async () => { throw new Error('no model'); });
+    const { db, project } = createFakeDb({ project: { script } });
+    await finalizeScript(db, 'p1', async () => {}, predict);
+    expect(predict).toHaveBeenCalledWith('p1');
+    expect(project.stage).toBe('scripted');
+  });
 });

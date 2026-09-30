@@ -143,7 +143,7 @@ export function dueRetros(rows: { projectId: string; publishedAt: Date; retroDay
     .map((r) => r.projectId);
 }
 
-const toMetricSet = (w: {
+export const toMetricSet = (w: {
   viewCount: number | null;
   likeCount: number | null;
   favoriteCount: number | null;
