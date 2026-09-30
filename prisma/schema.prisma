@@ -316,3 +316,28 @@ model AppSetting {
   value     String
   updatedAt DateTime @updatedAt
 }
+
+/// 总助手的对话
+model AssistantThread {
+  id        String             @id @default(cuid())
+  /// 取第一句用户消息的前 30 字
+  title     String             @default("新对话")
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  messages  AssistantMessage[]
+}
+
+model AssistantMessage {
+  id         String          @id @default(cuid())
+  threadId   String
+  thread     AssistantThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  /// user | assistant | tool | system
+  role       String
+  content    String          @db.Text
+  toolName   String?
+  toolInput  Json?
+  toolResult Json?
+  createdAt  DateTime        @default(now())
+
+  @@index([threadId, createdAt])
+}

@@ -77,3 +77,10 @@ describe('material / film views', () => {
     ]);
   });
 });
+
+describe('toMessageView detail', () => {
+  it('exposes the tool detail text', () => {
+    expect(toMessageView({ id: 'm', role: 'tool', content: '概况', toolName: 'status', toolResult: { ok: true, data: { text: '粉丝 408' } } })).toMatchObject({ ok: true, detail: '粉丝 408' });
+    expect(toMessageView({ id: 'm', role: 'user', content: 'x', toolName: null, toolResult: null }).detail).toBeNull();
+  });
+});
