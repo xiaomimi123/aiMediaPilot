@@ -13,6 +13,7 @@ import { loadCurrentTranscript } from '@/lib/recording/transcript';
 import { getActiveModel, NO_MODEL_MESSAGE } from '@/lib/llm/provider';
 import { formatPersona, type PersonaLike } from '@/lib/tools/types';
 import { CliError, needArg, type Command, type CommandCtx } from '../registry';
+import { findLagging } from '@/lib/predict/lag';
 
 export interface StatusData {
   fans: number | null;
@@ -23,6 +24,8 @@ export interface StatusData {
   scan: string;
   pendingLinks: number;
   lessonCandidates: number;
+  /** 发布后前两天比预测落后的作品数 */
+  behind?: number;
 }
 
 const n = (v: number) => v.toLocaleString('en-US');
@@ -31,7 +34,7 @@ const taskLine = (s: CollectStatus) => (s.state === 'ok' ? `正常（${new Date(
 export function formatStatus(d: StatusData): string {
   const fans = d.fans === null ? '粉丝 还没回采到' : `粉丝 ${n(d.fans)}${d.fansDelta ? `（${d.fansDelta > 0 ? '+' : ''}${d.fansDelta}）` : ''}`;
   const pend = [d.pendingLinks ? `${d.pendingLinks} 条作品关联` : '', d.lessonCandidates ? `${d.lessonCandidates} 条写法经验` : ''].filter(Boolean).join('，');
-  return [`${fans}${fans.endsWith('）') ? '' : ' '}· 获赞 ${d.likes === null ? '—' : n(d.likes)}`, `今天对标爆款 ${d.hits24h} 条`, `回采：${d.collect}`, `巡检：${d.scan}`, pend ? `待确认：${pend}` : '没有待确认的事'].join('\n');
+  return [`${fans}${fans.endsWith('）') ? '' : ' '}· 获赞 ${d.likes === null ? '—' : n(d.likes)}`, `今天对标爆款 ${d.hits24h} 条`, `回采：${d.collect}`, `巡检：${d.scan}`, d.behind ? `比预期落后：${d.behind} 条` : '', pend ? `待确认：${pend}` : '没有待确认的事'].filter(Boolean).join('\n');
 }
 
 export function formatHits(d: VideoView[]): string {
@@ -76,7 +79,8 @@ export const READ_COMMANDS: Command[] = [
       let pendingLinks = 0;
       for (const p of await ctx.db.project.findMany({ where: { stage: 'final' }, select: { id: true } })) if (await findCandidate(ctx.db, p.id)) pendingLinks++;
       const lessonCandidates = await ctx.db.writingLesson.count({ where: { status: 'candidate' } });
-      return { fans: sum.fans, fansDelta: sum.fansDelta, likes: sum.likes, hits24h: sum.hits24h, collect: taskLine(c), scan: taskLine(s), pendingLinks, lessonCandidates };
+      const behind = (await findLagging(ctx.db, ctx.now).catch(() => [])).length;
+      return { fans: sum.fans, fansDelta: sum.fansDelta, likes: sum.likes, hits24h: sum.hits24h, collect: taskLine(c), scan: taskLine(s), pendingLinks, lessonCandidates, ...(behind ? { behind } : {}) };
     },
     format: (d) => formatStatus(d as StatusData),
   },

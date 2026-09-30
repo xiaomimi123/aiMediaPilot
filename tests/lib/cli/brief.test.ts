@@ -32,6 +32,9 @@ describe('buildBrief', () => {
       ].join('\n'),
     );
   });
+  it('mentions predictions that are behind', () => {
+    expect(buildBrief({ ...base, behind: 2 })).toBe(['MediaPilot 早报', '比预期落后：2 条（回电脑看项目）', '粉丝 408（+3）'].join('\n'));
+  });
   it('loadBriefInput tolerates a retro with a null diagnosis', async () => {
     const { loadBriefInput } = await import('@/lib/cli/brief');
     const db = {

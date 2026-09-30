@@ -66,3 +66,32 @@ describe('ChatPanel note proposals', () => {
     await waitFor(() => expect(screen.getByText('存进 Obsidian')).toBeTruthy());
   });
 });
+
+describe('ChatPanel pendingSend', () => {
+  it('sends a message handed in from outside', async () => {
+    const f = vi.fn(async () => ({ ok: false, body: null, status: 500, json: async () => ({ message: 'x' }) }));
+    vi.stubGlobal('fetch', f);
+    render(<ChatPanel projectId="p1" initialMessages={[]} pendingSend={{ id: 'a1', text: '按预测的建议改' }} onTurnStart={noop} onTurnEvent={noop} onTurnEnd={noop} />);
+    await waitFor(() => expect(f).toHaveBeenCalled());
+    expect(JSON.parse(String((f.mock.calls[0] as unknown as [string, RequestInit])[1].body))).toEqual({ text: '按预测的建议改' });
+  });
+});
+
+describe('ChatPanel pendingSend while busy', () => {
+  it('waits for the current turn instead of dropping the message', async () => {
+    let finishFirst: (v: unknown) => void = () => {};
+    const f = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise((r) => (finishFirst = r)))
+      .mockResolvedValue({ ok: false, body: null, status: 500, json: async () => ({ message: 'x' }) });
+    vi.stubGlobal('fetch', f);
+    const props = { projectId: 'p1', initialMessages: [], quickPrompts: ['第一句'], onTurnStart: noop, onTurnEvent: noop, onTurnEnd: noop };
+    const { rerender } = render(<ChatPanel {...props} />);
+    fireEvent.click(screen.getByText('第一句'));
+    await waitFor(() => expect(f).toHaveBeenCalledTimes(1));
+    rerender(<ChatPanel {...props} pendingSend={{ id: 'x1', text: '按建议改' }} />);
+    finishFirst({ ok: false, body: null, status: 500, json: async () => ({ message: 'x' }) });
+    await waitFor(() => expect(f).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(String((f.mock.calls[1] as unknown as [string, RequestInit])[1].body))).toEqual({ text: '按建议改' });
+  });
+});

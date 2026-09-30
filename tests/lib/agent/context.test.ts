@@ -85,3 +85,9 @@ describe('editor rules for notes', () => {
     expect(p).toContain('propose_note');
   });
 });
+
+describe('editor rules for predictions', () => {
+  it('tells the editor when to call predict_views', () => {
+    expect(formatSystemPrompt({ title: 't', stage: 'draft', targetSec: 60, script: null, persona: null })).toContain('predict_views');
+  });
+});

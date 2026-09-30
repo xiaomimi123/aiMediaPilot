@@ -5,6 +5,7 @@ import type { PublishKit } from '@/lib/retro/publish-kit';
 import type { Diagnosis } from '@/lib/retro/diagnose';
 import type { LessonView } from '@/lib/retro/view';
 import { DiagnosisView } from '@/components/retro/diagnosis-view';
+import { PredictionSummary } from './prediction-summary';
 import { LessonCard } from '@/components/retro/lesson-card';
 
 interface State {
@@ -118,6 +119,8 @@ export function PublishPane({ projectId, onChanged }: { projectId: string; onCha
           </>
         )}
       </section>
+
+      <PredictionSummary projectId={projectId} views={s.work?.viewCount ?? null} />
 
       {s.work && (
         <section>

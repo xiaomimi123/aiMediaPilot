@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ROLE_LABEL } from '@/lib/script/model';
 import type { ProjectView } from '@/lib/project/view';
+import { PredictionPanel } from './prediction-panel';
 import { cn } from '@/lib/utils';
 
 export function ScriptPane({
@@ -10,14 +11,28 @@ export function ScriptPane({
   highlighted,
   onEdit,
   onFinalize,
+  onHighlight = () => {},
+  onAskEditor = () => {},
+  onPredictionChanged = () => {},
+  quoted = null,
+  predictionKey,
 }: {
   project: ProjectView;
   highlighted: Set<string>;
   onEdit: (segmentId: string, text: string) => Promise<void>;
   onFinalize: () => Promise<void>;
+  onHighlight?: (segmentId: string) => void;
+  onAskEditor?: (text: string) => void;
+  onPredictionChanged?: () => void;
+  /** 预测里被点的原句所在段落: 标「依据」并滚过去 */
+  quoted?: string | null;
+  predictionKey?: string | number;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  useEffect(() => {
+    if (quoted) document.getElementById(`seg-${quoted}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [quoted]);
 
   if (!project.script || !project.report) {
     return (
@@ -48,20 +63,27 @@ export function ScriptPane({
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto p-6">
+        <PredictionPanel projectId={project.id} reloadKey={predictionKey} onHighlight={onHighlight} onAskEditor={onAskEditor} onChanged={onPredictionChanged} />
         {script.segments.map((s, i) => {
           const r = report.segments[i];
           const isEditing = editing === s.id;
           return (
             <div
               key={s.id}
+              id={`seg-${s.id}`}
               className={cn(
                 'rounded-lg border p-4',
-                highlighted.has(s.id) ? 'border-[var(--warning)] bg-[var(--warning-subtle)]' : 'border-[var(--border-subtle)] bg-[var(--bg-surface)]',
+                highlighted.has(s.id)
+                  ? 'border-[var(--warning)] bg-[var(--warning-subtle)]'
+                  : quoted === s.id
+                    ? 'border-[var(--accent)] bg-[var(--bg-surface)]'
+                    : 'border-[var(--border-subtle)] bg-[var(--bg-surface)]',
               )}
             >
               <div className="mb-2 flex items-center gap-2 text-xs">
                 <span className="font-medium text-[var(--text-primary)]">{ROLE_LABEL[s.role]}</span>
                 {highlighted.has(s.id) && <span className="text-[var(--warning)]">刚改</span>}
+                {quoted === s.id && !highlighted.has(s.id) && <span className="text-[var(--accent)]">依据</span>}
                 <div className="flex-1" />
                 <span className={cn('font-mono', r.over ? 'text-[var(--danger)]' : 'text-[var(--text-tertiary)]')}>
                   {r.over ? `${r.estSec} / ${r.limitSec} 秒 · 超了` : `${r.estSec} / ${r.budgetSec} 秒`}

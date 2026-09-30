@@ -31,6 +31,7 @@ model Project {
   jobs           Job[]
   publishedWorks PublishedWork[]
   noteProposals  NoteProposal[]
+  predictions    Prediction[]
 
   @@index([updatedAt])
 }
@@ -361,4 +362,53 @@ model NoteProposal {
   updatedAt DateTime @updatedAt
 
   @@index([projectId, status])
+}
+
+/// 流量预测(定稿/录制后两种一旦生成不可改不可删)
+model Prediction {
+  id             String   @id @default(cuid())
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// draft | final | recorded
+  kind           String
+  formulaVersion Int
+  /// 所依据文本的 sha256 前 12 位
+  inputHash      String
+  /// 模型打分(§3 的 scores)
+  scores         Json
+  /// 换算结果: { metrics: {key, baseline, predicted, verdict}[], composite, benchmarkBonus, baselineViews, center, buckets: {label, lo, hi, prob}[], confidence, calibratedCount } ; 无播放基线时 baselineViews/center 为 null、buckets 为空
+  result         Json
+  createdAt      DateTime @default(now())
+  check          PredictionCheck?
+
+  @@index([projectId, kind, createdAt])
+}
+
+/// 锁定预测与实际的对账(第 3 天生成, 第 7 天更新)
+model PredictionCheck {
+  id           String     @id @default(cuid())
+  predictionId String     @unique
+  prediction   Prediction @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+  dayN         Int
+  /// { [metric]: 实际 / 预测 }
+  ratios       Json
+  /// 实际播放 / 中枢
+  viewRatio    Float?
+  /// 实际播放所在档位是否就是预测概率最高的那档
+  bucketHit    Boolean?
+  /// { [metric]: 'hit' | 'optimistic' | 'pessimistic' }
+  verdicts     Json
+  updatedAt    DateTime   @updatedAt
+}
+
+/// 预测换算公式(版本化)
+model PredictionFormula {
+  version   Int       @id
+  params    Json
+  /// active | proposed | rejected | retired
+  status    String
+  /// 提议原因与回测: { metric, direction, samples, oldError, newError }
+  reason    Json?
+  createdAt DateTime  @default(now())
+  decidedAt DateTime?
 }

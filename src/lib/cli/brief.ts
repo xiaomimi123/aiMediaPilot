@@ -4,6 +4,7 @@ import { AnalysisSchema } from '@/lib/benchmark/analyze';
 import { findCandidate } from '@/lib/retro/match';
 import { PROFILE_METRICS } from '@/lib/douyin/profile';
 import type { Diagnosis } from '@/lib/retro/diagnose';
+import { findLagging } from '@/lib/predict/lag';
 
 export interface BriefInput {
   collect: CollectStatus;
@@ -14,6 +15,8 @@ export interface BriefInput {
   lessonCandidates: number;
   fans: number | null;
   fansDelta: number | null;
+  /** 发布后前两天比预测落后的作品数 */
+  behind?: number;
 }
 
 const fansLine = (i: BriefInput) => (i.fans === null ? '' : `粉丝 ${i.fans}${i.fansDelta ? `（${i.fansDelta > 0 ? '+' : ''}${i.fansDelta}）` : ''}`);
@@ -22,12 +25,13 @@ const fansLine = (i: BriefInput) => (i.fans === null ? '' : `粉丝 ${i.fans}${i
 export function buildBrief(i: BriefInput): string {
   const warns = [i.collect, i.scan].filter((s) => s.state !== 'ok').map((s) => `⚠ ${s.hint}`);
   const pend = [i.pendingLinks ? `${i.pendingLinks} 条作品关联` : '', i.lessonCandidates ? `${i.lessonCandidates} 条写法经验` : ''].filter(Boolean).join('，');
-  if (!warns.length && !i.hits.length && !i.retros.length && !pend) return `昨晚一切正常，没有新爆款。${fansLine(i)}`.trim();
+  if (!warns.length && !i.hits.length && !i.retros.length && !pend && !i.behind) return `昨晚一切正常，没有新爆款。${fansLine(i)}`.trim();
   return [
     'MediaPilot 早报',
     ...warns,
     ...(i.hits.length ? [`对标爆款 ${i.hits.length} 条：`, ...i.hits.slice(0, 3).map((h) => `· ${h.author}（平时 ${h.ratio ?? '?'} 倍）${h.topic}`)] : []),
     ...(i.retros.length ? ['复盘：', ...i.retros.map((r) => `· ${r.title}：${r.line}`)] : []),
+    ...(i.behind ? [`比预期落后：${i.behind} 条（回电脑看项目）`] : []),
     ...(pend ? [`待你确认：${pend}（回电脑上看）`] : []),
     fansLine(i),
   ]
@@ -58,5 +62,6 @@ export async function loadBriefInput(db: PrismaClient, now: Date): Promise<Brief
     lessonCandidates: await db.writingLesson.count({ where: { status: 'candidate' } }),
     fans: fans?.currentCount ?? null,
     fansDelta: fans?.lastPeriodIncr ?? null,
+    behind: (await findLagging(db, now).catch(() => [])).length,
   };
 }

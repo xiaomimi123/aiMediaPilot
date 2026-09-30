@@ -6,6 +6,7 @@ import { ScriptSchema, ROLE_LABEL } from '@/lib/script/model';
 import { loadCurrentTranscript } from '@/lib/recording/transcript';
 import { AnalysisSchema } from '@/lib/benchmark/analyze';
 import { proposeSafely } from '@/lib/notes/proposals';
+import { recordChecks } from '@/lib/predict/calibrate';
 import { assignSegments, diagnose, type Diagnosis, type MetricSet } from './diagnose';
 
 export const LESSON_STAGES = ['topic', 'hook', 'opening', 'middle', 'ending', 'interaction', 'title'] as const;
@@ -49,6 +50,8 @@ export interface RetroDeps {
   now(): Date;
   /** 复盘后提议存进 Obsidian */
   proposeNote?(projectId: string): Promise<void>;
+  /** 复盘后给锁定的预测对账 */
+  checkPredictions?(projectId: string, dayN: number, diagnosis: Diagnosis, views: number | null): Promise<void>;
 }
 
 const SYSTEM_PROMPT = `你是抖音 AI 知识类博主的编导，读一份复盘诊断，给博主解读并提炼写法经验。
@@ -129,6 +132,8 @@ export async function generateRetro(deps: RetroDeps, projectId: string): Promise
   await deps.save({ projectId, workId: input.workId, dayN, diagnosis, narrative, narrativeError, dataAsOf: input.metricsUpdatedAt, lessons, contradictedIds });
   // 复盘后提议存进 Obsidian; 失败不影响复盘
   await deps.proposeNote?.(projectId).catch(() => {});
+  // 复盘后给锁定的预测对账(并检查要不要提议调公式); 失败不影响复盘
+  await deps.checkPredictions?.(projectId, dayN, diagnosis, input.work.viewCount).catch(() => {});
   return { ok: true };
 }
 
@@ -143,7 +148,7 @@ export function dueRetros(rows: { projectId: string; publishedAt: Date; retroDay
     .map((r) => r.projectId);
 }
 
-const toMetricSet = (w: {
+export const toMetricSet = (w: {
   viewCount: number | null;
   likeCount: number | null;
   favoriteCount: number | null;
@@ -173,6 +178,7 @@ export async function createRetroDeps(db: PrismaClient): Promise<RetroDeps> {
     llm: active?.llm ?? null,
     now: () => new Date(),
     proposeNote: (id) => proposeSafely(db, id, 'retro'),
+    checkPredictions: (id, dayN, d, views) => recordChecks(db, id, dayN, d, views),
     async load(projectId) {
       const work = await db.publishedWork.findFirst({ where: { projectId }, orderBy: { publishedAt: 'desc' } });
       if (!work) return null;

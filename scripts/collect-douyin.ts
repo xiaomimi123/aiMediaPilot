@@ -5,6 +5,7 @@ import { parseSelfProfile, saveSelfProfile, SELF_PROFILE_SCRIPT } from '../src/l
 import { collectWorkMetrics } from '../src/lib/retro/collect-step';
 import { saveWorkMetrics } from '../src/lib/retro/metrics-store';
 import { runDueRetros } from '../src/lib/retro/generate';
+import { postLagAlerts } from '../src/lib/predict/lag';
 import { importWorks, type IncomingWork } from '../src/lib/works/import';
 
 /**
@@ -231,6 +232,7 @@ async function main(): Promise<void> {
     // 到期复盘(发布第 3 天生成、第 7 天更新) —— 独立失败
     try {
       log(await runDueRetros(prisma));
+      log(`预测落后提醒: ${await postLagAlerts(prisma, new Date())} 条`);
     } catch (e) {
       log(`复盘生成失败(不影响前面的): ${e instanceof Error ? e.message : String(e)}`);
     }

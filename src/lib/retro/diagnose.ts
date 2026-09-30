@@ -17,10 +17,10 @@ export interface MetricSet {
 }
 
 export type Verdict = 'good' | 'even' | 'bad' | 'na';
-type Key = 'hook2s' | 'hook5s' | 'middle' | 'ending' | 'like' | 'favorite' | 'share' | 'subscribe';
+export type MetricKey = 'hook2s' | 'hook5s' | 'middle' | 'ending' | 'like' | 'favorite' | 'share' | 'subscribe';
 
 export interface StageResult {
-  key: Key;
+  key: MetricKey;
   label: string;
   value: number | null;
   baseline: number | null;
@@ -38,7 +38,7 @@ export interface Diagnosis {
 
 const rate = (n: number | null, v: number | null) => (n === null || !v ? null : n / v);
 
-function values(m: MetricSet): Record<Key, number | null> {
+export function metricValues(m: MetricSet): Record<MetricKey, number | null> {
   return {
     hook2s: m.bounceRate2s,
     hook5s: m.completionRate5s,
@@ -51,7 +51,7 @@ function values(m: MetricSet): Record<Key, number | null> {
   };
 }
 
-const LABEL: Record<Key, string> = {
+const LABEL: Record<MetricKey, string> = {
   hook2s: '开头 2 秒（跳出率）',
   hook5s: '前 5 秒（完播率）',
   middle: '中段（平均观看）',
@@ -80,9 +80,9 @@ export function assignSegments(segments: { label: string; text: string }[], line
 
 export function computeBaseline(history: MetricSet[]) {
   const recent = history.slice(0, BASELINE_SIZE);
-  const medians: Partial<Record<Key, number>> = {};
-  for (const k of Object.keys(LABEL) as Key[]) {
-    const xs = recent.map((m) => values(m)[k]).filter((x): x is number => x !== null);
+  const medians: Partial<Record<MetricKey, number>> = {};
+  for (const k of Object.keys(LABEL) as MetricKey[]) {
+    const xs = recent.map((m) => metricValues(m)[k]).filter((x): x is number => x !== null);
     if (xs.length >= MIN_BASELINE) medians[k] = median(xs);
   }
   const likes = recent.map((m) => m.likeCount).filter((x): x is number => x !== null);
@@ -91,7 +91,7 @@ export function computeBaseline(history: MetricSet[]) {
 
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 
-function verdictOf(key: Key, v: number | null, b: number | null): Verdict {
+export function verdictOf(key: MetricKey, v: number | null, b: number | null): Verdict {
   if (v === null || b === null || b === 0) return 'na';
   const diff = (v - b) / b;
   const better = key === 'hook2s' ? diff < -THRESHOLD : diff > THRESHOLD;
@@ -108,12 +108,12 @@ export function diagnose(input: {
 }): Diagnosis {
   const base = computeBaseline(input.history);
   const enough = base.count >= MIN_BASELINE;
-  const v = values(input.work);
+  const v = metricValues(input.work);
   const sec = input.work.avgViewSec;
   const hitLine = sec !== null && input.lines ? input.lines.find((l) => sec >= l.startSec && sec < l.endSec) ?? input.lines.at(-1) ?? null : null;
   const dropAt = sec === null ? null : { sec, segment: hitLine?.segment ?? null, line: hitLine?.text ?? null };
 
-  const stages = (Object.keys(LABEL) as Key[]).map((key): StageResult => {
+  const stages = (Object.keys(LABEL) as MetricKey[]).map((key): StageResult => {
     const value = v[key];
     const baseline = enough ? base.medians[key] ?? null : null;
     const verdict = enough ? verdictOf(key, value, baseline) : 'na';
