@@ -25,10 +25,17 @@ export function ObsidianCard() {
     void load();
   }, [load]);
 
+  // 保存中锁住勾选: 连点时不会拿旧列表覆盖上一次的修改
+  const [saving, setSaving] = useState(false);
   const toggle = async (f: string) => {
-    if (!v) return;
+    if (!v || saving) return;
     const readFolders = v.readFolders.includes(f) ? v.readFolders.filter((x) => x !== f) : [...v.readFolders, f];
-    apply(await call('PUT', { readFolders }));
+    setSaving(true);
+    try {
+      apply(await call('PUT', { readFolders }));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -50,7 +57,7 @@ export function ObsidianCard() {
           <div className="flex flex-wrap gap-3">
             {v.topFolders.map((f) => (
               <label key={f} className="flex items-center gap-1 text-xs">
-                <input type="checkbox" aria-label={f} checked={v.readFolders.includes(f)} onChange={() => void toggle(f)} />
+                <input type="checkbox" aria-label={f} disabled={saving} checked={v.readFolders.includes(f)} onChange={() => void toggle(f)} />
                 {f}
               </label>
             ))}

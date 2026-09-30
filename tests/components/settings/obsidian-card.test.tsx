@@ -23,4 +23,18 @@ describe('ObsidianCard', () => {
     await waitFor(() => expect(f).toHaveBeenCalledTimes(2));
     expect(JSON.parse(String((f.mock.calls[1] as unknown as [string, RequestInit])[1].body))).toEqual({ readFolders: ['5-灵感', '旧文件夹', '1-项目'] });
   });
+  it('locks the folder checkboxes while a save is in flight', async () => {
+    let release: () => void = () => {};
+    const f = vi.fn(async (_u: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') await new Promise<void>((r) => (release = r));
+      return { json: async () => ({ success: true, data }) };
+    });
+    vi.stubGlobal('fetch', f);
+    render(<ObsidianCard />);
+    await waitFor(() => expect(screen.getByDisplayValue('/v')).toBeTruthy());
+    fireEvent.click(screen.getByLabelText('1-项目'));
+    await waitFor(() => expect((screen.getByLabelText('5-灵感') as HTMLInputElement).disabled).toBe(true));
+    release();
+    await waitFor(() => expect((screen.getByLabelText('5-灵感') as HTMLInputElement).disabled).toBe(false));
+  });
 });

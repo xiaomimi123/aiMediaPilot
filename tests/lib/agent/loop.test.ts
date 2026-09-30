@@ -179,4 +179,15 @@ describe('runAgentTurn', () => {
     const { events } = await run(scriptedModel([{ text: '', toolCalls: [{ id: 'c', name: 'status', arguments: '{}' }] }, { text: '好', toolCalls: [] }]), [withText]);
     expect(events.find((e) => e.type === 'tool')).toMatchObject({ detail: '粉丝 408' });
   });
+
+  it('names the assistant, not the editor, in its own messages', async () => {
+    const { db } = createFakeDb();
+    const events: AgentEvent[] = [];
+    await runAgentTurn({
+      projectId: 'p1', userText: '你好', db, agentName: '助手',
+      model: scriptedModel([{ text: '', toolCalls: [{ id: 'c1', name: 'echo', arguments: '{"n":"三"}' }] }, { text: '好', toolCalls: [] }]),
+      tools: [echoTool], toolCtx: { projectId: 'p1', db, llm: {} as never }, emit: (e) => events.push(e),
+    });
+    expect(events.find((e) => e.type === 'tool')).toMatchObject({ summary: '回声：助手给的参数不对，已让它重试' });
+  });
 });

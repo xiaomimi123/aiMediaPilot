@@ -46,6 +46,8 @@ export interface PredictDeps {
   trimDrafts(projectId: string): Promise<void>;
   /** 同一段文字之前打过的分(文字没变就复用, 结果不再随模型波动) */
   findScores?(projectId: string, inputHash: string): Promise<DimScore[] | null>;
+  /** 保存前再查一次是否已关联发布(打分要十几秒, 期间可能刚关联) */
+  isPublished?(projectId: string): Promise<boolean>;
 }
 
 const isFormatError = (e: unknown) => e instanceof z.ZodError || /json|schema|format|parse|格式|expected/i.test(e instanceof Error ? e.message : String(e));
@@ -82,6 +84,7 @@ export async function runPrediction(deps: PredictDeps, projectId: string, kind: 
       scores = await scoreStable(deps, scoreInput);
     }
     const result = computePrediction({ scores: scoreMap(scores), baselines: input.baselines, baselineViews: input.baselineViews, benchmarkHit: input.benchmarkHit, calibratedCount: input.calibratedCount, params: input.formula.params, publicWorks: input.publicWorks });
+    if (await deps.isPublished?.(projectId)) throw new PredictRefused(PUBLISHED_REFUSAL);
     const { id } = await deps.save({ projectId, kind, formulaVersion: input.formula.version, inputHash, scores, result });
     if (kind === 'draft') await deps.trimDrafts(projectId);
     return { id, summary: summarize(kind, scores, result), scores, result, formulaVersion: input.formula.version };
@@ -121,6 +124,7 @@ export async function createPredictDeps(db: PrismaClient, llm?: StructuredLLM | 
       const r = await db.prediction.create({ data: { ...row, scores: row.scores as unknown as Prisma.InputJsonValue, result: row.result as unknown as Prisma.InputJsonValue } });
       return { id: r.id };
     },
+    isPublished: async (projectId) => (await db.publishedWork.count({ where: { projectId } })) > 0,
     async findScores(projectId, inputHash) {
       const prev = await db.prediction.findFirst({ where: { projectId, inputHash }, orderBy: { createdAt: 'desc' } });
       return prev ? (prev.scores as unknown as DimScore[]) : null;

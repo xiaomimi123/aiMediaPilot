@@ -29,10 +29,18 @@ export const PREDICT_COMMANDS: Command[] = [
     usage: 'mp predict run <项目>',
     summary: '按当前稿子做一次草稿预测',
     async run(ctx, p) {
+      const id = needArg(p, 0, '项目');
+      // 命令行是另一个进程, 和页面上的预测互相看不见锁: 先查有没有正在跑的
+      if (await ctx.db.job.findFirst({ where: { projectId: id, kind: { startsWith: 'predict_' }, status: { in: ['queued', 'running'] } } })) throw new CliError('running', '正在预测');
+      // 占一条任务记录: 页面上的「预测」据此知道命令行在跑, 不会同时再跑一份
+      const job = await ctx.db.job.create({ data: { projectId: id, kind: 'predict_draft', status: 'running', progress: 0 } });
+      const finish = (status: string, userMessage: string) => ctx.db.job.update({ where: { id: job.id }, data: { status, userMessage } }).catch(() => {});
       try {
-        const r = await runPrediction(await createPredictDeps(ctx.db), needArg(p, 0, '项目'), 'draft');
+        const r = await runPrediction(await createPredictDeps(ctx.db), id, 'draft');
+        await finish('done', '命令行预测完成');
         return { text: formatPrediction({ id: r.id, kind: 'draft', createdAt: new Date().toISOString(), formulaVersion: r.formulaVersion, scores: r.scores, result: r.result, check: null }) };
       } catch (e) {
+        await finish('failed', e instanceof Error ? e.message : String(e));
         if (e instanceof PredictRefused) throw new CliError('bad_args', e.message);
         throw e;
       }

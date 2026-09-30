@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatPanel } from '@/components/project/chat-panel';
 import type { MessageView } from '@/lib/project/view';
 
@@ -17,19 +17,34 @@ export function AssistantView() {
     setThreads(list);
     return list;
   }, []);
+  // 快速连点两个对话时, 只采用最后一次点的结果
+  const wanted = useRef<string | null>(null);
+  const currentRef = useRef(current);
+  // 发过消息的对话(对话框自己管消息, 这里只记「用过」)
+  const used = useRef(new Set<string>());
+  currentRef.current = current;
   const open = useCallback(async (id: string) => {
+    wanted.current = id;
     const j = await (await fetch(`/api/assistant/threads/${id}`)).json().catch(() => ({ success: false }));
-    if (j.success) setCurrent({ id, messages: j.data.messages });
+    if (j.success && wanted.current === id) setCurrent({ id, messages: j.data.messages });
   }, []);
   const create = useCallback(async () => {
+    // 当前对话还没说过话: 直接用它, 不再堆空对话
+    const cur = currentRef.current;
+    if (cur && cur.messages.length === 0 && !used.current.has(cur.id)) return;
     const j = await (await fetch('/api/assistant/threads', { method: 'POST' })).json().catch(() => ({ success: false }));
     if (j.success) {
+      wanted.current = j.data.id;
       setCurrent({ id: j.data.id, messages: [] });
       await loadThreads();
     }
   }, [loadThreads]);
 
+  // StrictMode 下 effect 会跑两次: 只初始化一次, 避免建出两个空对话
+  const started = useRef(false);
   useEffect(() => {
+    if (started.current) return;
+    started.current = true;
     void (async () => {
       const list = await loadThreads();
       if (list[0]) await open(list[0].id);
@@ -70,7 +85,7 @@ export function AssistantView() {
             busyText="助手在处理…"
             quickPrompts={QUICK}
             initialMessages={current.messages}
-            onTurnStart={() => {}}
+            onTurnStart={() => used.current.add(current.id)}
             onTurnEvent={() => {}}
             onTurnEnd={() => void loadThreads()}
           />

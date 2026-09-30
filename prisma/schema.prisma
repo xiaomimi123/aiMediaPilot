@@ -355,7 +355,7 @@ model NoteProposal {
   path      String
   /// 标记区块内的内容(预览即写入内容)
   content   String   @db.Text
-  /// pending | written | rejected | expired
+  /// pending | writing | written | rejected | expired
   status    String   @default("pending")
   error     String?
   createdAt DateTime @default(now())

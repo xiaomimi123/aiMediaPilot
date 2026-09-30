@@ -17,4 +17,23 @@ describe('mp predict', () => {
     ])).toBe(['[b] B · 录制后预测 · 中枢约 5,000 · 最可能 2,900–1.5万 50%', '[a] A · 定稿预测 · 中枢约 1,000 · 最可能 <1,450 60%', '[c] C · 草稿预测 · 暂不预测数字'].join('\n'));
     expect(formatPredictList([])).toBe('没有待发布的项目。');
   });
+  it('refuses to run while the page is already predicting', async () => {
+    const run = PREDICT_COMMANDS.find((c) => c.path.join(' ') === 'predict run')!;
+    const db = { job: { findFirst: async () => ({ id: 'j1' }) } } as never;
+    await expect(run.run({ db, agent: 'claude-code', now: new Date(), progress: () => {}, write: () => {} }, { positionals: ['p1'], flags: {} })).rejects.toThrow('正在预测');
+  });
+  it('holds a job row while running so the page sees it', async () => {
+    const run = PREDICT_COMMANDS.find((c) => c.path.join(' ') === 'predict run')!;
+    const jobs: { kind: string; status: string }[] = [];
+    const db = {
+      job: {
+        findFirst: async () => null,
+        create: async ({ data }: { data: { kind: string; status: string } }) => (jobs.push({ ...data }), { id: 'j1' }),
+        update: async ({ data }: { data: { status: string } }) => Object.assign(jobs[0], data),
+      },
+      project: { findUniqueOrThrow: async () => { throw new Error('no project'); } },
+    } as never;
+    await expect(run.run({ db, agent: 'claude-code', now: new Date(), progress: () => {}, write: () => {} }, { positionals: ['p1'], flags: {} })).rejects.toThrow();
+    expect(jobs).toEqual([{ kind: 'predict_draft', status: 'failed', projectId: 'p1', progress: 0 }].map(({ kind, status }) => expect.objectContaining({ kind, status })));
+  });
 });
