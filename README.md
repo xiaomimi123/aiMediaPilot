@@ -1,1038 +1,124 @@
 # MediaPilot
 
-> AI 自媒体工作台 — 自用创作闭环: 选题灵感 → 写稿改稿 → 拍摄/发布追踪 → 数据复盘。 主阵地抖音, 其他平台 (B站/YouTube/推特/小红书/公众号/快手/微博) 走分发登记。 设计预留 SaaS 扩展空间 (`userId` 隔离已在 schema, 未接 auth/计费)。
+AI 知识类抖音口播的个人工作台：一条内容 = 一个项目，在项目里和编导 agent 对话把稿子磨好，再录口播、配特效、出成片。
 
-**当前状态:** 单用户 MVP。 经历三次定位调整: "个人视频分析工具" → "小白向导式智能体" → "自用自媒体工作台" → **"Creator Cockpit 整体移植"** (2026-08-04, 详见 `docs/superpowers/specs/2026-08-04-cockpit-adoption-design.md`)。 首页 `/` 与全站外壳已换成移植自开源项目 [creator-cockpit](https://github.com/AverrryHu/creator-cockpit) 的纸质编辑部风格操作台; 紧接着完成**二期「平台页面融入驾驶舱」** (2026-08-05, 详见 `docs/superpowers/specs/2026-08-05-platform-pages-fusion-design.md`)——把一期挂壳的创作/数据/设置页面功能长进驾驶舱视图, 侧栏「平台」组解散; 再完成**三期「产出优先信息架构重组」** (2026-08-06, 详见 `docs/superpowers/specs/2026-08-06-platform-first-ia-design.md`)——侧栏从「流程优先」六视图重排为「产出优先」按平台组织; 又完成**四期「AI 深度采集 · 热点雷达」** (2026-08-13, 详见 `docs/superpowers/specs/2026-08-13-radar-deep-collection-design.md`)——新增服务端热点雷达管线 (关键词 → Tavily 搜索 → AI 逐篇阅读评分 → 热度排行), 独立「热点雷达」侧栏视图 + 设置「雷达配置」卡, 零 Claude 额度消耗 (阅读评分走用户自己的 AI provider); 又完成**五期「创作质量深化」** (2026-08-13, 详见 `docs/superpowers/specs/2026-08-13-script-quality-design.md`)——抖音脚本生成从单次大 prompt 升级为「研究→写作」两阶段管线, 产出可直接口播的完整逐字稿 (`script.sections[]`), 叠加 Tavily 联网研究打底 + 抽屉素材框, 定稿自动沉淀为风格样本供后续生成 few-shot 参照, 新增分块/整稿两级改稿; 又完成**六期「抽屉改稿闭环 + 小红书两阶段接入」** (2026-08-14, 详见 `docs/superpowers/specs/2026-08-14-drawer-closure-xhs-design.md`)——补齐五期两个已知限制 (抽屉关闭后改稿 UI 不可恢复、定稿自动推进阶段失效), 同时把小红书从旧单阶段生成升级为与抖音同款的「研究→写作」两阶段管线, 抽屉新增小红书素材简报/正文渲染 + 整稿指令框; 又完成**七期「小红书 AI 配图生成」** (2026-08-14, 详见 `docs/superpowers/specs/2026-08-14-xhs-image-generation-design.md`)——把小红书图文笔记里的 `shotIdeas` 配图建议升级为 gpt-image-1 真实生成的图片, 抽屉内一键全生成 (封面+全部配图), 单张失败可单独重试, 完成后打包 zip (png + 发布文案) 一键下载, 实现"定稿即成品"; 又完成**八期「人设定位驱动选题」** (2026-08-14, 详见 `docs/superpowers/specs/2026-08-14-persona-driven-topics-design.md`)——新增 `PersonaProfile` 人设定位档案(受众/想吸引的粉丝/3-5 条内容支柱/差异化角度/忌讳), 设置页「人设定位」卡支持直接编辑与「AI 帮我起草」五问访谈(DeepSeek 综合风格档案+定稿样本+雷达关键词起草, 只回填表单不落库, 保存才写库), 建立后自动注入三处: 热点雷达阅读评分(命中内容支柱 +8 分/未命中 ×0.7 降权 + 雷达页支柱名/"偏离定位"徽标)、选题与灵感生成(倾斜推荐更贴合定位的方向)、抖音与小红书写稿角度(受众画像与差异化角度约束切入点, 公众号与改稿路由不注入); 无档案时以上行为与现状完全一致(零迁移)。 又完成**九期「平台差异化流水线」** (2026-08-15, 详见 `docs/superpowers/specs/2026-08-15-platform-stage-flows-design.md`)——修正"全站统一 8 阶段"与"小红书是纯 AI 图文产线, 录制/剪辑永远空走"的错配: 新增平台阶段流层 (`src/lib/cockpit/platform-stages.ts`), 小红书看板/抽屉/档期/今日推进收窄为灵感→大纲→文案→发布→复盘 5 阶段 (其余平台不变, 仍是 7 阶段全集), 定稿(picked)与阶段完成推进都按平台流走 (小红书完成文案直接进发布, 不再卡进死阶段), 配一次性存量归并脚本; 收尾 E2E 顺带发现并修复一处五期遗留的真实 bug (`/content/script/[id]` 深度脚本页对两阶段生成的抖音稿 `retentionBeats` 字段读取崩溃, 见下文小节)。 又完成**十期「账号定位体系 · 作战室」** (2026-08-15, 详见 `docs/superpowers/specs/2026-08-15-positioning-system-design.md`)——把八期人设定位档案从"受众+支柱+角度+忌讳"一层薄皮扩展成完整作战室: `PersonaProfile` 新增痛点 (`painPoints` 3-6 条) / 商品服务 (`offerings` 1-5 条) / 产品逻辑 (`productLogic`) / 市场前景 (`marketInsight`, AI 自动调研可重跑) / 体系摘要 (`systemSummary`, 一页纸 markdown 可导出) 五个字段, 建档访谈从五问扩到九问 (新增痛点/变现/转化路径/竞争格局四问, 一次起草全部新字段); 内容卡新增 `intent` (引流/建立信任/转化) 字段, 生成时可指定或由 AI 建议回填, 写稿结尾 CTA 按 intent 分岔 (转化意图自然带出 offerings 里的具体产品名); 热点雷达阅读评分新增痛点命中 (`painHit`) 与差异化角度建议 (`angleSuggestion`) 展示, 但**不新增热度调权系数**——痛点只进相关性判断语义, 热度分合成公式 (`composeHeat`/`applyPersonaAdjust`) 零改动 (收尾用真实扫描数据重算验证过, 见下文小节); 内容总览新增内容组合比例条 (引流/信任/转化/未标注占比, 只展示不纠偏); 全档案仍不整体注入 prompt, 改为按用途 (`radar`/`write`/`topic`) 三段导出防止 prompt 暴长稀释指令。 又完成**十一期「账号定位独立视图」** (2026-08-15, 详见 `docs/superpowers/specs/2026-08-15-positioning-view-design.md`)——十期把定位体系(人设定位卡+风格档案卡)做进了「设置」页, 与 AI 服务配置/雷达配置/基线等一次性配置项并列, 用户实际体验后指出语义错位: 定位是反复回看、随经营迭代的**内容战略资产**, 不该埋在"配置一次不动"的设置页里。十一期把两张卡**原样迁移**(零重写, 只换挂载点)到新建的独立「账号定位」视图, 插入侧栏「工作台」组**第一项**(定位是选题/写稿一切动作的前提); 视图顶部新增**体系报告置顶区**(自取数展示 `systemSummary` + 「导出 .md」, 为空时引导访谈调研), 设置页收窄为只剩三张真正的配置卡。 本文档 §3 为当前实际 IA。
+> 2026-09-27 起整体重构（设计见 `docs/superpowers/specs/2026-09-27-project-agent-rebuild-design.md`）。重构前的全部代码在 git tag `v1-final`，旧文档在 `docs/archive/`，旧数据库 `mediapilot` 原样保留。
 
----
+## 现在能做什么
 
-## 1. Product Vision (当前: 工作台定位)
+- **项目**：首页新建项目，列表看每条的阶段与时长。
+- **编导对话**：项目页右侧和编导 agent 聊，它会写整稿（`write_script`）或只改某一段（`patch_script`）；工具改过的段落会高亮，直到你发下一条消息。
+- **时长硬约束**：稿子固定 6 段（开场钩子 / 概念A / 概念B / 冷知识 / 知识串联 / 金句收尾），按 5 字/秒估算；超标时 agent 自己修（写稿最多自修 2 轮），修不好会如实告诉你差多少秒。
+- **手改与定稿**：点任意一段直接改，时长即时重算；满意后「定稿」。
+- **② 口播**：全屏提词器照稿录制；把录好的视频拖进来，后台自动转写（本地 faster-whisper），再按原稿只修识别错字；逐句显示并标出「临场加的」和「没讲到」的段落。转写完成后编导对话里会收到通知，编导也能看到转写内容。任务失败或被重启打断时点「重试」，不会自动重跑。
+- **③ 成片**：上传录屏、视频、截图、图片作素材（可写一句说明）；在 Claude Code 里说「给这个项目出片」，按 `.claude/skills/produce-film` 流程用 Remotion 出一条 1080×1920 竖屏成片（人物小窗右上角、内容区动效卡片与素材、底部字幕，风格「极客手账」），登记回项目后可播放、下载、查看素材使用表。
+- **首页账号数据**：顶部显示粉丝、获赞（与抖音主页一致）、公开作品数与播放合计、最近公开发布（来自每晚回采；仅自己可见的作品不计）；回采失败或超过 36 小时没成功时直接提示原因和补救方法。
+- **定位**：编辑人设档案（受众、差异化角度、忌讳、内容支柱、痛点、产品、定位摘要），编导写稿时读取；只影响之后新建的项目。
+- **设置**：「模型」：添加任意模型（OpenAI 兼容：DeepSeek / 通义千问 / Kimi / 智谱 GLM / 豆包 / OpenRouter / Ollama / 中转站；Claude 原生），「测试」判断能不能当编导（连通 / 工具调用 / 结构化输出），全局选一个当前使用；依赖体检逐项检查数据库、当前模型、ffmpeg、本地转写、出片子工程、回采，缺什么给出补救命令（含对标巡检）。「每晚任务」卡片可随时「立即运行」作品数据回采 / 对标巡检（各每天最多手动 3 次，保护账号），也能开关每晚定时并改时间（装/卸 macOS launchd 定时任务，与 `scripts/install-*-cron.sh` 等效）。
+- **选题**：关注对标博主（粘主页链接，或按关键词搜），每晚 20:30 用 ego lite 里登录的账号只读巡检，按「点赞是他平时的 3 倍以上」挑出爆款并自动拆解（逐字稿 + 选题 / 开头钩子 / 标题写法 / 与你定位的契合度）；一键建项目，编导写稿时借选题、钩子写法、标题思路，不照抄原句（与对标逐字稿连续 12 字相同会标出所在段落让编导改掉）。「让编导挑 3 个」从近 14 天的对标爆款里按你的定位出选题；在空项目里对编导说「帮我找个选题」也行。也可以直接粘贴抖音分享链接拆解单条视频。
 
-### 当前定位
+- **发布与复盘**：项目页「④ 发布与复盘」生成候选标题 / 话题标签 / 封面字（你自己在抖音发）；发布后第二天回采自动提示"这条是你发的吗"，确认即关联（也可贴链接）。发布第 3 天自动复盘、第 7 天更新：按开头 2 秒 / 前 5 秒 / 中段（平均观看秒数对到逐句转写）/ 收尾 / 互动逐段和你平时比，从对标建的项目还会比点赞倍数；编导解读并提出写法经验，你采纳后编导以后写稿都会遵守。侧栏「复盘」看全部已发布作品与写法库。每晚回采另存每条作品的完播/跳出/平均观看等指标，发布 30 天内每天一份快照。
 
-**用户:** 自己 (AI 知识类抖音博主), 保留未来扩展给其他博主的可能 (`userId` 隔离已在 schema 里, 未来接 SaaS 需要另加 auth/计费中间件)
-**覆盖环节:** 选题灵感 → 写稿改稿 → 拍摄/发布追踪 → 数据/复盘, 完整创作闭环 (见 §3 `/` 工作台首页)
-**平台策略:** 主阵地 + 分发登记。 抖音是主阵地 (创作闭环 + L1 预测 + 复盘全在这里); 其他平台只登记"这条内容分发到了哪", 不做独立创作流
-**不做:** 一键发布、看板拖拽改状态、SaaS 计费 (本期范围外)
+- **外部 agent**：`mp` 命令行覆盖全部功能（中文输出，加 `--json` 给程序读）；Claude Code 用项目内 skill `mediapilot` 一句话跑选题→建项目→磨稿→定稿→出片→发布→复盘；本机 Hermes 装上后可在微信里查爆款、复盘、任务状态，每天早上收到简报。
+- **助手**：侧栏「助手」是跨项目的总助手（用设置页的当前模型）：问状态和数据、一句话开工（对标爆款 → 建项目 → 编导写首版）、讨论怎么调整。它能用 `mp` 命令行的全部能力（出片与安装 Hermes 除外），做事不先问你（每日额度、只读抖音等护栏照旧）；每次调用工具显示一行，点开看原始输出，回复里的项目可点。内置 3 个 skill：每日开工、从对标到首版稿、数据诊断（`assistant/skills/`）。当前模型不支持工具调用时只能聊天，会提示换模型。
+- **Obsidian 记忆**：设置页「Obsidian」选编导能读的文件夹（默认 5-灵感 / 3-资源 / 1-项目，库路径自动识别，未勾选的文件夹一律不读）。编导写稿前会搜你的笔记、优先用你自己的观点和经历，并在回复里注明借用了哪篇（`[[笔记名]]`）；助手也能用 `mp notes search/show` 查（Hermes 不能）。定稿、复盘后或你让编导"存进笔记"时，对话里出现「存进 Obsidian」卡片，点确认才把项目笔记（选题 / 对标 / 定稿 / 复盘 / 写法经验 / 编导小结）写进库里的 `MediaPilot/项目/`；你在标记区块外写的内容不会被覆盖，同名的自建笔记不会被动。
 
-### 历史定位 1: 小白向导式智能体 (第一次 pivot, 已被工作台定位取代)
+出片目前在 Claude Code 里完成，网页一键出片（接 Claude API）排在后续路线图里。
 
-**用户:** 想做自媒体但不知道怎么开始的小白
-**核心交互:** 向导式智能体 — 选平台 → 选垂类 → 输 topic → 出 platform-ready 内容
-**平台:** 抖音 / 小红书 / 公众号 (3 平台同时支持,文风差异由 platform-specific prompts 处理)
+## 快速开始
 
-这一版的产物 (多平台脚本生成、`/agent` 向导页) 被保留并整合进当前工作台, 但面向小白的教学引导 (三步教学卡、"第一次来"新手引导) 已在工作台重定位中压缩/移除 —— 自用工具不需要新手教程。
-
-### 历史定位 0: 个人视频分析工具 (pivot 前) — 保留为深度功能
-
-视频上传 → AI 4 维诊断 → L1 播放量预测 → 发布后 retro 复盘 → calibration 闭环。
-这条线 (Phase 1 + L1 + retro) **保留**,是当前工作台看板"已拍待发/已发布/已复盘"三列的数据来源。
-
----
-
-## 2. 14 Sub-projects 全景
-
-### 仍然核心 (post-pivot)
-
-| ID | 内容 | 状态 |
-|---|---|---|
-| **E** | Script 生成 (DeepSeek + zod schema) | ✅ 3 平台 (抖音/小红书/公众号) 各自 prompt + schema |
-| **F** + **K2** | Script ↔ Analysis 双向链 (URL `?fromScript=` + DB FK) | ✅ |
-| **H** + **I** | UI 风格 (Stitch 设计,蓝紫渐变,中文化) | ✅ 已被 Cockpit 纸质编辑部风格取代 —— `.bg-brand-gradient`/`.text-brand-gradient` 二期 (T7) 已全部退役 (`button.tsx` 的 `brand` variant 与其余 6 处字面量用法均改为 cockpit clay 强调色), 全仓库 `grep brand-gradient` 零残留 |
-| **G** | Mobile 响应式 (drawer + 卡 stack) | ✅ |
-| **M** | finalTitle 实时 AI 反馈 (DeepSeek 评分 + 改进建议) | ✅ `title-feedback` API 已支持 `platform` 参数 |
-
-### 改造能用
-
-| ID | 内容 | 待改 |
-|---|---|---|
-| **A** | 账号视频通常播放数 (baseline) | 概念偏视频,新场景下需重设计,当前不动; 二期 (T5) 已从 `/settings/baseline` 挪进 cockpit 设置视图「Baseline」卡, 旧路由已删除 (redirect → `/?view=settings`) |
-| **J** | 发前 publish checklist (5 项 + isReady) | 仍是视频专属单一 schema,未按平台拆分 (Roadmap Phase D,未做) |
-
-### 老视频管线 — 保留为深度功能
-
-| ID | 内容 |
-|---|---|
-| **Phase 1** | 视频上传 + ffmpeg 预处理 + 4 维 AI 评估 (hook/retention/title-caption/cover) + Whisper 转录 + synthesize 综合评分 |
-| **L1** | 播放区间预测 (baseline × scoreMultiplier × calibrationFactor) |
-| **C** | Retro 半自动 (review.py list + 手动 dropdown 匹配) |
-| **D** | Auto-sync cron 12h + bigram Dice 0.8 fuzzy match |
-| **B** | Phase 3 Dashboard 7 widget (StatsBar / OverallScoreTrend / Calibration / PredictionAccuracy / Niche / Top / Misses) | 二期 (T4/T6) `/dashboard` 页整体退役: Calibration/PredictionAccuracy/Misses → 迁移进复盘实验室「预测与校准」区块; Niche/Top → 迁移进大目标「内容表现」区块; StatsBar/OverallScoreTrend 连同页面自身的 QuickCreate/AccountRecent/EmptyState 一并退役删除 (无迁移, 首屏信息与其他视图重复), 数据源 `GET /api/v1/dashboard/summary` **保留**未退役 (两个新 widget panel 仍靠它取数, 未按 spec 原计划"仅剩 dashboard 用就退役") |
-| **L** | NextSteps "下一步" widget (待发 / 待复盘 / 草稿待拍 3 计数) | 二期 (T6) 随 `/dashboard` 一起退役删除, 未迁移 (职责已被「今日推进」视图取代) |
-
----
-
-## 3. 当前 IA (Creator Cockpit 全面接管 + 二期融合 + 三期产出优先重组)
-
-首页 `/` 与全站外壳已替换为移植自开源项目 [creator-cockpit](https://github.com/AverrryHu/creator-cockpit) 的纸质编辑部风格操作台 (一期, 详见 `docs/superpowers/specs/2026-08-04-cockpit-adoption-design.md`)。 旧工作台看板/内容库列表页/旧侧栏已删除。
-
-**二期 (平台页面融入驾驶舱, 详见 `docs/superpowers/specs/2026-08-05-platform-pages-fusion-design.md`) 已完成**: 侧栏「平台」组 (创作/数据/设置三项外链) **已解散**——AI 写稿、数据看板、AI key/baseline 三块功能已分别**长进**驾驶舱视图内部 (不再是独立挂壳页面); `/agent` `/dashboard` `/settings` 三个旧壳页已删除, 全部 redirect 回 `/` 的对应视图 (见下方 redirect 表)。 `/accounts` 保留为双入口。 二期还把蓝紫渐变 (Stitch 风格残留) 全面退役, 存留的站外页面 (`/accounts`、`/agent/discover`、`/content/*`) 视觉统一为 cockpit 纸质编辑部风格。
-
-**三期 (产出优先信息架构重组, 详见 `docs/superpowers/specs/2026-08-06-platform-first-ia-design.md`) 已完成**: 二期的六视图侧栏是「流程优先」(灵感→推进→档期→总览→目标→复盘), 与"按平台组织产出"的实际心智不符——三期只重排信息架构、不动底层机制 (抽屉/409 防护/AI 生成/爬虫回填等全部保留)。 侧栏「今日推进」与「档期规划」合并为一个视图内的今日/本周/档期三个 tab; 「大目标」与「复盘实验室」合并为「内容数据分析」一个视图内的目标/复盘两个分区; 新增「创作」固定分组, 五个平台 (抖音/小红书/bilibili/X/YouTube) 各自一个流水线页; 侧栏拖拽排序整体移除 (与新的固定分组结构冲突, 按 spec"实施时定"的授权简化)。 本文档 §3 为当前实际 IA。
-
-### Sidebar
-
-侧栏 (`src/components/cockpit/sidebar.tsx`) 现在是三段固定分组, 全站统一, **不支持拖拽排序**:
-
-```
-◌ 账号定位                      ← 工作台组第一项 (十一期新增, 自取数视图, 见下方「账号定位独立视图」小节)
-✣ 灵感库选题                    ← 工作台组
-◉ 热点雷达                      ← 工作台组 (四期新增, 自取数视图, 见下方「热点雷达」小节)
-◫ 今日推进                      ← 工作台组 (页内 tab: 今日 / 本周 / 档期)
-─ 创作 ──────────────────────
-▸ 抖音 / 小红书 / bilibili / X / YouTube   ← 创作组, 各自独立平台流水线页
-──────────────────────────────
-▦ 内容总览                      ← 总览组 (全平台看板, 不过滤)
-◎ 内容数据分析                  ← 总览组 (页内 tab: 目标 / 复盘)
-⚙ 设置                          ← 底部, 不在上述任一分组
-```
-
-站外页面挂入壳时同一份侧栏渲染成 `/?view=<id>` 静态链接。 `settings` 是固定分组之外的独立 view state (不在侧栏三段分组渲染逻辑里), 只能通过「设置与备份」按钮或 `/?view=settings` 直达。 `/accounts` 页面十七期已整体移除 (见下文「账号绑定功能移除」小节), 不再是站外落地页之一。
-
-### `/` — Cockpit 驾驶舱 (首页)
-
-`src/app/page.tsx` 只 `dynamic import` 一个客户端组件 `Cockpit.tsx` (`ssr:false`), 内部按 `view` state (`NavView`, 定义于 `src/lib/cockpit/view-routing.ts`) 切换视图: `positioning`(十一期新增, 自取数, 不进 `WorkspaceState`, 侧栏工作台组首项) / `inspirations` / `radar`(四期新增, 自取数, 不进 `WorkspaceState`) / `momentum`(今日/本周/档期三个 `MomentumPeriod` tab) / 五个 `platform-<平台>` / `pipeline` / `analytics`(目标/复盘两个 `AnalyticsTab` tab) 七类固定视图 + 一个独立的 `settings` 视图, 均是原样移植或参数化复用的 UI + 交互逻辑 (`src/lib/cockpit/{model,workflow,schedule,calculations}.ts` 纯函数零改动移植; `view-routing.ts` 是三期新增的纯逻辑模块, 详见下方兼容映射)。 首次进入 (workspace 为空) 走 onboarding; 支持明暗主题 + 5 套设计风格切换, 侧栏可折叠 (拖拽排序已移除); <820px 时侧栏收起, 换成底部 `.mobile-nav`。
-
-### 平台流水线页 (三期新增)
-
-五个平台 (抖音/小红书/bilibili/X/YouTube) 各有一个 `/?view=platform-<id>` 页面 (`src/components/cockpit/views/platform.tsx`), 每页固定三区:
-
-1. **产出区**: 「+ 新建内容」按钮直接创建内容并预置 `platform` 为当前页所属平台, 打开抽屉；能力分级提示文字——抖音/小红书 (全能力) 支持抽屉内就地 AI 生成, bilibili/X/YouTube (基础能力) 仅手写脚本骨架。
-2. **看板区**: 复用 `内容总览` 同一个 `ContentOverviewView` 组件 (`views/pipeline.tsx`), 传入 `platformFilter` 只显示该平台内容 (参数化复用, 非复制)。
-3. **分发区**: 读现有 `Distribution` 表, 展示登记到该平台的分发记录 (来源选题标题 + URL + 日期)。
-
-**platform 字段与主平台+分发模型**: 内容在其 `platform` 字段标记的主平台上完整走完创作流水线 (灵感→脚本→拍摄→发布→复盘)；发布到其他平台不重新走流程, 而是在该内容的脚本详情页登记一条 `Distribution` 记录 (平台+URL), 出现在对应平台流水线页的分发区——"一份内容, 一条主线, 多条分发标记"。
-
-### 热点雷达 (四期新增)
-
-一句话: **关键词 → Tavily 搜索 → AI 逐篇阅读评分 → 热度排行 → (人工审批)收入灵感库**——AI 只负责采集与排序, 是否值得做仍由人决定。
-
-服务端 AI 深度采集管线 + 独立视图, 与 cockpit 其余六视图不同——**自取数, 不进 `WorkspaceState`**（学 dashboard summary 先例，见 `src/components/cockpit/views/radar.tsx` 顶部注释）。「零 Claude 额度消耗」是硬约束: AI 阅读评分走用户自己在「AI 服务配置」卡配置的服务商 (现为 DeepSeek); DeepSeek key 解析优先读该卡里的 `AIConfig` 记录, 未配置时回退 `.env` 里的 `DEEPSEEK_API_KEY` (见 `src/lib/llm/resolve-key.ts`), 不占用 Claude 用量。
-
-**管线** (`src/lib/radar/run.ts` 的 `runRadarScan`, `src/jobs/workers/radar-worker.ts` 每日一次仿 auto-sync-worker 注册 + `/api/v1/radar/trigger` 手动触发仿二期 trigger 超时模式):
-
-```
-活跃 RadarKeyword → Tavily 搜索 (近期结果, 含正文) → URL+标题指纹双去重
-→ AI 逐篇阅读 (zod 结构化: 摘要/角度/相关度/新鲜度/讨论强度/可做性/候选关键词)
-→ 相关性闸门 (relevance < 40 丢弃不入库) → 热度合成 (四维加权 + 同话题跨源共现加成)
-→ 写 RadarItem + 候选词入 RadarKeyword(candidate) + RadarRun 运行日志
-```
-
-每日阅读上限默认 20 篇 (`RadarConfig.dailyLimit`, 可在设置卡改), 是**近 24 小时滚动累计**的额度 (而非"每次点击立即扫描各自的上限")——跑之前先查过去 24h 内该用户所有 RadarRun 的 `read` 总和, 剩余额度 = `dailyLimit - 已耗用`; 剩余为 0 时本轮仍创建 RadarRun 但不进入阅读循环, 记一条 `errors: [{stage:'budget', message:'今日阅读额度已用完'}]` 后立即收尾, 在雷达视图的上轮运行摘要中可见。
-
-**数据模型** (4 张新表, 均 `userId` 隔离, 详见 `prisma/schema.prisma`): `RadarKeyword`(关键词, status: active/candidate/ignored) / `RadarItem`(采集条目, status: new/adopted/ignored) / `RadarRun`(每轮运行日志) / `RadarConfig`(单行, Tavily key 用 `src/lib/crypto.ts` 同款 AES-256-GCM 加密存储, 前端只回 `hasKey` 布尔不回显明文/密文)。
-
-**视图三块** (`/?view=radar`, spec §3): ① 候选关键词审批条 (仅当存在 AI 学到的候选词时显示, 采纳/忽略) ② 热度排行 (卡片: 热度分 + 悬浮展开四维分项与共现加成 / 来源链接 `target=_blank` / AI 摘要与可做角度 / 命中关键词标签 / 「收入灵感库」「忽略」——两个动作都走幂等守卫, 非 `new` 状态的条目一律 409, 防双击产生孤儿数据) ③ 「立即扫描」按钮 + 上轮运行摘要一行 (扫 X 词/读 Y 篇/入库 Z 条/错误 N)。空态分两级: 未配置 Tavily key 或未启用 → 引导文案 + 「去设置」链接; 已配置但暂无条目 → 提示手动扫描或等待每日自动采集。
-
-**「收入灵感库」复用既有事务**: `PATCH /api/v1/radar/items/[id] {action:'adopt'}` 直接调用 `cockpitInspiration.create` + `bumpCockpitRev(tx)` 同一事务 (与 `POST /api/v1/cockpit/inspirations` 同等逻辑), 并在同事务里把该 `RadarItem` 标记 `adopted` + 回写 `inspirationId`——零新增 cockpit 写路径。
-
-**设置「雷达配置」卡** (`src/components/cockpit/settings-cards/radar-config-card.tsx`, 挂在设置视图): Tavily API Key (密码框, 留空 = 不修改, 已配置时显示掩码提示) / 每日阅读上限 / 启用开关 / 关键词管理 (已启用⇄已停用双向切换, 手动新增, 重复关键词 409 提示——AI 候选词的采纳/忽略在雷达视图页顶完成, 不在这张卡)。
-
-**API**: `GET/PUT /api/v1/radar/config`、`GET/POST /api/v1/radar/keywords`、`PATCH /api/v1/radar/keywords/[id]`、`GET /api/v1/radar/items`、`PATCH /api/v1/radar/items/[id]`、`POST /api/v1/radar/trigger` (前置就绪检查: 未启用/无 Tavily key → 400；无可用 DeepSeek key (设置卡 `AIConfig` 与 `.env` 均未配置) → 503)、`GET /api/v1/radar/runs/latest` (雷达视图「上轮运行摘要」的数据源)。
-
-**成本与真实验证**: DeepSeek 每篇几厘, Tavily 免费档每月 1000 次检索通常够用。管线核心 (纯函数热度合成/搜索层/阅读 prompt/API 路由) 全链路可 mock 测试 (见 `tests/lib/radar/` `tests/api/radar/`); worker 的每日 repeat 调度层未直测, 循 auto-sync-worker 先例 (人工验证)。真实跑一轮需用户在设置卡配置真实 Tavily key 后自验 (同 DeepSeek key 先例)。
-
-### 抖音口播逐字稿 · 创作质量深化 (五期新增)
-
-一句话: 抖音脚本生成从「一次性大纲」升级为「研究→写作」两阶段管线——雷达采纳选题摘要 + Tavily 联网搜索 + 抽屉素材框, 提炼成素材简报后再写出可直接对镜头念的完整逐字稿, 支持分块/整稿两级改稿, 定稿自动沉淀风格样本反哺下次生成。**本期仅抖音**(内容抽屉「脚本」tab 生成平台选「抖音」时可见; 其余平台仍是原有单次生成路径未变)。
-
-管线 (`src/lib/script/research.ts` + `src/lib/script/style.ts`, 编排在 `src/app/api/v1/scripts/generate/route.ts` 的 douyin 分支):
-
-```
-阶段一 研究 runResearch()
-  雷达来源选题(标题匹配已采纳的 RadarItem → aiSummary/aiAngle/url)
-  + Tavily 搜索×2(主题原词 + "主题 案例 数据", 近 7 天, 同四期雷达口径)
-  + 素材框文本(可选, 用户自己粘的资料)
-  → 三路任一失败/未命中都静默跳过, 全空或无 DeepSeek key → 整体降级返回 null
-    (前端提示"本篇未联网研究"), 不阻断写稿; 拼接超过 8000 字截断上限时,
-    雷达种子与用户素材优先于 Tavily 搜索正文保留 (体积最大的搜索正文最先被截)
-  → DeepSeek 提炼 3-6 条「素材简报」{fact, source(URL|"用户素材"), usage},
-    存入 ScriptDraft.output.research 供改稿复用(不重新联网)
-
-阶段二 写稿 SCRIPT_WRITE_DOUYIN
-  输入 = 专家人设 + 风格上下文 + 素材简报 + 主题 + 时长目标(30/45/60s, 默认 45)
-  输出 = script.sections[](role: hook/main/cta, startSec/endSec, 逐字口播 text, 3-6 块)
-       + hooks×3 候选 + titles×3 + cover
-```
-
-**风格学习** (`getStyleContext`): `StyleSample(platform='douyin')` 样本数 <2 → 用 `StyleProfile.description` 一句话说明兜底; ≥2 → 切换为最近 3 篇样本 few-shot(说明仍附带)。定稿(`PUT /api/v1/scripts/[id]/picked`)成功后自动把该稿 sections 拼接沉淀为一条 `StyleSample`——同一草稿改稿后再次定稿会**覆盖更新**已有样本 content(而非新建或跳过), 保证样本始终是这篇稿子的最新文本, 用户裁决优先。
-
-**两级改稿** (`POST /api/v1/scripts/[id]/refine`): `scope='section'` 只重写 `sectionIdx` 指定的一块, 服务端校验其余块 `text` 逐字未变, 越权改动 → 502 且不写库; `scope='all'` 重写全部 sections(titles/cover 不动)。两者都复用已存的素材简报, 不重新联网搜索。
-
-**抽屉交互** (内容详情抽屉「脚本」tab, `src/components/cockpit/content-drawer.tsx`): 生成前可折叠「素材(可选)」文本域 + 时长下拉(30/45/60s); 生成后素材简报折叠区(要点+来源链接) + 逐字稿分块渲染(块头角色中文标签+秒段, 块内「换一版」+ 一句话指令输入) + 页顶「整体指令」+ hook 块 3 候选切换(沿用既有 picked 机制)。
-
-**抽屉懒加载拉回改稿 UI (六期)**: 五期的分块改稿面板只存在于抽屉自己的前端 state, 重开抽屉(或刷新页面后重开)后消失, 只剩六个文本框(见上文 spec §6(c) 限制)。六期起: 打开抽屉挂载时若本地无生成态且 `item.scriptDraftId`(`CockpitContent` 服务端字段, 由上面 `cockpitContentId` 回写关联, `server-store.ts` 只读下发给前端, `PUT /api/v1/cockpit/workspace` 仍不接收) 非空, 懒加载 `GET /api/v1/scripts/{id}` 拉回 `output`, 用窄化解析纯函数 `parseDraftOutput` (`src/lib/cockpit/draft-restore.ts`) 恢复 sections/research/hooks/时长(douyin)或 intro/body/tags/配图建议(xiaohongshu, 见下方专门段落); 两种形态都解析不出(旧 `retentionBeats` 形态、intro/body 缺一个、请求失败等)一律静默保持现状, 不阻断六个文本框编辑。
-
-**xiaohongshu 分支两阶段化 (六期)**: 上文「本期仅抖音」是五期交付时的范围——六期起 `xiaohongshu` 分支同样走 `runResearch` → `getStyleContext(userId, 'xiaohongshu')` → `SCRIPT_WRITE_XHS`(专家人设+风格上下文+素材简报+主题) 两阶段管线, 落库 `ScriptDraft.output = { research, titles, coverText, intro, body, tags, shotIdeas }`(与五期 douyin 的 `{ research, script.sections[], hooks, titles, cover, durationSec }` 形状并列, 键名不同); `durationSec` 请求参数仍校验但 xhs 分支不消费。`depositStyleSample`(`src/lib/script/style.ts`) 相应按 `draft.platform` 分支取定稿文本源: douyin 沿用 `sections` 拼接, xiaohongshu 取 `intro + '\n' + body`, 其余平台(含 gongzhonghao、未知值)防御性返回 `false` 不写入。`gongzhonghao` 分支未改动, 仍是单次生成、不落库 `ScriptDraft`。
-
-**xiaohongshu 抽屉交互 + 落库去重 (六期)**: 抽屉「脚本」tab 生成平台选小红书时不再是六个空文本框——生成后展示素材简报折叠区(与 douyin 分块面板共用同一个 `ResearchBriefDetails` 子组件)+ 页顶「整稿指令」框(只有 scope:'all', 小红书不支持分块改稿) + intro/正文/标签/配图建议只读渲染; 素材（可选）折叠框对小红书开放(时长下拉仍只有 douyin 有, `durationSec` 后端不消费); 整稿指令成功后本地替换 intro/body, 并按 `mapGeneratedToScript('xiaohongshu', {intro, body})`(即 `mapXiaohongshu`)同款语义回填六字段骨架的 `hook`/`body`(不触碰 `headline`/`conclusion`/`example`/`ending`)。生成/整稿指令/hook 相关动作(douyin 专属)四类互斥、生成中禁用, 沿用五期 T9 的 busy 开关模式。`src/lib/cockpit/generate-flow.ts` 里「生成成功后是否二次 `POST /api/v1/scripts` 保存」的分支条件从只判断 `platform === 'douyin'` 扩到 `douyin || xiaohongshu`——五期收尾曾修过 douyin 的同类孤儿 `ScriptDraft` 问题, T4 把 xhs 的 generate 路由也改成落库后这个坑对 xhs 原样重现(旧代码仍会二次保存产生一条孤儿草稿, 且把 `CockpitContent.scriptDraftId` 覆盖指向孤儿记录), 六期一并修掉, `gongzhonghao` 的生成路由仍不落库、继续走二次保存。`parseDraftOutput`(`src/lib/cockpit/draft-restore.ts`) 相应扩展形状嗅探: 先找 douyin 的 `script.sections`, 找不到再找顶层 `intro`+`body`(双非空字符串) 判定为 xiaohongshu 形态, 两种形态互斥, 判别口径与 refine 路由的 `XhsOutputReadSchema` 一致——抽屉懒加载拉回改稿 UI 因此对两个平台都生效。
-
-**「风格档案」卡** (`src/components/cockpit/settings-cards/style-profile-card.tsx`, 十一期起挂在独立的「账号定位」视图, 见下方「账号定位独立视图」小节, 组件本身零改动): 上半编辑 `StyleProfile.description`(口吻/句式/口头禅/忌讳); 下半只读样本列表(平台 badge + 预览 + 创建时间), 单条可删, 不提供手动新增入口(样本只经由脚本定稿沉淀, 避免两条写入路径)。
-
-**数据模型** (2 张新表, 零迁移): `StyleProfile`(userId 单行) / `StyleSample`(定稿沉淀, `platform` + `content` + `sourceScriptDraftId` 溯源, `@@index([userId, platform, createdAt])`); `ScriptDraft.output` Json 内新增 `research`/`script.sections[]` 两键, 旧稿没有这两键时抽屉按旧结构原样渲染。
-
-**API**: `POST /api/v1/scripts/generate`(douyin/xiaohongshu 分支两阶段化, 请求体新增 `materials?`/`durationSec?`/`cockpitContentId?`, 响应新增 `scriptDraftId`/`research`/`researchDegraded` + 各自的产出字段(douyin: `sections`/`hooks`/`titles`/`cover`; xiaohongshu: `titles`/`coverText`/`intro`/`body`/`tags`/`shotIdeas`); 无 DeepSeek key → 500; `cockpitContentId` 六期新增, douyin/xiaohongshu 分支落库 `ScriptDraft` 后 best-effort 回写 `CockpitContent.scriptDraftId`——归属校验/写入失败仅 `console.warn` 不阻断响应, 供抽屉重开恢复改稿 UI; gongzhonghao 分支目前仍不落库 `ScriptDraft`, 该参数暂不生效, `styleHints`/`inspirationApplied` 仅 gongzhonghao 分支保留)、`POST /api/v1/scripts/[id]/refine`(无 DeepSeek key → 503——与 generate 路由同场景的 500 状态码不同, 两条路由各自独立裁决, 未回头统一口径)、`GET/PUT /api/v1/style/profile`、`GET /api/v1/style/samples`、`DELETE /api/v1/style/samples/[id]`。
-
-**配置依赖(不新增配置项, 复用既有两张卡)**: DeepSeek key 走设置「AI 服务配置」卡(同全站其它 LLM 调用点), Tavily key 走设置「雷达配置」卡(同四期热点雷达)——两者任一缺失时研究阶段静默降级(不联网研究, 不影响写稿本身), 只有 DeepSeek key 缺失才会让整个生成/改稿请求失败。
-
-**成本**: 单篇生成 2 次 Tavily 搜索 + 2 次 DeepSeek 调用(研究提炼 + 写稿), 几分钱级; 每次改稿 1 次 DeepSeek 调用。
-
-**真实验证**: 收尾任务用已配置的真实 DeepSeek + Tavily key 跑通全链路(雷达已采纳选题作种子生成一篇、素材框生成一篇、对其做一次分块改稿+一次整稿改稿、定稿沉淀样本后再生成第三篇确认样本数 ≥2 时切换 few-shot), 过程中发现并修复了一处真实 bug(素材过长截断会把用户素材框内容整段丢弃, 见上文「雷达种子与用户素材优先于搜索正文保留」), 详见 `.superpowers/sdd/2026-08-13-script-quality/task-8-report.md`。
-
-### 小红书 AI 配图生成 (七期新增)
-
-一句话: 小红书图文笔记定稿后, shotIdeas 配图建议从"文字建议"升级成"真图"——两步链路(出图计划 → 逐张生图) + gpt-image-1, 抽屉一键全生成, 完成后打包下载即可直接发布。
-
-**两步链路**(`src/app/api/v1/scripts/[id]/images/{plan,route}.ts`):
-
-```
-① POST .../images/plan  (幂等, 已有 imagePlan 直接返回既有计划, 重新规划需 ?force=1)
-   输入 = ScriptDraft.output 的 coverText/intro/body/shotIdeas
-   DeepSeek 输出 { style: 全篇统一视觉风格描述, images: [{idx, prompt}] }
-   idx=0 为封面(prompt 要求把 coverText 原文渲染为海报大字), idx 1..N 对应 shotIdeas
-   总数 = 1+shotIdeas 数且 ≤10(成本护栏); 落 output.imagePlan
-
-② POST .../images  body {idx, quality?}  (逐张, 前端并发 2 调用)
-   GptImageProvider.generate() → POST api.openai.com/v1/images/generations
-   (model gpt-image-1, size 1024x1536 竖版, quality 默认 medium, b64_json)
-   写盘 public/generated/<draftId>/<idx>.png, 落 output.images[idx] = {path,prompt,createdAt}
-```
-
-抽屉「配图」区块 (`XhsScriptPanel`, `content-drawer.tsx`): 常亮「生成配图」按钮, 无本地 imagePlan 先幂等调 plan, 无 key (503) 时提示引导去设置卡配置; 否则并发 2 逐张调用 images, 生成一张渲染一张(缩略图网格), 单张失败该格显示「重试」; 生成动作并入既有互斥矩阵(生图中不可改稿); 至少 1 张成图后出现「打包下载」链接。关抽屉重开靠 `draft-restore.ts` 的 `imagePlan`/`images` 窄化解析恢复缩略图与下载入口(六期懒加载机制的自然延伸)。
-
-**打包下载**: `GET .../images/archive` 把已生成的 png + `note.txt`(标题+正文+标签, 可直接粘贴发布)打成 zip, 文件名 `<topic>-发布包.zip`; 单张配图文件缺失时跳过(console.warn), 全部缺失才 400。用 `jszip` 打包(见下方决策记录), 二进制 zip 响应不走全站 `ok()` JSON 包裹, 与图片二进制响应路由同一先例。
-
-**key 配置**: 设置 → 「AI 服务配置」卡新增 provider「OpenAI 生图」(`gpt-image`, 模型 `gpt-image-1`), key 保存/AES 加密/掩码全走既有 `AIConfig` 机制; 生图客户端**硬编码**直连 `https://api.openai.com/v1`(不读 `.env` 的 `OPENAI_BASE_URL`, 那个指向百炼视觉模型), 需保证本地网络能直达 OpenAI 官方端点; 连通性测试按钮对该 provider 不支持(同 deepseek 现状, 显示友好提示)。
-
-**成本**: 出图计划 1 次 DeepSeek(几厘) + 每张 gpt-image-1 约 ¥0.1-0.6(按 quality 档), 单篇全生成(封面+数张配图)约 1-3 元。
-
-**真实生图验证(用户裁决, 七期收尾未做)**: 生图需要用户自己的 OpenAI 官方 key(与站内其余 LLM 调用点不同, 这个 key 没有 `.env` 回退), 收尾时用户尚未配置, 按 DeepSeek/Tavily 先例降级——核心链路(plan prompt/schema、逐张生图路由、写盘、archive 打包)全部 mock 测试覆盖, 真实成图/打包留待用户配置 key 后自验, 步骤: ① 设置→AI 服务配置卡保存「OpenAI 生图」key ② 打开一篇小红书稿的抽屉, 点「生成配图」③ 确认封面+配图渲染出来、单张重试可用 ④ 点「打包下载」解压确认 png+note.txt。
-
-### 平台差异化流水线 (九期新增)
-
-一句话: 每个平台的创作流程不一样, 不该共用同一套 8 阶段——小红书七期后是纯 AI 图文产线, 录制/剪辑对它是永远空走的死阶段, 定稿自动推进还会把它卡进去; 九期新增「平台阶段流」视图层, 各平台按自己的实际流程显示与推进, 数据层 8 阶段超集不动。
-
-**平台阶段流** (`src/lib/cockpit/platform-stages.ts`, 唯一事实来源, 纯函数零 IO):
-
-| 平台 | 阶段流 | 说明 |
-|---|---|---|
-| 小红书 (xiaohongshu) | 灵感→大纲→**文案**→发布→复盘 (5 阶段) | `script` 阶段展示名改「文案」(`stageLabelFor`); 配图并入文案阶段的抽屉, 不新增阶段值 |
-| 其余平台 (抖音/bilibili/X/YouTube/公众号) + 未收录平台 | 灵感→大纲→脚本→录制→剪辑→发布→复盘 (7 阶段, `WORK_STAGES`) | 与九期前行为一致 (`DEFAULT_STAGE_FLOW`) |
-| 内容总览 (跨平台混合看板) | 上述 7 阶段 + 归档 (8 阶段超集, `CONTENT_STAGES`) | 总览故意保留超集不收窄, 存量脏值卡也能显示 |
-
-`stageFlowFor(platform)` 决定看板列/抽屉 tab/可排期阶段集合; `nextStageFor(platform, stage)` 决定"完成当前阶段"与定稿(picked)时推进到哪一站——流内直接取下一站, 流尾 (`review`) 返回 `null` 不自动归档; 流外脏值 (含改平台后残留的旧阶段) 按 8 阶段超集顺序回落到该平台流内第一个能接住的阶段, 不硬阻断。
-
-**消费点**: 平台流水线页看板列、内容详情抽屉 tab (含「阶段完成状态」进度条与「下一步动作」文案)、档期规划的可拖拽阶段 chip、今日推进的任务生成闸门 (`canScheduleStage`) 五处统一改走流层函数; 内容总览看板与「全局当前阶段」下拉 (数据层手动逃生舱, 用于纠错脏值) 两处刻意保留 8 阶段超集。
-
-**定稿(picked)推进语义**: `PUT /api/v1/scripts/[id]/picked` 与阶段完成按钮 (`setContentStageCompletion`/`toggleStageEvent`) 都从硬编码"推进到 `recording`"改为 `nextStageFor(platform, 'script')`——小红书完成文案直接进「发布」(跳过死阶段), 其余平台仍进「录制」不变。 API 本身不加阶段取值硬校验 (看板过滤已天然限制展示, 硬校验会卡住存量脏值卡)。
-
-**存量归并脚本**: `npm run migrate:xhs-stages`, 用法与语义见 §6「xhs 存量阶段归并 (一次性)」小节, 不重复展开。
-
-**收尾 E2E 顺带修复的真实 bug**: 走查②③(定稿一篇 xhs 稿/一篇抖音稿, 确认落对看板列)时发现 `/content/script/[id]` 深度脚本详情页对两阶段生成 (五期起) 的抖音稿会直接崩溃——`script-result.tsx` 的 `DouyinView` 仍在读旧单阶段 schema 才有的 `retentionBeats[]` 字段, 而两阶段管线的产出形状是 `output.script.sections[]`, 二者字段名不同, `.map` 在 `undefined` 上直接抛错, 五期上线后这个页面对新形状草稿从未被人工走查覆盖过。 修复: `DouyinView` 按 `retentionBeats` 是否存在分岔渲染 (老稿走原表格, 新稿改渲染 `sections` 逐字稿列表), 不改数据形状本身。 与本期平台阶段流特性本身无关, 单独一个 fix commit。
-
-真实验证 (无 mock, 真花 DeepSeek key 额度几分钱): 新建一张小红书测试卡、用 AI 生成一篇两阶段图文稿、在深度脚本页选定标题触发定稿——看板卡片直接落「发布」列 (而不是不存在的「录制」列); 新建一张抖音测试卡同样走一遍确认仍落「录制」列 (回归无误); 过程中修复上述 bug 后原地复现验证通过。 明暗主题下的看板列头 (`kanban-column header h2`) 与设计风格「安静编辑部」的深色模式联动过一遍浅色→深色→浅色, 文字渲染正常。 走查用的测试卡片/草稿/风格样本已全部清理, 数据库恢复原状, 详见 `.superpowers/sdd/2026-08-15-platform-stage-flows/task-5-report.md`。
-
-### 账号定位体系 · 作战室 (十期新增)
-
-一句话: 八期的人设定位档案只回答了"你是谁/想吸引谁/擅长讲什么/差异化角度是什么", 前半段"关键痛点→商品服务→产品逻辑→市场前景→体系总结"全部空缺——平台像一个强生产车间但缺作战室, 能把任何选题做成漂亮成品, 却不知道这条内容为谁的什么痛点服务、最终怎么变现。十期扩展 `PersonaProfile` 补齐这一段, 并让它真正改变选题与生成, 详见 `docs/superpowers/specs/2026-08-15-positioning-system-design.md`。
-
-**档案字段** (`prisma/schema.prisma` `PersonaProfile`, 八期已有 `audience`/`targetFans`/`pillars`/`angle`/`avoid` 五字段原样保留不动):
-
-| 新增字段 | 形状 | 说明 |
-|---|---|---|
-| `painPoints` | `{pain(≤30字), evidence(≤60字)}[]`, 3-6 条 | 目标人群的关键痛点 + 证据来源 |
-| `offerings` | `{name(≤20), type: 'tool'\|'service'\|'course', description(≤80), targetPain(≤30)}[]`, 1-5 条 | 卖什么 (工具/服务/课程) + 对应哪条痛点 |
-| `productLogic` | `string`, ≤500 字 | 内容把人从「刷到」带到「付费」的路径自述 |
-| `marketInsight` | `{landscape, mainstream, unmet, opportunity, researchedAt}` 或 `null` | AI 自动市场调研结论 (各段 ≤300 字), `null` = 未调研过 |
-| `systemSummary` | `string`, ≤2000 字 markdown | 定位体系一页纸报告, 可导出 `.md` |
-
-内容卡新增 `CockpitContent.intent`: `'' | 'reach' | 'trust' | 'convert'` (空 = 未标注), 中文标签「引流 / 建立信任 / 转化」(`INTENT_LABELS`, `src/lib/cockpit/model.ts`)。
-
-**建档三步** (「人设定位」卡, `src/components/cockpit/settings-cards/persona-card.tsx`, 十一期起挂在独立的「账号定位」视图, 见下方「账号定位独立视图」小节, 组件本身零改动):
-
-1. **访谈起草** (从八期 5 问扩到 9 问, 新增④目标人群最头疼什么⑤打算靠什么变现⑧刷到到付费中间经历什么⑨怎么看赛道竞争四问) → `POST /api/v1/persona/draft` (`src/app/api/v1/persona/draft/route.ts`) 一次性起草**全部**字段 (含 painPoints/offerings/productLogic), 说明性字段宽进严出 (校验层放宽接住 AI 超发挥再在 transform 里截断, 防真实 500) → 只回填表单不落库, 用户改后点保存才 `PUT /api/v1/persona/profile` 落库 (八期"起草不落库"语义不变)。
-2. **市场调研** (独立按钮, 可重跑) → `POST /api/v1/persona/market-research` (`src/app/api/v1/persona/market-research/route.ts`) → 查询词取「内容支柱名 赛道 现状」+「受众 内容 账号」两条 → 复用四期 Tavily 搜索层 (`getSearchProvider`) → DeepSeek 汇总成 `{landscape, mainstream, unmet, opportunity}` → 服务端只更新 `marketInsight` 一列直写落库 (不经过 PUT 的整表单合并流程), 同时记 `researchedAt`。 无 Tavily key 时 400 引导去雷达配置卡配置, 不阻断其余建档流程。
-3. **体系报告** → `POST /api/v1/persona/summary` (`src/app/api/v1/persona/summary/route.ts`) → DeepSeek 综合已建档的全部字段生成一页纸 markdown (定位陈述/人群与痛点/变现路径/内容策略/差异化机会) → 只更新 `systemSummary` 一列直写落库, 可重生成 (覆盖)。 设置卡内展示 + 「导出 .md」按钮 (`downloadMarkdown`, 纯前端 Blob 下载, 不经服务端)。
-
-`PUT /api/v1/persona/profile` 对**新增的 5 个字段**改为合并语义: 请求体显式提供的字段才覆盖, 未提供的 key 从现有行读回原样保留——防止老版本表单 (只发八期 5 字段) 每次保存把 T2/T3 产出的新字段静默清空; 市场调研/体系报告两条路由则各自只更新自己那一列 (更稳的"列式表 spread 保留", 无 PUT 那种"读回合并"的 TOCTOU 窗口)。 八期原始 5 字段仍是 PUT 全量覆盖语义不变。
-
-**三处注入** (`buildPersonaSection(profile, scope, intent?)`, `src/lib/llm/prompts/persona-section.ts`, 唯一事实来源): 全档案任何时候都不整体倒进 prompt, 改按用途分段, 各调用点只拿自己需要的子集——
-
-| scope | 含 | 调用点 (实况 5 处) |
-|---|---|---|
-| `radar` | 受众 + 内容支柱 + 用户痛点 + 市场机会位 | `src/lib/radar/run.ts` (雷达阅读评分) |
-| `write` | 受众 + 用户痛点 + 差异化角度 + 市场机会位 (+ intent 非空时追加 CTA 指引段) | `src/app/api/v1/scripts/generate/route.ts` 抖音/小红书两分支 |
-| `topic` | 受众 + 内容支柱 + 用户痛点 | `src/app/api/v1/discover/topics/route.ts`、`src/app/api/v1/inspiration/insights/generate/route.ts` |
-
-未建立档案 (`isProfileEstablished` 判定不变: `audience` 非空 + `pillars≥1`) 时 `loadPersonaProfile` 返回 `null`, `buildPersonaSection` 直接返回空串, 各调用点字符级退回八期/无档案行为。
-
-**痛点识别 (雷达)**: 阅读评分 (`src/lib/llm/prompts/radar-read.ts`) 新增 `painHit`(命中痛点原文, 与档案痛点严格等值校验, 同 `pillarHit` 先例宽进严出) 与 `angleSuggestion`(≤40 字差异化切入建议), 雷达卡片展示「戳中痛点：X」与角度建议 (`src/components/cockpit/views/radar.tsx`)。 **不新增热度调权系数**——`composeHeat`/`applyPersonaAdjust` (`src/lib/radar/scoring.ts`) 全期零改动, 痛点只进 AI 判断 `relevance` 时的语义参考, 不再叠加第三层调权 (八期已有共现加成 + 人设调权两层, 第三层会饱和且不可解释, E2E 实测调权空间已被压到 0)。
-
-**内容意图与 CTA**: 生成请求可带 `intent`; AI 同时会按选题+`productLogic` 建议一个 `suggestedIntent` (严格枚举校验, 非法/无倾向一律 `null`), 未标注的内容卡收到生成响应后自动回填 (`shouldAutoFillIntent`, `src/lib/cockpit/intent-stats.ts`)。 写稿 prompt 结尾段按 intent 分岔: `reach` 给互动钩子引导关注, `trust` 引导收藏+看更多案例, `convert` 场景化自然带出 `offerings` 里的具体产品名 (禁生硬广告话术); intent 为空时沿用现状写法。 内容抽屉「内容意图」下拉可手动改 (`content-drawer.tsx`)。
-
-**内容组合比例**: 内容总览/平台流水线页顶部一行「引流 X% / 信任 Y% / 转化 Z% / 未标注 N 条」+ 一句静态提示「转化内容长期为 0 时, 专业信任无法变现」(`computeIntentMix`, `src/lib/cockpit/intent-stats.ts`), 平台视图按该平台内容统计、总览按全量, 只展示不做自动纠偏。
-
-**成本**: 访谈起草/体系报告各 1 次 DeepSeek 调用 (几分钱); 市场调研 2 条 Tavily 搜索 + 1 次 DeepSeek 汇总 (约几毛/次, 可重跑); 生成侧 intent 注入不额外增加调用次数, 只是同一次写稿 prompt 变长几十到一两百字。
-
-**收尾真实 E2E** (无 mock, 真花 DeepSeek+Tavily key 额度几毛钱, 详见 `.superpowers/sdd/2026-08-15-positioning-system/task-7-report.md`): ①真实 9 问作答起草 (5 条痛点/3 条 offerings/productLogic 均在 spec 上限内) → 保存 → GET 校验一致 ②真实市场调研一轮, `marketInsight` 四段均非空 + `researchedAt` ③真实体系报告生成 (1839 字 markdown) + 导出逻辑代码走读确认 (浏览器扩展当次不可用, 未做真实点击下载走查, 与七期先例同样降级) ④真实雷达扫描产出 5 条新条目, 4 条命中 `painHit`/带 `angleSuggestion`——用 `composeHeat`/`applyPersonaAdjust` 对同一批条目原样重算, 5/5 与库内 `heatScore`/`personaAdjust` 完全一致, 实测验证"痛点识别不影响热度分"⑤真实生成一篇 `intent='convert'` 的抖音稿, CTA 确认指向 `offerings` 里的真实产品名⑥临时清空 `audience`/`pillars` 触发无档案回退, 真实生成/雷达扫描确认不报错且退回默认文案, 随后完整恢复原档案 (三份新旧字段深度比对完全一致, 详见报告)⑦`typecheck`+`test`(1376)+`build` 全绿。 过程中④→⑤走查发现一个真实 bug 并修复: 抖音写稿 prompt (`src/lib/llm/prompts/script-write-douyin.ts`) 里"最后一块必须引导评论/关注/转发"是无条件的写作要求, 会盖过 persona 段按 `intent='convert'` 给出的 CTA 指引 (真实生成验证到 AI 完全没有引用任何 offering), 改为"上文如果给了具体的结尾方向就照着写, 没给的话默认引导评论/关注/转发"后原地复现验证通过, 单独一个 fix commit。 E2E 过程中产生的测试用 `ScriptDraft`(3 条) 已清理; 雷达真实扫描产出的条目属于真实产品输出 (非测试专用数据) 予以保留; 用户真实定位档案原样保留未受影响。
-
-### 抖音逐字稿六幕改造 (十三期新增)
-
-一句话: 抖音口播逐字稿的结构从「hook/main×N/cta」三段式改为固定六幕(向外部工具
-`script_spec.md` 的六幕格式对齐), 新增服务端硬检查(lint, 不阻断保存)。详见
-`docs/superpowers/specs/2026-08-16-six-act-script-design.md`。
-
-**六幕结构** (`src/lib/script/six-act.ts`, `ACT_KEYS` 固定顺序, 不可乱序/增减):
-
-| 幕 key | 中文标签 | 时长占比 |
-|---|---|---|
-| `hook` | 开场钩子 | 10% |
-| `concept_a` | 概念A | 22.5% |
-| `concept_b` | 概念B | 22.5% |
-| `trivia` | 冷知识 | 15% |
-| `synthesis` | 知识串联 | 22.5% |
-| `punchline` | 金句收尾 | 7.5% |
-
-`allocateActSeconds(durationSec)` 按占比四舍五入分配各幕 `targetSec`, 余数补给
-`concept_a`, 保证 6 幕之和恰好等于 `durationSec`。每幕除 `narration`(口播台词)外还带
-`title`/`visual`(配图建议)/`note`(备注)/`beats`(3-5 个关键词 chip)/`facts`(0-8 条
-事实核查, 每条 `claim`+`value`+`source`+`confidence`)。字段宽进严出: LLM 响应先放宽
-上限接住超发挥, `ScriptActSchema` 的 `transform` 再截断到展示上限(如 `narration` 最多
-1500 字接、截到 800 展示), 而不是直接拒收整份重试。`isSixActScript` 是**唯一的形状判别
-入口**——`script-write-douyin.ts`/生成路由/改稿路由/`style.ts`/`script-mapping.ts`/深度页/
-抽屉六处消费点都调它分岔, 不各写各的判别逻辑。
-
-**时长建议**: 生成请求 `durationSec` 可选 30/45/60/**90(六幕默认)**——六幕结构是按
-~90 秒科普口播设计的(六幕塞进 45 秒每幕仅 4-11 秒, 概念讲不透), 抽屉时长下拉与深度写稿页
-都以 90 为默认值, 选中 <60 秒时给出提示「六幕结构在 60 秒以下会很挤，建议 90 秒」。
-
-**lint 硬检查** (`src/lib/script/six-act-lint.ts` 的 `lintSixActScript`, 规则移植自参考实现
-`lint.py` 并按当前字段裁剪): 生成后自动跑一遍, 结果落 `output.lintIssues` 并随生成响应
-返回, **仅作展示提示, 不阻断保存**(生成/改稿都是 200 直接持久化)。规则表:
-
-| 规则 | 级别 |
-|---|---|
-| 六幕缺失或顺序错误 | error |
-| 四维(`gain`/`surprise`/`clarity`/`appeal`)任一项为空 | error |
-| 某幕 `title`/`narration`/`visual` 为空 | error |
-| 台词里出现的数字(年份/百分比/倍数/万亿等单位)在该幕 `facts` 里找不到对应条目("不说没把握的数字") | error |
-| `facts` 条目缺 `source`(没有标注来源) | error |
-| 开场 30 字内出现「大家好/欢迎来到/今天我们来聊聊/我是」等寒暄词 | error |
-| 空洞形容词(非常/极其/震撼/颠覆) | warn |
-| 单句超过 30 字(念不出来, 建议拆) | warn |
-| 句首悬空指代(这个/那个开头) | warn |
-| 收尾 (`punchline`) 与开场 (`hook`) 没有 2 字以上共同词(可能没回扣钩子) | warn |
-
-抽屉「脚本」tab 六幕卡片区顶部有一条 lint 结果条, error 红点/warn 黄点分组展示, 点开列出
-`act + message`, 明确标注「仅提示, 不影响保存」。
-
-**六处消费点**: ①写稿 prompt(`script-write-douyin.ts`)与生成路由 —— `DouyinFullScriptSchema`
-从 `sections` 换成 `acts`+`four_dims`, system prompt 吸收 `script_spec.md` 的六幕职责/占比/
-科普严谨性原则, 生成后跑 lint、落库 `output.script.acts`+`output.four_dims`+`output.lintIssues`
-②改稿路由新增 `scope:'act'`(单幕改稿, 服务端校验其余五幕 `narration` 逐字不变 + act
-key/顺序不被打乱)与六幕版 `scope:'all'`(整稿改稿, 校验幕数固定 6 且顺序正确) ③定稿沉淀
-(`style.ts` 的 `depositStyleSample`)六幕稿取 `acts[].narration` 拼接作为样本正文 ④抽屉骨架
-回填(`script-mapping.ts` 的 `mapDouyin`)六幕稿取 hook 幕 narration 回填 `draft.hook`、六幕
-`[标签] narration` 拼接回填 `draft.body` ⑤深度脚本页(`script-result.tsx` 的 `DouyinView`)
-按 `pickDouyinViewMode` 四态判别(`legacy`/`six-act`/`sections`/`empty`)渲染六幕卡片(标题+
-建议时长+台词+配图建议+关键词 chips+事实核查表) ⑥抽屉六幕面板(`SixActPanel`, 六张幕卡片 +
-每幕「改这一幕」按钮 + 页顶整稿指令 + lint 结果条)。
-
-**旧稿兼容(零迁移)**: 所有消费点按 `output.script` 里是 `sections` 还是 `acts` 分岔, 旧的
-三段式抖音稿(`output.script.sections`)完全走原渲染/原改稿路径, 不做存量数据迁移脚本——
-`isSixActScript` 对旧稿返回 `false`, 六处消费点各自落回改造前的逻辑, 字符级不变。
-
-**成本**: 一篇 90 秒六幕稿约几分钱 DeepSeek 调用(研究+写稿两阶段管线沿用五期结构未变);
-单幕改稿一次调用成本更低(只重写一幕的输出量)。
-
-**收尾真实 E2E** (无 mock, 真花 DeepSeek key 额度几分钱, 详见
-`.superpowers/sdd/2026-08-16-six-act-script/task-7-report.md`): ①真实生成一篇 90 秒六幕稿——
-六幕齐全且顺序正确(`hook/concept_a/concept_b/trivia/synthesis/punchline`)、`four_dims` 四项
-均非空、9 条 `facts` 全部标注 `source`、6 幕 `targetSec`(9/20/20/14/20/7)合计=90 ②对
-`punchline` 幕按幕改稿——其余五幕 `narration` 逐字节比对与改稿前完全一致(仅 `punchline`
-变化) ③定稿(`PUT .../picked`)→ `StyleSample.content` 与库内草稿六幕 `narration` 拼接逐字节
-相等 ④打开库里一篇真实存在的旧三段式抖音稿(`cmsrgm36f0001jupvvnbxvlx1`, `output.script.sections`
-5 块)——深度页 `pickDouyinViewMode` 判定为 `'sections'`(非六幕/非崩溃), 抽屉懒加载
-`parseDraftOutput` 正确恢复 5 个 section + hooks + research; 另建一份该草稿的临时克隆走真实
-`scope:'section'` 改稿 HTTP 调用全链路验证「改稿仍可用」, 验证完删除克隆, **原稿只读查未做
-任何写入** ⑤手工构造一条含无来源数字(`87%`)的六幕稿喂给真实 `lintSixActScript`, 确认产出
-`error` 级问题; 真实生成响应里也自然复现了同类问题(`trivia` 幕「2025 年」无 facts 佐证)且
-仍 200 保存, 双重验证「lint 不阻断」⑥`typecheck` + `test`(1566) + `build` 全绿。
-
-过程中④走查发现两个真实 bug 并修复(均为单独 fix commit): 一是抽屉懒加载恢复
-(`src/lib/cockpit/draft-restore.ts` 的 `parseDraftOutput`)完全没有六幕形态判据——关闭抽屉
-再打开同一条**新生成**的六幕稿(组件整体重挂载, 触发的正是这条懒加载路径)时六幕面板会
-整体消失(不崩溃, 但改稿功能不可用), 已补上六幕稿判据(优先于 sections 判别, 与
-`script-mapping.ts`/`douyin-view-mode.ts` 判别顺序一致), 并把该文件的 `durationSec` 白名单
-从 `[30,45,60]` 补到 `[30,45,60,90]`(90 此前会被直接判非法丢弃); 二是抽屉内时长选择器
-(`content-drawer.tsx`)默认值硬编码 45 且下拉选项只有 30/45/60——生成请求每次都显式携带
-`durationSec`, 后端「六幕默认 90 秒」的改动在抽屉这一实际入口从未真正生效过, 也缺失 spec
-里要求的「<60 秒 UI 提示」, 一并补上(默认值改 90、下拉加 90 选项、<60 秒时给出提示文案)。
-两处修复各补了对应单测(`tests/lib/cockpit/draft-restore.test.ts` 新增六幕懒加载恢复
-describe 块, 3 条用例)。E2E 过程中产生的测试用 `ScriptDraft`(生成稿 1 条 + 旧稿克隆 1 条)与
-对应 `StyleSample`(1 条)已清理; 用户真实存在的旧三段式草稿全程只读, 内容与创建时间未变。
-
-### AI 视频交付三模式 (十九期新增)
-
-一句话: 十五期的「AI 自动生成无人出镜成片」改名为 `ppt-narration`(读稿形式), 并新增两种
-交付方式——`talking-head-broll`(真人出镜 + AI B-roll 挖空替换 + 真实字幕烧录)与
-`illustration-tts`(无出镜, 火山引擎 TTS 逐幕配音 + AI 插画风格分镜)。三者共用同一套
-`VideoProduction` 状态机与生成面板 UI, 只是 worker 里各自一条独立的处理分支; 内容详情页
-「交付方式」从二选一(手动拍剪 / AI 自动生成无人出镜成片)扩展为四选一(手动拍剪 / PPT 读稿
-形式 / 口播视频配字幕特效 / 插画动画形式)。详见
-`docs/superpowers/specs/2026-08-22-video-production-modes-design.md`。
-
-**用法**:
-- **PPT 读稿形式** (`ppt-narration`): 与十五期行为完全一致(仅改名, 零回归), 六幕脚本 SRT
-  直接驱动 Director/Builder 生成纯 AI 分镜, 无需任何素材上传。
-- **口播视频配字幕特效** (`talking-head-broll`): 「录制」步骤新增视频上传控件, 先传一段自己
-  出镜说话的视频(不要求逐字念稿, 自由发挥即可——语音对齐阶段按语义匹配六幕结构, 不追求逐词
-  精确, 完全没讲到的幕会被判定为零时长, 不强行拉伸覆盖); 上传成功后自动触发生成: ASR 转写→
-  语音对齐(DeepSeek 判断每幕在真实录音里的起止时间)→ Director 分镜→ Builder 生成 B-roll 插
-  播画面→ 挖空替换合成(原始出镜画面按分镜时间点切换到 B-roll, 人声全程不间断)→ 字幕烧录
-  (真实 ASR 转写文本, 非脚本原文)→ 预览。
-- **插画动画形式** (`illustration-tts`): **必须先在「设置」页配置好火山引擎 TTS**(`apiKey` +
-  可选的 `resourceId`/`voiceType`, 参见设置页「火山 TTS」卡, 或 `POST /api/v1/tts/volc-config`),
-  否则生成会在 `directing` 阶段直接报错「请先在设置页配置火山 TTS」。配置好后「剪辑」步骤直
-  接点「开始生成」即可, 无需上传任何素材: 逐幕调用 TTS 合成真实配音→按各幕音频真实时长对齐
-  时间轴→ Director 分镜→ Builder 用插画视觉风格(手绘感矢量插画构图, 区别于读稿模式的文字卡片
-  风格)生成分镜→ 画面拼接 + 配音轨拼接 + 混流→预览。
-
-**十九期收尾真实 E2E 走查** (`npm run dev` + 真实本机 Postgres/Redis/worker, 真花 DeepSeek 与
-火山引擎 TTS 额度, 未 mock 任何外部调用): 三种模式各走了一遍完整流水线并推进到
-`preview_ready`, 额外把三条都「确认导出」推进到 `done`(非必选项, 时间允许下顺带验证; master
-渲染复用预览阶段已持久化的 `direction.json`/分镜源码/对齐结果, 不重新消耗 DeepSeek/TTS 额度,
-只是用 30fps 重新渲染+重新合成, 因此顺带验证不显著增加真实调用成本)。
-
-- **PPT 读稿形式**: 6 个镜头, 预览产物 56 秒 / 838KB, 端到端(排队→预览就绪)约 2 分 39 秒,
-  行为与十五期报告描述一致, 确认零回归。
-- **口播视频配字幕特效**: 用一段真实的 28 秒竖屏(2160x3840, iPhone HEVC/AAC)自由发挥口播素材
-  走查——ASR 转写出 10 段真实语句, DeepSeek 语音对齐给出的六幕时间划分与人工回看的主观感受
-  基本吻合, 对说话人完全没提到的幕(冷知识/知识串联)正确判定为零时长而不是强行摊派时间, 印证
-  了对齐提示词"允许合理误差、不追求逐词精确"的设计在真实自由发挥场景下确实按预期工作; B-roll
-  切换时机与人声内容对得上, 画面切换不生硬; 字幕烧录使用真实转写文本, 清晰可读。预览产物
-  2160x3840(与源视频同尺寸)/28 秒/约 5.1MB。
-- **插画动画形式**: 6 个镜头, 逐幕真实调用火山引擎 TTS 合成配音(音色 `zh_female_vv_uranus_bigtts`),
-  音色自然、语速正常, 各幕音频拼接后与画面时长严格对应, 音画同步无漂移; 插画视觉风格(扁平色块
-  + 简单人物/物件剪影)与读稿模式的文字卡片风格观感上有明显区别。预览产物 36.7 秒 / 约 610KB。
-
-**真实走查中发现并修复的 bug** (`src/lib/video/ffmpeg.ts` 的 `compositeCutawayVideo`,
-仅 `talking-head-broll` 分支会触发, 走查前从未被真实素材测出过, 已用真实竖屏 iPhone 素材复现
-+ 修复后重跑验证通过, 单独提交):
-1. **多音轨源视频导致挖空合成整体崩溃**——现代 iPhone (实测机型 iPhone 17 Pro Max) 录制的
-   `.mov` 常见不止一条音轨(标准 stereo AAC 主音轨 + 一条 `apple_apac` 空间音频副轨), 原实现
-   `-map 0:a` 会把两条音轨都映射进输出, 本机 ffmpeg 版本没有 `apple_apac` 解码器, 整条合成命令
-   直接报错退出。改为 `-map 0:a:0` 只取第一条(实测即人声主音轨)。
-2. **竖屏出镜素材与 B-roll 画布尺寸不一致导致 concat 报错**——Builder 生成的 B-roll 分镜固定
-   按 1920x1080 横屏渲染, 而真实手机竖拍素材是 2160x3840, ffmpeg 的 concat filter 要求参与
-   拼接的所有视频流尺寸严格一致, 尺寸不一致直接报错退出。新增 `probeVideoDimensions` 探测源
-   视频真实宽高, B-roll 分镜合成前用 `scale`(等比缩放不拉伸变形)+`pad`(黑边填充)对齐到源视频
-   尺寸, 源视频自身片段不受影响(保持原画质)。
-
-**已知限制** (四条, 三种模式共通/各自适用):
-- **PPT 读稿形式仍无配音**——分镜画面无人声旁白, 与十五期状态一致, 未在本期补齐; 需要配音的
-  内容请选口播或插画两种模式(两者都自带真实音轨)。
-- **语音对齐允许误差, 不追求逐词精确**——`talking-head-broll` 的语音对齐是语义匹配(判断某句话
-  属于六幕脚本的哪一幕), 不是逐字时间戳级别的精确匹配, 说话人自由发挥、跳过某幕、临场发挥超出
-  脚本原文都是预期内行为, 不是缺陷。
-- **字幕是静态烧录, 不是动画效果**——`burnCaptions` 用 ffmpeg `subtitles` filter 烧录普通
-  `.srt`, 是既定的范围简化(详见 spec 风险表), 不做逐字弹出、卡拉 OK 高亮等动画字幕效果。
-- **插画动画形式必须先配置火山 TTS 才能用**——「设置」页没有配置有效的 `apiKey` 时,
-  `illustration-tts` 生成会在 directing 阶段直接失败并提示去设置页配置, 不会静默跳过配音。
-
-### 视频模板板块 (二十期新增)
-
-一句话: 十九期的三种 AI 交付模式(读稿/口播/插画)每次生成都要重新配一遍参数; 二十期新增侧栏
-「模板」板块, 把交付模式+视觉风格、配音音色预设、写稿提示、字幕/BGM/片头片尾包装样式固化为
-可复用的**视频模板**, 出片流程收敛为「选模板 → 定文案 → 自动出片」, 并一次性补齐管线原来缺失
-的包装能力(样式化字幕/BGM 混音/片头片尾拼接)。详见
-`docs/superpowers/specs/2026-08-23-video-template-design.md`。
-
-**用法**: 侧栏常驻项新增「模板」(十六期收窄后的账号定位/灵感库选题/热点雷达/内容数据分析 4 项之间, 排在热点雷达之后、内容数据分析之前, 现为 5 项), 首次进入自动播种 3 个内置预设(图文口播/真人出镜+B-roll/
-插画配音各一, `isPreset=true` 仅作 UI 徽标, 可正常改/复制/删除, 播种只在该用户 0 条模板时
-发生, 幂等); 模板卡片「用它出片」进出片向导, 步骤随模板动态收缩: **定文案**(三 tab——选已
-定稿六幕稿/粘贴新写/从灵感选题出稿, 后两种生成六幕稿预览、确认后自动建一张 `CockpitContent`
-落入内容总览与复盘闭环)→ **上传出镜视频**(仅 `talking-head-broll` 模板出现)→ **确认配音**
-(仅 `illustration-tts` 模板出现, 默认带出模板 `voicePreset.voiceType` 可临时覆盖一次)→
-**生成与审片**(复用十九期的排队/预览/确认导出面板)。内容详情页现有生成入口保持现状不动
-(模板驱动的生成流程只在模板页发起)。
-
-**包装三件套**(仅 master 渲染完成后执行, 预览阶段不包装; 只有带 `templateId` 且模板配了
-对应项的任务才走, 三步各自独立可缺省, 任一步失败任务进 `failed` 但保留已产出的未包装
-master 路径不白跑):
-1. **样式化字幕**: 以 `.ass` 替代真人出镜模式原来的默认 `.srt` 烧录, 支持字体/字号/颜色/
-   描边/底部边距; 三种模式各自的时间轴来源——真人出镜用 ASR 原话、插画配音用逐幕 TTS 真实
-   时长、图文口播按分镜时长铺排文案; 带模板且配了 `captionStyle` 的真人出镜任务会跳过原有
-   默认 `.srt` 烧录, 由包装段统一烧 `.ass`, 避免双层字幕。
-2. **BGM 混音**: 循环补齐到正片时长, 音量按 `bgmVolume`(0~1) 压低后与人声混合; 图文口播
-   无人声时 BGM 即唯一音轨。v1 固定音量, 不做 sidechain 自动闪避。
-3. **片头/片尾拼接**: 探测正片尺寸后对片头片尾做 scale+pad 对齐, 统一重编码(不走 `-c copy`,
-   十九期已验证过 copy 拼接会漂移), 无声片段补静音轨保证 concat 流结构一致。
-
-**数据模型**: 新表 `VideoTemplate`(`deliveryMode`/`visualStyle`/`palette`/`voicePreset`/
-`scriptPrompt`/`captionStyle`/`bgmPath`+`bgmVolume`/`introPath`/`outroPath`/`isPreset`,
-`userId` 级联删除); `VideoProduction` 新增 `templateId String?`(为空 = 旧入口任务, 包装段
-整段跳过, 零迁移)与 `status` 枚举新增 `packaging`(位于 master 完成之后、`done` 之前)。
-
-**API**: `GET/POST /api/v1/video-templates`(列表含首访播种/新建)、`GET/PUT/DELETE
-/api/v1/video-templates/[id]`(详情/更新/删除连素材目录)、`POST .../duplicate`(复制,
-素材**复制文件本体**到新模板目录, 只复制引用会在原模板删除时悬空)、`POST .../assets`
-(上传 BGM/片头/片尾, `kind=bgm|intro|outro`, MIME 白名单+大小上限+`safeExt` 防路径穿越,
-校验通过后落 `<root>/<templateId>/` 并回写对应字段)、`POST .../script`(文案生成: 粘贴/
-灵感来源 + 模板 `scriptPrompt` 注入六幕写稿管线, 返回预览不落库)、`POST .../produce`(发起
-出片: 已定稿 `contentId` 或确认后的六幕稿自动建卡 + 可选一次性音色覆盖, 创建带 `templateId`
-的 `VideoProduction`)。
-
-**收尾本地走查**(合并前, 不花 DeepSeek/火山 TTS 额度的部分, 详见
-`.superpowers/sdd/2026-08-23-video-template/task-11-report.md`): 预设播种(3 条, 徽标正确)、
-播种幂等(连续刷新 3 次仍是同 3 条记录)、模板编辑(名称/字幕字号颜色/BGM 音量改后**直接查库**
-确认落库, 非只看 UI)、素材上传(真实 ffmpeg 生成的 mp3/mp4 落在 `VIDEO_TEMPLATE_ROOT` 目录下、
-路径字段回写)、复制(副本素材是独立文件, 删除原模板后副本文件仍在)、删除(记录与素材目录一并
-清理)、出片向导步骤收缩(三预设模板步骤条与 §「用法」描述一致, 由源码逻辑+既有组件测试双重
-核实)、零迁移(全期改动零触碰内容详情页/生成入口相关文件, 全量测试套件未见回归)八项全部通过,
-过程零 bug; 服务端 Next.js 日志全程无 4xx/5xx(浏览器控制台/网络面板受限于本轮 Chrome 扩展工具
-连接不稳定未能持续取样, 已用服务端日志作为替代信号)。**真实三模式端到端
-出片(会真花 DeepSeek/火山 TTS 额度, 真人出镜还需真实出镜素材)未在本轮执行, 留待用户本人验收**,
-验收清单: ①三个预设模板各真实出一条片 ②检查包装三件套(字幕样式/BGM/片头片尾)是否实际生效
-③真人出镜模式确认字幕样式来自模板 `captionStyle` 而非旧默认样式 ④插画模式确认配音音色用了
-模板 `voicePreset`(而非全局火山 TTS 配置)。
-
-**已知限制**:
-- **`.ass` 字幕字体依赖渲染机器已装** —— 字体白名单收敛为 macOS 自带中文字体(苹方/冬青黑体/
-  华文黑体/宋体, 见 `CAPTION_FONT_WHITELIST`), 不支持字体上传; 换到没装这些字体的机器上渲染,
-  libass 会静默回退默认字体。
-- **BGM 无自动闪避(ducking)** —— v1 固定音量压低, 不做人声出现时自动降低 BGM 音量的
-  sidechain 处理, 列为后续可选项。
-- **预览(preview)阶段不包装** —— 包装三件套只在 master 渲染完成后跑一次, 省一遍渲染成本;
-  预览片看到的画面/字幕仍是未包装的原始版本。
-- **模板音色优先级**: 一次性临时覆盖(出片向导「确认配音」步骤手动改的值) → 模板
-  `voicePreset` 预设 → 全局火山 TTS 配置(设置页「火山 TTS」卡), 逐级回落, 仅 `illustration-tts`
-  模式消费。
-
-### 前端视觉重构 + 首页整合 (十六期新增)
-
-一句话: 十一期到十五期陆续新增了账号定位/热点雷达/人物志等视图, 视觉风格 (间距/圆角/
-字重/卡片密度) 全靠各期实施时手感对齐, 逐渐跑偏; 十六期不新增功能, 统一一套 CSS token
-(间距/圆角/字号/描边), 把首页重新组合成一个视图, 侧栏收窄到 4 项, 全站套用同一视觉基线。
-详见 `docs/superpowers/plans/2026-08-19-frontend-redesign.md`。
-
-**首页变化**: 原来分散的「今日推进」「内容总览」「五个平台看板」三类视图合并成一个新
-首页——顶部是一条可展开的摘要条 (「你有 N 条内容待推进, N 条已逾期」), 点「展开今日推进」
-在原地弹出今日 / 本周 / 档期三个 tab (即以前的「今日推进」视图, 拖拽改期等交互原样保留);
-摘要条下方是平台 tab (全部 / 抖音 / 小红书 / bilibili / X / YouTube), 「全部」是原来的
-「内容总览」看板, 切到具体平台是该平台独立的产出区 + 看板 + 分发记录区 (原来的平台流水线
-页, 现在长在首页里而不是单独视图)。旧收藏链接 (`?view=momentum`、`?view=pipeline`、
-`?view=platform-douyin` 等) 都会自动落到新首页对应的展开态 / 平台 tab, 不需要用户手动改
-书签。
-
-**侧栏变化**: 十五期时侧栏还有 11 项 (账号定位/灵感库选题/热点雷达/今日推进 + 创作分组
-五平台 + 内容总览/内容数据分析/设置), 十六期收窄为 4 项——「今日推进」并入新首页后从侧栏
-移除, 「创作」分组的五平台入口与「内容总览」也一并移除 (功能都还在, 只是搬进了新首页),
-侧栏现在只剩账号定位 / 灵感库选题 / 热点雷达 / 内容数据分析 4 个常驻项 + 底部设置; 点品牌
-logo (左上角) 随时回到新首页。移动端底部导航同步收窄为这 4 项。
-
-**视觉基线**: 新增一套 CSS 变量 (间距/圆角/字号/描边宽度) 作为全站统一 token, 账号定位 /
-灵感库选题 / 热点雷达 / 内容数据分析 4 个独立页面与新首页逐一套用, 整体视觉密度比改造前
-更松弛克制 (卡片内边距、区块间距按 token 收敛到统一数值), 明暗两态与移动端窄屏未受影响
-(未改动颜色 token, 未新增依赖)。
-
-**收尾真实走查** (`npm run dev` 真实点一遍, 非只读代码): 新首页默认展示流水线视图 (非
-「今日推进」) 且摘要条数字真实反映待推进/已逾期内容数; 摘要条展开态今日/本周/档期三个
-tab 均可正常切换与拖拽改期; 平台 tab 切换后「新建内容」与分发记录区在具体平台下仍存在
-且可用; 侧栏确认只剩 4 项, 点 logo 回到首页; 内容详情整页 7 个 tab (概览/大纲/脚本/录制/
-剪辑/发布/复盘) 均可正常切换, 把一条真实的六幕脚本内容切到「AI 自动生成无人出镜成片」
-交付方式后「剪辑」步骤正确换成「生成成片」面板且渲染正常 (验证后已改回「手动拍剪」,
-未污染真实数据); `?view=momentum`/`?view=pipeline`/`?view=platform-douyin` 三种旧链接
-均落到新首页, 第三种正确预选中「抖音」tab; 深色模式下首页/账号定位/灵感库选题/热点雷达/
-内容数据分析均未见颜色断层; 移动端 375px 宽度下底部导航确认为 4 项且与侧栏一致。走查同时
-额外确认了三处此前任务复审时标记「留到收尾用肉眼确认」的细节: 新首页展开态里内嵌的
-「今日推进」面板 (与账号定位页共用 `.panel`/`.panel-heading` 样式) 视觉协调、无错位; 灵感库
-选题页的素材编辑区 (间距收紧) 不显拥挤; 内容数据分析·目标 tab 的少量 token 取整误差肉眼
-不可察。全程未发现真实 bug, 无代码改动。
-
-### 无人出镜 AI 自动成片 (十五期新增)
-
-一句话: 六幕脚本(十三期)定稿后, 内容详情页(十四期)脚本 tab 新增「交付方式」选择——选
-「AI 自动生成无人出镜成片」后, 「录制」步骤跳过、「剪辑」步骤换成生成成片面板, 点「开始
-生成」全自动跑完 SRT 合成 → DeepSeek 导演(分镜) → DeepSeek 构建者(逐镜头 HTML+GSAP 动画
-源码) → headless Chromium 逐帧截图 → ffmpeg 编码拼接, 产出可在浏览器里播放的预览片; 人工
-确认「确认导出」后用正式规格 (30fps, 对比预览档 15fps) 重新跑一遍同一条流水线产出正式成
-片, 可下载。详见 `docs/superpowers/specs/2026-08-18-ai-video-production-design.md`。
-
-**用法**: 内容详情页「脚本」tab, 生成六幕脚本后出现「交付方式」二选一 (手动拍剪 / AI 自动
-生成无人出镜成片) → 选 AI 模式后切到「剪辑」tab (此时标签显示「生成成片」) → 点「开始生
-成」→ 面板每 3 秒轮询一次状态, 依次经过 `queued → directing → building → assembling →
-preview_ready`, 全程几分钟(镜头数与画面复杂度影响耗时, 一次 60 秒脚本、7 个镜头的真实走
-查约 4.5 分钟) → 预览片就绪后内嵌 `<video>` 播放, 「确认导出」触发 `approved → building →
-assembling → done` 的正式渲染 (同一条流水线, 时长通常是预览档的 1.5-2 倍——上述真实走查约
-8 分钟), 完成后「下载成片」。预览片/正式成片都通过 `GET /api/v1/cockpit/video-productions/
-[id]/file?kind=preview|master` 流式返回 (支持 Range, 用户/内容归属校验同其它接口), 不是
-直接暴露服务器文件系统路径。
-
-**已知限制**:
-- **画面质量弱于人工剪辑** —— 这是本期接受的明确取舍。Builder 阶段由 DeepSeek 直接产出
-  HTML+GSAP 动画源码, 第一版构图故意从简 (文字卡片 + 基础过渡, 不做复杂运镜/隐喻), 视觉
-  丰富度和转场精细度都明显不如人工剪辑, 后续阶段若要提升需要专门迭代 Builder 提示词或改
-  用更贴近专业剪辑工作流的渲染引擎。
-- **只支持无人出镜 (faceless)** —— 不支持真人出镜/口播实拍内容的自动剪辑, 交付方式仍需
-  手动选「手动拍剪」走原有录制/剪辑流程。
-- **仅本机可跑** —— 依赖本机已安装的 Playwright Chromium (`playwright install chromium`,
-  找不到时可用 `PLAYWRIGHT_CHROMIUM_PATH` 环境变量指定) 和本机 `ffmpeg`/`ffprobe`, 未做容
-  器化/服务器部署适配, 暂不能部署到无头服务器上跑。
-- **真实耗时随镜头数/时长线性增长** —— 渲染是逐帧截图 (15fps 预览 / 30fps 正式), 脚本越
-  长、Director 切的镜头越多, 耗时越长; 长脚本 (如六幕默认 90 秒) 单次生成可能到 10 分钟以
-  上量级, 是预期行为不是 bug。
-
-### 内容详情整页 + 步骤条 (十四期新增)
-
-一句话: 内容详情从右拉抽屉(7 个标签平级按钮, 每次打开都硬编码停在「概览」)改为独立整页
-路由(`/content/detail/[id]`, 可刷新/可分享), 新增连线步骤条自动定位到内容当前所在阶段;
-录制/剪辑阶段对已生成的六幕稿(十三期)新增逐幕对照指导(台词+配图建议+备注+关键词 chip+
-打勾), 无六幕稿的内容退回原有空白备注框, 零迁移。详见
-`docs/superpowers/specs/2026-08-17-content-detail-page-design.md` 与
-`docs/superpowers/plans/2026-08-17-content-detail-page.md`。
-
-**步骤条** (`src/components/cockpit/stage-stepper.tsx` + 纯函数 `computeStepNodes`,
-`src/lib/cockpit/stage-stepper.ts`): 按平台阶段流 (`stageFlowFor`) 渲染圆点+连线, 已完成
-(`--olive` 绿) / 当前 (`--gold` 金) / 未到 (灰) 三态, **不锁顺序**——所有节点仍可自由点击
-切换标签, 只是导航展示, 不触发阶段推进 (`onSelect` 只调 `setTab`, 不调 `changeStage`)。
-
-**六幕录制/剪辑指导** (`src/components/cockpit/six-act-guide-panel.tsx`): 内容有六幕脚本时,
-录制/剪辑两个 tab 从空白备注框换成六张幕卡片(标题+建议时长+台词+配图建议+备注+关键词
-chip), 每幕一个「这一幕录完了/剪完了」打勾, 录制与剪辑两侧进度各自独立存储
-(`ContentItem.recordingActProgress`/`editingActProgress`, 十三期新增字段) 并持久化到
-Postgres。
-
-**数据加载**: 新页面不新建单条内容读写接口, 复用现有 `loadWorkspace()`/`saveWorkspace()`
-整仓库机制——抽成共享 hook `useWorkspaceState` (`src/lib/cockpit/use-workspace-state.ts`),
-供 `Cockpit.tsx` 与新页面共同使用。所有原来会打开抽屉的入口 (看板卡片/今日推进/灵感库
-"已转为内容"/内容数据分析"待复盘") 统一改为 `router.push('/content/detail/[id]')`。
-
-**导航前显式落盘**: 整页架构下, `router.push` 会立即卸载承载 `useWorkspaceState` 的组件树,
-而自动保存是 250ms 防抖——若变更后立即导航, 防抖计时器可能来不及触发就被清理。
-`createBlankContent`/`createContentForPlatform`/`createContentFromInspiration`(`Cockpit.tsx`)
-与内容详情页的删除处理函数(`content-detail-client.tsx`)因此都在 `setState(...)` 之后、
-导航之前显式调用一次 `saveWorkspace(nextState)`(best-effort, 不 `await`, 只保证请求在卸载前
-已发出), 不依赖防抖计时器。
-
-### 人物志 + 个人经历库 (十二期新增)
-
-一句话: 定位体系的每个字段都是商业策略维度(受众/支柱/痛点/商品/产品逻辑/市场), 是一份营销
-brief 而不是一个人——用户实际使用后评价"只能是一个没有灵魂的博主, 缺少真人的灵动性和个人
-魅力"。十二期补两块: **人物志**(你是谁)与**个人经历库**(你凭什么这么说)。详见
-`docs/superpowers/specs/2026-08-16-creator-voice-design.md`。
-
-**人物志** (`CreatorVoice`, userId 单行, 独立于 `PersonaProfile`): 身份(具体的人而非品类
-标签) / **我不是什么**(护栏, 防 AI 把你包装成你不是的专家) / 表达能量 / 来路故事 / 立场主张
-0-5 条。**不含语言风格字段**——口吻句式口头禅归「风格档案」, 两处都写会让写稿 prompt 收到
-自相矛盾的指令。建档走 6 问 AI 访谈(`POST /api/v1/voice/draft`, 起草不落库, 改完保存才 PUT)。
-
-**个人经历库** (`CreatorExperience`, 多条目): 「随手记一笔」零门槛录入(不需分类不需起标题),
-DeepSeek 自动打主题/类型(实践/翻车/认知刷新/成果)/检索关键词; keywords 可人工编辑——AI 提取
-质量不稳而它直接决定能否被检索到。**打标签失败不丢内容**(LLM 挂了仍原文入库, 响应 tagged:false)。
-
-**检索与注入**: 写稿前 `matchExperiences(topic, items, 3)` 纯函数按关键词命中数+新鲜度取
-top3, 注入两处——①研究层 `curatedParts` **最前**(亲身经历 > 用户贴的资料 > 搜索正文)
-②写稿 prompt 原文注入 + 护栏句「不相关就别用, 不要硬凑」。命中条目 `usedCount+1`(best-effort)。
-体系报告也吃人物志, 否则那份一页纸仍是营销 brief。无人物志/空库时全链路降级为十二期之前行为(零迁移)。
-
-**中文检索的坑(收尾 E2E 真实复现)**: 主题「…用错的方式提问」与关键词「提问技巧」互不为子串,
-纯 `includes` 匹配 0 命中, 经历库一度形同虚设。现中文走 **2 字滑窗**、ASCII 走**词边界正则**
-(避免 `AI` 命中 `detail`)。另修 `RESEARCH_BRIEF` 的 source 词表——原本只认「URL/用户素材」,
-标注为「我的亲身经历」的素材无法归类被整条丢弃。
-
-**成本**: 6 问起草约几分钱; 随手记每条打标签约几厘; 检索与注入零额外调用。
-
-### 账号定位独立视图 (十一期新增)
-
-一句话: 定位体系(人设定位+风格档案)从「设置」页搬出来, 独立成侧栏工作台组**第一项**, 顶部新增体系报告置顶区。 详见 `docs/superpowers/specs/2026-08-15-positioning-view-design.md`。
-
-**背景**: 十期把「人设定位」「风格档案」两张卡做进了设置页, 与 AI 服务配置/雷达配置/内容基准三张一次性配置卡并列——语义错位: 后三张"配一次不动", 前两张是随经营持续回看/迭代的战略资产, 被埋没在配置项容器里 (同一病灶此前已表现为"找不到生图配置")。
-
-**改动**: `NavView` 新增 `'positioning'`, 侧栏 `WORKBENCH_NAV_ITEMS` 首位插入 `{id:'positioning', label:'账号定位', icon:'◌'}` (复用 `review` 键闲置的圆环字符, 不新增图标资源); 新建 `src/components/cockpit/views/positioning.tsx`, `?view=positioning` 直达, 三段纵向结构:
-
-1. **体系报告置顶区**: 视图自行 `GET /api/v1/persona/profile` 取 `systemSummary`——与下方 `PersonaCard` 内部各自取数会有一次重复请求, 按 YAGNI 接受, 不为省一次 GET 引入跨组件状态提升。非空展示 markdown 原文(`<pre>`) + 「导出 .md」; 为空展示引导文案「完成访谈与调研后, 这里会生成你的定位一页纸」。
-2. `<PersonaCard />`——十期原组件**原样迁移**, 零字节改动, 只换挂载父组件。
-3. `<StyleProfileCard />`——同上, 零改动。
-
-设置页 (`src/components/cockpit/views/settings.tsx`) 相应移除这两张卡的引入与挂载, 现只剩三张真正的一次性配置卡 (AI 服务配置 / 内容基准 / 雷达配置)。旧地址 `?view=settings` 仍打开设置页 (此时页内已无定位卡), 不做重定向/迁移提示 (YAGNI, 用户是唯一使用者)。平台维度的定位切换/侧写 (抖音与小红书分账号侧写) 本期不做, 等小红书接入时再评估。
-
-**验证**: 无纯函数新增 (纯 UI 挂载点搬迁), 走查用 Playwright 直连本机 Chromium 做真实浏览器交互验证 (`?view=positioning` 直达 / 侧栏点击 / 移动端首项 / 设置页只剩三卡 / 明暗主题 / 保存往返写入-核对-恢复), 详见 `.superpowers/sdd/2026-08-15-positioning-view/task-2-report.md`。
-
-### `/agent/discover` `/content/*` — 挂入 Cockpit 外壳
-
-根布局 (`src/components/layout/main-layout.tsx`) 按路径判断: 非 `/` 时用 `ExternalShell` (`src/components/cockpit/external-shell.tsx`) 包一层, 复用同一个 `Sidebar`(`mode="external"`) + `.main-area` 容器 + 移动端 `.mobile-nav`, 主题/风格从 cockpit 写入的 localStorage 同步。 二期起 `ExternalShell` 仅剩 `/agent/discover`(及其未挂导航的兄弟页 `inspiration`/`patterns`)、`/content/preflight|script|retro-sync` 使用 (`/agent` `/dashboard` `/settings` `/accounts` 均已删除, 见下文「账号绑定功能移除」小节)。 这些存留页面二期 (T7) 已做纸质风重塑 (样式层改动, 业务逻辑零改动)。
-
-### 账号绑定功能移除 (十七期)
-
-二期起以双入口形式保留的 `/accounts` 账号绑定与采集功能 (扫码登录向导 + 独立 `bind-worker` + 自建 Chromium/NoVNC 容器 + `src/crawler/**` 爬虫代码, 详见 `docs/superpowers/specs/2026-05-25-phase2-account-binding-and-sync-design.md`) 十七期**整体移除**——排查确认它与实际在用的抢点/雷达/自动同步功能完全无关 (那些走外部 `cheat-on-content` 项目自行管理登录态, 从不读写这里的 `PlatformAccount.cookieData`/`BrowserSession`)。移除范围: `/accounts` 页面 + 绑定向导组件 + `bind-session`/`sessions/*`/`proxy/test` 三组 API 路由 + `bind-worker.ts` + `src/crawler/**` + 自建 `chromium` Docker 服务 + 侧栏/设置页/内容数据分析·目标 tab 状态条里指向账号绑定的入口引用。`内容数据分析·目标 tab` 状态条精简为只保留"上次自动同步时间 + 立即同步"手动触发 (与账号绑定无关, 保留)。`PlatformAccount`/`BrowserSession` 等 Prisma 表暂不删 (仍被 `AccountMetric`/`PlatformNote`/`SyncTask`/`PublishTarget` 关联引用, 全部清理需要单独核查这几张表)。
-
-### 新功能位置表 (二期融合 + 三期重组后)
-
-| 功能 | 一期挂壳位置 (已删除) | 当前位置 (三期) |
-|---|---|---|
-| AI 写稿 | `/agent` 向导页 | 内容抽屉「脚本」tab 就地生成按钮 (三平台下拉选择器 + 生成中态; 标题字段失焦 1.5s 防抖调用 `title-feedback` 展示一行建议); 抖音平台五期升级为两阶段研究+写稿, 见 §3「抖音口播逐字稿」小节 |
-| 灵感抓取/热点 | `/agent` 首页推荐行「+ 入选题池」 | `/agent/discover` (保留路由) 每条主题卡「存入灵感池」→ 写 `CockpitInspiration`, 灵感库选题视图右上角「抓灵感 →」跳回该页 |
-| 数据看板 (预测准确率/校准/Misses/Niche/Top) | `/dashboard` | 预测准确率·校准矩阵·Misses → 内容数据分析·复盘 tab「预测与校准」区块; Niche·Top → 内容数据分析·目标 tab「内容表现」区块 (二期时这两个 tab 曾是独立的复盘实验室/大目标视图, 三期合并进「内容数据分析」一个视图, 见 §3 Sidebar) |
-| AI key 配置 | `/settings` | cockpit 设置视图「AI Provider」卡 |
-| 账号基准播放数 (baseline) | `/settings/baseline` | cockpit 设置视图「Baseline」卡 |
-| 手动同步 | `/settings` 或账号页内触发 | 内容数据分析·目标 tab「账号粉丝趋势」状态条「立即同步」按钮 (`POST /api/v1/douyin/auto-sync/trigger`) |
-| 账号绑定/管理 (深流程) | 侧栏常驻「账号」入口 | 十七期**整体移除** (`/accounts` 页面/向导/worker/爬虫代码/Chromium 容器均已删除), 与实际在用的抢点/雷达/自动同步功能无关; 内容数据分析·目标 tab 状态条精简为只保留自动同步时间+手动触发 |
-| 深度写稿 (完整多区块生成, 非抽屉内快速生成) | `/agent` | `/content/script/new`(保留, `ScriptForm`/`ScriptResult` 组件未删除, 仍支持 `?topic=&ideaId=&platform=&niche=&inspirationId=` 预填) |
-
-### redirect 表 (`next.config.js`)
-
-| 旧 URL | 目的地 | 说明 |
-|---|---|---|
-| `/agent` | `/?view=pipeline` | 307, 精确匹配, `/agent/discover` 等子路径不受影响 |
-| `/dashboard` | `/?view=review` | 307 (目的地查询值经三期兼容映射折叠进 analytics 视图 review tab, 见下方说明) |
-| `/settings` | `/?view=settings` | 307 (二期实施中从最初的 `/` 升级为直达 settings 视图, 见 spec 实际实施结论) |
-| `/settings/baseline` | `/?view=settings` | 307, 同上 |
-
-保留可直接访问的路由 (不 redirect): `/agent/discover`、`/agent/inspiration`、`/agent/patterns`、`/content/script`、`/content/script/new`(深度写稿入口)、`/content/script/[id]`、`/content/preflight`、`/content/retro-sync`。 (`/accounts` 十七期已删除)
-
-**三期 (产出优先信息架构重组) 起旧 `?view=` 兼容映射**: 二期六视图里的 `schedule`/`goals`/`review` 三个旧 view 值 (redirect 表目的地里仍会出现) 在三期后不再是独立视图, 由 `src/lib/cockpit/view-routing.ts` (`resolveInitialView`/`resolveInitialMomentumTab`/`resolveInitialAnalyticsTab`, 单测 `tests/lib/cockpit/view-routing.test.ts`) 精确折叠到新视图的对应 tab；其余三值原生直达。 六值映射矩阵:
-
-| 旧 `?view=` 值 | 三期落点 |
-|---|---|
-| `inspirations` | 灵感库选题 (原生直达, 未变) |
-| `momentum` | 今日推进 · 今日 tab (原生直达, 默认 tab) |
-| `schedule` | 今日推进 · 档期 tab (折叠) |
-| `pipeline` | 内容总览 (原生直达, 未变) |
-| `goals` | 内容数据分析 · 目标 tab (折叠) |
-| `review` | 内容数据分析 · 复盘 tab (折叠) |
-
-`settings` 及五个 `platform-*` 值本就是三期新增/未变的原生视图 id, 同样直达; 其余非法/缺省值一律回退 momentum(今日 tab)。
-
-### `/content` 的变化
-
-- 列表页 (`src/app/content/page.tsx`) 已删除, 由 Cockpit **Pipeline** 视图 (`/?view=pipeline`) 取代。
-- 子路由保留: `/content/preflight`(视频分析 Phase 1/L1)、`/content/script`(AI 脚本生成详情页, 含分发登记; `/content/script/new` 为深度写稿入口)、`/content/retro-sync`(半自动复盘) —— 未挂进侧栏导航, 但仍是抽屉/inspiration/patterns 页跳转深度写稿、发布登记、复盘流程内部跳转的落点, 照常可直接访问。
-
-### Cockpit 数据层
-
-- **10 张 Prisma 表**: `CockpitContent` / `CockpitInspiration` / `CockpitStageEvent` / `CockpitReviewDay` / `CockpitLiveSession` / `CockpitScheduleObjectType` / `CockpitScheduleObject` / `CockpitGoalCycle` / `CockpitInsightRule` / `CockpitPrefs`, 字段形状与 vendor `model.ts` 的 TS 类型一一对应, 保证移植过来的纯函数直接可用。 `FollowerSnapshot` **不建表**: `GET /api/v1/cockpit/workspace` 时从既有的 `AccountMetric` (爬虫每日写入) 实时派生, `PUT` 忽略该字段。
-- `GET/PUT /api/v1/cockpit/workspace`: GET 组装整个 `WorkspaceState` 返回; PUT 提交整个 `WorkspaceState` + 加载时拿到的 `rev`, 服务端 diff 落库, 若 `rev` 与当前不一致 (双标签页并发保存) 返回 **409**, 前端弹冲突提示, 不做自动合并 (单用户场景接受 last-write-wins + 显式提示, 不做 CRDT 之类的方案)。
-- 前端存储适配器 `src/lib/cockpit/storage.ts` (`loadWorkspace`/`saveWorkspace`) 替换掉原版的 IndexedDB 读写, 是移植时唯一改动的一层; `src/lib/cockpit/migrations.ts` 只搬运了 vendor `storage.ts` 里 `migrateWorkspace` 这一个纯函数 (老版本 workspace 字段升级), 其余 IndexedDB 相关代码没有移植。
-- 强能力集成点: **AI 写稿** (二期起内容抽屉脚本 tab「用 AI 写脚本」按钮就地调用生成管线并回填, 不再跳转 `/agent`; 保存定稿自动把关联 `CockpitContent` 的 script 阶段推进完成; 三期起生成默认平台跟随内容 `platform` 字段, 而非固定抖音) · **爬虫指标回填** (auto-sync 命中已发视频写入播放/点赞/收藏/评论快照) · **粉丝快照** (`AccountMetric` 派生 `FollowerSnapshot` 喂 `calculateGoalHealth`) · **L1 预测对比** (内容数据分析·复盘 tab 展示预测区间 vs 实际播放, 结论可沉淀为 `InsightRule`)。
-- 备份/导入导出 UI 未移植 —— 数据库本身就是持久化底座, 版本记录 (`版本记录` 弹窗) 里仍保留历史版本可查看/导出, 但没有单独的「导入导出 JSON」界面 (原版基于 IndexedDB 需要这个, 我们不需要)。
-
-存量数据一次性迁移到 Cockpit 表见 §6; 老流水线 (`ScriptDraft`/`TopicIdea`/`Distribution`) 的阶段派生规则见 §3.5, 迁移脚本复用同一套判定。
-
-### `vendor/creator-cockpit/`
-
-移植源码的只读参考副本, 固定在 commit `197d49b93ff42d80211c1d832d1f8fa8db7c6660` ([AverrryHu/creator-cockpit](https://github.com/AverrryHu/creator-cockpit), MIT License, Copyright (c) 2026 Avery)。 `tsconfig.json` 显式 `exclude` 了 `vendor`, 不参与构建也不会被任何 `src/` 代码 `import` —— 纯粹留作逐行对照 (排查移植差异、日后想再搬一部分东西时的对照源), 不需要跟随其上游更新。
-
-### 3.5 数据模型: 管线阶段派生 (支撑 `/content` 子路由与迁移脚本)
-
-`ScriptDraft` 是老流水线的基本单元 (曾经是已删除的工作台看板的数据源, 现在是 `/content/script` 详情页和一次性迁移脚本的数据源)。 **阶段不落库, 按现有数据实时派生**, 判定唯一入口是纯函数 `deriveStage` (`src/lib/pipeline/stage.ts`), UI / API / 迁移脚本都调用它, 不内联复制规则, 避免双写不一致:
-
-| 阶段 | 判定规则 |
-|---|---|
-| 📝 草稿 (`DRAFTING`) | `picked == null` |
-| ✅ 定稿待拍 (`READY`) | `picked != null` 且无关联 `analysis` |
-| 🎬 已拍待发 (`SHOT`) | 有关联 `analysis`, 且未发布 |
-| 🚀 已发布 (`PUBLISHED`) | `analysis.publishedAt != null` **或** 存在任一 `Distribution` 记录 |
-| 📊 已复盘 (`RETROED`) | `analysis.retroStatus === 'COMPLETED'` |
-
-缺失数据 (analysis 被删导致悬空) 一律降级到更早阶段, 不抛错。 归档 (`ScriptDraft.archivedAt` 非空) 的卡不进看板。 没链接 `ScriptDraft` 的孤儿 `ContentAnalysis` (老数据, 直接上传视频分析) 也进看板, 从「已拍待发」起算。
-
-新增 Prisma 模型:
-
-- **`TopicIdea`** (选题池): `title` / `note` / `source` (`discover` | `inspiration` | `manual`) / `status` (`POOL` | `ADOPTED` | `DISCARDED`) / `scriptDraftId` (采纳后回链)。
-- **`Distribution`** (分发登记): `scriptDraftId` + `platform` (代码注册表 key, 非 DB enum, 见 `src/lib/pipeline/platforms.ts`) + `url` + `publishedAt` + `note`。 抖音主阵地发布仍走 `ContentAnalysis.publishedAt` (喂 L1 预测 / retro 管线); `Distribution` 管其他平台的搬运登记, 未走视频分析直接发布的内容也可用 `platform='douyin'` 的 `Distribution` 兜底登记 (不参与 retro)。
-- **`ScriptDraft.archivedAt`** (`DateTime?`): 放弃的内容标记归档, 不删数据。 字段与 `PATCH /api/v1/scripts/[id] { archived }` 路由仍在, 但触发它的「归档」按钮曾挂在已删除的旧工作台看板卡片上 —— 目前没有 UI 入口调用, 相当于遗留能力, 未来若做类似操作可直接复用这条路由。
-
-分发平台注册表 (`src/lib/pipeline/platforms.ts`, 加新平台 = 加一行, 不改 DB schema): 抖音 / B站 / YouTube / X-推特 / 小红书 / 公众号 / 快手 / 微博 (共 8 个)。 与 `src/lib/platform.ts` 的采集端 `Platform` enum、创作端 `ContentPlatform` 是两套独立命名空间 —— 这里管"内容搬运到了哪"。
-
-API: `POST/GET /api/v1/topics`、`PATCH /api/v1/topics/[id]`、`POST/GET /api/v1/scripts/[id]/distributions`、`DELETE /api/v1/distributions/[id]`。 (旧工作台看板专用的 `GET /api/v1/workbench` 聚合接口已随看板一起删除。)
-
-### 关键交互流
-
-1. **灵感抓取**: `/agent/discover` 页每条主题卡「存入灵感池」按钮 (`POST /api/v1/cockpit/inspirations`), 直接写入 Cockpit 灵感墙 (`CockpitInspiration`); Cockpit 灵感库选题视图 (三期改名, 原「灵感池」) 右上角「抓灵感 →」跳回该页。 二期起这是灵感进入系统的唯一活跃路径——`TopicIdea`(选题池) 表与配套的 `PoolButton`/`ideaId` 预填链路是 `/agent` 首页 (已随壳页一起删除) 的产物, 现无任何 UI 入口可达, 属遗留能力 (`PoolButton` 组件、`ScriptForm` 对 `ideaId` query param 的兼容读取、`script-result.tsx` 里 `ideaId` 存在时的 `ADOPTED` 回写均原样保留代码, 只是没有链接会带上 `ideaId` 了); `POST/GET /api/v1/topics` 等 API 仍在但无写入方。
-2. **分发登记**: script 详情页 (`/content/script/[id]`) + 分发登记弹窗, 选平台 (注册表 key) + 贴 URL → 写一条 `Distribution` 记录, 显示「已分发 N 平台」徽标。
-3. **复盘闭环**: 现有 retro / auto-sync 不动; Cockpit 内容数据分析·复盘 tab (三期起, 原「复盘实验室」独立视图) 承接「待复盘 / 复盘倒计时」的展示职责 (原来在旧看板已发布列)。
-
----
-
-## 4. Roadmap — 分阶段实施 (Phase A-C 已完成)
-
-不一次性 5 天大重构,分小步走,每步可发布。 **这是第一次 pivot (小白向导) 时定的 roadmap; Phase A-C 已完成, D 未做, E 仍是未来事项。** 工作台重定位 (第二次 pivot) 是独立的后续 spec, 见 `docs/superpowers/specs/2026-08-03-workbench-repositioning-design.md`, 其自身的 12 个 Task 均已完成 (数据层 → 工作台首页 → 交互流 → 本文档)。 Creator Cockpit 整体移植 (第三次 pivot, 见 `docs/superpowers/specs/2026-08-04-cockpit-adoption-design.md`) 又是独立的后续 spec, 14 个 Task 均已完成 —— 替换了第二次 pivot 引入的工作台首页/看板/侧栏。 **平台页面融入驾驶舱 (二期, 见 `docs/superpowers/specs/2026-08-05-platform-pages-fusion-design.md`) 8 个 Task 均已完成** —— 把一期挂壳的 `/agent`/`/dashboard`/`/settings` 三页功能长进驾驶舱六视图, 侧栏「平台」组解散 (§3 为当前实际 IA)。 Phase A-C 的产物 (脚本多平台生成、`/content` 子路由) 保留不受影响。
-
-### ✅ **Phase A: Script 多平台化** — 已完成
-
-1. ✅ ScriptDraft 加 `platform` 列 (`'douyin' | 'xiaohongshu' | 'gongzhonghao'`)
-2. ✅ 拆分 prompts: `script-generate-douyin.ts` / `script-generate-xiaohongshu.ts` / `script-generate-gongzhonghao.ts`
-3. ✅ POST `/api/v1/scripts/generate` 加 `platform` 参数 → 路由到对应 prompt
-4. ✅ UI ScriptForm 加 Step 1 platform 选择器
-5. ✅ UI ScriptResult 按 platform 渲染不同 schema
-6. ✅ 单测覆盖每平台 prompt schema
-
-### ✅ **Phase B: IA 重组** — 已完成 (后续被工作台重定位进一步扩展为 6 项 sidebar, 见 §3)
-
-1. ✅ `/agent` 顶级路由
-2. ✅ Sidebar nav 简化
-3. ✅ 底部 CTA 改 "+ 新内容" → `/agent`
-4. ✅ `/content` 合并 scripts + analyses (统一列表 + 类型 badge)
-5. ✅ 老入口仍可访问 (向后兼容)
-
-### ✅ **Phase C: M 多平台化** — 已完成
-
-`POST /api/v1/checklist/title-feedback` 已支持 `platform` 参数, 不同平台走不同"好标题"评价标准。
-
-### ⬜ **Phase D: J 改造为多平台 publish checklist**（可选, 未做）
-
-`src/lib/checklist/types.ts` 目前仍是单一 (视频专属) checklist schema, 未按平台 (抖音/小红书/公众号) 拆分发布前检查项。
-
-### ⬜ **Phase E: SaaS 准备**（未来, 未做）
-
-- NextAuth 登录
-- 数据 userId 隔离 (DB schema 已经有 userId, 但中间件需要严格 user scope)
-- Stripe 计费
-- API quota / rate limit
-
-**这阶段不在当前 sprint 范围。**
-
----
-
-## 5. 技术债 & Known Issues
-
-### Schema / Data
-
-- `User.baselinePlays` (L1) — 视频专属概念, 新场景下 score multiplier 失去意义。 留着不动。
-- `ContentAnalysis.publishChecklist` (J) — 视频专属。
-- 新增 `ScriptDraft.platform` 后,现有数据是抖音,需 migration 设默认值。
-
-### Code 重复
-
-- `match-douyin` POST route + `runAutoSync` 中 "写 douyinAwemeId + enqueue retro" 逻辑重复 (~ 25 行)。 抽 helper 留 future。
-- 多个 prompt 文件用同一 `getExpertPersona(niche)` + `JSON_STRICTNESS` 头尾, 但每个文件自己拼。 可以抽 `composeSystemPrompt(niche, taskDescription)` helper。
-
-### LLM 配置
-
-- 视频管线 vision LLM 是 Bailian Qwen-VL,文本 LLM 是 DeepSeek。
-- DeepSeek key: 优先读设置「AI 服务配置」卡里的 `AIConfig` 记录 (`provider='deepseek'`, AES-256-GCM 加密存储), 查不到或解密失败时回退 `.env` 里的 `DEEPSEEK_API_KEY` (`src/lib/llm/resolve-key.ts` 的 `resolveDeepSeekApiKey`, 所有消费点——脚本生成/选题生成/灵感总结/标题反馈/热点雷达/内容分析复盘/人设定位访谈起草(八期)/市场调研与体系报告(十期)——统一走它)。
-- vision LLM (OpenAI/Bailian) key 仍只在 `.env` (OPENAI_API_KEY, OPENAI_BASE_URL 等), 未纳入本次桥接范围。
-
-### 测试覆盖
-
-- 1376 tests 绝大多数是 API 单测 + 纯函数 + mock prisma (含 Cockpit `model/workflow/schedule/calculations`/迁移映射的原版测试; 四期新增雷达搜索层/热度合成/阅读 prompt/API 路由测试; 五期新增研究层/风格层/两阶段生成/两级改稿/风格档案 API 的 mock 测试; 六期新增 `draft-restore.ts` 窄化解析纯函数测试(含新增的 xiaohongshu 形状嗅探用例) + xiaohongshu 分支两阶段化/`depositStyleSample` 平台分支沉淀测试 + `generate-flow.ts` xiaohongshu 跳过二次保存的回归用例; 七期新增 `GptImageProvider`/`resolveImageApiKey` 单测 + 出图计划 prompt/schema 与 `images/plan`、`images`、`images/archive` 三条路由的 mock 测试(含 idx 字段匹配/写盘容错/zip 打包缺文件跳过等边界) + `draft-restore.ts` 的 `imagePlan`/`images` 窄化解析用例; 七期终审修复新增 `writeGeneratedImage` 原子写 (`src/lib/image/write-generated-image.ts`) 的并发竞态 mock 回归 + `output.images` 父键缺失场景的**真实连 Postgres 集成测试** `tests/lib/image/write-generated-image.integration.test.ts`(需本机 docker compose 起了 postgres, 用真实 `PrismaClient` 建临时 User/ScriptDraft 行、跑写入、`findUnique` 读回断言、afterAll 清理); 八期新增 `PersonaProfile` 数据层(`isProfileEstablished`/`parsePersonaPillars`/`validatePillarHit`)/`buildPersonaSection`/`applyPersonaAdjust`/`pickPersonaBadge` 纯函数测试 + `persona/profile`、`persona/draft` 路由 mock 测试 + 雷达评分/选题/灵感/写稿四处注入点"无档案字符级一致"回归测试; 九期新增 `platform-stages.ts` 七个导出函数的流矩阵测试 + 五类消费点接入回归 (含修复轮的"完成文案按平台阶段流推进"四路断言) + `picked` 路由三种平台语义测试 + `migrate-xhs-stages.ts` 归并脚本测试(含 `completedAt` 区分排期/历史的修复轮用例); 十期新增 `PersonaProfile` 新五字段的数据层测试 (`tests/lib/persona/profile.test.ts`, painPoints/offerings/marketInsight 解析与校验) + 分段 `buildPersonaSection(profile, scope, intent?)` 三段 (`radar`/`write`/`topic`) 全量矩阵测试 (`tests/lib/llm/prompts/persona-section.test.ts`) + `persona/draft`(9 问)/`persona/market-research`/`persona/summary`/`persona/profile`(合并语义) 四条路由 mock 测试 + 雷达 `painHit`/`angleSuggestion` 校验与截断测试 (`tests/lib/radar/run.test.ts`、`tests/lib/llm/prompts/radar-read.test.ts`) + `scripts/generate` intent 透传/`suggestedIntent`/CTA 分岔回归 (`tests/api/scripts/generate.test.ts`) + `computeIntentMix`/`shouldAutoFillIntent` 纯函数测试 (`tests/lib/cockpit/intent-stats.test.ts`))
-- UI 一律走手动 E2E (是有意识的取舍); 五期收尾用真实 DeepSeek+Tavily key 额外跑了一轮全链路真实 E2E (非 mock), 见 `.superpowers/sdd/2026-08-13-script-quality/task-8-report.md`; 六期收尾同样用真实 key 跑通抖音懒加载恢复+`picked`自动推进/小红书两阶段生成+整稿改稿+定稿沉淀样本, 并额外用浏览器走查确认了抽屉小红书面板渲染、页顶整稿指令回填六字段骨架、关抽屉重开(不刷新)恢复三处 UI 行为, 详见 `.superpowers/sdd/2026-08-14-drawer-closure-xhs/task-6-report.md`; **七期收尾未跑真实生图 E2E**(用户尚未配置 OpenAI 生图 key, 与 DeepSeek/Tavily 先例同样的降级——mock 全过, 真实成图/打包验证责任转移给用户配 key 后自验), 详见 `.superpowers/sdd/2026-08-14-xhs-image-generation/task-6-report.md`; 八期收尾用真实 DeepSeek+Tavily key 跑通访谈建档(真实起草 5 条具体支柱→保存→established)+真实雷达扫描(`heatFactors` 命中 `pillarHit`/`personaAdjust`)+真实生成一篇抖音稿(临时 `console.log` 验证后移除, 确认 727 字符 persona 段确实注入 system prompt)+无档案回退(临时清空再恢复), 过程中发现并修复了一个环境类问题(radar-worker 长驻进程未重启导致跑的是旧代码, 非产品代码 bug), 详见 `.superpowers/sdd/2026-08-14-persona-driven-topics/task-6-report.md`; 十期收尾用真实 DeepSeek+Tavily key 跑通 9 问访谈建档→市场调研→体系报告→意图 CTA 生成→雷达痛点扫描 (含用 `composeHeat`/`applyPersonaAdjust` 对真实扫描条目重算比对, 证实热度分公式未受痛点影响)→无档案回退→恢复全流程, 过程中发现并修复一处真实 prompt 冲突 bug (抖音写稿 prompt 里硬编码的 CTA 收尾要求盖过了 intent 指引), 详见 `.superpowers/sdd/2026-08-15-positioning-system/task-7-report.md`
-- Worker 集成测试缺 (auto-sync-worker, content-analyze-worker, radar-worker 的每日 repeat 调度层)
-
----
-
-## 6. 本地开发
-
-### 基础启动
+需要：Node 20+、Docker Desktop（建议设为开机自启，数据库容器会跟着自动起来）。
 
 ```bash
-# 1. 配置 .env (从 .env.example 复制 + 填 DEEPSEEK_API_KEY 等)
-cp .env.example .env
-
-# 2. 启 Postgres + Redis
-docker compose up -d postgres redis
-
-# 3. 同步 schema (无 migrations, 用 prisma db push)
-npx prisma db push
-
-# 4. 安装依赖
+docker compose up -d        # 只有一个 Postgres
 npm install
-
-# 5. 跑 dev + worker (各开一个 terminal)
-npm run dev          # http://localhost:3000
-npm run worker:dev   # BullMQ workers (analyze / retro / auto-sync / radar 四期新增 / video-production 十五期新增)
+cd remotion && npm install && cd ..   # 出片用的 Remotion 子工程(独立依赖)
+npx prisma db push          # 首次或改了 schema 后
+npm run dev                 # http://localhost:3000
 ```
 
-无人出镜 AI 自动成片 (十五期, 见 §3「无人出镜 AI 自动成片」小节) 除上面两步外还需要:
-本机执行过 `npx playwright install chromium` (headless 截帧用) 和一个可用的 `ffmpeg`/
-`ffprobe` (`brew install ffmpeg`); DeepSeek key 同五期抖音逐字稿复用「AI 服务配置」卡/
-`.env` 里的 `DEEPSEEK_API_KEY`, 不需要额外配置项。
+改了 `prisma/schema.prisma` 之后必须 `npx prisma generate` 并重启 `npm run dev`。不要在 dev 运行时跑 `npm run build`。
 
-雷达功能额外需要: Tavily API key (在设置视图「雷达配置」卡里填, 见 §3「热点雷达」小节; 去 [tavily.com](https://tavily.com) 免费注册即得, 免费档每月 1000 次检索通常够用) + 一个可用的 DeepSeek key (阅读评分复用「AI 服务配置」卡——优先读该卡里配置的 key, 未配置时回退 `.env` 里的 `DEEPSEEK_API_KEY`)。 两者任一缺失时「立即扫描」会明确报错 (未配置 Tavily/未启用 → 400；无可用 DeepSeek key → 503), 每日自动扫描会静默跳过该轮 (不报错, 见 `runRadarScan` 注释)。
+## 环境变量（`.env`）
 
-抖音口播逐字稿 (五期, 见 §3「抖音口播逐字稿」小节) 不新增配置项, 直接复用上面两张卡的 key: 研究阶段的 Tavily 搜索缺 key 时静默降级 (跳过联网研究, 不报错); DeepSeek key 缺失会让生成/改稿请求直接失败 (`/scripts/generate` 500, `/scripts/[id]/refine` 503)。
-
-小红书 AI 配图生成 (七期, 见 §3「小红书 AI 配图生成」小节) 需要一个额外的 key: 设置视图「AI 服务配置」卡新增服务商「OpenAI 生图」(provider `gpt-image`), 保存用户自己的 OpenAI 官方 key (无 `.env` 回退); 生图客户端硬编码直连 `https://api.openai.com/v1`, 需保证本地网络能直达该端点 (不支持代理/自定义网关)。未配置该 key 时「生成配图」按钮走 503 引导文案, 不阻断其余功能; 出图计划阶段仍只需要 DeepSeek key。成本: 出图计划几厘 + 每张 gpt-image-1 约 ¥0.1-0.6, 单篇全生成约 1-3 元。
-
-账号定位体系 (十期, 见 §3「账号定位体系 · 作战室」小节) 不新增配置项, 复用上面已有的两张卡: 访谈起草/体系报告只需要 DeepSeek key (各约几分钱); 市场调研额外需要 Tavily key (同雷达功能), 缺 key 时 400 引导去雷达配置卡配置, 不阻断其余建档步骤; 单次市场调研约几毛钱, 可重跑。
-
-视频模板板块 (二十期, 见 §3「视频模板板块」小节) 新增一个环境变量 `VIDEO_TEMPLATE_ROOT` —— 模板素材(BGM/片头/片尾)的服务端存储根目录, 未设置时默认 `./video-templates`(与既有 `VIDEO_PRODUCTION_ROOT` 同一范式), 每个模板一个子目录 `<root>/<templateId>/`。生成侧不新增配置项, 复用十九期已有的 DeepSeek key(写稿/导演/构建者)与火山 TTS 配置(插画配音模式)。
-
-### 测试
-
-```bash
-npm run typecheck    # tsc --noEmit
-npm test             # vitest, 1620 tests across 130 files (含 Cockpit 纯逻辑层原版测试; 其中 1 个文件是真实连 Postgres 的集成测试, 需先 docker compose up -d postgres; 无人出镜 AI 自动成片相关文件里有 1 个是真实跑 headless Chromium 截帧+ffmpeg 编码的集成测试, 无网络调用, 不需要 DeepSeek key)
-npm test -- <filter> # 跑某个 file
-```
-
-### Schema 改动
-
-```bash
-# 改完 prisma/schema.prisma 后
-npx prisma db push   # 同步 + regenerate client
-# (项目用 db push 而不是 migrations, dev 简单)
-```
-
-### 重启 dev / worker (改 schema 后必须)
-
-dev server 和 worker 都缓存 prisma client。 schema 改后必须重启它们才能用新字段。
-
-`worker:dev` (`tsx src/jobs/workers/index.ts`) 是长驻进程, 启动时一次性 import 所有依赖文件, **不像
-Next dev server 那样对代码改动热重载** —— 改了 `src/lib/radar/`（或任何 worker 会 import 到的模块）
-后, 常驻的 worker 进程仍在跑旧代码且不会报错 (只是悄悄少算/漏算新逻辑), 必须手动 kill 后重新
-`npm run worker:dev`。 八期 T6 收尾真实验证雷达评分注入时踩到过 (worker 在人设定位 5 个提交之前就
-启动着, 扫描出的 `heatFactors` 一直缺 `pillarHit`/`personaAdjust`, 重启后才正常), 与"改 schema 必须
-重启"是同一类"长驻进程 + 代码不同步"问题, 重启即愈。
-
-### 存量数据迁移到 Cockpit (一次性)
-
-```bash
-npx tsx scripts/migrate-cockpit.ts          # dry-run (默认): 只打印映射清单+汇总, 不写库
-npx tsx scripts/migrate-cockpit.ts --apply  # 人工确认 dry-run 输出无误后再写库
-```
-
-把老表 (`ScriptDraft`/`ContentAnalysis`/`ActualMetric`/`TopicIdea`/`InspirationVideo`) 一次性映射进
-`CockpitContent`/`CockpitStageEvent`/`CockpitInspiration`。阶段判定复用 `deriveStage`
-(`src/lib/pipeline/stage.ts`)，纯映射函数见 `src/lib/cockpit/migrate-mapping.ts`。`--apply` 会先检查
-目标用户名下 `CockpitContent` 是否已有数据，非空直接中止（防重复迁移）；旧表全程只读，不删不改。
-`publishedAt`/`metrics.capturedAt` 这两个"日期部分"字段按 `Asia/Shanghai` (UTC+8) 取年月日
-(`dateISOInShanghai`)，与运行时写入方约定一致，避免 UTC 午夜前后跑迁移脚本时日期错位一天。
-**必须先在 `/` 完成一次 onboarding（`CockpitPrefs.setupComplete=true`）再执行 `--apply`**——迁移脚本
-不经过全量保存的 compare-and-set，若 onboarding 未完成就先写库，页面之后触发的第一次自动保存会用
-"空白开始"的全量状态把刚迁移进去的数据整个覆盖清空；`--apply` 会检测该顺序并主动中止。
-
-### xhs 存量阶段归并 (一次性)
-
-```bash
-npm run migrate:xhs-stages          # dry-run (默认): 打印候选卡片 id/title/stage, 不写库
-npm run migrate:xhs-stages -- --apply  # 人工确认 dry-run 输出无误后再写库
-```
-
-九期引入平台差异化流水线后，小红书 (`xiaohongshu`) 的 `recording`/`editing` 两个阶段被从它的
-流程 (`PLATFORM_STAGE_FLOW`, `src/lib/cockpit/platform-stages.ts`) 中剔除，对小红书永远是死阶段。
-本脚本一次性归并特性上线前遗留、卡在这两个阶段的小红书存量卡片：单事务内逐卡
-`stage → 'script'` + 清理该卡在 `CockpitStageEvent` 里 `recording`/`editing` 的排期记录（历史排期
-不动）+ 按去重后的 `userId` 逐个 `bumpCockpitRev`。归并逻辑纯函数见 `planXhsStageMigration`
-(`scripts/migrate-xhs-stages.ts`)。
-
----
-
-## 7. 目录结构 (重要文件)
-
-```
-src/
-├── app/
-│   ├── page.tsx                  # `/` — 只 dynamic import Cockpit.tsx (ssr:false)
-│   ├── cockpit.css                # 全站纸质编辑部风格 (主题变量 + 5 套 design style + mobile-nav)
-│   ├── layout.tsx                 # 根布局, 套 MainLayout
-│   ├── agent/                     # 二期起仅剩 discover/ inspiration/ patterns 三个子页面, 挂 ExternalShell (`/agent` 本体已删, redirect → `/?view=pipeline`)
-│   ├── content/
-│   │   ├── preflight/             # 视频分析 (Phase 1, L1) — 列表页已删, 子路由保留
-│   │   ├── script/                # 脚本生成详情页 (E) + 分发登记, `script/new` 为深度写稿入口
-│   │   └── retro-sync/            # 抖音半自动复盘 (C)
-│   └── api/v1/                    # 所有 API routes (含 topics/ distributions/ cockpit/workspace/ cockpit/inspirations/ douyin/auto-sync/trigger/ radar/{items,keywords,config,trigger,runs/latest}/ scripts/generate(五期 douyin 两阶段化)/ scripts/[id]/refine(五期新增)/ style/{profile,samples}(五期新增)/ scripts/[id]/images/{plan,route,archive}(七期新增: 出图计划/逐张生图/zip 打包)/ cockpit/video-productions/{[id],[id]/approve,[id]/file,latest}(十五期新增: 触发生成/状态轮询/确认导出/预览-成片文件流)/ cockpit/video-productions/[id]/upload-source(十九期新增: 真人出镜模式的出镜视频上传)/ tts/volc-config(十九期新增: 火山 TTS 单条配置读写)/ video-templates/{[id],[id]/duplicate,[id]/assets,[id]/script,[id]/produce}(二十期新增: 模板 CRUD+首访播种/复制/素材上传/文案生成/发起出片))
-├── components/
-│   ├── cockpit/                   # Creator Cockpit 移植主体
-│   │   ├── Cockpit.tsx             # 顶层组件: state + view 路由 (`NavView`, 三期起见 `lib/cockpit/view-routing.ts`) + 主题/onboarding (侧栏拖拽排序三期已移除)
-│   │   ├── views/                 # inspirations/radar(四期新增, 自取数)/momentum(含 schedule tab)/platform(五平台流水线页共用)/pipeline/analytics(含 goals+review tab)/templates.tsx(二十期新增: 模板列表/编辑器/出片向导三块) + settings.tsx (独立视图)
-│   │   ├── analytics/              # 二期 (T4) 从 components/dashboard/ 迁移重塑: prediction-panel/performance-panel + 7 个搬迁 widget + use-dashboard-summary hook
-│   │   ├── settings-cards/         # ai-provider-card, baseline-card (二期 T5) + radar-config-card (四期 T6) + style-profile-card (五期新增) + volc-tts-config-card (十九期新增: 火山 TTS 单条配置卡)
-│   │   ├── sidebar.tsx             # 全站共用侧栏 (cockpit 模式 + external 模式), 二期起「平台」外链组已移除, 四期新增「热点雷达」项
-│   │   ├── external-shell.tsx      # 站外页面外壳 (侧栏 + mobile-nav + 主题同步), 仅剩 /agent/discover /content/* 使用 (十七期起 /accounts 已删除)
-│   │   ├── content-drawer.tsx      # 内容详情抽屉, 二期 (T2) 脚本 tab 加入就地 AI 生成 + 标题实时建议; 五期新增素材框/时长/简报折叠区/分块渲染/换一版/整体指令; 六期新增挂载时懒加载拉回改稿 UI (parseDraftOutput) + 小红书两阶段面板(`XhsScriptPanel`, 与 douyin 分块面板共用 `ResearchBriefDetails` 素材简报子组件) + 素材框对小红书开放 + 生成/改稿/hook 动作四类互斥扩到小红书整稿指令; 七期新增「配图」区块 (一键全生成 + 并发 2 逐张渲染 + 单张重试 + 打包下载链接), 生图动作并入同一互斥矩阵
-│   │   ├── video-production-panel.tsx # 十五期新增, 十九期扩展为三种 AI 交付方式共用: 内容详情页「剪辑」tab 上的成片生成面板, 按 deliveryMode prop ('ppt-narration'/'talking-head-broll'/'illustration-tts') 替换原剪辑清单, 3 秒轮询状态 + 预览播放器 + 确认导出/重新生成/下载
-│   │   ├── onboarding.tsx / shared.tsx
-│   ├── content/                   # script-form, script-result (深度写稿入口用), publish-checklist, prediction-card, 分发登记弹窗 etc
-│   └── layout/                    # main-layout.tsx (按路径决定是否套 ExternalShell)
-├── lib/
-│   ├── cockpit/                   # model/workflow/schedule/calculations (纯函数, 零改动移植) + storage.ts(API 适配器) + migrations.ts(migrateWorkspace) + migrate-mapping.ts(存量数据映射) + script-mapping.ts(二期 T1: 生成结果→脚本骨架映射纯函数, 五期扩展 sections→body/hook 映射) + draft-restore.ts(六期: `ScriptDraft.output` → 抽屉改稿 UI 恢复字段的窄化解析纯函数, 形状嗅探同时覆盖 douyin `script.sections` 与 xiaohongshu 顶层 `intro`+`body` 两种形态) + generate-flow.ts(六期: 跳过二次保存的分支条件从只判 douyin 扩到 douyin/xiaohongshu, gongzhonghao 仍走二次保存) + extras.ts/extras-types.ts(复盘/大目标额外数据, 含二期新增 account/settings) + view-routing.ts(`NavView` 定义, 四期新增 `radar`)
-│   ├── radar/                     # 四期新增: search.ts(SearchProvider 抽象 + Tavily 实现) / config.ts(RadarConfig 读写+加解密) / scoring.ts(titleFingerprint/clusterByTopic/composeHeat/applyTimeDecay 纯函数) / run.ts(runRadarScan 管线主体)
-│   ├── script/                    # 五期新增: research.ts(runResearch 两阶段生成的阶段一, 雷达种子+Tavily+素材框合并→DeepSeek 提炼简报) / style.ts(getStyleContext 风格上下文切换 + depositStyleSample 定稿沉淀)
-│   ├── image/                     # 七期新增: provider.ts(ImageProvider 抽象 + GptImageProvider, 直连 api.openai.com, b64_json 返回)
-│   ├── video-production/          # 十五期新增: srt-synthesis.ts(六幕脚本→SRT 纯函数) / director-prompt.ts + builder-prompt.ts(DeepSeek 导演/构建者两阶段 prompt+schema) / shot-renderer.ts(headless Chromium 逐帧截图→ffmpeg 编码单镜头 clip) / assets/gsap.min.js(构建者产出的 HTML 固定引入的本地 GSAP 资产); 十九期新增: aligner-prompt.ts(真人出镜录音 → 六幕时间戳对齐的 DeepSeek prompt+schema); 二十期新增: ass-captions.ts(.ass 样式化字幕生成器, 三种模式时间轴来源转换) / packaging.ts(字幕→BGM→片头片尾三步包装编排) / packaging-input.ts(三种模式字幕时间轴来源分岔选取) / voice-resolve.ts(插画配音模式的音色优先级链: 临时覆盖→模板预设→全局配置)
-│   ├── video-template/            # 二十期新增: model.ts(`VideoTemplateConfig`/`CaptionStyle` 类型+zod schema+3 个内置预设定义) / store.ts(模板素材目录 `templateAssetDir`+首访播种 `seedPresetsIfEmpty`+id 生成)
-│   ├── tts/                       # 十九期新增: volcengine.ts(火山引擎/豆包语音 TTS 客户端封装, X-Api-Key 单 Key 鉴权 + resourceId 资源档位 + SSE 分行 JSON 响应拼接 mp3)
-│   ├── llm/                       # DeepSeekTextLLM + OpenAIVisionLLM + prompts/ (四期新增 radar-read.ts; 五期新增 research-brief.ts / script-write-douyin.ts / script-refine.ts; 七期新增 image-plan.ts / resolve-image-key.ts(gpt-image key 解析, 无 .env 回退))
-│   ├── pipeline/                  # deriveStage 纯函数 + platforms.ts 分发平台注册表
-│   ├── prediction/                # L1 formula + baseline
-│   ├── dashboard/                 # aggregate + calibration + prediction-accuracy (聚合逻辑零改动, 仍是 cockpit/analytics 面板与 `/api/v1/dashboard/summary` 的数据源)
-│   ├── settings/                  # 二期 (T5) 新建: baseline-stats.ts (computeRetroStats 纯函数, 从旧 baseline 页抽出)
-│   ├── douyin/                    # cheat-on-content adapter + fuzzy + auto-sync
-│   ├── checklist/                 # J types + isReady
-│   └── prisma.ts
-├── jobs/
-│   ├── queue.ts                   # 7 BullMQ queues (四期新增 radar; 十五期新增 video-production)
-│   └── workers/                   # 6 workers (bind, analyze, retro, auto-sync, radar 四期新增, video-production 十五期新增)
-scripts/
-├── migrate-cockpit.ts             # 存量数据 → Cockpit 表, dry-run 默认 / --apply 写库
-└── migrate-xhs-stages.ts          # 九期: xhs 存量 recording/editing 归并回 script, dry-run 默认 / --apply 写库
-prisma/
-└── schema.prisma                  # User / ContentAnalysis / ActualMetric / ScriptDraft / TopicIdea / Distribution / Cockpit* (10 张) / Radar*(4 张, 四期新增) / StyleProfile / StyleSample (五期新增) / VideoProduction (十五期新增, 二十期新增 templateId 字段+packaging 状态) / VideoTemplate (二十期新增) 等
-vendor/
-└── creator-cockpit/                # 移植源固定副本 (pinned 197d49b, MIT), tsconfig 排除, 不参与构建, 只读参考
-docs/superpowers/
-├── specs/                         # 每个 sub-project 的 design spec
-└── plans/                         # 每个 sub-project 的 task plan
-```
-
----
-
-## 8. 决策记录 (重要选择)
-
-| 决策 | 理由 |
+| 变量 | 说明 |
 |---|---|
-| Single-user (default-user) | 一开始就要 SaaS 是 over-build; 验证产品后再加 auth |
-| Prisma `db push` (无 migrations) | dev 速度优先, 一次性单用户产品, migrations 复杂收益低 |
-| BullMQ over Trigger.dev / Inngest | 自管 Redis 单机够用, 无云依赖 |
-| LLM: DeepSeek (text) + Qwen-VL (vision) + Whisper (local Python) | 中文友好 + 成本低; 测过 kedaya 代理 503 / OpenAI 直接调 模型不可达后选定 |
-| Stateless generate + opt-in save | 避免数据库膨胀;用户决定是否记下 |
-| 不做 native auto-publish | 平台 API 限制重 + 法律风险; 改成 copy-paste UX / 分发登记 UX |
-| Stitch 风格 (蓝紫渐变) | 用户自己拿 AI 设计稿确认的, 不是我猜 |
-| 管线阶段不落库, 按数据派生 (`deriveStage`) | 避免状态与真实数据 (picked/analysis/distribution) 双写不一致 |
-| 分发平台用代码注册表非 DB enum | 加平台 = 加一行代码, 不用改 schema / migration |
-| 工作台看板不做拖拽 (历史决策, 该看板已被 Cockpit Pipeline 视图取代) | 状态由真实动作驱动 (选版本/传视频/登记链接), 拖拽会制造假状态 |
-| Creator Cockpit 整体移植 (UI + 交互逻辑复制) 而非照抄视觉重新实现 | 用户认可其纸质编辑部风格与操作台交互逻辑; 移植省去重新设计+踩坑成本, 用 Prisma 换掉 IndexedDB 接入已有数据库 |
-| Cockpit 纯逻辑层零改动复制, 只换存储层 | `model/workflow/schedule/calculations.ts` 是「输入 state → 输出新 state」纯函数, 与存储解耦, 换存储不动逻辑风险最低 |
-| FollowerSnapshot 不建表, GET 时从 AccountMetric 派生 | 爬虫已经每日写 AccountMetric, 建独立表是重复数据, 派生更简单且不会不同步 |
-| 不搬 IndexedDB 备份/导入导出 UI | 数据库本身就是持久化底座, 这套 UI 是原版应对"无后端"环境的权宜设计, 我们不需要 |
-| 二期: 侧栏「平台」组解散, 功能长进驾驶舱视图而非留作独立挂壳页 | 消除双产品观感与页面跳转; `/agent`/`/dashboard`/`/settings` 挂壳页退役, 逻辑/数据源保留 (零后端改动) |
-| 二期: 账号入口做双入口 (大目标状态条 + 设置视图 + 移动端导航) 而非单一入口 | 吸取一期教训 (侧栏入口消失曾导致功能不可达), 拆掉常驻侧栏项前必须确保至少两条可达路径 |
-| 二期: `/content/script/new` (ScriptForm/ScriptResult) 保留为独立深度写稿入口, 不随 `/agent` 一起退役 | 抽屉内就地生成偏「快速起草」, 深度写稿页仍是唯一支持 `?ideaId=` 遗留链路兼容与完整多区块编辑的入口 |
-| 二期: `/api/v1/dashboard/summary` 端点保留未退役 (偏离 spec 原计划) | 迁移进复盘实验室/大目标的 widget 面板仍靠它取数, 实施时判断"仅剩 dashboard 使用则退役"的前提不成立 |
-| 七期: 新增 `jszip` 运行时依赖 (本项目首个"为单一功能引入"的第三方包, 而非框架基础设施) | zip 发布包下载 (`images/archive/route.ts`) 要把多张 PNG + note.txt 打成一个 zip 供用户下载; Node 无内置 zip 打包能力, 手写 zip 格式成本远高于引入成熟库 |
+| `DATABASE_URL` | `postgresql://mediapilot:<密码>@localhost:5432/mediapilot_v2` |
+| `DEEPSEEK_API_KEY` | 只在首次启动时迁移成设置页「模型」里的 DeepSeek（设为当前）；之后在设置页管理模型与 key |
+| `DB_PASSWORD` | docker-compose 的数据库密码 |
+| `PYTHON_BIN` | 本地转写用的 Python（需装 faster-whisper） |
+| `PROJECT_FILES_ROOT` | 项目文件（口播原片、转写）存放目录，默认仓库下 `projects/`（已 gitignore） |
+| `WHISPER_MODEL` | 本地转写模型，默认 `small`；要更准可设 `medium`（更慢） |
 
----
+## 出片命令行（给 Claude Code 用）
 
-## 9. 下一步
+```bash
+npm run -s mp -- project list
+npm run -s mp -- project export <项目id>
+npm run -s mp -- film new <项目id>                 # 建片子骨架 remotion/films/<id>-v<N>/
+npm run -s mp -- film check <片子目录>              # 镜头覆盖 / 素材截取 / 画面数字有出处
+npm run -s mp -- film render <片子目录> [--stills]  # 关键帧或整片(79 秒约 2 分钟)
+npm run -s mp -- film register <片子目录> --summary <这一版改了什么>
+```
 
-Phase A-C、工作台重定位 (Task 1-12)、Creator Cockpit 整体移植 (Task 1-14) 与平台页面融入驾驶舱 (二期, Task 1-8) 均已完成。 尚未做的:
+组件库在 `remotion/kit/`，每条片子的源码在 `remotion/films/`（不入库）。
 
-1. **Phase D** — checklist 按平台拆分发布前检查项 (`src/lib/checklist/types.ts` 目前仍单一 schema)
-2. **Phase E / SaaS 准备** — NextAuth 登录 + userId 中间件严格 scope + 计费, 本期范围外
-3. **本地真用一段时间** — 用 default-user 走完整 Cockpit 闭环 (灵感→转内容→档期拖拽→今日勾选→阶段推进→发布登记→复盘录入), 找实际使用中的痛点
-4. **人工走查一期 Task 14 未自动化验证项** — onboarding 冷启动、拖拽排期、双标签页 409 提示、明暗/5 风格切换、375px 移动端视觉 (见 `.superpowers/sdd/2026-08-04-cockpit-adoption/task-14-report.md`)
-5. **人工走查二期 Task 8 未自动化验证项** — 抽屉三平台生成回填真机走查、discover 存灵感→灵感池 409 横幅、复盘/大目标新区块数据对照、立即同步真实入队观察、设置卡三项功能等价、明暗模式残留检查 (见 `.superpowers/sdd/2026-08-05-platform-pages-fusion/task-8-report.md` 待人工走查清单)
-6. **遗留清理候选** — `PoolButton` 组件与 `TopicIdea`/`ideaId` 选题池链路现无任何 UI 入口 (二期起灵感只走 `CockpitInspiration`), 未来若确认不再需要可整体移除; cockpit 设置视图「账号管理」静态链接卡未单独拆文件 (内联在 `settings.tsx`), 后续扩展时再拆
-7. **十期遗留 minor (已知不阻断使用)** — `truncateAngleSuggestion`/`pushCtaLines` 里个别防御性空分支在当前校验顺序下不可达 (zod 先一步抛错), 保留纯防御; `suggestedIntent` 只在生成响应里返回、不落库 `ScriptDraft.output`(重开草稿不保留 AI 建议, spec 未要求持久化); 体系报告「导出 .md」按钮的真实浏览器点击下载走查因扩展当次故障未做 (逻辑走读已确认, 待扩展恢复后补, 同七期先例)
-8. **十五期 Builder 画面质量** — 无人出镜自动成片(见 §3「无人出镜 AI 自动成片」小节)的构图质量是本期明确接受的取舍, 弱于人工剪辑, 未来若要提升需专门迭代 Builder 提示词; 收尾 E2E 走查时 Chrome 扩展连接不稳定, 预览片在浏览器里的可视化播放确认改用「直接 HTTP GET/Range 请求 `[id]/file` 路由 + ffprobe 解析时长」验证 (字节级比对文件一致、时长与 SRT 总时长吻合), 未留存真实浏览器截图, 后续如需要可补一次纯人工走查
+## 常见问题
 
----
+- **dev 运行中新增了 API 路由目录后，别的接口也返回 Next 的 404 页**：重启 `npm run dev`（开发服务器路由表没刷新）。
 
-## 附录: Sub-projects 详细 spec / plan 索引
+## 每晚回采抖音数据
 
-- `docs/superpowers/specs/2026-06-12-content-preflight-design.md` (Phase 1 A v1)
-- `docs/superpowers/specs/2026-06-12-content-preflight-v2-design.md` (Phase 1 A v2 retro)
-- `docs/superpowers/specs/2026-06-14-dashboard-design.md` (Phase 3 B)
-- `docs/superpowers/specs/2026-06-15-l1-prediction-design.md` (L1)
-- `docs/superpowers/specs/2026-06-15-baseline-settings-design.md` (A)
-- `docs/superpowers/specs/2026-06-15-prediction-accuracy-design.md` (B widget)
-- `docs/superpowers/specs/2026-06-16-retro-sync-design.md` (C)
-- `docs/superpowers/specs/2026-06-16-auto-sync-design.md` (D)
-- `docs/superpowers/specs/2026-06-17-script-generate-design.md` (E)
-- `docs/superpowers/specs/2026-08-03-workbench-repositioning-design.md` (工作台重定位, 第二次 pivot, Task 1-12)
-- `docs/superpowers/specs/2026-08-04-cockpit-adoption-design.md` (Creator Cockpit 整体移植, 第三次 pivot, Task 1-14)
-- `docs/superpowers/specs/2026-08-05-platform-pages-fusion-design.md` (平台页面融入驾驶舱, 二期, Task 1-8)
-- `docs/superpowers/specs/2026-08-18-ai-video-production-design.md` (无人出镜 AI 自动成片, 十五期, Task 1-10)
-(Plan files in `docs/superpowers/plans/` 对应每个 spec)
+```bash
+sh scripts/install-collect-cron.sh            # 装定时任务(每晚 20:00)
+sh scripts/install-collect-cron.sh uninstall  # 卸载
+npm run collect:douyin                        # 手动跑一次
+```
+
+依赖 ego lite（共享已登录的浏览器状态），全程只读。日志在 `logs/collect-douyin.log`；抓到 0 条会判定为异常并拒绝写库。写入 `PublishedWork`、`DouyinOverviewSnapshot`、`DouyinMetricSummary` 三张表。
+
+旧库导出的人设与回采数据可用 `npm run import:legacy` 导入（读 `data/legacy-export.json`，幂等，不回退已回采的新数据）。
+
+## 每晚对标巡检
+
+- 安装：`sh scripts/install-scan-cron.sh`（每晚 20:30，排在回采之后；卸载加 `uninstall`）
+- 手动跑一次：`npm run scan:benchmarks`
+- 日志：`logs/scan-benchmarks.log`（首页与设置页读它判断巡检是否正常）
+- 风控护栏（写死在代码里）：只读，不点赞/关注/评论；每晚最多 15 个账号、每个只读第一页、账号间隔 5～10 秒；连续 3 个账号被拒当晚即停；按关键词搜博主每天最多 10 次。
+- 播放量拿不到（他人作品接口恒为 0），爆款只按点赞判断。
+
+## 命令行与外部 agent
+
+- 看全部命令：`npm run -s mp -- help`；任何命令加 `--json` 输出一行 JSON（`{ok,data}` / `{ok:false,error:{code,message}}`），退出码 0 成功 / 1 失败 / 2 权限不允许。
+- 身份：`MP_AGENT=hermes` 时只能用只读命令与少数安全写（建项目、采纳/不要经验、忽略作品、确认作品关联）；写稿、出片、访问抖音的命令只给 Claude Code。这只防误操作，不是安全隔离。
+- Claude Code：项目内 skill `.claude/skills/mediapilot`（全流程与停点）。
+- Hermes：`npm run -s mp -- agents install-hermes [--time 08:30] [--deliver all]` 把 `agents/hermes/mediapilot` 复制到 `~/.hermes/skills/`，写 `~/.hermes/scripts/mediapilot-brief.sh`，建定时任务「MediaPilot 每日简报」。简报不经过大模型、原样投递；已有同名 skill / 任务会先备份 / 替换。
+
+## 目录
+
+```
+src/app/                 页面与 API（/、/projects/[id]、/persona、/settings、/api/...）
+src/components/project/  项目页组件（稿子栏、对话栏）
+src/lib/script/          稿子模型、时长估算、写稿与自修
+src/lib/tools/           agent 工具（与界面无关，将来可套 CLI 给外部 agent）
+src/lib/agent/           对话循环、上下文、DeepSeek 流式模型
+src/lib/film/            出片：资料包、片子骨架、检查规则、素材、登记
+src/lib/llm/             模型层：配置与迁移、OpenAI 兼容 / Claude 适配、能力测试、报错翻译
+src/lib/assistant/       总助手：命令→工具、skill 读取、系统提示、对话范围
+src/lib/notes/           Obsidian：库配置、路径安全检索、笔记拼装与写入、存进提议
+assistant/skills/        总助手内置 skill（SKILL.md）
+src/lib/retro/           发布与复盘：作品指标/快照、作品-项目匹配、分段诊断、复盘生成、写法经验
+src/lib/benchmark/       选题：抖音只读访问、巡检、爆款规则、拆解、找选题、照抄检查
+src/lib/douyin/ account/  回采日志解析、首页账号概览
+src/lib/persona/          人设档案 schema
+src/lib/settings/ health/ .env 写入、DeepSeek key 测试、依赖体检
+remotion/                出片用的 Remotion 子工程（kit 组件库 + 渲染脚本）
+scripts/                 回采、旧数据导入、字级对齐
+```
+
+## 测试
+
+```bash
+npm test          # vitest
+npm run typecheck
+```

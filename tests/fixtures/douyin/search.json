@@ -1,0 +1,54 @@
+{
+ "status_code": 0,
+ "has_more": 1,
+ "user_list": [
+  {
+   "user_info": {
+    "nickname": "AI课代表小明",
+    "unique_id": "965106105",
+    "short_id": "965106105",
+    "follower_count": 2182666,
+    "total_favorited": 37078456,
+    "sec_uid": "MS4wLjABAAAAu1K73eFXi73h02uPPbNu9OWbncWhkZaPfgvbjC4nCUo",
+    "signature": "🚩Day 142｜已测 AI 工具 68款\n🤫90% 的 AI 工具是玩具，我帮你挖出剩下那 10%\n💡工具测评 · 实操教程 · 实用玩法 · 工具认知\n💰工具用顺，副业和搞钱更顺手👇更多福利进群领取",
+    "avatar_thumb": {
+     "url_list": [
+      "https://p3.douyinpic.com/fake.jpeg"
+     ]
+    }
+   }
+  },
+  {
+   "user_info": {
+    "nickname": "EthanAI工具",
+    "unique_id": "AIgongjuxx",
+    "short_id": "2253906462",
+    "follower_count": 468595,
+    "total_favorited": 4376557,
+    "sec_uid": "MS4wLjABAAAA9F0XP9pv8r98hDKjoTH6uAznNjJ5bEZiHj9fF4XeuSc",
+    "signature": "分享最好用的AI工具\n让AI成为你的得力助手",
+    "avatar_thumb": {
+     "url_list": [
+      "https://p3.douyinpic.com/fake.jpeg"
+     ]
+    }
+   }
+  },
+  {
+   "user_info": {
+    "nickname": "添叔AI雷达",
+    "unique_id": "80603252992",
+    "short_id": "80603252992",
+    "follower_count": 31275,
+    "total_favorited": 140025,
+    "sec_uid": "MS4wLjABAAAAwhOXWvj-5F0UzBPbYRCgAW44_PuZ9gIPZfgL_u1oziArH_zrDBOAYhAp9VA7ACfo",
+    "signature": "🧿每天雷达扫描1个好用工具\n✅AI工具｜宝藏网站｜效率软件｜新奇玩法\n🤝🏻合作测评：私📩",
+    "avatar_thumb": {
+     "url_list": [
+      "https://p3.douyinpic.com/fake.jpeg"
+     ]
+    }
+   }
+  }
+ ]
+}

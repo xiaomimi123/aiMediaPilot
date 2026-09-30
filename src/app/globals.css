@@ -1,54 +1,140 @@
+@import './tokens.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * 视觉语言: Linear 风高密度深色(三十四期 UI 重做, 设计交付见
+ * docs/superpowers/specs/2026-09-08-ui-dark-handoff/)。
+ *
+ * 令牌真源是 tokens.css(与 Figma 变量集合一一对应)。这里做两件事:
+ * ① 把令牌**桥接**到 shadcn 语义变量(--background/--card/--border 那套 HSL 三元组)
+ *    —— 47 个既有组件全走这套变量, 桥一次, 全体换肤, 不逐个重写组件;
+ * ② 承接旧纸感里仍然成立的原则: 红色只表示"这里有问题"(--danger 语义固定),
+ *    数字一律等宽对齐。
+ *
+ * 为什么桥接层是 HSL 三元组而不是直接引用 tokens.css 的 hex:
+ * 既有组件大量使用透明度修饰(bg-secondary/70、border-foreground/10),
+ * Tailwind 的 /alpha 只对 `hsl(var(--x))` 形式生效 —— hex var 会让这些修饰
+ * 静默失效(不报错, 只是渲染成不透明), 排查起来极费劲。
+ * 数值是从 tokens.css 的 hex 换算来的, 改令牌时两处要一起改(tokens.css 是真源)。
+ */
+
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
-    --radius: 0.5rem;
+    /* --bg-canvas #08090A */
+    --background: 210 11% 4%;
+    /* --text-primary #F2F3F5 */
+    --foreground: 220 12% 95%;
+    /* --bg-surface #16171A */
+    --card: 225 8% 9%;
+    --card-foreground: 220 12% 95%;
+    /* 主操作 = 靛蓝 --accent #5E6AD2。README 明确: accent 只用于主操作与"当前位置" */
+    --primary: 234 56% 60%;
+    --primary-foreground: 0 0% 100%;
+    /* 次级按钮底 --bg-elevated #1E1F24 */
+    --secondary: 230 9% 13%;
+    --secondary-foreground: 220 12% 95%;
+    /* --bg-surface-hover #1C1D21; muted 文字 = --text-secondary #9195A0 */
+    --muted: 228 8% 12%;
+    --muted-foreground: 224 7% 60%;
+    /* shadcn 的 "accent"(hover/选中底)与 tokens.css 的 --accent(靛蓝 hex)撞名 ——
+       同名变量后加载的赢, 曾把 var(--accent) 覆盖成裸 HSL 三元组, 让所有
+       bg-brand(靛蓝方块)静默消失。桥接层让名: 用 --ui-hover, tokens 保住 --accent。 */
+    --ui-hover: 228 8% 12%;
+    --ui-hover-foreground: 220 12% 95%;
+    /* --danger #E5484D。语义固定: 断链/失败/0 分, 不当装饰用 */
+    --destructive: 358 75% 59%;
+    --destructive-foreground: 0 0% 100%;
+    /* --border-subtle #1F2024; input 用 --border-default #292A2F */
+    --border: 228 7% 13%;
+    --input: 230 7% 17%;
+    --ring: 235 64% 66%;
+    /* 与 tokens 的圆角阶对齐: lg=8 md=6 sm=4 */
+    --radius: 8px;
+
+    /* 状态色(hex 真源在 tokens.css, 这里是 HSL 桥接, 供 /alpha 修饰用) */
+    --status-success: 152 49% 48%;
+    --status-warning: 34 87% 59%;
+    --status-danger: 358 75% 59%;
+    --status-info: 209 97% 65%;
+    --status-soft: 255 92% 76%;
   }
 
-  .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
+  /*
+   * 显示比例: root 15px。设计稿正文 13px/20px —— 15px root 下 text-sm 恰为
+   * 13.1px、text-xs 为 11.25px(= 设计稿 Caption 11px), 整套 rem 间距同步收紧,
+   * 得到 Linear 式的高密度。沿用旧版的手法: 抬/压 root 做等比缩放, 不逐个改字号。
+   */
+  html {
+    font-size: 15px;
   }
 
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font);
+    font-size: 13px;
+    line-height: 20px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /*
+   * 标题不再走衬线(纸感退役)。h1-h3 收紧字距 —— 设计稿的 Display/Title 系列
+   * 都带负字距, 深色高密度界面里宽字距的中文标题会显得松。
+   */
+  h1, h2, h3 {
+    letter-spacing: -0.01em;
+  }
+
+  /* 数字一律等宽 —— 分数、时长、字数在这个工具里到处都是, 跳动会很扰 */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-default);
+    border-radius: 6px;
+    border: 3px solid var(--bg-canvas);
+  }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  :focus-visible {
+    outline: 2px solid var(--accent-hover);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
   }
 }
 
+@layer components {
+  /*
+   * 设计稿原语里用得最密的两个, 做成类以便服务端组件直接用
+   * (状态徽章与分组标签在 14 个页面里到处都是, 每处写一串 utility 会漂移)。
+   */
+  .t-label {
+    font-size: 11px;
+    line-height: 16px;
+    font-weight: 500;
+    letter-spacing: 0.4px;
+    color: var(--text-tertiary);
+  }
+
+  .badge-base {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 7px;
+    border-radius: 5px;
+    font-size: 11px;
+    line-height: 16px;
+    white-space: nowrap;
+  }
+}

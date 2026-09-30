@@ -7,6 +7,8 @@ dist
 .env
 .env.local
 .env*.local
+# 设置页写 .env 的临时文件(含完整 key, 仓库公开)
+.env.tmp-*
 prisma/migrations/dev.db*
 .superpowers/
 # Claude Code local permission settings — may contain machine-specific paths
@@ -17,8 +19,44 @@ prisma/migrations/dev.db*
 uploads/
 vendor/
 # 十九期: AI 视频生成产物 (VIDEO_PRODUCTION_ROOT 默认值), 与 uploads/ 同类, 纯本机运行时产物
-video-productions/
-# 二十期: 模板素材 (VIDEO_TEMPLATE_ROOT 默认值), 与 video-productions/ 同类, 纯本机运行时产物
-# 用根锚定 (/) 而非 video-productions/ 那种不锚定写法 —— 源码里同样存在
+# 三十一期 Task 1 修复: 原来没锚定到仓库根, 会误伤同名的源码目录
+# src/app/api/v1/cockpit/video-productions/——新增的 [id]/render/route.ts 曾因此
+# 被 git 悄悄忽略、看不出没提交。加前导 '/' 只匹配仓库根的运行时产物目录。
+/video-productions/
+# 二十一期: 内容真实素材上传(CONTENT_ASSET_ROOT 默认值), 同为本机运行时产物
+/content-assets/
+# 二十期: 模板素材 (VIDEO_TEMPLATE_ROOT 默认值), 与 video-productions/
+# 二十一期: 内容真实素材上传(CONTENT_ASSET_ROOT 默认值), 同为本机运行时产物
+/content-assets/ 同类, 纯本机运行时产物
+# 用根锚定 (/) 而非 video-productions/
+# 二十一期: 内容真实素材上传(CONTENT_ASSET_ROOT 默认值), 同为本机运行时产物
+/content-assets/ 那种不锚定写法 —— 源码里同样存在
 # src/app/api/v1/video-templates/、tests/api/video-templates/ 目录, 不锚定会把它们也吃掉。
 /video-templates/
+logs/
+
+/teardowns/
+.venv/
+# 二十八期: renderFilm 渲染时中转人声/BGM 到这里、渲后即清理, 纯运行时产物
+/remotion/public/render-assets/
+
+# 二十九期 Task 5: 字级对齐脚本的 venv 与模型缓存, 不进 git
+scripts/align/.venv
+scripts/align/__pycache__
+
+# 模板演示视频(本地生成, npm run gen:template-demos)
+/public/template-demos/
+
+# 外部工具(source-available, 禁止再分发, 不入库)
+/tools/overlay-studio/
+
+# 重构(2026-09-27): 旧库导出与本地数据, 含个人数据, 不入库
+/data/
+
+# 重构阶段 3: 项目文件(口播原片、转写), 本机运行时产物, 可能很大
+/projects/
+
+# 阶段 4: Remotion 子工程依赖与每条片子的源码/产物(源码随项目走, 不入库)
+/remotion/node_modules/
+/remotion/films/*
+!/remotion/films/.gitkeep

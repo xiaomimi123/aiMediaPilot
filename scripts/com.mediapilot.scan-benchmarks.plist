@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  每晚 20:30 巡检对标账号(排在 20:00 回采之后)。
+
+  装: cp 到 ~/Library/LaunchAgents/ 后 launchctl load -w
+  卸: launchctl unload -w ~/Library/LaunchAgents/com.mediapilot.scan-benchmarks.plist
+
+  RunAtLoad 特意设为 false —— 装的时候不该顺手跑一次, 那会让人分不清「装好了」和
+  「跑成功了」。想立刻验证就手动跑 npm run scan:benchmarks。
+
+  日志写在项目的 logs/scan-benchmarks.log。失败也写在同一个文件里, 不分流 ——
+  分成两个文件的结果就是没人看 stderr 那个。
+
+  ProgramArguments 里先 cd 再 exec: launchd 起 shell 时的初始工作目录不一定可访问,
+  直接跑会先吐一行 getcwd 权限警告。cd 失败就 exit 1, 不带着错误的目录往下跑。
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.mediapilot.scan-benchmarks</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>cd "__PROJECT_DIR__" || exit 1; exec npm run scan:benchmarks</string>
+  </array>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>20</integer>
+    <key>Minute</key>
+    <integer>30</integer>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>StandardOutPath</key>
+  <string>__PROJECT_DIR__/logs/scan-benchmarks.log</string>
+  <key>StandardErrorPath</key>
+  <string>__PROJECT_DIR__/logs/scan-benchmarks.log</string>
+
+  <key>WorkingDirectory</key>
+  <string>__PROJECT_DIR__</string>
+</dict>
+</plist>

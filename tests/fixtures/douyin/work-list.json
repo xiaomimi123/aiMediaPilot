@@ -1,0 +1,186 @@
+{
+ "status_code": 0,
+ "has_more": true,
+ "max_cursor": 1773288273000,
+ "total": 102,
+ "aweme_list": [
+  {
+   "aweme_id": "7537605160290684170",
+   "create_time": 1754985465,
+   "desc": "只要不被打倒，你将会更加强大！",
+   "status": {
+    "is_private": false,
+    "self_see": false
+   }
+  },
+  {
+   "aweme_id": "7678813842822871926",
+   "create_time": 1787863170,
+   "desc": "（私密作品）",
+   "status": {
+    "is_private": true,
+    "self_see": false
+   }
+  },
+  {
+   "aweme_id": "7678486298110291947",
+   "create_time": 1787786908,
+   "desc": "（私密作品）",
+   "status": {
+    "is_private": false,
+    "self_see": true
+   }
+  },
+  {
+   "aweme_id": "7665077489212353747",
+   "create_time": 1784664937,
+   "desc": "（私密作品）",
+   "status": {
+    "is_private": true,
+    "self_see": false
+   }
+  }
+ ],
+ "items": [
+  {
+   "id": 7537605160290684170,
+   "create_time": 1754985465,
+   "description": "只要不被打倒，你将会更加强大！",
+   "metrics": {
+    "avg_view_proportion": "0.240949",
+    "avg_view_second": "10.378139",
+    "bounce_rate_2s": "0.265879",
+    "comment_count": "5",
+    "comment_rate": "0.001719",
+    "completion_rate": "0.093687",
+    "completion_rate_5s": "0.502216",
+    "cover_show": "0",
+    "danmaku_count": "0",
+    "dislike_count": "0",
+    "dislike_rate": "0.000000",
+    "download_count": "0",
+    "fan_view_proportion": "0.037455",
+    "favorite_count": "13",
+    "favorite_rate": "0.004470",
+    "homepage_visit_count": "21",
+    "like_count": "66",
+    "like_rate": "0.022696",
+    "share_count": "8",
+    "share_rate": "0.002751",
+    "subscribe_count": "2",
+    "subscribe_rate": "0.000688",
+    "unsubscribe_count": "0",
+    "unsubscribe_rate": "0.000000",
+    "view_count": "2908"
+   },
+   "metrics_offline_update_time": 1762704000
+  },
+  {
+   "id": 7678813842822871926,
+   "create_time": 1787863170,
+   "description": "（私密作品）",
+   "metrics": {
+    "avg_view_proportion": "0.072047",
+    "avg_view_second": "11.167323",
+    "bounce_rate_2s": "0.350394",
+    "comment_count": "1",
+    "comment_rate": "",
+    "completion_rate": "0.012101",
+    "completion_rate_5s": "0.322835",
+    "cover_show": "132",
+    "danmaku_count": "0",
+    "dislike_count": "0",
+    "dislike_rate": "",
+    "download_count": "0",
+    "fan_view_proportion": "0.090493",
+    "favorite_count": "8",
+    "favorite_rate": "",
+    "homepage_visit_count": "42",
+    "like_count": "15",
+    "like_rate": "",
+    "share_count": "0",
+    "share_rate": "",
+    "subscribe_count": "2",
+    "subscribe_rate": "",
+    "unsubscribe_count": "1",
+    "unsubscribe_rate": "",
+    "view_count": "0"
+   },
+   "metrics_offline_update_time": null
+  },
+  {
+   "id": 7678486298110291947,
+   "create_time": 1787786908,
+   "description": "（私密作品）",
+   "metrics": {
+    "avg_view_second": "7.118259",
+    "bounce_rate_2s": "0.397092",
+    "comment_count": "446",
+    "comment_entry_rate": "0.260638",
+    "comment_rate": "0.001982",
+    "completion_rate": "0.361068",
+    "completion_rate_5s": "0.361068",
+    "cover_click_rate": "0.092486",
+    "cover_show": "336",
+    "danmaku_count": "0",
+    "description_completion_rate": "0.800613",
+    "description_spread_rate": "0.001065",
+    "dislike_count": "27",
+    "dislike_rate": "0.000120",
+    "download_count": "1",
+    "fan_view_proportion": "0.000538",
+    "favorite_count": "271",
+    "favorite_rate": "0.001204",
+    "homepage_visit_count": "2035",
+    "image_avg_view_count": "1.000000",
+    "like_count": "1709",
+    "like_rate": "0.007595",
+    "share_count": "679",
+    "share_rate": "0.003018",
+    "subscribe_count": "14",
+    "subscribe_rate": "0.000062",
+    "unsubscribe_count": "0",
+    "unsubscribe_rate": "0.000000",
+    "view_count": "225016"
+   },
+   "metrics_offline_update_time": null
+  },
+  {
+   "id": 7665077489212353747,
+   "create_time": 1784664937,
+   "description": "（私密作品）",
+   "metrics": {
+    "avg_view_second": "3.213178",
+    "bounce_rate_2s": "0.589147",
+    "comment_count": "1",
+    "comment_entry_rate": "0.059140",
+    "comment_rate": "",
+    "completion_rate": "0.227273",
+    "completion_rate_5s": "0.227273",
+    "cover_click_rate": "0.000000",
+    "cover_show": "6",
+    "danmaku_count": "0",
+    "description_completion_rate": "0.750000",
+    "description_spread_rate": "0.022059",
+    "dislike_count": "0",
+    "dislike_rate": "",
+    "download_count": "0",
+    "fan_view_proportion": "0.281106",
+    "favorite_count": "0",
+    "favorite_rate": "",
+    "homepage_visit_count": "12",
+    "image_avg_view_count": "1.000000",
+    "like_count": "11",
+    "like_rate": "",
+    "share_count": "0",
+    "share_rate": "",
+    "subscribe_count": "0",
+    "subscribe_rate": "",
+    "unsubscribe_count": "0",
+    "unsubscribe_rate": "",
+    "view_count": "0"
+   },
+   "metrics_offline_update_time": null
+  }
+ ]
+}

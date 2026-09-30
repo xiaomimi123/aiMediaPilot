@@ -1,0 +1,82 @@
+/* MediaPilot Design Tokens — Linear 风深色主题
+   与 Figma 文件 "MediaPilot Design System" 的 Tokens 变量集合一一对应。
+   用法：在 app/globals.css 顶部 @import "./tokens.css"; */
+
+:root {
+  /* ---- 背景 Surface ---- */
+  --bg-canvas:        #08090A; /* 页面最底层 */
+  --bg-base:          #0F1011; /* 侧边栏 / 右侧面板 */
+  --bg-surface:       #16171A; /* 卡片、表格 */
+  --bg-surface-hover: #1C1D21; /* 行 hover、当前导航项 */
+  --bg-elevated:      #1E1F24; /* 次级按钮、标签底、进度条槽 */
+  --bg-inset:         #0B0C0E; /* 输入框、表头、内嵌块 */
+
+  /* ---- 描边 Border ---- */
+  --border-subtle:    #1F2024; /* 卡片、分隔线（默认） */
+  --border-default:   #292A2F; /* 输入框、可点击容器 */
+  --border-strong:    #3A3B41; /* 次级按钮、图标占位 */
+
+  /* ---- 文字 Text ---- */
+  --text-primary:     #F2F3F5;
+  --text-secondary:   #9195A0;
+  --text-tertiary:    #62656E;
+  --text-disabled:    #4A4C54; /* 空值 "—" */
+  --text-on-accent:   #FFFFFF;
+
+  /* ---- 强调 Accent ---- */
+  --accent:           #5E6AD2;
+  --accent-hover:     #7079E0;
+  --accent-subtle:    #21243D;
+  --accent-border:    #3A3F72;
+
+  /* ---- 状态 Status（语义固定，不要挪用） ----
+     success = 链路通 / 已完成 / 满分
+     warning = 等你处理 / 偏离预算 / 样本不足
+     danger  = 断链 / 失败 / 0 分
+     info    = 系统正在跑（排队、渲染中）
+     soft    = 软指标，AI 判断出来的分            */
+  --success:          #3FB77E;  --success-subtle: #0F2A20;
+  --warning:          #F2A33C;  --warning-subtle: #2E2113;
+  --danger:           #E5484D;  --danger-subtle:  #2E1618;
+  --info:             #4EA7FC;  --info-subtle:    #10243A;
+  --soft:             #A78BFA;  --soft-subtle:    #221A3A;
+
+  /* ---- 间距（4pt 栅格） ---- */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px;
+  --s6:24px; --s7:32px; --s8:40px; --s9:48px;
+
+  /* ---- 圆角 ---- */
+  --r-sm:4px;   /* 小色块、幕序号 */
+  --r-md:6px;   /* 按钮、输入框、标签 */
+  --r-lg:8px;   /* 卡片、横幅、内嵌块 */
+  --r-xl:12px;  /* 当前编辑的幕卡片 */
+  --r-full:999px;
+
+  /* ---- 字体 ---- */
+  --font: -apple-system, BlinkMacSystemFont, "Inter", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+
+  /* ---- 布局 ---- */
+  --sidebar-w: 224px;
+  --rail-w:    236px;  /* 编辑器左侧时长分配栏 */
+  --panel-w:   340px;  /* 编辑器右侧评分面板 */
+  --topbar-h:  58px;
+}
+
+/* 字阶（与 Figma Text Styles 同名）
+   Display      28/36  700   页面主标题
+   Title 1      20/28  700   区块标题
+   Title 2      16/24  600   卡片标题
+   Title 3      14/20  600   小标题 / 表头
+   Body         13/20  400   正文默认
+   Body Medium  13/20  500   正文强调
+   Small        12/18  400   次要说明
+   Small Medium 12/18  500   标签文字
+   Caption      11/16  400   脚注
+   Label        11/16  500  +0.4px  分组标签（大写感）
+   Metric XL    28/34  Mono 500     大数字
+   Metric       20/26  Mono 500     指标数字
+   Metric Small 13/18  Mono 500     表格数字
+   Mono         12/18  Mono 400     ID / 时间 / 代码
+   —— 所有数字一律走 Mono，保证表格和指标对齐（tabular）。 */

@@ -1,45 +1,48 @@
 'use client';
-import { createContext, useContext, type ReactNode } from 'react';
+
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
-type Ctx = { value: string; onChange: (v: string) => void };
-const TabsCtx = createContext<Ctx | null>(null);
-
-export function Tabs({
-  value, onValueChange, children, className,
-}: { value: string; onValueChange: (v: string) => void; children: ReactNode; className?: string }) {
+/**
+ * 极简 tabs。没装 radix, 这里只要"切换显示哪一块"这一个能力, 不引依赖。
+ * 每个 tab 的内容由调用方按当前值自己渲染 —— 组件不持有内容, 只持有当前值。
+ */
+export function Tabs<T extends string>({
+  tabs,
+  value,
+  onChange,
+  className,
+}: {
+  tabs: readonly { value: T; label: string; disabled?: boolean }[];
+  value: T;
+  onChange: (v: T) => void;
+  className?: string;
+}) {
   return (
-    <TabsCtx.Provider value={{ value, onChange: onValueChange }}>
-      <div className={cn('flex flex-col gap-2', className)}>{children}</div>
-    </TabsCtx.Provider>
+    <div role="tablist" className={cn('flex gap-1 rounded-md bg-secondary p-1', className)}>
+      {tabs.map((t) => (
+        <button
+          key={t.value}
+          role="tab"
+          type="button"
+          disabled={t.disabled}
+          aria-selected={value === t.value}
+          onClick={() => onChange(t.value)}
+          className={cn(
+            'flex-1 rounded px-2 py-1 text-xs transition-colors disabled:opacity-40',
+            value === t.value
+              ? 'bg-background font-medium shadow-sm'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
-export function TabsList({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn('inline-flex gap-1 rounded-md bg-muted p-1', className)}>{children}</div>;
-}
-
-export function TabsTrigger({ value, children }: { value: string; children: ReactNode }) {
-  const ctx = useContext(TabsCtx);
-  if (!ctx) throw new Error('TabsTrigger outside Tabs');
-  const active = ctx.value === value;
-  return (
-    <button
-      type="button"
-      onClick={() => ctx.onChange(value)}
-      className={cn(
-        'rounded-sm px-3 py-1 text-sm transition-colors',
-        active ? 'bg-background text-foreground shadow' : 'text-muted-foreground hover:text-foreground'
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-export function TabsContent({ value, children }: { value: string; children: ReactNode }) {
-  const ctx = useContext(TabsCtx);
-  if (!ctx) throw new Error('TabsContent outside Tabs');
-  if (ctx.value !== value) return null;
-  return <div>{children}</div>;
+/** 受控值的 hook —— 页面不需要为一个 tab 状态单独想变量名。 */
+export function useTabs<T extends string>(initial: T) {
+  return useState<T>(initial);
 }
