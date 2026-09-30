@@ -16,6 +16,7 @@ description: 用 mp 命令行操作 MediaPilot 做一条抖音口播: 找选题�
    - 有"照抄对标原句"→ `mp chat <项目> "把照抄的句子换成我的说法"`;
    - 超时 → 让编导按提示压缩。
    - 想用用户自己的积累: `mp notes search <关键词>` → `mp notes show <路径>`(只读用户在设置页勾选的 Obsidian 文件夹; 编导磨稿时也会自己搜)。
+   - 想知道能跑多少: `mp predict run <项目>`(按拖后腿的建议再磨); 手上几条稿子时 `mp predict list` 看先发哪条。
    然后 `mp project show <项目>` 把稿子给用户看。⏸ 用户确认后 `mp script finalize <项目>`。
 5. ⏸ **录口播**: 告诉用户在项目页「② 口播」用提词器录、上传; 转写完成后再继续(`mp project show` 显示"已转写 N 句")。
 6. **出片**: ⏸ 先问用户要不要现在出片, 同意后按 `produce-film` skill 做。
