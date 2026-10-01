@@ -15,7 +15,7 @@ describe('overview widgets', () => {
   it('shows the calibration line once checked', () => {
     render(<MetricCards m={{ fans: 410, fansDelta: 1, likes: 2452, works: 5, views: 32890, calib: { count: 3, avgError: 1.6 } }} />);
     expect(screen.getByText('410')).toBeTruthy();
-    expect(screen.getByText('较昨天 +1')).toBeTruthy();
+    expect(screen.getByText('较上次回采 +1')).toBeTruthy();
     expect(screen.getByText('对过 3 次账 · 平均偏差 1.6 倍')).toBeTruthy();
   });
   it('waits for 7 days before drawing the trend', () => {
@@ -35,5 +35,9 @@ describe('overview widgets', () => {
     fireEvent.click(screen.getByText('播放'));
     const links = screen.getAllByRole('link').map((a) => a.textContent);
     expect(links[0]).toContain('大');
+  });
+  it('labels the fan change as since the last collection', () => {
+    render(<MetricCards m={{ fans: 410, fansDelta: 1, likes: 2452, works: 5, views: 32890, calib: { count: 0, avgError: null } }} />);
+    expect(screen.getByText('较上次回采 +1')).toBeTruthy();
   });
 });

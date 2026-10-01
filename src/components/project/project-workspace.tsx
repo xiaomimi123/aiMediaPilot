@@ -15,6 +15,7 @@ import { ChatDrawer } from './chat-drawer';
 import { currentStep, stepsOf, type StepKey } from '@/lib/overview/steps';
 import type { Reference } from '@/lib/benchmark/adopt';
 
+const isNotice = (m: MessageView) => m.role === 'system' && (!!m.toolName?.startsWith('job:') || m.toolName === 'note:proposal');
 const isActive = (j: JobView | undefined) => !!j && (j.status === 'running' || j.status === 'queued');
 
 export function ProjectWorkspace({
@@ -82,11 +83,12 @@ export function ProjectWorkspace({
     if ('reference' in j.data) setReference(j.data.reference ?? null);
     if ('published' in j.data) setPublished(!!j.data.published);
     if ('hasRetro' in j.data) setHasRetro(!!j.data.hasRetro);
-    setNotices(((j.data.messages ?? []) as MessageView[]).filter((m) => m.role === 'system' && (m.toolName?.startsWith('job:') || m.toolName === 'note:proposal')));
+    setNotices(((j.data.messages ?? []) as MessageView[]).filter(isNotice));
   }, [project.id]);
 
   // 新通知(任务完成 / 存笔记卡片 / 预测完成)到来时展开对话一次; 同一条不重复弹
-  const seenNotices = useRef(new Set<string>());
+  // 打开页面时已有的通知算看过, 只对之后新来的弹开
+  const seenNotices = useRef(new Set(initialMessages.filter(isNotice).map((m) => m.id)));
   useEffect(() => {
     const fresh = notices.filter((n) => !seenNotices.current.has(n.id));
     if (!fresh.length) return;
@@ -127,7 +129,7 @@ export function ProjectWorkspace({
   }, []);
 
   return (
-    <div className={cn('flex h-full flex-col transition-[padding]', chatOpen && 'md:pr-[var(--drawer-w)]')}>
+    <div className={cn('flex h-full flex-col transition-[padding]', chatOpen && 'lg:pr-[var(--drawer-w)]')}>
       <div className="px-4 pt-4 md:px-8">
         <input
           // 非受控输入只读一次 defaultValue; 以标题做 key, agent 改名后刷新才会跟上
@@ -139,7 +141,8 @@ export function ProjectWorkspace({
         <StepBar steps={steps} active={tab} onSelect={setTab} />
         {error && <p className="mt-1 text-xs text-[var(--danger)]">{error}</p>}
       </div>
-      <div className="min-h-0 flex-1">
+      {/* 底部留出悬浮按钮的位置, 不挡最后一行 */}
+      <div className="min-h-0 flex-1 pb-16">
         <div className="mx-auto h-full w-full max-w-[820px]">
           {tab === 'topic' && (
             <div className="h-full overflow-y-auto px-4 py-5 md:px-6">

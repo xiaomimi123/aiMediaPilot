@@ -115,4 +115,23 @@ describe('ProjectWorkspace', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.queryByLabelText('收起对话')).toBeNull();
   });
+  it('does not pop the drawer for notices that were already there when the page loaded', async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const old = { id: 'mOld', role: 'system' as const, content: '转写完成：6 句', toolName: 'job:transcribe', ok: true };
+    vi.stubGlobal('fetch', vi.fn(async (_u: string, init?: { method?: string }) => ({
+      json: async () => ({ success: true, data: init?.method === 'PATCH' ? toProjectView({ ...base, title: 't', stage: 'scripted' }) : { project: toProjectView({ ...base, title: 't', stage: 'scripted' }), messages: [old] } }),
+    })));
+    render(<ProjectWorkspace initialProject={toProjectView({ ...base, title: 't' })} initialMessages={[old]} />);
+    fireEvent.click(screen.getByText('定稿'));
+    await new Promise((r) => setTimeout(r, 80));
+    expect(screen.queryByLabelText('收起对话')).toBeNull();
+  });
+  it('keeps marking the real current step after choosing another one', () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    vi.stubGlobal('fetch', vi.fn(async () => ({ json: async () => ({ success: false }) })));
+    render(<ProjectWorkspace initialProject={toProjectView({ ...base, title: 't', stage: 'scripted' })} initialMessages={[]} />);
+    fireEvent.click(screen.getByRole('tab', { name: '脚本' }));
+    expect(screen.getByRole('tab', { name: '口播' }).getAttribute('aria-current')).toBe('step');
+    expect(screen.getByRole('tab', { name: '脚本' }).getAttribute('aria-selected')).toBe('true');
+  });
 });

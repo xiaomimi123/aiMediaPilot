@@ -28,4 +28,12 @@ describe('ChatDrawer', () => {
     fireEvent.click(screen.getByLabelText('收起对话'));
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
+  it('makes the closed panel inert so it cannot take focus', () => {
+    const { container } = render(
+      <ChatDrawer open={false} onOpenChange={() => {}} unread={false}>
+        <textarea />
+      </ChatDrawer>,
+    );
+    expect(container.querySelector('aside')!.hasAttribute('inert')).toBe(true);
+  });
 });

@@ -12,9 +12,11 @@ export async function recordDailySnapshot(db: PrismaClient, now: Date): Promise<
     db.douyinMetricSummary.findUnique({ where: { metric: PROFILE_METRICS.totalLikes } }),
     db.publishedWork.aggregate({ where: { isPrivate: false }, _count: { _all: true }, _sum: { play: true } }),
   ]);
+  // 只记今天回采到的粉丝/获赞: 今天资料抓取失败时库里还是昨天的数, 不能记到今天名下
+  const fresh = (m: { fetchedAt: Date } | null) => !!m && dayKey(m.fetchedAt) === day;
   const data = {
-    ...(fans ? { fans: fans.currentCount } : {}),
-    ...(likes ? { likes: likes.currentCount } : {}),
+    ...(fans && fresh(fans) ? { fans: fans.currentCount } : {}),
+    ...(likes && fresh(likes) ? { likes: likes.currentCount } : {}),
     works: agg._count._all,
     views: agg._sum.play ?? 0,
   };

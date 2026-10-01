@@ -9,7 +9,7 @@ export function MetricCards({ m }: { m: { fans: number | null; fansDelta: number
       <div className="card">
         <div className="t-label">粉丝</div>
         <Num v={n(m.fans)} />
-        {m.fansDelta ? <div className={`text-xs ${m.fansDelta > 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>{`较昨天 ${m.fansDelta > 0 ? '+' : ''}${m.fansDelta}`}</div> : null}
+        {m.fansDelta ? <div className={`text-xs ${m.fansDelta > 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>{`较上次回采 ${m.fansDelta > 0 ? '+' : ''}${m.fansDelta}`}</div> : null}
       </div>
       <div className="card">
         <div className="t-label">获赞</div>

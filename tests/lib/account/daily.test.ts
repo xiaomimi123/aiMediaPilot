@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { dayKey, loadTrend, recordDailySnapshot } from '@/lib/account/daily';
 
-function fakeDb(fans: number | null, likes: number | null) {
+function fakeDb(fans: number | null, likes: number | null, fetchedAt: Date = new Date(2026, 9, 1, 19)) {
   const rows = new Map<string, Record<string, unknown>>();
   const db = {
-    douyinMetricSummary: { findUnique: async ({ where }: { where: { metric: string } }) => (/follow/i.test(where.metric) ? (fans === null ? null : { currentCount: fans }) : likes === null ? null : { currentCount: likes }) },
+    douyinMetricSummary: { findUnique: async ({ where }: { where: { metric: string } }) => (/follow/i.test(where.metric) ? (fans === null ? null : { currentCount: fans, fetchedAt }) : likes === null ? null : { currentCount: likes, fetchedAt }) },
     publishedWork: { aggregate: async () => ({ _count: { _all: 5 }, _sum: { play: 32890 } }) },
     accountDailySnapshot: {
       findUnique: async ({ where }: { where: { day: string } }) => rows.get(where.day) ?? null,
@@ -41,5 +41,13 @@ describe('account daily snapshot', () => {
     await recordDailySnapshot(db, new Date(2026, 8, 30, 20));
     await recordDailySnapshot(db, new Date(2026, 9, 1, 20));
     expect((await loadTrend(db, 7, new Date(2026, 9, 1, 21))).map((r) => r.day)).toEqual(['2026-09-30', '2026-10-01']);
+  });
+  it('does not record yesterday\'s fans under today when today\'s profile fetch failed', async () => {
+    const { db, rows } = fakeDb(410, 2452, new Date(2026, 8, 30, 20));
+    await recordDailySnapshot(db, new Date(2026, 9, 1, 20));
+    const r = rows.get('2026-10-01')!;
+    expect(r.fans).toBeUndefined();
+    expect(r.likes).toBeUndefined();
+    expect(r.works).toBe(5);
   });
 });

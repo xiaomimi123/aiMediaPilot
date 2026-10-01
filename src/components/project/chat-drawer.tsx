@@ -16,6 +16,8 @@ export function ChatDrawer({ open, onOpenChange, unread, children }: { open: boo
       )}
       <aside
         aria-hidden={!open}
+        // 收起时整块不可聚焦(对话内容仍挂载, 不清空)
+        {...(!open ? ({ inert: '' } as object) : {})}
         className={cn(
           'fixed z-40 flex flex-col bg-[var(--bg-base)] shadow-[var(--shadow-pop)] transition-transform',
           'inset-x-0 bottom-0 h-[85dvh] rounded-t-[var(--r-xl)] md:inset-x-auto md:right-0 md:top-0 md:h-full md:w-[var(--drawer-w)] md:rounded-none',
