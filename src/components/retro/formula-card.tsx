@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 type Proposed = { version: number; reason: { label: string; direction: string; samples: number; oldError: number; newError: number } };
 
-export function FormulaCard({ onChanged }: { onChanged: () => void }) {
+export function FormulaCard({ onChanged = () => {} }: { onChanged?: () => void }) {
   const [p, setP] = useState<Proposed | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const load = useCallback(async () => {
