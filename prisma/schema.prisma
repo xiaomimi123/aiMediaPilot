@@ -412,3 +412,14 @@ model PredictionFormula {
   createdAt DateTime  @default(now())
   decidedAt DateTime?
 }
+
+/// 账号每日快照(每晚回采写一条, 同一天覆盖)
+model AccountDailySnapshot {
+  day        String   @id   // YYYY-MM-DD(本机时区)
+  fans       Int?
+  likes      Int?
+  works      Int?           // 公开作品数
+  views      Int?           // 公开作品播放合计
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}

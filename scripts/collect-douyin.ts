@@ -6,6 +6,7 @@ import { collectWorkMetrics } from '../src/lib/retro/collect-step';
 import { saveWorkMetrics } from '../src/lib/retro/metrics-store';
 import { runDueRetros } from '../src/lib/retro/generate';
 import { postLagAlerts } from '../src/lib/predict/lag';
+import { recordDailySnapshot } from '../src/lib/account/daily';
 import { importWorks, type IncomingWork } from '../src/lib/works/import';
 
 /**
@@ -220,6 +221,14 @@ async function main(): Promise<void> {
       log(`账号资料: 粉丝 ${p.followers} / 获赞 ${p.totalLikes} / 作品 ${p.awemeCount}`);
     } catch (e) {
       log(`账号资料抓取失败(不影响前面的): ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    // 账号每日快照(总览走势曲线) —— 独立失败
+    try {
+      const { day } = await recordDailySnapshot(prisma, new Date());
+      log(`账号每日快照: ${day}`);
+    } catch (e) {
+      log(`账号每日快照失败(不影响前面的): ${e instanceof Error ? e.message : String(e)}`);
     }
 
     // 每条作品的完整指标(完播/跳出/平均观看) + 30 天内每日快照 —— 独立失败
