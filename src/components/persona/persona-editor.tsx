@@ -42,7 +42,7 @@ export function PersonaEditor({ initial }: { initial: Persona }) {
       </div>
 
       <section>
-        <h3 className="mb-2 text-sm font-medium">内容支柱</h3>
+        <h3 className="mb-2 text-[15px] font-semibold">内容支柱</h3>
         <div className="space-y-2">
           {p.pillars.map((it, i) => (
             <div key={i} className="grid gap-2 sm:grid-cols-[10rem_1fr_auto]">
@@ -56,7 +56,7 @@ export function PersonaEditor({ initial }: { initial: Persona }) {
       </section>
 
       <section>
-        <h3 className="mb-2 text-sm font-medium">受众痛点</h3>
+        <h3 className="mb-2 text-[15px] font-semibold">受众痛点</h3>
         <div className="space-y-2">
           {p.painPoints.map((it, i) => (
             <div key={i} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
@@ -70,7 +70,7 @@ export function PersonaEditor({ initial }: { initial: Persona }) {
       </section>
 
       <section>
-        <h3 className="mb-2 text-sm font-medium">产品与服务</h3>
+        <h3 className="mb-2 text-[15px] font-semibold">产品与服务</h3>
         <div className="space-y-2">
           {p.offerings.map((it, i) => (
             <div key={i} className="grid gap-2 rounded-lg border border-[var(--border-subtle)] p-2 md:grid-cols-[1fr_120px]">

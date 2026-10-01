@@ -55,7 +55,7 @@ export function AssistantView() {
   return (
     <div className="flex h-full min-h-0 flex-col md:flex-row">
       <aside className="shrink-0 border-b border-[var(--border-subtle)] p-3 md:w-56 md:border-b-0 md:border-r">
-        <button className="mb-2 w-full rounded-md bg-[var(--accent)] px-3 py-1.5 text-sm text-[var(--text-on-accent)]" onClick={() => void create()}>
+        <button className="mb-2 w-full btn-primary" onClick={() => void create()}>
           新对话
         </button>
         <select className="w-full rounded-md border border-[var(--border-default)] bg-[var(--bg-inset)] px-2 py-1 text-sm md:hidden" value={current?.id ?? ''} onChange={(e) => void open(e.target.value)}>

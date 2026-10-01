@@ -16,9 +16,9 @@ export function HealthPanel() {
     void load();
   }, [load]);
   return (
-    <section className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+    <section className="card">
       <div className="mb-3 flex items-center">
-        <h3 className="text-sm font-medium">依赖体检</h3>
+        <h3 className="text-[15px] font-semibold">依赖体检</h3>
         <div className="flex-1" />
         <button className="text-xs text-[var(--accent)]" onClick={() => void load()}>重新检查</button>
       </div>

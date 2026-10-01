@@ -74,7 +74,7 @@ export function FilmPane({ projectId, materials, films, onChanged }: { projectId
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-6">
       <section>
-        <h3 className="mb-2 text-sm font-medium">素材</h3>
+        <h3 className="mb-2 text-[15px] font-semibold">素材</h3>
         <div
           className={cn(
             'mb-3 flex cursor-pointer items-center justify-center rounded-lg border border-dashed p-5 text-sm',
@@ -127,7 +127,7 @@ export function FilmPane({ projectId, materials, films, onChanged }: { projectId
       </section>
 
       <section>
-        <h3 className="mb-2 text-sm font-medium">成片</h3>
+        <h3 className="mb-2 text-[15px] font-semibold">成片</h3>
         {films.length === 0 ? (
           <p className="text-sm text-[var(--text-secondary)]">还没有成片。在 Claude Code 里说「给这个项目出片」，出好的成片会出现在这里。</p>
         ) : (
@@ -135,7 +135,7 @@ export function FilmPane({ projectId, materials, films, onChanged }: { projectId
             <p className="mb-3 text-xs text-[var(--text-tertiary)]">修改成片：在 Claude Code 里说「改这个项目的成片：……」</p>
             <ul className="space-y-4">
               {films.map((f) => (
-                <li key={f.id} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3">
+                <li key={f.id} className="card">
                   <div className="mb-2 flex items-center gap-3 text-sm">
                     <b>{`成片 v${f.version}`}</b>
                     <span className="text-xs text-[var(--text-tertiary)]">{new Date(f.createdAt).toLocaleString('zh-CN')}</span>

@@ -19,7 +19,7 @@ export function LessonCard({ lesson: l, onChanged }: { lesson: LessonView; onCha
     onChanged();
   };
   return (
-    <div className="rounded-md border border-[var(--border-subtle)] p-3 text-sm">
+    <div className="rounded-[var(--r-md)] bg-[var(--bg-inset)] p-3 text-sm">
       <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-tertiary)]">
         <span>{l.stageLabel}</span>
         <span>{l.evidenceCount <= 1 ? `证据少：${l.evidenceCount} 条作品` : `${l.evidenceCount} 条作品`}</span>

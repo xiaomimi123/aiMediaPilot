@@ -52,13 +52,13 @@ export function ScriptPane({
         <div className="flex-1" />
         {project.stage === 'draft' ? (
           <button
-            className="rounded-md bg-[var(--accent)] px-3 py-1.5 text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)]"
+            className="btn-primary"
             onClick={() => void onFinalize()}
           >
             {report.ok ? '定稿' : '时长还超，仍然定稿'}
           </button>
         ) : (
-          <span className="text-[var(--text-secondary)]">已定稿 · 去「② 口播」录制</span>
+          <span className="text-[var(--text-secondary)]">已定稿 · 去「口播」录制</span>
         )}
       </div>
 
@@ -99,7 +99,7 @@ export function ScriptPane({
                   />
                   <div className="flex gap-2 text-sm">
                     <button
-                      className="rounded-md bg-[var(--accent)] px-3 py-1 text-[var(--text-on-accent)]"
+                      className="btn-primary"
                       onClick={async () => {
                         await onEdit(s.id, draft);
                         setEditing(null);

@@ -106,7 +106,7 @@ export function PublishPane({ projectId, onChanged, section }: { projectId: stri
           ) : (
             <>
               {s.candidate && (
-                <div className="mb-3 rounded-md border border-[var(--border-subtle)] p-3">
+                <div className="mb-3 rounded-[var(--r-md)] bg-[var(--bg-inset)] p-3">
                   <p>这条是你发的吗？</p>
                   <p className="mt-1 text-xs text-[var(--text-secondary)]">{`${s.candidate.text.slice(0, 60)} · ${new Date(s.candidate.publishedAt).toLocaleString('zh-CN')}`}</p>
                   <div className="mt-2 flex gap-3 text-xs">

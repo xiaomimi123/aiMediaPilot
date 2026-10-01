@@ -53,9 +53,9 @@ export function ModelsCard() {
   };
 
   return (
-    <section className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+    <section className="card">
       <div className="mb-1 flex items-center">
-        <h3 className="text-sm font-medium">模型</h3>
+        <h3 className="text-[15px] font-semibold">模型</h3>
         <div className="flex-1" />
         {!form && (
           <select className="rounded-md border border-[var(--border-default)] bg-[var(--bg-inset)] px-2 py-1 text-xs" value="" onChange={(e) => {
@@ -72,7 +72,7 @@ export function ModelsCard() {
       <p className="mb-3 text-xs text-[var(--text-secondary)]">编导、写稿、拆解、复盘、找选题、发布文案都用"当前使用"的模型。key 只存在本机数据库里。</p>
 
       {form && (
-        <div className="mb-4 space-y-2 rounded-md border border-[var(--border-subtle)] p-3">
+        <div className="mb-4 space-y-2 rounded-[var(--r-md)] bg-[var(--bg-inset)] p-3">
           <div className="grid gap-2 md:grid-cols-2">
             <input className={input} placeholder="显示名" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <select className={input} value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as Form['kind'] })}>
@@ -86,7 +86,7 @@ export function ModelsCard() {
           {form.note && <p className="text-xs text-[var(--text-tertiary)]">{form.note}</p>}
           <p className="text-xs text-[var(--text-tertiary)]">接口地址是预填的，以厂商文档为准。</p>
           <div className="flex gap-2 text-sm">
-            <button className="rounded-md bg-[var(--accent)] px-3 py-1 text-[var(--text-on-accent)]" disabled={busy !== null} onClick={() => {
+            <button className="btn-primary" disabled={busy !== null} onClick={() => {
               const body = { name: form.name, kind: form.kind, baseUrl: form.baseUrl, model: form.model, apiKey: form.apiKey };
               void act('save', form.id ? `/api/settings/models/${form.id}` : '/api/settings/models', form.id ? 'PATCH' : 'POST', body, '已保存，点「测试」看看能不能用。');
             }}>保存</button>
@@ -102,7 +102,7 @@ export function ModelsCard() {
       ) : (
         <ul className="space-y-2">
           {models.map((m) => (
-            <li key={m.id} className="rounded-md border border-[var(--border-subtle)] p-3 text-sm">
+            <li key={m.id} className="rounded-[var(--r-md)] bg-[var(--bg-inset)] p-3 text-sm">
               <div className="flex flex-wrap items-center gap-2">
                 <b>{m.name}</b>
                 {m.isActive && <span className="rounded bg-[var(--accent-subtle)] px-1.5 text-xs text-[var(--accent)]">当前使用</span>}

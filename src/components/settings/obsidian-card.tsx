@@ -39,8 +39,8 @@ export function ObsidianCard() {
   };
 
   return (
-    <section className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
-      <h3 className="mb-1 text-sm font-medium">Obsidian</h3>
+    <section className="card">
+      <h3 className="mb-1 text-[15px] font-semibold">Obsidian</h3>
       <p className="mb-3 text-xs text-[var(--text-secondary)]">编导和助手只读勾选的文件夹；存进 Obsidian 只写 MediaPilot/，每次都要你在对话里确认。</p>
       {!v ? (
         <p className="text-sm text-[var(--text-secondary)]">读取中…</p>
@@ -49,7 +49,7 @@ export function ObsidianCard() {
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-[var(--text-tertiary)]">库路径{v.detected ? '（自动识别）' : ''}</span>
             <input className="min-w-0 flex-1 rounded-md border border-[var(--border-default)] bg-[var(--bg-inset)] px-2 py-1" value={vault} onChange={(e) => setVault(e.target.value)} />
-            <button className="rounded-md border border-[var(--border-strong)] px-3 py-1" onClick={async () => apply(await call('PUT', { vault }), '已保存库路径。')}>
+            <button className="btn-secondary" onClick={async () => apply(await call('PUT', { vault }), '已保存库路径。')}>
               保存
             </button>
           </div>

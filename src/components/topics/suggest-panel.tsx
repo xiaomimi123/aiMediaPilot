@@ -26,9 +26,9 @@ export function SuggestPanel() {
   };
 
   return (
-    <section className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+    <section className="card">
       <div className="flex items-center gap-3">
-        <button className="shrink-0 whitespace-nowrap rounded-md bg-[var(--accent)] px-3 py-1.5 text-sm text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)]" disabled={busy} onClick={() => void run()}>
+        <button className="shrink-0 whitespace-nowrap btn-primary" disabled={busy} onClick={() => void run()}>
           {busy ? '编导在挑…' : '让编导挑 3 个'}
         </button>
         <span className="text-xs text-[var(--text-tertiary)]">从近 14 天的对标爆款里，按你的定位挑</span>

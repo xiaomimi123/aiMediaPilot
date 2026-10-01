@@ -100,7 +100,7 @@ export function skeletonShots(lines: FilmBundle['transcript'], durationSec: numb
 
 export async function scaffoldFilm(bundle: FilmBundle, version: number, root = filmsRoot()): Promise<string> {
   if (!bundle.video) throw new Error('这个项目还没有口播视频');
-  if (!(await exists(bundle.video.path))) throw new Error(`口播原片文件不在了：${bundle.video.path}（先在「② 口播」重新上传）`);
+  if (!(await exists(bundle.video.path))) throw new Error(`口播原片文件不在了：${bundle.video.path}（先在「口播」一步重新上传）`);
   const dir = path.join(root, `${bundle.project.id}-v${version}`);
   if (await exists(dir)) throw new Error(`片子目录已存在：${dir}`);
   // 先建在临时目录, 全部成功后再改名; 中途失败不留半截目录(否则下次 film new 会跳过这个版本号)

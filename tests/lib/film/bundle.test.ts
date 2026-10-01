@@ -33,6 +33,6 @@ describe('buildFilmBundle', () => {
   });
   it('refuses when the recording has not been transcribed', async () => {
     const { db } = await setup({ withTranscript: false });
-    await expect(buildFilmBundle(db, 'p1', probe)).rejects.toThrow('这个项目还没有转写好的口播，先在「② 口播」上传并等转写完成。');
+    await expect(buildFilmBundle(db, 'p1', probe)).rejects.toThrow('这个项目还没有转写好的口播，先在「口播」一步上传并等转写完成。');
   });
 });

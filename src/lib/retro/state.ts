@@ -7,7 +7,7 @@ import { findCandidate } from './match';
 import { generatePublishKit, PublishKitSchema, type PublishKit } from './publish-kit';
 import { toLessonView } from './view';
 
-/** 项目的发布与复盘状态(网页 ④ 标签与 mp retro show 共用); 项目不存在返回 null */
+/** 项目的发布与复盘状态(网页「发布 / 复盘」两步与 mp retro show 共用); 项目不存在返回 null */
 export async function loadPublishState(db: PrismaClient, projectId: string) {
   const p = await db.project.findUnique({ where: { id: projectId }, include: { retro: true } });
   if (!p) return null;

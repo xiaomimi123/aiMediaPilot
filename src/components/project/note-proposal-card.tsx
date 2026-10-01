@@ -46,7 +46,7 @@ export function NoteProposalCard({ proposalId }: { proposalId: string }) {
 
   if (!p) return <div className="text-xs text-[var(--text-tertiary)]">{err ?? '读取提议…'}</div>;
   return (
-    <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-xs">
+    <div className="card text-xs">
       <div className="font-medium">要把这个项目存进 Obsidian 吗？</div>
       <div className="mt-1 text-[var(--text-tertiary)]">{p.path}</div>
       <button type="button" className="mt-1 underline" onClick={() => setOpen((o) => !o)}>
@@ -56,10 +56,10 @@ export function NoteProposalCard({ proposalId }: { proposalId: string }) {
       {(p.error || err) && <p className="mt-2 text-[var(--danger)]">{p.error ?? err}</p>}
       {p.status === 'pending' ? (
         <div className="mt-2 flex gap-2">
-          <button type="button" disabled={busy} className="rounded-md bg-[var(--accent)] px-3 py-1 text-[var(--text-on-accent)] disabled:opacity-50" onClick={() => void decide('accept')}>
+          <button type="button" disabled={busy} className="btn-primary disabled:opacity-50" onClick={() => void decide('accept')}>
             存进 Obsidian
           </button>
-          <button type="button" disabled={busy} className="rounded-md border border-[var(--border-strong)] px-3 py-1" onClick={() => void decide('reject')}>
+          <button type="button" disabled={busy} className="btn-secondary" onClick={() => void decide('reject')}>
             不要
           </button>
         </div>

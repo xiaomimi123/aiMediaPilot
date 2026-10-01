@@ -35,7 +35,7 @@ export function VideoCard({ video: v, onChanged }: { video: VideoView; onChanged
   };
 
   return (
-    <article className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+    <article className="card">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-[var(--text-secondary)]">
         <span className="font-medium text-[var(--text-primary)]">{v.author}</span>
         <span>{new Date(v.publishedAt).toLocaleDateString('zh-CN')}</span>

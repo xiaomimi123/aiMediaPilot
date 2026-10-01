@@ -58,13 +58,13 @@ export function PredictionPanel({
   const r = p?.result;
   const top = r?.buckets.length ? r.buckets.reduce((a, b) => (b.prob > a.prob ? b : a)) : null;
   return (
-    <section className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 text-sm">
+    <section className="card text-sm">
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <h3 className="font-medium">流量预测</h3>
         {p && <span className="text-xs text-[var(--text-tertiary)]">{`${KIND_LABEL[p.kind]}${p.kind === 'draft' ? '' : ' · 已锁定'} · ${new Date(p.createdAt).toLocaleString('zh-CN')}`}</span>}
         <div className="flex-1" />
         {d.published ? (
-          <span className="text-xs text-[var(--text-tertiary)]">已发布，不再预测（看「④ 发布与复盘」里的对账）</span>
+          <span className="text-xs text-[var(--text-tertiary)]">已发布，不再预测（看「复盘」里的对账）</span>
         ) : (
           <>
             {d.canLockFinal && (
@@ -73,7 +73,7 @@ export function PredictionPanel({
             {d.canLockRecorded && (
               <button className="text-xs text-[var(--accent)]" disabled={d.running} onClick={() => void start('recorded')}>补做录制后预测</button>
             )}
-            <button className="rounded-md border border-[var(--border-strong)] px-3 py-1 text-xs disabled:opacity-50" disabled={d.running} onClick={() => void start('draft')}>
+            <button className="btn-secondary text-xs disabled:opacity-50" disabled={d.running} onClick={() => void start('draft')}>
               {d.running ? '预测中…' : '预测'}
             </button>
           </>
