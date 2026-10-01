@@ -43,7 +43,7 @@ function TaskCard({ t, onChanged }: { t: TaskView; onChanged: (justStarted?: boo
       : t.hint;
 
   return (
-    <div className="rounded-md border border-[var(--border-subtle)] p-3">
+    <div className="rounded-[var(--r-md)] bg-[var(--bg-inset)] p-3">
       <div className="flex flex-wrap items-center gap-2">
         <b className="text-sm">{t.label}</b>
         <span className={`text-xs ${t.schedule.enabled ? 'text-[var(--success)]' : 'text-[var(--text-tertiary)]'}`}>
@@ -52,7 +52,7 @@ function TaskCard({ t, onChanged }: { t: TaskView; onChanged: (justStarted?: boo
       </div>
       <p className={`mt-1 text-xs ${running || t.state === 'ok' ? 'text-[var(--text-secondary)]' : 'text-[var(--warning)]'}`}>{status}</p>
       <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-        <button className="rounded-md bg-[var(--accent)] px-3 py-1 text-[var(--text-on-accent)] disabled:opacity-50" disabled={busy || running || t.manualLeft === 0} onClick={() => void runNow()}>
+        <button className="btn-primary disabled:opacity-50" disabled={busy || running || t.manualLeft === 0} onClick={() => void runNow()}>
           {running ? '正在跑…' : '立即运行'}
         </button>
         <span className="text-xs text-[var(--text-tertiary)]">今天还能手动 {t.manualLeft} 次</span>
@@ -60,11 +60,11 @@ function TaskCard({ t, onChanged }: { t: TaskView; onChanged: (justStarted?: boo
         <input type="time" className="rounded-md border border-[var(--border-default)] bg-[var(--bg-inset)] px-2 py-0.5 text-sm" value={time} onChange={(e) => setTime(e.target.value)} />
         {t.schedule.enabled ? (
           <>
-            <button className="rounded-md border border-[var(--border-strong)] px-3 py-1" disabled={busy} onClick={() => void setSchedule(true)}>改时间</button>
+            <button className="btn-secondary" disabled={busy} onClick={() => void setSchedule(true)}>改时间</button>
             <button className="text-xs text-[var(--text-tertiary)]" disabled={busy} onClick={() => void setSchedule(false)}>关闭定时</button>
           </>
         ) : (
-          <button className="rounded-md border border-[var(--border-strong)] px-3 py-1" disabled={busy} onClick={() => void setSchedule(true)}>开启每晚定时</button>
+          <button className="btn-secondary" disabled={busy} onClick={() => void setSchedule(true)}>开启每晚定时</button>
         )}
       </div>
       {msg && <p className={`mt-2 text-xs ${msg.ok ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>{msg.text}</p>}
@@ -90,8 +90,8 @@ export function NightlyTasks() {
   }, [tasks, load, pollUntil]);
 
   return (
-    <section className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
-      <h3 className="mb-1 text-sm font-medium">每晚任务</h3>
+    <section className="card">
+      <h3 className="mb-1 text-[15px] font-semibold">每晚任务</h3>
       <p className="mb-3 text-xs text-[var(--text-secondary)]">都用 ego lite 里登录的抖音账号只读访问。定时靠 Mac 的系统定时任务，电脑需开着且 ego lite 在运行。手动每天最多 3 次，保护账号。</p>
       {tasks === null ? (
         <p className="text-sm text-[var(--text-secondary)]">读取中…</p>

@@ -37,7 +37,9 @@ function Copy({ text }: { text: string }) {
   );
 }
 
-export function PublishPane({ projectId, onChanged }: { projectId: string; onChanged?: () => void }) {
+export function PublishPane({ projectId, onChanged, section }: { projectId: string; onChanged?: () => void; section?: 'publish' | 'retro' }) {
+  const showPublish = section !== 'retro';
+  const showRetro = section !== 'publish';
   const [s, setS] = useState<State | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -66,63 +68,68 @@ export function PublishPane({ projectId, onChanged }: { projectId: string; onCha
   if (!s) return <div className="p-6 text-sm text-[var(--text-secondary)]">{msg ?? '读取中…'}</div>;
   return (
     <div className="h-full space-y-6 overflow-y-auto p-6 text-sm">
-      <section>
-        <div className="mb-2 flex items-center gap-3">
-          <h3 className="font-medium">发布文案</h3>
-          <button className="text-xs text-[var(--accent)]" disabled={busy !== null} onClick={() => void run('kit', `${base}/kit`)}>
-            {busy === 'kit' ? '生成中…' : s.kit ? '重新生成' : '生成发布文案'}
-          </button>
-        </div>
-        {s.kit ? (
-          <div className="space-y-2">
-            {s.kit.titles.map((t) => (
-              <div key={t} className="flex gap-2 rounded-md bg-[var(--bg-inset)] px-3 py-2">
-                <span className="min-w-0 flex-1">{t}</span>
-                <Copy text={t} />
-              </div>
-            ))}
-            <div className="flex gap-2 rounded-md bg-[var(--bg-inset)] px-3 py-2">
-              <span className="min-w-0 flex-1">{s.kit.hashtags.join(' ')}</span>
-              <Copy text={s.kit.hashtags.join(' ')} />
-            </div>
-            <div className="flex gap-2 rounded-md bg-[var(--bg-inset)] px-3 py-2">
-              <span className="min-w-0 flex-1">封面字：{s.kit.coverText.join(' / ')}</span>
-              <Copy text={s.kit.coverText.join('\n')} />
-            </div>
+      {showPublish && (
+        <>
+        <section>
+          <div className="mb-2 flex items-center gap-3">
+            <h3 className="font-medium">发布文案</h3>
+            <button className="text-xs text-[var(--accent)]" disabled={busy !== null} onClick={() => void run('kit', `${base}/kit`)}>
+              {busy === 'kit' ? '生成中…' : s.kit ? '重新生成' : '生成发布文案'}
+            </button>
           </div>
-        ) : (
-          <p className="text-xs text-[var(--text-tertiary)]">生成 3 个候选标题、话题标签和封面字，你挑一个在抖音里手动发。</p>
-        )}
-      </section>
-
-      <section>
-        <h3 className="mb-2 font-medium">发布的作品</h3>
-        {s.work ? (
-          <p className="text-[var(--text-secondary)]">{`${s.work.text} · ${new Date(s.work.publishedAt).toLocaleDateString('zh-CN')} · 播放 ${s.work.viewCount} · 点赞 ${s.work.likeCount}`}</p>
-        ) : (
-          <>
-            {s.candidate && (
-              <div className="mb-3 rounded-md border border-[var(--border-subtle)] p-3">
-                <p>这条是你发的吗？</p>
-                <p className="mt-1 text-xs text-[var(--text-secondary)]">{`${s.candidate.text.slice(0, 60)} · ${new Date(s.candidate.publishedAt).toLocaleString('zh-CN')}`}</p>
-                <div className="mt-2 flex gap-3 text-xs">
-                  <button className="text-[var(--accent)]" disabled={busy !== null} onClick={() => void run('link', `${base}/link`, { workId: s.candidate!.workId })}>确认</button>
-                  <button className="text-[var(--text-tertiary)]" disabled={busy !== null} onClick={() => void run('dismiss', `${base}/dismiss`, { workId: s.candidate!.workId })}>不是</button>
+          {s.kit ? (
+            <div className="space-y-2">
+              {s.kit.titles.map((t) => (
+                <div key={t} className="flex gap-2 rounded-md bg-[var(--bg-inset)] px-3 py-2">
+                  <span className="min-w-0 flex-1">{t}</span>
+                  <Copy text={t} />
                 </div>
+              ))}
+              <div className="flex gap-2 rounded-md bg-[var(--bg-inset)] px-3 py-2">
+                <span className="min-w-0 flex-1">{s.kit.hashtags.join(' ')}</span>
+                <Copy text={s.kit.hashtags.join(' ')} />
               </div>
-            )}
-            <div className="flex gap-2">
-              <input className="min-w-0 flex-1 rounded-md border border-[var(--border-default)] bg-[var(--bg-inset)] px-2 py-1.5" placeholder="发完后粘贴作品分享链接关联" value={link} onChange={(e) => setLink(e.target.value)} />
-              <button className="shrink-0 rounded-md border border-[var(--border-strong)] px-3" disabled={!link.trim() || busy !== null} onClick={() => void run('link', `${base}/link`, { text: link })}>关联</button>
+              <div className="flex gap-2 rounded-md bg-[var(--bg-inset)] px-3 py-2">
+                <span className="min-w-0 flex-1">封面字：{s.kit.coverText.join(' / ')}</span>
+                <Copy text={s.kit.coverText.join('\n')} />
+              </div>
             </div>
-            <p className="mt-1 text-xs text-[var(--text-tertiary)]">发布后第二天回采时，会自动在这里提示候选作品。</p>
-          </>
-        )}
-      </section>
+          ) : (
+            <p className="text-xs text-[var(--text-tertiary)]">生成 3 个候选标题、话题标签和封面字，你挑一个在抖音里手动发。</p>
+          )}
+        </section>
+  
+        <section>
+          <h3 className="mb-2 font-medium">发布的作品</h3>
+          {s.work ? (
+            <p className="text-[var(--text-secondary)]">{`${s.work.text} · ${new Date(s.work.publishedAt).toLocaleDateString('zh-CN')} · 播放 ${s.work.viewCount} · 点赞 ${s.work.likeCount}`}</p>
+          ) : (
+            <>
+              {s.candidate && (
+                <div className="mb-3 rounded-[var(--r-md)] bg-[var(--bg-inset)] p-3">
+                  <p>这条是你发的吗？</p>
+                  <p className="mt-1 text-xs text-[var(--text-secondary)]">{`${s.candidate.text.slice(0, 60)} · ${new Date(s.candidate.publishedAt).toLocaleString('zh-CN')}`}</p>
+                  <div className="mt-2 flex gap-3 text-xs">
+                    <button className="text-[var(--accent)]" disabled={busy !== null} onClick={() => void run('link', `${base}/link`, { workId: s.candidate!.workId })}>确认</button>
+                    <button className="text-[var(--text-tertiary)]" disabled={busy !== null} onClick={() => void run('dismiss', `${base}/dismiss`, { workId: s.candidate!.workId })}>不是</button>
+                  </div>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <input className="min-w-0 flex-1 rounded-md border border-[var(--border-default)] bg-[var(--bg-inset)] px-2 py-1.5" placeholder="发完后粘贴作品分享链接关联" value={link} onChange={(e) => setLink(e.target.value)} />
+                <button className="shrink-0 rounded-md border border-[var(--border-strong)] px-3" disabled={!link.trim() || busy !== null} onClick={() => void run('link', `${base}/link`, { text: link })}>关联</button>
+              </div>
+              <p className="mt-1 text-xs text-[var(--text-tertiary)]">发布后第二天回采时，会自动在这里提示候选作品。</p>
+            </>
+          )}
+        </section>
+        </>
+      )}
 
-      <PredictionSummary projectId={projectId} views={s.work?.viewCount ?? null} />
+      {showRetro && <PredictionSummary projectId={projectId} views={s.work?.viewCount ?? null} />}
 
-      {s.work && (
+      {showRetro && !s.work && section === 'retro' && <p className="text-sm text-[var(--text-secondary)]">发布并关联作品后，第 3 天自动复盘。</p>}
+      {showRetro && s.work && (
         <section>
           <div className="mb-2 flex flex-wrap items-center gap-3">
             <h3 className="font-medium">复盘</h3>

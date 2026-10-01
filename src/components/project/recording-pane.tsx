@@ -29,7 +29,7 @@ export function RecordingPane({
   const input = useRef<HTMLInputElement>(null);
 
   if (!project.script) {
-    return <div className="flex h-full items-center justify-center p-8 text-sm text-[var(--text-secondary)]">先在「① 脚本」里把稿子写出来，再来录。</div>;
+    return <div className="flex h-full items-center justify-center p-8 text-sm text-[var(--text-secondary)]">先在「脚本」里把稿子写出来，再来录。</div>;
   }
   const running = job && (job.status === 'running' || job.status === 'queued');
   const failed = job && (job.status === 'failed' || job.status === 'interrupted');
@@ -54,7 +54,7 @@ export function RecordingPane({
       {prompter && <Teleprompter script={project.script} onClose={() => setPrompter(false)} />}
 
       <div className="mb-4 flex items-center gap-3">
-        <button className="rounded-md bg-[var(--accent)] px-3 py-1.5 text-sm text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)]" onClick={() => setPrompter(true)}>
+        <button className="btn-primary" onClick={() => setPrompter(true)}>
           打开提词器
         </button>
         <span className="text-xs text-[var(--text-tertiary)]">照着稿子录，录完把视频拖进来</span>
@@ -97,7 +97,7 @@ export function RecordingPane({
             <p className="flex-1 text-[var(--danger)]">{job.userMessage}</p>
             <button
               disabled={retrying}
-              className="rounded-md border border-[var(--border-strong)] px-3 py-1 text-[var(--text-primary)] disabled:opacity-50"
+              className="btn-secondary text-[var(--text-primary)] disabled:opacity-50"
               onClick={async () => {
                 // 请求返回前禁用, 防止双击启动两次转写
                 if (retrying) return;

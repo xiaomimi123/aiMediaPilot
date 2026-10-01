@@ -16,6 +16,9 @@ export default async function ProjectPage({ params }: { params: { id: string } }
       initialJobs={bundle.jobs}
       initialMaterials={bundle.materials}
       initialFilms={bundle.films}
+      initialReference={bundle.reference}
+      initialPublished={bundle.published}
+      initialHasRetro={bundle.hasRetro}
     />
   );
 }

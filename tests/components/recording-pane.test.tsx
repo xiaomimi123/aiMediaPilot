@@ -13,7 +13,7 @@ const noop = { onUploaded: vi.fn(), onRetry: vi.fn(async () => {}) };
 describe('RecordingPane', () => {
   it('asks for a script first when there is none', () => {
     render(<RecordingPane project={{ ...project, script: null, report: null }} recording={null} job={null} {...noop} />);
-    expect(screen.getByText('先在「① 脚本」里把稿子写出来，再来录。')).toBeTruthy();
+    expect(screen.getByText('先在「脚本」里把稿子写出来，再来录。')).toBeTruthy();
   });
 
   it('offers the teleprompter and the upload area before anything is uploaded', () => {

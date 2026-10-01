@@ -59,7 +59,7 @@ export function AccountPanel({ onChanged }: { onChanged: () => void }) {
   };
 
   return (
-    <section className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+    <section className="card">
       <h2 className="mb-2 text-sm font-medium">对标账号（关注中 {data?.following.length ?? 0} 个，每晚 20:30 巡检）</h2>
       <ul className="divide-y divide-[var(--border-subtle)]">
         {data?.following.map((a) => (

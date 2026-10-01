@@ -23,7 +23,7 @@ export async function buildFilmBundle(
   const p = await db.project.findUnique({ where: { id: projectId } });
   if (!p) throw new Error(`没有编号为 ${projectId} 的项目`);
   const t = await loadCurrentTranscript(db, projectId);
-  if (!t) throw new Error('这个项目还没有转写好的口播，先在「② 口播」上传并等转写完成。');
+  if (!t) throw new Error('这个项目还没有转写好的口播，先在「口播」一步上传并等转写完成。');
   const video = await db.projectFile.findFirst({ where: { projectId, kind: 'raw_video' }, orderBy: { version: 'desc' } });
   const materials = await db.projectFile.findMany({ where: { projectId, kind: 'material' }, orderBy: { createdAt: 'asc' } });
   const parsed = ScriptSchema.safeParse(p.script);
