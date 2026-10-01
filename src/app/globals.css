@@ -4,70 +4,41 @@
 @tailwind utilities;
 
 /*
- * 视觉语言: Linear 风高密度深色(三十四期 UI 重做, 设计交付见
- * docs/superpowers/specs/2026-09-08-ui-dark-handoff/)。
- *
- * 令牌真源是 tokens.css(与 Figma 变量集合一一对应)。这里做两件事:
- * ① 把令牌**桥接**到 shadcn 语义变量(--background/--card/--border 那套 HSL 三元组)
- *    —— 47 个既有组件全走这套变量, 桥一次, 全体换肤, 不逐个重写组件;
- * ② 承接旧纸感里仍然成立的原则: 红色只表示"这里有问题"(--danger 语义固定),
- *    数字一律等宽对齐。
- *
- * 为什么桥接层是 HSL 三元组而不是直接引用 tokens.css 的 hex:
- * 既有组件大量使用透明度修饰(bg-secondary/70、border-foreground/10),
- * Tailwind 的 /alpha 只对 `hsl(var(--x))` 形式生效 —— hex var 会让这些修饰
- * 静默失效(不报错, 只是渲染成不透明), 排查起来极费劲。
- * 数值是从 tokens.css 的 hex 换算来的, 改令牌时两处要一起改(tokens.css 是真源)。
+ * 视觉语言：暖白卡片（2026-10 改版，spec 2026-10-01-ui-warm-redesign）。
+ * 令牌真源是 tokens.css；这里把令牌桥接到 shadcn 语义变量（HSL 三元组，供 Tailwind 的 /alpha 修饰），
+ * 改令牌时两处一起改。红色只表示"这里有问题"，数字一律等宽对齐。
  */
 
 @layer base {
   :root {
-    /* --bg-canvas #08090A */
-    --background: 210 11% 4%;
-    /* --text-primary #F2F3F5 */
-    --foreground: 220 12% 95%;
-    /* --bg-surface #16171A */
-    --card: 225 8% 9%;
-    --card-foreground: 220 12% 95%;
-    /* 主操作 = 靛蓝 --accent #5E6AD2。README 明确: accent 只用于主操作与"当前位置" */
-    --primary: 234 56% 60%;
+    --background: 37 31% 95%;        /* --bg-canvas #F6F3EE */
+    --foreground: 26 9% 15%;         /* --text-primary #2B2724 */
+    --card: 40 100% 99%;             /* --bg-surface #FFFDF9 */
+    --card-foreground: 26 9% 15%;
+    --primary: 26 79% 38%;           /* --accent #AD5614 */
     --primary-foreground: 0 0% 100%;
-    /* 次级按钮底 --bg-elevated #1E1F24 */
-    --secondary: 230 9% 13%;
-    --secondary-foreground: 220 12% 95%;
-    /* --bg-surface-hover #1C1D21; muted 文字 = --text-secondary #9195A0 */
-    --muted: 228 8% 12%;
-    --muted-foreground: 224 7% 60%;
-    /* shadcn 的 "accent"(hover/选中底)与 tokens.css 的 --accent(靛蓝 hex)撞名 ——
-       同名变量后加载的赢, 曾把 var(--accent) 覆盖成裸 HSL 三元组, 让所有
-       bg-brand(靛蓝方块)静默消失。桥接层让名: 用 --ui-hover, tokens 保住 --accent。 */
-    --ui-hover: 228 8% 12%;
-    --ui-hover-foreground: 220 12% 95%;
-    /* --danger #E5484D。语义固定: 断链/失败/0 分, 不当装饰用 */
-    --destructive: 358 75% 59%;
+    --secondary: 36 41% 93%;         /* --bg-elevated #F4EEE5 */
+    --secondary-foreground: 26 9% 15%;
+    --muted: 34 50% 95%;             /* --bg-surface-hover #F8F2EA */
+    --muted-foreground: 30 10% 40%;  /* --text-secondary #6F655B */
+    --ui-hover: 34 50% 95%;
+    --ui-hover-foreground: 26 9% 15%;
+    --destructive: 0 61% 48%;        /* --danger #C53030 */
     --destructive-foreground: 0 0% 100%;
-    /* --border-subtle #1F2024; input 用 --border-default #292A2F */
-    --border: 228 7% 13%;
-    --input: 230 7% 17%;
-    --ring: 235 64% 66%;
-    /* 与 tokens 的圆角阶对齐: lg=8 md=6 sm=4 */
-    --radius: 8px;
-
-    /* 状态色(hex 真源在 tokens.css, 这里是 HSL 桥接, 供 /alpha 修饰用) */
-    --status-success: 152 49% 48%;
-    --status-warning: 34 87% 59%;
-    --status-danger: 358 75% 59%;
-    --status-info: 209 97% 65%;
-    --status-soft: 255 92% 76%;
+    --border: 37 30% 89%;            /* --border-subtle #ECE6DC */
+    --input: 35 27% 84%;             /* --border-default #E2D9CC */
+    --ring: 26 79% 38%;
+    --radius: 10px;
+    --status-success: 143 48% 32%;
+    --status-warning: 25 91% 34%;
+    --status-danger: 0 61% 48%;
+    --status-info: 211 58% 40%;
+    --status-soft: 264 29% 51%;
   }
 
-  /*
-   * 显示比例: root 15px。设计稿正文 13px/20px —— 15px root 下 text-sm 恰为
-   * 13.1px、text-xs 为 11.25px(= 设计稿 Caption 11px), 整套 rem 间距同步收紧,
-   * 得到 Linear 式的高密度。沿用旧版的手法: 抬/压 root 做等比缩放, 不逐个改字号。
-   */
+  /* 正文 14、根 16：暖白版放松密度 */
   html {
-    font-size: 15px;
+    font-size: 16px;
   }
 
   * {
@@ -77,8 +48,8 @@
   body {
     @apply bg-background text-foreground;
     font-family: var(--font);
-    font-size: 13px;
-    line-height: 20px;
+    font-size: 14px;
+    line-height: 22px;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -104,7 +75,7 @@
   ::-webkit-scrollbar-track { background: transparent; }
 
   :focus-visible {
-    outline: 2px solid var(--accent-hover);
+    outline: 2px solid var(--accent);
     outline-offset: 2px;
     border-radius: 4px;
   }
@@ -120,7 +91,7 @@
    * (状态徽章与分组标签在 14 个页面里到处都是, 每处写一串 utility 会漂移)。
    */
   .t-label {
-    font-size: 11px;
+    font-size: 12px;
     line-height: 16px;
     font-weight: 500;
     letter-spacing: 0.4px;
@@ -137,4 +108,38 @@
     line-height: 16px;
     white-space: nowrap;
   }
+
+  .card {
+    background: var(--bg-surface);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-card);
+    padding: 16px;
+  }
+  @media (max-width: 767px) {
+    .card { padding: 12px; }
+  }
+  .card-hero {
+    background: var(--accent-subtle);
+    border-radius: var(--r-xl);
+    padding: 16px;
+  }
+  .btn-primary {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 36px; padding: 0 14px; border-radius: var(--r-md);
+    background: var(--accent); color: var(--text-on-accent); font-weight: 600;
+  }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-primary:disabled { opacity: 0.5; }
+  .btn-secondary {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 36px; padding: 0 14px; border-radius: var(--r-md);
+    background: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--border-strong);
+  }
+  .btn-secondary:hover { background: var(--bg-surface-hover); }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 10px; border-radius: var(--r-full); font-size: 12px; line-height: 18px;
+    background: var(--bg-elevated); color: var(--text-secondary);
+  }
+  .font-display { font-family: var(--font-display); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 }
