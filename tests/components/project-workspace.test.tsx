@@ -83,6 +83,36 @@ describe('ProjectWorkspace', () => {
     await vi.advanceTimersByTimeAsync(2100);
     vi.useRealTimers();
     await waitFor(() => expect(screen.getByText('转写完成：6 句')).toBeTruthy());
-    await waitFor(() => expect(screen.getByRole('tab', { name: '② 口播' }).getAttribute('aria-selected')).toBe('true'));
+    await waitFor(() => expect(screen.getByRole('tab', { name: '口播' }).getAttribute('aria-selected')).toBe('true'));
+  });
+  it('shows six steps and starts on the current one', () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    vi.stubGlobal('fetch', vi.fn(async () => ({ json: async () => ({ success: false }) })));
+    render(<ProjectWorkspace initialProject={toProjectView({ ...base, title: 't', stage: 'scripted' })} initialMessages={[]} />);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent?.replace(/^✓\s*/, ''))).toEqual(['选题', '脚本', '口播', '成片', '发布', '复盘']);
+    expect(screen.getByRole('tab', { name: '口播' }).getAttribute('aria-selected')).toBe('true');
+  });
+  it('opens the drawer once per new notice', async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const card = { id: 'mNote', role: 'system', content: '要把这个项目存进 Obsidian 吗？', toolName: 'note:proposal', ok: true, proposalId: 'np1' };
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: { method?: string }) => ({
+      json: async () => ({
+        success: true,
+        data: url.startsWith('/api/notes/proposals/')
+          ? { id: 'np1', projectId: 'p1', trigger: 'finalize', path: 'MediaPilot/项目/t.md', content: '# t', status: 'pending', error: null, createdAt: '2026-09-30T00:00:00.000Z' }
+          : init?.method === 'PATCH'
+            ? toProjectView({ ...base, title: 't', stage: 'scripted' })
+            : { project: toProjectView({ ...base, title: 't', stage: 'scripted' }), messages: [card] },
+      }),
+    })));
+    render(<ProjectWorkspace initialProject={toProjectView({ ...base, title: 't' })} initialMessages={[]} />);
+    expect(screen.queryByLabelText('收起对话')).toBeNull();
+    fireEvent.click(screen.getByText('定稿'));
+    await waitFor(() => expect(screen.getByLabelText('收起对话')).toBeTruthy());
+    fireEvent.click(screen.getByLabelText('收起对话'));
+    // 同一条通知不会因为重新渲染再弹开
+    fireEvent.click(screen.getByRole('tab', { name: '脚本' }));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByLabelText('收起对话')).toBeNull();
   });
 });
