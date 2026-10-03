@@ -61,7 +61,7 @@ async function view(projectId: string): Promise<FilmSessionData> {
   return {
     current,
     history: past.map((h) => ({ id: h.id, version: h.version, status: h.status, summary: h.summary, createdAt: h.createdAt.toISOString() })),
-    busyElsewhere: await runningElsewhere(prisma, projectId),
+    busyElsewhere: await runningElsewhere(prisma, deps, projectId),
     claudeAvailable: !!deps.claudeBin,
     versions: films.map((f) => Number((f.meta as { filmVersion?: unknown } | null)?.filmVersion) || 0).filter(Boolean).sort((a, b) => b - a),
   };

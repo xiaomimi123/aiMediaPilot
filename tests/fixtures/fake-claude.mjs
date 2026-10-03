@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 测试用: 按 FAKE_SCENARIO 和是否 --resume、消息内容, 输出一轮 stream-json
 const args = process.argv.slice(2);
-const msg = args[args.indexOf('-p') + 1] ?? '';
+const msg = args[args.indexOf('--') + 1] ?? '';
 const out = (o) => process.stdout.write(JSON.stringify(o) + '\n');
 const use = (id, name, input) => out({ type: 'assistant', message: { content: [{ type: 'tool_use', id, name, input }] } });
 const res = (id, content, is_error = false) => out({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: id, content, is_error }] } });

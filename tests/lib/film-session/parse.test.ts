@@ -76,4 +76,8 @@ describe('parseLog', () => {
     expect(p.items).toEqual([{ kind: 'you', text: 'go' }]);
     expect(p.last.ended).toBe(false);
   });
+  it('skips null lines and null content items', () => {
+    const p = parseLog([turn(1, 'go'), 'null', j({ type: 'assistant', message: { content: [null] } }), j({ type: 'user', message: null })]);
+    expect(p.items).toEqual([{ kind: 'you', text: 'go' }]);
+  });
 });

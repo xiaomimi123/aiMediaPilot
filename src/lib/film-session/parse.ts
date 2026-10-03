@@ -65,6 +65,7 @@ export function parseLog(lines: string[]): ParsedLog {
     } catch {
       continue; // 半行(正在写)或非 JSON 输出
     }
+    if (!ev || typeof ev !== 'object') continue;
     if (ev.type === 'mp_turn') {
       turns++;
       last = blank();
@@ -77,9 +78,10 @@ export function parseLog(lines: string[]): ParsedLog {
       if (last.isError) last.errorText = String(ev.result ?? ev.subtype ?? '出错了');
       continue;
     }
-    const content = (ev.message as { content?: unknown[] } | undefined)?.content;
+    const content = (ev.message as { content?: unknown[] } | null | undefined)?.content;
     if (!Array.isArray(content)) continue;
-    for (const c of content as Record<string, unknown>[]) {
+    for (const c of content as (Record<string, unknown> | null)[]) {
+      if (!c || typeof c !== 'object') continue;
       if (ev.type === 'assistant' && c.type === 'text' && String(c.text).trim()) {
         items.push({ kind: 'say', text: String(c.text).trim() });
         last.lastText = String(c.text).trim();

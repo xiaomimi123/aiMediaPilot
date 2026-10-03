@@ -22,8 +22,43 @@ export const FILM_ALLOWED_TOOLS = [
   'Bash(ls:*)',
 ];
 
+/** 兜底黑名单: 即使别处的设置放行了, 这些也拒绝(拒绝规则优先于放行) */
+export const FILM_DENIED_TOOLS = [
+  'Bash(git:*)',
+  'Bash(rm:*)',
+  'Bash(mv:*)',
+  'Bash(curl:*)',
+  'Bash(wget:*)',
+  'Bash(node:*)',
+  'Bash(npx:*)',
+  'Bash(python:*)',
+  'Bash(python3:*)',
+  'Bash(kill:*)',
+  'Bash(killall:*)',
+  'Bash(pkill:*)',
+  'Bash(docker:*)',
+  'Bash(sudo:*)',
+  'Bash(open:*)',
+  'Bash(npm install:*)',
+  'Bash(npm run dev:*)',
+  'Bash(npm run build:*)',
+  'WebFetch',
+  'WebSearch',
+  'Write(src/**)',
+  'Edit(src/**)',
+  'Write(prisma/**)',
+  'Edit(prisma/**)',
+  'Write(remotion/kit/**)',
+  'Edit(remotion/kit/**)',
+  'Write(.claude/**)',
+  'Edit(.claude/**)',
+  'Read(./.env)',
+  'Read(./.env.*)',
+  'Read(~/.ssh/**)',
+];
+
 export const FILM_RULES = `你在 MediaPilot 网页里被调用，用户在网页上看你的进度、在停顿时回复你。
-- 按 produce-film skill 的流程出片，只做出片相关的事。
+- 按 .claude/skills/produce-film/SKILL.md 的流程出片（先用 Read 读它），只做出片相关的事。
 - 镜头表 shots.json 写好后停下：用一段话说明切了几镜、怎么用素材，然后问"镜头表可以吗？可以就回复继续"。本轮到此结束。
 - 渲染成片（film render，不带 --stills）完成后，不要运行 film register：说明这一版做了什么、用了哪些素材、做了哪些取舍，问"要登记为新版本吗？"。本轮到此结束。
 - 用户回复"可以，登记"后再运行 film register（--summary 写这一版做了什么）。
@@ -40,7 +75,6 @@ export function firstMessage(i: { kind: 'new' | 'revise'; projectId: string; tit
 export function buildClaudeArgs(i: { message: string; sessionId: string; resume: boolean; model: string }): string[] {
   return [
     '-p',
-    i.message,
     ...(i.resume ? ['--resume', i.sessionId] : ['--session-id', i.sessionId]),
     '--output-format',
     'stream-json',
@@ -51,6 +85,14 @@ export function buildClaudeArgs(i: { message: string; sessionId: string; resume:
     FILM_ALLOWED_TOOLS.join(','),
     '--append-system-prompt',
     FILM_RULES,
+    // 不读项目里的 .claude/settings*.json(那里放行了很多命令), 白名单只来自上面
+    '--setting-sources',
+    'user',
+    '--disallowedTools',
+    FILM_DENIED_TOOLS.join(','),
+    // 消息放在 -- 之后: 以 - 开头的回复不会被当成参数
+    '--',
+    i.message,
   ];
 }
 

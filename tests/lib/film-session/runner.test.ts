@@ -132,4 +132,69 @@ describe('film runner', () => {
     const { db } = fakeDb();
     await expect(startFilm(db, realDeps({ claudeBin: null }), { projectId: 'p1', kind: 'new', model: 'opus' })).rejects.toThrow('本机没有可用的 Claude Code');
   });
+  it('lets only one of two simultaneous replies start a turn', async () => {
+    const { db } = fakeDb();
+    const deps = realDeps();
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    await settle(db, deps, s.id);
+    process.env.FAKE_SCENARIO = 'slow';
+    const r = await Promise.allSettled([replyFilm(db, deps, s.id, '可以，继续', 'opus'), replyFilm(db, deps, s.id, '可以，继续', 'opus')]);
+    expect(r.filter((x) => x.status === 'fulfilled')).toHaveLength(1);
+    expect((await deps.readLines(s.logPath)).filter((l) => l.includes('mp_turn'))).toHaveLength(2);
+    await stopFilm(db, deps, s.id);
+  });
+  it('lets only one of two simultaneous starts run', async () => {
+    process.env.FAKE_SCENARIO = 'slow';
+    const { db } = fakeDb();
+    const deps = realDeps();
+    const r = await Promise.allSettled([startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' }), startFilm(db, deps, { projectId: 'p2', kind: 'new', model: 'opus' })]);
+    const won = r.filter((x): x is PromiseFulfilledResult<Awaited<ReturnType<typeof startFilm>>> => x.status === 'fulfilled');
+    expect(won).toHaveLength(1);
+    await stopFilm(db, deps, won[0].value.id);
+  });
+  it('does not let a finished-but-unrefreshed session block other projects', async () => {
+    const { db } = fakeDb();
+    const deps = realDeps({ spawn: (bin, args, log) => createRunnerDeps().spawn.call(realDeps(), bin, args, log, () => {}) });
+    await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    await new Promise((x) => setTimeout(x, 800));
+    process.env.FAKE_SCENARIO = 'slow';
+    const s2 = await startFilm(db, deps, { projectId: 'p2', kind: 'new', model: 'opus' });
+    expect(s2.status).toBe('running');
+    await stopFilm(db, deps, s2.id);
+  });
+  it('treats a turn with a result event as finished even if the pid looks alive', async () => {
+    const { db } = fakeDb();
+    const deps = realDeps({ isAlive: () => true });
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    expect((await settle(db, deps, s.id)).session.status).toBe('waiting');
+  });
+  it('stopping does not also report an unexpected exit', async () => {
+    process.env.FAKE_SCENARIO = 'slow';
+    const { db, chat } = fakeDb();
+    const deps = realDeps();
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    await stopFilm(db, deps, s.id);
+    await new Promise((x) => setTimeout(x, 300));
+    expect((await refreshFilm(db, deps, s.id)).session.status).toBe('stopped');
+    expect(chat).toEqual([]);
+  });
+  it('refuses to resume while the stopped process is still alive', async () => {
+    process.env.FAKE_SCENARIO = 'slow';
+    const { db } = fakeDb();
+    const deps = realDeps({ killGroup: () => {} });
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    const stopped = await stopFilm(db, deps, s.id);
+    await expect(replyFilm(db, deps, s.id, '接着做', 'opus')).rejects.toThrow('上一轮还没完全停下');
+    createRunnerDeps().killGroup(stopped.pid!);
+  });
+  it('turns a claude that cannot be started into a failed turn', async () => {
+    const { db } = fakeDb();
+    const broken = path.join(dir, 'not-executable');
+    fs.writeFileSync(broken, 'x');
+    const deps = realDeps({ claudeBin: broken });
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    const r = await settle(db, deps, s.id);
+    expect(r.session.status).toBe('failed');
+    expect(r.session.message).toContain('启动 claude 失败');
+  });
 });

@@ -21,7 +21,8 @@ describe('film session args', () => {
   });
   it('starts a session and resumes it later', () => {
     const first = buildClaudeArgs({ message: '出片', sessionId: 'abc', resume: false, model: 'opus' });
-    expect(first.slice(0, 2)).toEqual(['-p', '出片']);
+    expect(first[0]).toBe('-p');
+    expect(first.at(-1)).toBe('出片');
     expect(first).toEqual(expect.arrayContaining(['--session-id', 'abc', '--output-format', 'stream-json', '--verbose', '--model', 'opus', '--append-system-prompt', FILM_RULES]));
     expect(first[first.indexOf('--allowedTools') + 1]).toBe(FILM_ALLOWED_TOOLS.join(','));
     const next = buildClaudeArgs({ message: '可以，继续', sessionId: 'abc', resume: true, model: 'sonnet' });
@@ -38,5 +39,17 @@ describe('film session args', () => {
   it('drops the host claude session vars from the child env', () => {
     const env = childEnv({ PATH: '/bin', HOME: '/h', CLAUDECODE: '1', CLAUDE_CODE_SESSION_ID: 'x', CLAUDE_CODE_ENTRYPOINT: 'y', CLAUDE_AGENT_SDK_VERSION: 'z', CLAUDE_PID: '1', ANTHROPIC_BASE_URL: 'u' });
     expect(env).toEqual({ PATH: '/bin', HOME: '/h', ANTHROPIC_BASE_URL: 'u' });
+  });
+  it('puts the message after -- so a reply starting with - is not a flag', () => {
+    const a = buildClaudeArgs({ message: '--dangerously-skip-permissions 第3镜太长', sessionId: 'abc', resume: true, model: 'opus' });
+    expect(a.slice(-2)).toEqual(['--', '--dangerously-skip-permissions 第3镜太长']);
+    expect(a[0]).toBe('-p');
+  });
+  it('ignores project and local settings and denies risky tools as a backstop', () => {
+    const a = buildClaudeArgs({ message: 'x', sessionId: 'abc', resume: false, model: 'opus' });
+    expect(a[a.indexOf('--setting-sources') + 1]).toBe('user');
+    const denied = a[a.indexOf('--disallowedTools') + 1].split(',');
+    for (const t of ['Bash(git:*)', 'Bash(rm:*)', 'Bash(node:*)', 'Bash(npx:*)', 'Bash(killall:*)', 'Bash(npm run dev:*)', 'Write(src/**)', 'Edit(remotion/kit/**)', 'Read(./.env)']) expect(denied).toContain(t);
+    expect(FILM_RULES).toContain('.claude/skills/produce-film/SKILL.md');
   });
 });
