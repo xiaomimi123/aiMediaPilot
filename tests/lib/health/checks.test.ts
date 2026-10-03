@@ -15,6 +15,7 @@ function deps(over: Partial<Parameters<typeof runHealthChecks>[0]> = {}) {
     cwd: '/repo',
     collect: okCollect,
     scan: okCollect,
+    claudeBin: '/x/claude' as string | null,
     ...over,
   };
 }
@@ -23,7 +24,7 @@ describe('runHealthChecks', () => {
   it('reports every item ok on a healthy machine', async () => {
     const items = await runHealthChecks(deps());
     expect(items.map((i) => [i.key, i.status])).toEqual([
-      ['db', 'ok'], ['model', 'ok'], ['ffmpeg', 'ok'], ['whisper', 'ok'], ['remotion', 'ok'], ['collect', 'ok'], ['scan', 'ok'],
+      ['db', 'ok'], ['model', 'ok'], ['ffmpeg', 'ok'], ['whisper', 'ok'], ['remotion', 'ok'], ['claude', 'ok'], ['collect', 'ok'], ['scan', 'ok'],
     ]);
   });
   it('gives an actionable fix for each failure', async () => {
@@ -52,5 +53,12 @@ describe('runHealthChecks', () => {
     const hanging: Exec = async (cmd) => (cmd === 'ffmpeg' ? { code: 124, stdout: '', stderr: 'timeout' } : { code: 0, stdout: '', stderr: '' });
     const items = await runHealthChecks(deps({ exec: hanging }));
     expect(items.find((i) => i.key === 'ffmpeg')).toMatchObject({ status: 'fail', detail: 'ffmpeg 没有响应（超时）' });
+  });
+  it('checks the local claude command for in-app film', async () => {
+    const exec: Exec = async (cmd, args) => (cmd === '/x/claude' && args[0] === '--version' ? { code: 0, stdout: '2.1.285 (Claude Code)\n', stderr: '' } : { code: 0, stdout: 'ok', stderr: '' });
+    expect((await runHealthChecks(deps({ exec }))).find((i) => i.key === 'claude')).toEqual({ key: 'claude', label: 'Claude Code（出片）', status: 'ok', detail: 'Claude Code 2.1.285' });
+    const missing = (await runHealthChecks(deps({ claudeBin: null }))).find((i) => i.key === 'claude');
+    expect(missing).toMatchObject({ status: 'warn' });
+    expect(missing?.fix).toContain('安装 Claude Code 后在终端运行 claude 登录');
   });
 });

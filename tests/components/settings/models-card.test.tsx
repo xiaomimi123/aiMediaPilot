@@ -40,4 +40,14 @@ describe('ModelsCard', () => {
     expect(confirm).toHaveBeenCalledWith('这个模型写稿改稿会失败（只能做分析），确定切换吗？');
     expect(f.mock.calls.some((c) => String(c[0]).includes('/activate'))).toBe(false);
   });
+  it('lets the film model be switched between Opus and Sonnet', async () => {
+    const f = stub((url, init) => (url === '/api/settings/film-model' ? { success: true, data: { model: init?.method === 'PUT' ? 'sonnet' : 'opus' } } : null));
+    render(<ModelsCard />);
+    const sel = (await screen.findByLabelText('出片模型')) as HTMLSelectElement;
+    await waitFor(() => expect(sel.value).toBe('opus'));
+    fireEvent.change(sel, { target: { value: 'sonnet' } });
+    await waitFor(() => expect(f.mock.calls.some((c) => c[0] === '/api/settings/film-model' && (c[1] as { method?: string; body?: string })?.method === 'PUT' && (c[1] as { body?: string }).body === JSON.stringify({ model: 'sonnet' }))).toBe(true));
+    await waitFor(() => expect(sel.value).toBe('sonnet'));
+  });
 });
+

@@ -34,6 +34,8 @@ export async function runHealthChecks(deps: {
   collect: CollectStatus;
   model: { label: string; grade: 'able_agent' | 'analysis_only' | 'unusable' | null } | null;
   scan: CollectStatus;
+  /** 本机 claude 命令路径(网页出片用); null = 没找到 */
+  claudeBin: string | null;
 }): Promise<HealthItem[]> {
   const items: HealthItem[] = [];
 
@@ -86,6 +88,17 @@ export async function runHealthChecks(deps: {
       ? { key: 'remotion', label: '出片（Remotion）', status: 'ok', detail: '子工程依赖已安装' }
       : { key: 'remotion', label: '出片（Remotion）', status: 'fail', detail: 'remotion/ 子工程还没装依赖', fix: 'cd remotion && npm install' },
   );
+
+  if (deps.claudeBin) {
+    const v = await deps.exec(deps.claudeBin, ['--version'], 5000);
+    items.push(
+      v.code === 0
+        ? { key: 'claude', label: 'Claude Code（出片）', status: 'ok', detail: `Claude Code ${v.stdout.trim().split(' ')[0]}` }
+        : { key: 'claude', label: 'Claude Code（出片）', status: 'warn', detail: 'claude 命令运行失败', fix: '在终端运行 claude 看看报错，必要时重新登录' },
+    );
+  } else {
+    items.push({ key: 'claude', label: 'Claude Code（出片）', status: 'warn', detail: '没有找到 claude 命令，网页里出片用不了', fix: '安装 Claude Code 后在终端运行 claude 登录' });
+  }
 
   items.push(
     deps.collect.state === 'ok'
