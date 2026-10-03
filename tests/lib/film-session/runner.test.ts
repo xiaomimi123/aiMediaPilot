@@ -1,0 +1,135 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import type { PrismaClient } from '@prisma/client';
+import { abandonFilm, createRunnerDeps, FilmBusy, refreshFilm, replyFilm, startFilm, stopFilm, type RunnerDeps } from '@/lib/film-session/runner';
+
+type Row = Record<string, unknown> & { id: string; projectId: string; status: string };
+
+function fakeDb() {
+  const sessions: Row[] = [];
+  const chat: { projectId: string; content: string; toolName: string }[] = [];
+  let seq = 0;
+  const match = (r: Row, w: Record<string, unknown>) =>
+    Object.entries(w).every(([k, v]) => (v && typeof v === 'object' && 'in' in (v as object) ? ((v as { in: unknown[] }).in).includes(r[k]) : v && typeof v === 'object' && 'not' in (v as object) ? r[k] !== (v as { not: unknown }).not : r[k] === v));
+  const db = {
+    project: { findUnique: async ({ where }: { where: { id: string } }) => ({ id: where.id, title: where.id === 'p2' ? '另一个' : 'U盘' }) },
+    filmSession: {
+      create: async ({ data }: { data: Row }) => {
+        const r = { createdAt: new Date(), updatedAt: new Date(), checkpoint: null, message: null, filmDir: null, version: null, summary: null, pid: null, turnStartedAt: null, ...data, id: `fs${++seq}` } as Row;
+        sessions.push(r);
+        return { ...r };
+      },
+      findUnique: async ({ where }: { where: { id: string } }) => sessions.find((s) => s.id === where.id) ?? null,
+      findFirst: async ({ where }: { where: Record<string, unknown> }) => [...sessions].reverse().find((s) => match(s, where)) ?? null,
+      update: async ({ where, data }: { where: { id: string }; data: Partial<Row> }) => Object.assign(sessions.find((s) => s.id === where.id)!, data),
+      updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Partial<Row> }) => {
+        const hit = sessions.filter((s) => match(s, where));
+        hit.forEach((s) => Object.assign(s, data));
+        return { count: hit.length };
+      },
+    },
+    chatMessage: { create: async ({ data }: { data: (typeof chat)[number] }) => void chat.push(data) },
+  } as unknown as PrismaClient;
+  return { db, sessions, chat };
+}
+
+let dir: string;
+let fake: string;
+beforeEach(() => {
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mp-fs-'));
+  fake = path.join(dir, 'claude');
+  fs.copyFileSync(path.join(process.cwd(), 'tests/fixtures/fake-claude.mjs'), fake);
+  fs.chmodSync(fake, 0o755);
+});
+afterEach(() => {
+  delete process.env.FAKE_SCENARIO;
+});
+
+const realDeps = (over: Partial<RunnerDeps> = {}): RunnerDeps => ({ ...createRunnerDeps(), claudeBin: fake, cwd: process.cwd(), logDir: dir, ...over });
+const settle = async (db: PrismaClient, deps: RunnerDeps, id: string) => {
+  for (let i = 0; i < 100; i++) {
+    const r = await refreshFilm(db, deps, id);
+    if (r.session.status !== 'running') return r;
+    await new Promise((x) => setTimeout(x, 50));
+  }
+  throw new Error('still running');
+};
+
+describe('film runner', () => {
+  it('walks shots → render → register with notices', async () => {
+    const { db, chat } = fakeDb();
+    const deps = realDeps();
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    let r = await settle(db, deps, s.id);
+    expect(r.session).toMatchObject({ status: 'waiting', checkpoint: 'shots', filmDir: 'remotion/films/p1-v3' });
+    await replyFilm(db, deps, s.id, '可以，继续', 'opus');
+    r = await settle(db, deps, s.id);
+    expect(r.session).toMatchObject({ status: 'waiting', checkpoint: 'render' });
+    await replyFilm(db, deps, s.id, '可以，登记', 'opus');
+    r = await settle(db, deps, s.id);
+    expect(r.session).toMatchObject({ status: 'done', version: 3 });
+    // 登记通知由 film register(registerFilm) 自己写, 运行器不重复发
+    expect(chat.map((c) => c.content)).toEqual(['镜头表排好了，等你确认（在「成片」里看）', '成片渲染好了，等你确认']);
+    expect(r.session.summary).toBe('x');
+    expect(r.parsed.turns).toBe(3);
+  });
+  it('allows only one running film at a time and one open session per project', async () => {
+    process.env.FAKE_SCENARIO = 'slow';
+    const { db } = fakeDb();
+    const deps = realDeps();
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    await expect(startFilm(db, deps, { projectId: 'p2', kind: 'new', model: 'opus' })).rejects.toThrow(FilmBusy);
+    await expect(startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' })).rejects.toThrow('这个项目还有一次出片没结束');
+    await stopFilm(db, deps, s.id);
+  });
+  it('refuses to reply while a turn is running', async () => {
+    process.env.FAKE_SCENARIO = 'slow';
+    const { db } = fakeDb();
+    const deps = realDeps();
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    await expect(replyFilm(db, deps, s.id, '可以，继续', 'opus')).rejects.toThrow('还在做');
+    expect((await stopFilm(db, deps, s.id)).status).toBe('stopped');
+  });
+  it('fails with the model error and can resume', async () => {
+    process.env.FAKE_SCENARIO = 'limit';
+    const { db } = fakeDb();
+    const deps = realDeps();
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    const r = await settle(db, deps, s.id);
+    expect(r.session).toMatchObject({ status: 'failed', message: 'usage limit reached' });
+    delete process.env.FAKE_SCENARIO;
+    await replyFilm(db, deps, s.id, '接着做', 'opus');
+    expect((await settle(db, deps, s.id)).session.status).toBe('waiting');
+  });
+  it('reconciles a finished turn on read and notifies once', async () => {
+    const { db, chat } = fakeDb();
+    const deps = realDeps({ spawn: (bin, args, log) => createRunnerDeps().spawn(bin, args, log, () => {}) });
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    await settle(db, deps, s.id);
+    await refreshFilm(db, deps, s.id);
+    expect(chat).toHaveLength(1);
+    expect(chat[0].toolName).toBe('job:film');
+  });
+  it('marks a vanished process as failed', async () => {
+    process.env.FAKE_SCENARIO = 'crash';
+    const { db } = fakeDb();
+    const deps = realDeps();
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    expect((await settle(db, deps, s.id)).session).toMatchObject({ status: 'failed', message: '出片进程意外退出' });
+  });
+  it('abandons a session for good', async () => {
+    process.env.FAKE_SCENARIO = 'limit';
+    const { db } = fakeDb();
+    const deps = realDeps();
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    await settle(db, deps, s.id);
+    expect((await abandonFilm(db, s.id)).status).toBe('abandoned');
+    await expect(replyFilm(db, deps, s.id, '接着做', 'opus')).rejects.toThrow('这次出片已经结束');
+  });
+  it('explains a missing claude', async () => {
+    const { db } = fakeDb();
+    await expect(startFilm(db, realDeps({ claudeBin: null }), { projectId: 'p1', kind: 'new', model: 'opus' })).rejects.toThrow('本机没有可用的 Claude Code');
+  });
+});
