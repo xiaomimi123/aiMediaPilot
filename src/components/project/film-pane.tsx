@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import type { FilmView, MaterialView } from '@/lib/project/view';
 import { cn } from '@/lib/utils';
+import { FilmAssistant } from './film-assistant';
 
 const mmss = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
 
@@ -73,6 +74,7 @@ export function FilmPane({ projectId, materials, films, onChanged }: { projectId
 
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-6">
+      <FilmAssistant projectId={projectId} onChanged={onChanged} />
       <section>
         <h3 className="mb-2 text-[15px] font-semibold">素材</h3>
         <div
@@ -129,10 +131,9 @@ export function FilmPane({ projectId, materials, films, onChanged }: { projectId
       <section>
         <h3 className="mb-2 text-[15px] font-semibold">成片</h3>
         {films.length === 0 ? (
-          <p className="text-sm text-[var(--text-secondary)]">还没有成片。在 Claude Code 里说「给这个项目出片」，出好的成片会出现在这里。</p>
+          <p className="text-sm text-[var(--text-secondary)]">还没有成片。在上面「出片助手」里点「出一版」。</p>
         ) : (
           <>
-            <p className="mb-3 text-xs text-[var(--text-tertiary)]">修改成片：在 Claude Code 里说「改这个项目的成片：……」</p>
             <ul className="space-y-4">
               {films.map((f) => (
                 <li key={f.id} className="card">
