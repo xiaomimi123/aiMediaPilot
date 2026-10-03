@@ -11,7 +11,7 @@ description: 给 MediaPilot 项目出一条竖屏口播成片(Remotion, 风格 C
 
 1. **找项目**: `npm run -s mp -- project list`(不熟悉命令时先 `npm run -s mp -- help`)。用户说的项目名对不上就问。
 2. **读资料**: `npm run -s mp -- project export <id>`。读稿子、逐句转写、素材说明。
-   - 视频素材: `ffmpeg -i <path> -vf fps=1/2,scale=480:-1 /tmp/mat-<id>-%03d.jpg` 抽帧后逐张看; 图片直接看。
+   - 视频素材: `mkdir -p /tmp/mp-film && ffmpeg -i <path> -vf fps=1/2,scale=480:-1 /tmp/mp-film/mat-<id>-%03d.jpg` 抽帧后逐张看; 图片直接看。
 3. **建片子**: `npm run -s mp -- film new <id>` → 得到片子目录 `remotion/films/<id>-v<N>/`。
    - 修改旧版时: 建新版本后, 从旧版目录复制 `Film.tsx`、`copy.ts`、`shots.json` 过来再改, 旧版不动(同一版本不能重复登记)。
    - `film new` 提示"素材文件不在了, 已跳过"时, 告诉用户哪个素材丢了。
