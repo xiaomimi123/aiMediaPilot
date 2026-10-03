@@ -40,7 +40,7 @@
   - 「可以，继续」「登记为新版本」= 以固定文字回复（"可以，继续" / "可以，登记"）续上会话；输入框 = 以你写的文字续上会话。
 - 结束（完成 / 失败 / 已停止）：
   - 完成：新版本出现在下方成片列表；卡片回到空闲，这次过程收成一行历史（"v3 · 10 月 3 日 · <登记时的 summary>"），点开回看。
-  - 失败 / 已停止：显示原因 + 「接着做」（续上同一会话，发"接着做"）+ 「放弃」（结束这次，片子目录保留但不登记）。
+  - 失败 / 已停止：显示原因 + 「接着做」（续上同一会话，发"接着做"）+ 「放弃」（状态 `abandoned`，结束这次，片子目录保留但不登记）。
 
 ### 3.2 编导对话通知
 
@@ -141,7 +141,7 @@ model FilmSession {
   baseFilmDir     String?
   /// Claude 会话 id(--session-id / --resume)
   claudeSessionId String
-  /// running | waiting | done | failed | stopped
+  /// running | waiting | done | failed | stopped | abandoned(放弃: 结束且不能再接着做)
   status          String    @default("running")
   /// shots | render | question(status=waiting 时)
   checkpoint      String?
@@ -163,7 +163,7 @@ model FilmSession {
 }
 ```
 
-- 同一时间全系统最多一条 `running`；一个项目最多一条未结束（running / waiting / failed 可接着做）的会话。
+- 同一时间全系统最多一条 `running`；一个项目最多一条未结束（running / waiting / failed / stopped，后三种可「接着做」）的会话；`done` 与 `abandoned` 为已结束。
 - 日志文件是过程的原始记录，不逐条入库。
 
 ### 4.7 设置与体检
