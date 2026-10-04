@@ -2,12 +2,17 @@ import type { TurnResult } from './parse';
 
 export type FilmStatus = 'running' | 'waiting' | 'done' | 'failed' | 'stopped' | 'abandoned';
 export type Checkpoint = 'shots' | 'render' | 'question';
-export const TURN_TIMEOUT_MS = 30 * 60_000;
+/** 日志 10 分钟没有任何新内容 = 卡住(如机器休眠); 一直在动的轮次最长 2 小时 */
+export const IDLE_TIMEOUT_MS = 10 * 60_000;
+export const TURN_MAX_MS = 2 * 60 * 60_000;
 
-export function deriveState(i: { last: TurnResult; alive: boolean; turnStartedAt: Date | null; now: Date }) {
+export function deriveState(i: { last: TurnResult; alive: boolean; turnStartedAt: Date | null; lastActivity?: Date | null; now: Date }) {
   const base = { checkpoint: null as Checkpoint | null, message: null as string | null, version: null as number | null, timedOut: false };
   if (i.alive) {
-    if (i.turnStartedAt && i.now.getTime() - i.turnStartedAt.getTime() > TURN_TIMEOUT_MS) return { ...base, status: 'failed' as const, message: '这一轮超过 30 分钟，已停止', timedOut: true };
+    const t = i.now.getTime();
+    if (i.turnStartedAt && t - i.turnStartedAt.getTime() > TURN_MAX_MS) return { ...base, status: 'failed' as const, message: '这一轮超过 2 小时，已停止', timedOut: true };
+    const active = Math.max(i.turnStartedAt?.getTime() ?? t, i.lastActivity?.getTime() ?? 0);
+    if (t - active > IDLE_TIMEOUT_MS) return { ...base, status: 'failed' as const, message: '已经 10 分钟没有新进展，判定卡住，已停止', timedOut: true };
     return { ...base, status: 'running' as const };
   }
   const l = i.last;

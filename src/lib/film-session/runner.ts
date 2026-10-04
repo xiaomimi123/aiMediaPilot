@@ -25,6 +25,8 @@ export interface RunnerDeps {
   isAlive(pid: number, since?: Date | null): boolean;
   killGroup(pid: number): void;
   readLines(p: string): Promise<string[]>;
+  /** 日志最后写入时间(判断是否卡住); 文件不在 = null */
+  lastWrite(p: string): Date | null;
   append(p: string, line: string): Promise<void>;
   now(): Date;
   uuid(): string;
@@ -76,6 +78,13 @@ export function createRunnerDeps(): RunnerDeps {
       };
       sig('SIGTERM');
       setTimeout(() => sig('SIGKILL'), 3000).unref();
+    },
+    lastWrite(p) {
+      try {
+        return fs.statSync(p).mtime;
+      } catch {
+        return null;
+      }
     },
     readLines: async (p) => (await fs.promises.readFile(p, 'utf8').catch(() => '')).split('\n').filter(Boolean),
     append: (p, line) => fs.promises.mkdir(path.dirname(p), { recursive: true }).then(() => fs.promises.appendFile(p, line + '\n')),
@@ -212,7 +221,7 @@ export async function refreshFilm(db: PrismaClient, deps: RunnerDeps, id: string
   // 刚占位还没 pid 的几秒算在跑(此时日志里最后一轮还是上一轮, 不能按它判); 本轮已有结果事件就算结束(不看 pid)
   const starting = s.pid === null && !!s.turnStartedAt && deps.now().getTime() - s.turnStartedAt.getTime() < START_GRACE_MS;
   const alive = starting || (!!s.pid && !parsed.last.ended && deps.isAlive(s.pid, s.turnStartedAt));
-  const st = deriveState({ last: parsed.last, alive, turnStartedAt: s.turnStartedAt, now: deps.now() });
+  const st = deriveState({ last: parsed.last, alive, turnStartedAt: s.turnStartedAt, lastActivity: deps.lastWrite(s.logPath), now: deps.now() });
   if (st.timedOut && s.pid) deps.killGroup(s.pid);
   if (st.status === 'running') {
     if (parsed.filmDir && parsed.filmDir !== s.filmDir) s = await db.filmSession.update({ where: { id }, data: { filmDir: parsed.filmDir } });
