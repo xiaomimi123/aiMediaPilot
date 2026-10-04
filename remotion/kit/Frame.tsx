@@ -1,6 +1,7 @@
 import React from 'react';
 import { AbsoluteFill, OffthreadVideo, staticFile } from 'remotion';
-import { C, FONT, ZONE } from './tokens';
+import { C, FONT } from './tokens';
+import { useLayout } from './layout';
 import { Captions, type CaptionLine } from './Captions';
 
 const GRID = 70;
@@ -16,34 +17,55 @@ export const Frame: React.FC<{
   highlights?: string[];
   title?: React.ReactNode;
   children: React.ReactNode;
-}> = ({ video, pipFocus = '50% 20%', captions, highlights, title, children }) => (
-  <AbsoluteFill
-    style={{
-      // 画框统一字体与字色: 没被组件包起来的文字也不会回退到衬线体
-      fontFamily: FONT,
-      color: C.ink,
-      background: C.bg,
-      backgroundImage: `linear-gradient(${C.grid} 2px, transparent 2px), linear-gradient(90deg, ${C.grid} 2px, transparent 2px)`,
-      backgroundSize: `${GRID}px ${GRID}px`,
-    }}
-  >
-    {title && (
-      <div style={{ position: 'absolute', ...ZONE.title, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>{title}</div>
-    )}
-    <div style={{ position: 'absolute', ...ZONE.content, overflow: 'hidden' }}>{children}</div>
-    <div
+}> = ({ video, pipFocus = '50% 20%', captions, highlights, title, children }) => {
+  const { ZONE: Z } = useLayout();
+  return (
+    <AbsoluteFill
       style={{
-        position: 'absolute',
-        ...ZONE.pip,
-        borderRadius: 36,
-        border: '12px solid #fff',
-        boxShadow: '0 20px 60px rgba(15,23,42,0.18)',
-        overflow: 'hidden',
-        background: C.ink,
+        // 画框统一字体与字色: 没被组件包起来的文字也不会回退到衬线体
+        fontFamily: FONT,
+        color: C.ink,
+        background: C.bg,
+        backgroundImage: `linear-gradient(${C.grid} 2px, transparent 2px), linear-gradient(90deg, ${C.grid} 2px, transparent 2px)`,
+        backgroundSize: `${GRID}px ${GRID}px`,
       }}
     >
-      <OffthreadVideo src={staticFile(video)} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: pipFocus }} />
-    </div>
-    <Captions lines={captions} highlights={highlights} />
-  </AbsoluteFill>
-);
+      {title && (
+        <div
+          style={{
+            position: 'absolute',
+            ...Z.title,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'flex-end',
+          }}
+        >
+          {title}
+        </div>
+      )}
+      <div style={{ position: 'absolute', ...Z.content, overflow: 'hidden' }}>{children}</div>
+      <div
+        style={{
+          position: 'absolute',
+          ...Z.pip,
+          borderRadius: 36,
+          border: '12px solid #fff',
+          boxShadow: '0 20px 60px rgba(15,23,42,0.18)',
+          overflow: 'hidden',
+          background: C.ink,
+        }}
+      >
+        <OffthreadVideo
+          src={staticFile(video)}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            objectPosition: pipFocus,
+          }}
+        />
+      </div>
+      <Captions lines={captions} highlights={highlights} />
+    </AbsoluteFill>
+  );
+};
