@@ -72,10 +72,10 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 }
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
-  const b = (await req.json().catch(() => ({}))) as { action?: string; kind?: string; baseVersion?: number; note?: string; text?: string };
+  const b = (await req.json().catch(() => ({}))) as { action?: string; kind?: string; baseVersion?: number; note?: string; text?: string; orientation?: string };
   const deps = createRunnerDeps();
   try {
-    if (b.action === 'start') await startFilm(prisma, deps, { projectId: params.id, kind: b.kind === 'revise' ? 'revise' : 'new', baseVersion: b.baseVersion, note: b.note, model: await model() });
+    if (b.action === 'start') await startFilm(prisma, deps, { projectId: params.id, kind: b.kind === 'revise' ? 'revise' : 'new', baseVersion: b.baseVersion, note: b.note, model: await model(), orientation: b.orientation === 'landscape' ? 'landscape' : 'portrait' });
     else {
       const cur = await currentFilm(prisma, params.id);
       if (!cur) return fail('没有进行中的出片', 404);

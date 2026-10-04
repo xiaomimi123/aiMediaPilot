@@ -17,7 +17,7 @@ function fakeDb() {
     project: { findUnique: async ({ where }: { where: { id: string } }) => ({ id: where.id, title: where.id === 'p2' ? '另一个' : 'U盘' }) },
     filmSession: {
       create: async ({ data }: { data: Row }) => {
-        const r = { createdAt: new Date(), updatedAt: new Date(), checkpoint: null, message: null, filmDir: null, version: null, summary: null, pid: null, turnStartedAt: null, ...data, id: `fs${++seq}` } as Row;
+        const r = { createdAt: new Date(), updatedAt: new Date(), orientation: 'portrait', checkpoint: null, message: null, filmDir: null, version: null, summary: null, pid: null, turnStartedAt: null, ...data, id: `fs${++seq}` } as Row;
         sessions.push(r);
         return { ...r };
       },
@@ -216,5 +216,23 @@ describe('film runner', () => {
     expect(killed).toEqual([]);
     await settle(db, deps, s.id);
   });
+  it('starts a landscape film and records the orientation', async () => {
+    const { db } = fakeDb();
+    const deps = realDeps();
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus', orientation: 'landscape' });
+    expect(s.orientation).toBe('landscape');
+    expect((await deps.readLines(s.logPath))[0]).toContain('横版成片');
+    await settle(db, deps, s.id);
+  });
+  it('revise follows the base version orientation', async () => {
+    const { db } = fakeDb();
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'mp-cwd-'));
+    fs.mkdirSync(path.join(cwd, 'remotion/films/p1-v4'), { recursive: true });
+    fs.writeFileSync(path.join(cwd, 'remotion/films/p1-v4/data.json'), JSON.stringify({ orientation: 'landscape' }));
+    const deps = realDeps({ cwd });
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'revise', baseVersion: 4, note: 'x', model: 'opus', orientation: 'portrait' });
+    expect(s.orientation).toBe('landscape');
+    expect((await deps.readLines(s.logPath))[0]).toContain('横版');
+    await settle(db, deps, s.id);
+  });
 });
-

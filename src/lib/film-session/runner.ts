@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { FilmSession, PrismaClient } from '@prisma/client';
 import { buildClaudeArgs, childEnv, firstMessage, resolveClaudeBin } from './args';
 import { parseLog, type ParsedLog } from './parse';
+import type { FilmOrientation } from '@/lib/film/orientation';
 import { deriveState } from './state';
 
 export class FilmBusy extends Error {}
@@ -132,7 +133,7 @@ async function lostRace(db: PrismaClient, s: FilmSession) {
   return p?.title ?? other.projectId;
 }
 
-export async function startFilm(db: PrismaClient, deps: RunnerDeps, i: { projectId: string; kind: 'new' | 'revise'; baseVersion?: number; note?: string; model: string }): Promise<FilmSession> {
+export async function startFilm(db: PrismaClient, deps: RunnerDeps, i: { projectId: string; kind: 'new' | 'revise'; baseVersion?: number; note?: string; model: string; orientation?: FilmOrientation }): Promise<FilmSession> {
   if (!deps.claudeBin) throw new FilmBusy(NO_CLAUDE);
   const other = await runningElsewhere(db, deps, i.projectId);
   if (other) throw new FilmBusy(`「${other.title}」正在出片，等它做完再开始`);
@@ -140,16 +141,26 @@ export async function startFilm(db: PrismaClient, deps: RunnerDeps, i: { project
   const p = await db.project.findUnique({ where: { id: i.projectId } });
   if (!p) throw new Error('项目不存在或已删除');
   const baseFilmDir = i.kind === 'revise' && i.baseVersion ? `remotion/films/${p.id}-v${i.baseVersion}` : null;
+  // 改片沿用基础版本的版式(读它的 data.json, 没写 = 竖版); 新出按选择
+  let orientation: FilmOrientation = i.orientation === 'landscape' ? 'landscape' : 'portrait';
+  if (baseFilmDir) {
+    const raw = (await deps.readLines(path.join(deps.cwd, baseFilmDir, 'data.json'))).join('\n');
+    try {
+      orientation = (JSON.parse(raw) as { orientation?: unknown }).orientation === 'landscape' ? 'landscape' : 'portrait';
+    } catch {
+      orientation = 'portrait';
+    }
+  }
   const id = deps.uuid();
   const s = await db.filmSession.create({
-    data: { projectId: p.id, kind: i.kind, baseFilmDir, claudeSessionId: id, status: 'running', turnStartedAt: deps.now(), logPath: path.join(deps.logDir, `${id}.jsonl`) },
+    data: { projectId: p.id, kind: i.kind, baseFilmDir, orientation, claudeSessionId: id, status: 'running', turnStartedAt: deps.now(), logPath: path.join(deps.logDir, `${id}.jsonl`) },
   });
   const lost = await lostRace(db, s);
   if (lost) {
     await db.filmSession.update({ where: { id: s.id }, data: { status: 'abandoned', message: '同时开始了两次，这次已取消' } });
     throw new FilmBusy(`「${lost}」正在出片，等它做完再开始`);
   }
-  return launch(db, deps, s, firstMessage({ kind: i.kind, projectId: p.id, title: p.title, baseFilmDir: baseFilmDir ?? undefined, baseVersion: i.baseVersion, note: i.note }), false, i.model);
+  return launch(db, deps, s, firstMessage({ kind: i.kind, projectId: p.id, title: p.title, baseFilmDir: baseFilmDir ?? undefined, baseVersion: i.baseVersion, note: i.note, orientation }), false, i.model);
 }
 
 export async function replyFilm(db: PrismaClient, deps: RunnerDeps, id: string, text: string, model: string): Promise<FilmSession> {

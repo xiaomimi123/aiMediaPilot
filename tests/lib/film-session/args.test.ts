@@ -55,4 +55,13 @@ describe('film session args', () => {
   it('stops after the shot list even when it is reused from the base version', () => {
     expect(FILM_RULES).toContain('改片时镜头表沿用旧版也要停');
   });
+  it('asks for a landscape film with the right commands', () => {
+    expect(firstMessage({ kind: 'new', projectId: 'p1', title: 'U盘', note: '多放录屏', orientation: 'landscape' })).toBe(
+      '给项目 p1（U盘）出一版横版成片（画面 1920×1080）。用 `npm run -s mp -- film new p1 --landscape` 建片子目录，检查时用 `npm run -s mp -- film check <片子目录> --expect landscape`。要求：多放录屏',
+    );
+    expect(firstMessage({ kind: 'revise', projectId: 'p1', title: 'U盘', baseFilmDir: 'remotion/films/p1-v4', baseVersion: 4, note: '录屏放大', orientation: 'landscape' })).toBe(
+      '改项目 p1（U盘）的成片：基于 v4（remotion/films/p1-v4）出新的一版横版（画面 1920×1080）。用 `npm run -s mp -- film new p1 --landscape` 建片子目录，检查时用 `npm run -s mp -- film check <片子目录> --expect landscape`。修改意见：录屏放大',
+    );
+    expect(firstMessage({ kind: 'new', projectId: 'p1', title: 'U盘', orientation: 'portrait' })).toBe('给项目 p1（U盘）出一版成片。');
+  });
 });

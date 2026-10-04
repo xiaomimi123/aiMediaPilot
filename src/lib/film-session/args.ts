@@ -1,4 +1,5 @@
 import path from 'node:path';
+import type { FilmOrientation } from '@/lib/film/orientation';
 
 export const FILM_MODELS = ['opus', 'sonnet'] as const;
 export const DEFAULT_FILM_MODEL = 'opus';
@@ -66,10 +67,12 @@ export const FILM_RULES = `你在 MediaPilot 网页里被调用，用户在网�
 - film check 或渲染同一个错误连续 3 次没修好，停下来把报错和你的判断告诉用户。
 - 不改 remotion/kit、不删除文件、不碰片子目录以外的文件。`;
 
-export function firstMessage(i: { kind: 'new' | 'revise'; projectId: string; title: string; baseFilmDir?: string; baseVersion?: number; note?: string }): string {
+export function firstMessage(i: { kind: 'new' | 'revise'; projectId: string; title: string; baseFilmDir?: string; baseVersion?: number; note?: string; orientation?: FilmOrientation }): string {
   const note = i.note?.trim();
-  if (i.kind === 'new') return `给项目 ${i.projectId}（${i.title}）出一版成片。${note ? `要求：${note}` : ''}`;
-  return `改项目 ${i.projectId}（${i.title}）的成片：基于 v${i.baseVersion}（${i.baseFilmDir}）出新的一版。${note ? `修改意见：${note}` : ''}`;
+  const land = i.orientation === 'landscape';
+  const how = land ? `（画面 1920×1080）。用 \`npm run -s mp -- film new ${i.projectId} --landscape\` 建片子目录，检查时用 \`npm run -s mp -- film check <片子目录> --expect landscape\`。` : '。';
+  if (i.kind === 'new') return `给项目 ${i.projectId}（${i.title}）出一版${land ? '横版' : ''}成片${how}${note ? `要求：${note}` : ''}`;
+  return `改项目 ${i.projectId}（${i.title}）的成片：基于 v${i.baseVersion}（${i.baseFilmDir}）出新的一版${land ? '横版' : ''}${how}${note ? `修改意见：${note}` : ''}`;
 }
 
 export function buildClaudeArgs(i: { message: string; sessionId: string; resume: boolean; model: string }): string[] {

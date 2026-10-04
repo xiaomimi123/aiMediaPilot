@@ -11,6 +11,7 @@ export function FilmAssistant({ projectId, onChanged }: { projectId: string; onC
   const [note, setNote] = useState('');
   const [reply, setReply] = useState('');
   const [base, setBase] = useState<number | null>(null);
+  const [orient, setOrient] = useState<'portrait' | 'landscape'>('portrait');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [zoom, setZoom] = useState<string | null>(null);
@@ -69,7 +70,14 @@ export function FilmAssistant({ projectId, onChanged }: { projectId: string; onC
           <div className="space-y-2">
             <textarea className="h-16 w-full rounded-[var(--r-md)] bg-[var(--bg-inset)] p-2" placeholder="要求（可不填），比如：开头用截图那张素材，节奏快一点" value={note} onChange={(e) => setNote(e.target.value)} />
             <div className="flex flex-wrap items-center gap-2">
-              <button className="btn-primary" disabled={busy || !!blocked} onClick={() => void post({ action: 'start', kind: 'new', ...(note.trim() ? { note: note.trim() } : {}) })}>
+              <div className="flex rounded-[var(--r-md)] bg-[var(--bg-inset)] p-0.5 text-xs" role="group" aria-label="版式">
+                {(['portrait', 'landscape'] as const).map((o) => (
+                  <button key={o} aria-pressed={orient === o} className={cn('rounded-[var(--r-sm)] px-2 py-1', orient === o && 'bg-[var(--bg-surface)] font-semibold shadow-sm')} onClick={() => setOrient(o)}>
+                    {o === 'landscape' ? '横版' : '竖版'}
+                  </button>
+                ))}
+              </div>
+              <button className="btn-primary" disabled={busy || !!blocked} onClick={() => void post({ action: 'start', kind: 'new', ...(orient === 'landscape' ? { orientation: 'landscape' } : {}), ...(note.trim() ? { note: note.trim() } : {}) })}>
                 出一版
               </button>
               {latest !== null && (

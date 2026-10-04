@@ -81,4 +81,13 @@ describe('FilmAssistant', () => {
     fireEvent.click(screen.getByText('发送'));
     await waitFor(() => expect(posted(f)).toEqual([{ action: 'reply', text: '换个思路' }]));
   });
+  it('starts a landscape film when 横版 is picked', async () => {
+    const f = stub(data());
+    render(<FilmAssistant projectId="p1" onChanged={() => {}} />);
+    await waitFor(() => expect(screen.getByText('出一版')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: '横版' }));
+    expect(screen.getByRole('button', { name: '横版' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByText('出一版'));
+    await waitFor(() => expect(posted(f)).toEqual([{ action: 'start', kind: 'new', orientation: 'landscape' }]));
+  });
 });

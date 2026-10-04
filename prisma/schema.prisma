@@ -434,6 +434,8 @@ model FilmSession {
   kind            String
   /// 改片时基于的片子目录
   baseFilmDir     String?
+  /// portrait | landscape(新出按选择, 改片沿用基础版本)
+  orientation     String    @default("portrait")
   /// Claude 会话 id(--session-id / --resume)
   claudeSessionId String
   /// running | waiting | done | failed | stopped | abandoned(放弃: 结束且不能再接着做)
