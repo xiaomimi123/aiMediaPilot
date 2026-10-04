@@ -58,13 +58,15 @@ export const LANDSCAPE_ZONE: Zones = {
   captions: { left: 96, top: 905, width: 1360, height: 100 },
 };
 
-export const LAYOUT: Record<Orientation, { W: number; H: number; ZONE: Zones; OVERLAYS: Record<string, Rect> }> = {
+/** captionMaxHeight: 字幕框不能超过的高度(横版字幕带只有 100, 两行会压进底部进度条); 竖版不限 */
+export const LAYOUT: Record<Orientation, { W: number; H: number; ZONE: Zones; OVERLAYS: Record<string, Rect>; captionMaxHeight?: number }> = {
   portrait: { W, H, ZONE, OVERLAYS: DOUYIN_OVERLAYS },
   landscape: {
     W: LW,
     H: LH,
     ZONE: LANDSCAPE_ZONE,
     OVERLAYS: LANDSCAPE_OVERLAYS,
+    captionMaxHeight: 100,
   },
 };
 

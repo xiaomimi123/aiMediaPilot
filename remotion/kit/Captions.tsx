@@ -22,14 +22,15 @@ function mark(text: string, highlights: string[]): React.ReactNode[] {
 }
 
 export const Captions: React.FC<{ lines: CaptionLine[]; highlights?: string[] }> = ({ lines, highlights = [] }) => {
-  const { ZONE: Z } = useLayout();
+  const layout = useLayout();
+  const Z = layout.ZONE;
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const t = frame / fps;
   const line = lines.find((l) => t >= l.startSec && t < l.endSec);
   if (!line) return null;
   // 按字幕区宽度拆成长度接近的两行(不再出现单字孤行); 放不下就逐级缩小字号
-  const { fontSize, rows } = captionLayout(line.text, Z.captions.width);
+  const { fontSize, rows } = captionLayout(line.text, Z.captions.width, layout.captionMaxHeight);
   return (
     <div style={{ position: 'absolute', ...Z.captions, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div

@@ -28,7 +28,7 @@ async function linkOrCopy(src: string, dest: string) {
   }
 }
 
-const INDEX = `import React from 'react';
+export const INDEX = `import React from 'react';
 import { Composition, registerRoot } from 'remotion';
 import { FPS, W, H } from '../../kit';
 import data from './data.json';
@@ -39,7 +39,7 @@ registerRoot(() => (
 ));
 `;
 
-const INDEX_LANDSCAPE = `import React from 'react';
+export const INDEX_LANDSCAPE = `import React from 'react';
 import { Composition, registerRoot } from 'remotion';
 import { FPS, LAYOUT, OrientationProvider } from '../../kit';
 import data from './data.json';

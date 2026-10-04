@@ -50,15 +50,17 @@ export function shouldCountUp(value: string): boolean {
   return true;
 }
 
-/** 字幕排版: 按字幕区宽度(减去左右内边距 30)从大到小试字号, 取第一个能放进两行的 */
+/** 字幕排版: 按字幕区宽度(减去左右内边距 30)从大到小试字号, 取第一个能放进两行的; 给了 maxHeight 时还要求整框(行高 1.3 + 上下内边距 28)不超过它 */
 export const CAPTION_FONT_SIZES = [50, 44, 40, 36, 32] as const;
-export function captionLayout(text: string, zoneWidth: number): { fontSize: number; rows: string[] } {
+export function captionLayout(text: string, zoneWidth: number, maxHeight?: number): { fontSize: number; rows: string[] } {
   const inner = zoneWidth - 60;
   let last = { fontSize: CAPTION_FONT_SIZES[0] as number, rows: [text] };
   for (const fontSize of CAPTION_FONT_SIZES) {
     const rows = balanceLines(text, inner / fontSize);
     last = { fontSize, rows };
-    if (rows.every((r) => displayWidth(r) * fontSize <= inner)) return last;
+    const fitsWidth = rows.every((r) => displayWidth(r) * fontSize <= inner);
+    const fitsHeight = maxHeight === undefined || rows.length * fontSize * 1.3 + 28 <= maxHeight;
+    if (fitsWidth && fitsHeight) return last;
   }
   return last;
 }

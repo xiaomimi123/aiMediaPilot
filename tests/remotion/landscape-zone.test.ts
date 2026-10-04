@@ -40,4 +40,13 @@ describe('landscape layout', () => {
     for (const r of l.rows) expect(displayWidth(r) * l.fontSize).toBeLessThanOrEqual(LANDSCAPE_ZONE.captions.width - 60);
     expect(captionLayout('半年后干到类目第一', LANDSCAPE_ZONE.captions.width)).toEqual({ fontSize: 50, rows: ['半年后干到类目第一'] });
   });
+  it('keeps landscape subtitles inside their 100px band', () => {
+    const z = LAYOUT.landscape.ZONE.captions;
+    for (const t of ['我知道又有一个不会用电脑的人把AI用起来了', '这个U盘让我在抖音把一个品类干到了第一名而且只用了半年时间朋友们']) {
+      const l = captionLayout(t, z.width, LAYOUT.landscape.captionMaxHeight);
+      expect(l.rows.length * l.fontSize * 1.3 + 28, t).toBeLessThanOrEqual(z.height);
+      for (const r of l.rows) expect(displayWidth(r) * l.fontSize).toBeLessThanOrEqual(z.width - 60);
+    }
+    expect(LAYOUT.portrait.captionMaxHeight).toBeUndefined();
+  });
 });
