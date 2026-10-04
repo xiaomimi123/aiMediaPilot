@@ -3,6 +3,7 @@ import { checkDuration, type DurationReport } from '@/lib/script/duration';
 import { ROLE_LABEL } from '@/lib/script/model';
 import type { TranscriptFile } from '@/lib/recording/transcript';
 import { compareWithScript } from '@/lib/recording/compare';
+import type { FilmOrientation } from '@/lib/film/orientation';
 
 export interface ProjectView {
   id: string;
@@ -125,6 +126,7 @@ export function toMaterialView(projectId: string, f: { id: string; path: string;
 export interface FilmView {
   id: string;
   version: number;
+  orientation: FilmOrientation;
   url: string;
   createdAt: string;
   summary: string;
@@ -134,7 +136,7 @@ export interface FilmView {
 type UsageRow = { materialId: string; atSec: number; durSec: number; clipFromSec?: number; clipToSec?: number; speed?: number };
 
 export function toFilmView(projectId: string, f: { id: string; path: string; createdAt: Date; meta: unknown }, materials: MaterialView[]): FilmView {
-  const m = (f.meta ?? {}) as { filmVersion?: unknown; summary?: unknown; usage?: unknown };
+  const m = (f.meta ?? {}) as { filmVersion?: unknown; summary?: unknown; usage?: unknown; orientation?: unknown };
   const usage = (Array.isArray(m.usage) ? (m.usage as UsageRow[]) : []).map(({ materialId, ...rest }) => ({
     materialName: materials.find((x) => x.id === materialId)?.originalName ?? '（已删除的素材）',
     ...rest,
@@ -142,6 +144,7 @@ export function toFilmView(projectId: string, f: { id: string; path: string; cre
   return {
     id: f.id,
     version: Number(m.filmVersion) || 0,
+    orientation: m.orientation === 'landscape' ? 'landscape' : 'portrait',
     url: `/api/projects/${projectId}/files/${f.id}`,
     createdAt: f.createdAt.toISOString(),
     summary: typeof m.summary === 'string' ? m.summary : '',

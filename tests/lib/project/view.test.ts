@@ -76,6 +76,11 @@ describe('material / film views', () => {
       { materialName: '（已删除的素材）', atSec: 12, durSec: 3 },
     ]);
   });
+  it('exposes the film orientation, portrait when not recorded', () => {
+    const base = { id: 'ff', path: '/x/f.mp4', createdAt: new Date('2026-10-04T00:00:00Z') };
+    expect(toFilmView('p1', { ...base, meta: { filmVersion: 4, orientation: 'landscape' } }, []).orientation).toBe('landscape');
+    expect(toFilmView('p1', { ...base, meta: { filmVersion: 1 } }, []).orientation).toBe('portrait');
+  });
 });
 
 describe('toMessageView detail', () => {
