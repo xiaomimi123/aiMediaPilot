@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { checkOrientation } from '@/lib/film/check';
 import { checkShots, checkNumbers, numberTokens, toChineseNumber, checkFilmSource } from '@/lib/film/check';
 import type { ShotsFile } from '@/lib/film/shots';
 
@@ -112,5 +113,30 @@ describe('checkFilmSource', () => {
     expect(issues).toContain('Shot 的时间要用 shots.json（写成 <Shot {...at.镜头id}>），不要手写秒数');
     expect(issues).toContain('镜头 hook 在 Film.tsx 里没有用到');
     expect(issues).toContain('镜头 end 在 Film.tsx 里没有用到');
+  });
+});
+
+
+describe('checkOrientation', () => {
+  const LAND_INDEX = '<OrientationProvider value="landscape">';
+  it('treats a film without orientation as portrait', () => {
+    expect(checkOrientation({}, 'width={W} height={H}')).toEqual({ orientation: 'portrait', issues: [] });
+  });
+  it('accepts a landscape film with its provider', () => {
+    expect(checkOrientation({ orientation: 'landscape' }, LAND_INDEX, 'landscape')).toEqual({ orientation: 'landscape', issues: [] });
+  });
+  it('fails a landscape film whose index.tsx lost the provider', () => {
+    expect(checkOrientation({ orientation: 'landscape' }, 'width={W} height={H}').issues).toEqual(['横版片子的 index.tsx 被改动了（缺少 OrientationProvider）：不要改 index.tsx，用 film new --landscape 重建']);
+  });
+  it('fails an unknown orientation value', () => {
+    expect(checkOrientation({ orientation: 'wide' }, '').issues).toEqual(['data.json 里的版式不认识：wide（只能是 portrait 或 landscape）']);
+  });
+  it('fails when the film does not match the expected orientation', () => {
+    expect(checkOrientation({}, '', 'landscape').issues).toEqual(['要横版，但这个片子目录是竖版：用 film new --landscape 重建']);
+    expect(checkOrientation({ orientation: 'landscape' }, LAND_INDEX, 'portrait').issues).toEqual(['要竖版，但这个片子目录是横版：用 film new 重建']);
+  });
+  it('rejects an unknown --expect value', () => {
+    expect(checkOrientation({}, '', 'horizontal').issues).toEqual(['--expect 只能是 landscape 或 portrait']);
+    expect(checkOrientation({}, '', true).issues).toEqual(['--expect 只能是 landscape 或 portrait']);
   });
 });

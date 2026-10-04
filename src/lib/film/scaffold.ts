@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { PrismaClient } from '@prisma/client';
 import type { FilmBundle } from './bundle';
 import type { ShotsFile } from './shots';
+import type { FilmOrientation } from './orientation';
 
 export function filmsRoot(): string {
   return process.env.FILMS_ROOT || path.join(process.cwd(), 'remotion', 'films');
@@ -38,6 +39,23 @@ registerRoot(() => (
 ));
 `;
 
+const INDEX_LANDSCAPE = `import React from 'react';
+import { Composition, registerRoot } from 'remotion';
+import { FPS, LAYOUT, OrientationProvider } from '../../kit';
+import data from './data.json';
+import { Film } from './Film';
+
+/** 横版: 画框 1920×1080; 区块由 OrientationProvider 传给画框与字幕, Film.tsx 不用管版式。不要改这个文件。 */
+const Root: React.FC = () => (
+  <OrientationProvider value="landscape">
+    <Film />
+  </OrientationProvider>
+);
+
+registerRoot(() => (
+  <Composition id="Film" component={Root} durationInFrames={Math.ceil(data.durationSec * FPS)} fps={FPS} width={LAYOUT.landscape.W} height={LAYOUT.landscape.H} />
+));
+`;
 const FILM = `import React from 'react';
 import { Frame, Shot, Note, Kicker, fromShots } from '../../kit';
 import data from './data.json';
@@ -98,7 +116,8 @@ export function skeletonShots(lines: FilmBundle['transcript'], durationSec: numb
   return out.map((seg, i) => ({ id: `s${i + 1}`, fromSec: seg.from, toSec: seg.to, intent: seg.text }));
 }
 
-export async function scaffoldFilm(bundle: FilmBundle, version: number, root = filmsRoot()): Promise<string> {
+export async function scaffoldFilm(bundle: FilmBundle, version: number, root = filmsRoot(), opts: { orientation?: FilmOrientation } = {}): Promise<string> {
+  const landscape = opts.orientation === 'landscape';
   if (!bundle.video) throw new Error('这个项目还没有口播视频');
   if (!(await exists(bundle.video.path))) throw new Error(`口播原片文件不在了：${bundle.video.path}（先在「口播」一步重新上传）`);
   const dir = path.join(root, `${bundle.project.id}-v${version}`);
@@ -129,11 +148,12 @@ export async function scaffoldFilm(bundle: FilmBundle, version: number, root = f
       captions: bundle.transcript,
       materials,
       missingMaterials,
+      ...(landscape ? { orientation: 'landscape' } : {}),
     };
     const shots: ShotsFile = { version: 1, shots: skeletonShots(bundle.transcript, bundle.video.durationSec) };
     await fs.writeFile(path.join(tmp, 'data.json'), JSON.stringify(data, null, 2));
     await fs.writeFile(path.join(tmp, 'shots.json'), JSON.stringify(shots, null, 2));
-    await fs.writeFile(path.join(tmp, 'index.tsx'), INDEX);
+    await fs.writeFile(path.join(tmp, 'index.tsx'), landscape ? INDEX_LANDSCAPE : INDEX);
     await fs.writeFile(path.join(tmp, 'Film.tsx'), FILM);
     await fs.writeFile(path.join(tmp, 'copy.ts'), COPY_TS);
     await fs.rename(tmp, dir);

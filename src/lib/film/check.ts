@@ -1,4 +1,5 @@
 import type { ShotsFile } from './shots';
+import { isFilmOrientation, orientationLabel, type FilmOrientation } from './orientation';
 
 export interface FilmData {
   durationSec: number;
@@ -187,4 +188,20 @@ export function checkFilmSource(src: string, shots: ShotsFile): string[] {
     }
   }
   return issues;
+}
+
+/** 版式: 不认识的值、横版 index.tsx 丢了 provider、与 --expect 不符, 都不通过 */
+export function checkOrientation(data: { orientation?: unknown }, indexSrc: string, expect?: string | true): { orientation: FilmOrientation; issues: string[] } {
+  const issues: string[] = [];
+  const raw = data.orientation;
+  if (raw !== undefined && !isFilmOrientation(raw)) issues.push(`data.json 里的版式不认识：${String(raw)}（只能是 portrait 或 landscape）`);
+  const orientation: FilmOrientation = raw === 'landscape' ? 'landscape' : 'portrait';
+  if (orientation === 'landscape' && !indexSrc.includes('<OrientationProvider value="landscape">')) {
+    issues.push('横版片子的 index.tsx 被改动了（缺少 OrientationProvider）：不要改 index.tsx，用 film new --landscape 重建');
+  }
+  if (expect !== undefined) {
+    if (!isFilmOrientation(expect)) issues.push('--expect 只能是 landscape 或 portrait');
+    else if (expect !== orientation) issues.push(`要${orientationLabel(expect)}，但这个片子目录是${orientationLabel(orientation)}：用 film new${expect === 'landscape' ? ' --landscape' : ''} 重建`);
+  }
+  return { orientation, issues };
 }

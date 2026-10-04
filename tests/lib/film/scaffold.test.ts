@@ -98,4 +98,17 @@ describe('scaffoldFilm', () => {
     await expect(scaffoldFilm(b, 1, root)).rejects.toThrow('口播原片文件不在了');
     expect(await fs.readdir(root)).toEqual([]);
   });
+  it('writes a landscape film when asked and leaves portrait output unchanged', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mp-src-'));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mp-films-'));
+    const land = await scaffoldFilm(await bundleIn(dir), 1, root, { orientation: 'landscape' });
+    expect(JSON.parse(await fs.readFile(path.join(land, 'data.json'), 'utf8')).orientation).toBe('landscape');
+    const idx = await fs.readFile(path.join(land, 'index.tsx'), 'utf8');
+    expect(idx).toContain('<OrientationProvider value="landscape">');
+    expect(idx).toContain('width={LAYOUT.landscape.W} height={LAYOUT.landscape.H}');
+    const por = await scaffoldFilm(await bundleIn(dir), 2, root);
+    expect('orientation' in JSON.parse(await fs.readFile(path.join(por, 'data.json'), 'utf8'))).toBe(false);
+    expect(await fs.readFile(path.join(por, 'index.tsx'), 'utf8')).toContain('width={W} height={H}');
+    expect(await fs.readFile(path.join(por, 'index.tsx'), 'utf8')).not.toContain('OrientationProvider');
+  });
 });
