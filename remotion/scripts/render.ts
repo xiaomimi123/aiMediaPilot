@@ -2,10 +2,11 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { bundle } from '@remotion/bundler';
 import { renderMedia, renderStill, selectComposition } from '@remotion/renderer';
+import { STILL_RENDER_OPTS, stillPath } from './still-opts';
 
 /**
  * 用法:
- *   render.ts <filmDir> --stills 1.5,4.2,9   每个秒数渲一张 <filmDir>/stills/<秒>.png
+ *   render.ts <filmDir> --stills 1.5,4.2,9   每个秒数渲一张 <filmDir>/stills/<秒>.jpg(半尺寸)
  *   render.ts <filmDir> --out <mp4>          渲整片
  * 片子目录必须有 index.tsx(registerRoot, 合成 id = Film) 与 public/。
  */
@@ -19,11 +20,13 @@ async function main() {
 
   if (flag === '--stills') {
     const dir = path.join(filmDir, 'stills');
+    // 每次重出: 清掉上一轮的(含旧的全尺寸 png), 只留这一轮
+    fs.rmSync(dir, { recursive: true, force: true });
     fs.mkdirSync(dir, { recursive: true });
     for (const s of value.split(',').map(Number)) {
       const frame = Math.min(composition.durationInFrames - 1, Math.max(0, Math.round(s * composition.fps)));
-      const output = path.join(dir, `${s}.png`);
-      await renderStill({ composition, serveUrl, output, frame });
+      const output = stillPath(dir, s);
+      await renderStill({ composition, serveUrl, output, frame, ...STILL_RENDER_OPTS });
       console.log(`still ${output}`);
     }
   } else if (flag === '--out') {

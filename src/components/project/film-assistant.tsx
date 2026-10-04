@@ -167,6 +167,11 @@ export function FilmAssistant({ projectId, onChanged }: { projectId: string; onC
               <p className="text-[var(--danger)]">{`出片停了：${c.message ?? '出错了'}`}</p>
               <div className="flex gap-2">
                 <button className="btn-primary" disabled={busy || !!blocked} onClick={() => void post({ action: 'reply', text: '接着做' })}>接着做</button>
+                {c.filmDir && (
+                  <button className="btn-secondary" disabled={busy || !!blocked} title="旧对话太长被拒收时用：开新对话，从检查开始接着做同一个片子" onClick={() => void post({ action: 'restart' })}>
+                    换个新对话接着做
+                  </button>
+                )}
                 <button className="btn-secondary" disabled={busy} onClick={() => void post({ action: 'abandon' })}>放弃</button>
               </div>
               <div className="flex gap-2">

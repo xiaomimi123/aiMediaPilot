@@ -74,6 +74,12 @@ export function firstMessage(i: { kind: 'new' | 'revise'; projectId: string; tit
   return `改项目 ${i.projectId}（${i.title}）的成片：基于 v${i.baseVersion}（${i.baseFilmDir}）出新的一版${land ? '横版' : ''}${how}${note ? `修改意见：${note}` : ''}`;
 }
 
+/** 对话太长被模型服务拒绝后, 换新对话接着做同一个片子目录: 从检查开始, 不重建、不重排镜头表 */
+export function restartMessage(i: { projectId: string; title: string; filmDir: string; orientation: FilmOrientation }): string {
+  const land = i.orientation === 'landscape';
+  return `继续给项目 ${i.projectId}（${i.title}）出${land ? '横版' : ''}成片。上一段对话太长中断了，这是新对话：片子目录 ${i.filmDir} 里的镜头表 shots.json 和画面 Film.tsx、copy.ts 都已经写好。不要 film new，不要重排镜头表。先读 .claude/skills/produce-film/SKILL.md 和这几个文件，从第 6 步开始：检查（\`npm run -s mp -- film check ${i.filmDir}${land ? ' --expect landscape' : ''}\`）→ 出关键帧逐张看 → 有问题就改 → 渲染成片，然后停下来等我确认。`;
+}
+
 export function buildClaudeArgs(i: { message: string; sessionId: string; resume: boolean; model: string }): string[] {
   return [
     '-p',

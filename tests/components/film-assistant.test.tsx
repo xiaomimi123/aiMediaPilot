@@ -90,4 +90,10 @@ describe('FilmAssistant', () => {
     fireEvent.click(screen.getByText('出一版'));
     await waitFor(() => expect(posted(f)).toEqual([{ action: 'start', kind: 'new', orientation: 'landscape' }]));
   });
+  it('offers a fresh conversation after a failure on an existing film dir', async () => {
+    const f = stub(data({ current: session({ status: 'failed', message: 'API Error: 400 read body failed' }) }));
+    render(<FilmAssistant projectId="p1" onChanged={() => {}} />);
+    fireEvent.click(await screen.findByText('换个新对话接着做'));
+    await waitFor(() => expect(posted(f)).toEqual([{ action: 'restart' }]));
+  });
 });

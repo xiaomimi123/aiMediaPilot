@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { PrismaClient } from '@prisma/client';
-import { abandonFilm, createRunnerDeps, FilmBusy, refreshFilm, replyFilm, startFilm, stopFilm, type RunnerDeps } from '@/lib/film-session/runner';
+import { abandonFilm, createRunnerDeps, restartFilm, FilmBusy, refreshFilm, replyFilm, startFilm, stopFilm, type RunnerDeps } from '@/lib/film-session/runner';
 
 type Row = Record<string, unknown> & { id: string; projectId: string; status: string };
 
@@ -235,5 +235,33 @@ describe('film runner', () => {
     expect(s.orientation).toBe('landscape');
     expect((await deps.readLines(s.logPath))[0]).toContain('横版');
     await settle(db, deps, s.id);
+  });
+  it('restarts a failed film in a fresh claude conversation on the same film dir', async () => {
+    process.env.FAKE_SCENARIO = 'limit';
+    const { db } = fakeDb();
+    const spawned: string[][] = [];
+    const deps = realDeps({ spawn: (bin, args, log, onExit) => (spawned.push(args), createRunnerDeps().spawn.call(realDeps(), bin, args, log, onExit)) });
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus', orientation: 'landscape' });
+    await settle(db, deps, s.id);
+    await db.filmSession.update({ where: { id: s.id }, data: { filmDir: 'remotion/films/p1-v4' } });
+    const oldClaude = s.claudeSessionId;
+    delete process.env.FAKE_SCENARIO;
+    const r = await restartFilm(db, deps, s.id, 'opus');
+    expect(r.status).toBe('running');
+    expect(r.claudeSessionId).not.toBe(oldClaude);
+    const args = spawned.at(-1)!;
+    expect(args[args.indexOf('--session-id') + 1]).toBe(r.claudeSessionId);
+    expect(args).not.toContain('--resume');
+    expect(args.at(-1)).toContain('片子目录 remotion/films/p1-v4');
+    expect(args.at(-1)).toContain('横版');
+    await settle(db, deps, s.id);
+  });
+  it('only restarts a stopped or failed film that has a film dir', async () => {
+    process.env.FAKE_SCENARIO = 'limit';
+    const { db } = fakeDb();
+    const deps = realDeps();
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    await settle(db, deps, s.id);
+    await expect(restartFilm(db, deps, s.id, 'opus')).rejects.toThrow('还没有片子目录');
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildClaudeArgs, childEnv, FILM_ALLOWED_TOOLS, FILM_RULES, firstMessage, resolveClaudeBin } from '@/lib/film-session/args';
+import { buildClaudeArgs, childEnv, restartMessage, FILM_ALLOWED_TOOLS, FILM_RULES, firstMessage, resolveClaudeBin } from '@/lib/film-session/args';
 
 describe('film session args', () => {
   it('whitelists only film work', () => {
@@ -66,5 +66,12 @@ describe('film session args', () => {
   });
   it('does not rely on mkdir (headless mode always asks before mkdir)', () => {
     expect(FILM_ALLOWED_TOOLS.some((t) => t.includes('mkdir'))).toBe(false);
+  });
+  it('restarts in a fresh conversation from the check step without rebuilding the film', () => {
+    expect(restartMessage({ projectId: 'p1', title: 'U盘', filmDir: 'remotion/films/p1-v4', orientation: 'landscape' })).toBe(
+      '继续给项目 p1（U盘）出横版成片。上一段对话太长中断了，这是新对话：片子目录 remotion/films/p1-v4 里的镜头表 shots.json 和画面 Film.tsx、copy.ts 都已经写好。不要 film new，不要重排镜头表。先读 .claude/skills/produce-film/SKILL.md 和这几个文件，从第 6 步开始：检查（`npm run -s mp -- film check remotion/films/p1-v4 --expect landscape`）→ 出关键帧逐张看 → 有问题就改 → 渲染成片，然后停下来等我确认。',
+    );
+    expect(restartMessage({ projectId: 'p1', title: 'U盘', filmDir: 'remotion/films/p1-v4', orientation: 'portrait' })).toContain('出成片。');
+    expect(restartMessage({ projectId: 'p1', title: 'U盘', filmDir: 'remotion/films/p1-v4', orientation: 'portrait' })).toContain('`npm run -s mp -- film check remotion/films/p1-v4`）');
   });
 });

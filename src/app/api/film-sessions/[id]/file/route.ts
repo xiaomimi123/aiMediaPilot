@@ -9,7 +9,7 @@ import { resolveSessionFile } from '@/lib/film-session/files';
 
 export const dynamic = 'force-dynamic';
 
-const TYPES: Record<string, string> = { '.mp4': 'video/mp4', '.png': 'image/png' };
+const TYPES: Record<string, string> = { '.mp4': 'video/mp4', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' };
 
 /** 出片过程里的关键帧截图与成片预览: 只读该会话片子目录内的 png / mp4 */
 export async function GET(req: Request, { params }: { params: { id: string } }) {

@@ -92,4 +92,8 @@ describe('parseLog', () => {
     ]);
     expect(p.items.filter((i) => i.kind === 'denied')).toEqual([{ kind: 'denied', text: 'Bash：cp a b' }, { kind: 'denied', text: 'Bash：cp c d' }]);
   });
+  it('shows jpeg keyframes as stills too', () => {
+    const p = parseLog([turn(1, 'go'), use('e', 'Read', { file_path: '/r/remotion/films/p1-v4/stills/12.2.jpg' }), res('e', '[image]')]);
+    expect(p.items).toContainEqual({ kind: 'still', path: 'stills/12.2.jpg' });
+  });
 });
