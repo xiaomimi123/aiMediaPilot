@@ -24,6 +24,8 @@ export function ModelsCard() {
   const [form, setForm] = useState<Form | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // 切换/删除在页面里确认(不用 confirm(): 内置浏览器等环境会屏蔽原生弹窗, 点了没反应)
+  const [ask, setAsk] = useState<{ id: string; text: string; run: () => void } | null>(null);
 
   const load = useCallback(async () => {
     const j = await call('/api/settings/models');
@@ -48,8 +50,9 @@ export function ModelsCard() {
 
   const activate = (m: ModelView) => {
     const g = m.lastTest?.grade;
-    if (g !== 'able_agent' && !confirm(g ? `这个模型写稿改稿会失败（${GRADE[g].text}），确定切换吗？` : '这个模型还没测试过，编导可能用不了，确定切换吗？')) return;
-    void act(`act-${m.id}`, `/api/settings/models/${m.id}/activate`, 'POST', undefined, `已切换到 ${m.name}。`);
+    const run = () => void act(`act-${m.id}`, `/api/settings/models/${m.id}/activate`, 'POST', undefined, `已切换到 ${m.name}。`);
+    if (g === 'able_agent') return run();
+    setAsk({ id: m.id, text: g ? `这个模型写稿改稿会失败（${GRADE[g].text}），确定切换吗？` : '这个模型还没测试过，编导可能用不了，确定切换吗？', run });
   };
 
   return (
@@ -114,10 +117,22 @@ export function ModelsCard() {
                 <button className="text-[var(--accent)]" disabled={busy !== null} onClick={() => void act(`test-${m.id}`, `/api/settings/models/${m.id}/test`, 'POST')}>{busy === `test-${m.id}` ? '测试中（约 20 秒）…' : '测试'}</button>
                 {!m.isActive && <button className="text-[var(--accent)]" disabled={busy !== null} onClick={() => activate(m)}>设为当前</button>}
                 <button className="text-[var(--text-secondary)]" onClick={() => setForm({ id: m.id, name: m.name, kind: m.kind, baseUrl: m.baseUrl, model: m.model, apiKey: '' })}>编辑</button>
-                <button className="text-[var(--danger)]" disabled={busy !== null} onClick={() => {
-                  if (confirm(m.isActive ? `${m.name} 是当前使用的模型，删掉后编导会用不了，确定删除吗？` : `确定删除 ${m.name}？`)) void act(`del-${m.id}`, `/api/settings/models/${m.id}`, 'DELETE', undefined, '已删除。');
-                }}>删除</button>
+                <button className="text-[var(--danger)]" disabled={busy !== null} onClick={() =>
+                  setAsk({
+                    id: m.id,
+                    text: m.isActive ? `${m.name} 是当前使用的模型，删掉后编导会用不了，确定删除吗？` : `确定删除 ${m.name}？`,
+                    run: () => void act(`del-${m.id}`, `/api/settings/models/${m.id}`, 'DELETE', undefined, '已删除。'),
+                  })
+                }>删除</button>
               </div>
+              {ask?.id === m.id && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 rounded-[var(--r-md)] bg-[var(--danger-subtle)] px-3 py-2 text-xs">
+                  <span className="text-[var(--danger)]">{ask.text}</span>
+                  <div className="flex-1" />
+                  <button className="rounded-[var(--r-md)] bg-[var(--danger)] px-3 py-1 text-white" onClick={() => { const r = ask.run; setAsk(null); r(); }}>确定</button>
+                  <button className="btn-secondary text-xs" onClick={() => setAsk(null)}>取消</button>
+                </div>
+              )}
             </li>
           ))}
         </ul>

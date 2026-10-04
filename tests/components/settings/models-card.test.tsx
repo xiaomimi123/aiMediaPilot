@@ -30,15 +30,35 @@ describe('ModelsCard', () => {
     expect(screen.getByText(/…abcd/)).toBeTruthy();
     expect(document.body.textContent).not.toContain('sk-');
   });
-  it('asks before activating a model that cannot be the director', async () => {
+  it('asks in the page before activating a model that cannot be the director', async () => {
     const f = stub();
     const confirm = vi.fn(() => false);
     vi.stubGlobal('confirm', confirm);
     render(<ModelsCard />);
     await waitFor(() => expect(screen.getByText('Ollama（本地）')).toBeTruthy());
+    const activates = () => f.mock.calls.filter((c) => String(c[0]).includes('/activate'));
     fireEvent.click(screen.getAllByText('设为当前')[0]);
-    expect(confirm).toHaveBeenCalledWith('这个模型写稿改稿会失败（只能做分析），确定切换吗？');
-    expect(f.mock.calls.some((c) => String(c[0]).includes('/activate'))).toBe(false);
+    expect(screen.getByText('这个模型写稿改稿会失败（只能做分析），确定切换吗？')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '取消' }));
+    expect(screen.queryByText('这个模型写稿改稿会失败（只能做分析），确定切换吗？')).toBeNull();
+    expect(activates()).toHaveLength(0);
+    fireEvent.click(screen.getAllByText('设为当前')[0]);
+    fireEvent.click(screen.getByRole('button', { name: '确定' }));
+    await waitFor(() => expect(activates().map((c) => c[0])).toEqual(['/api/settings/models/b/activate']));
+    expect(confirm).not.toHaveBeenCalled();
+  });
+  it('asks in the page before deleting a model', async () => {
+    const f = stub();
+    const confirm = vi.fn(() => true);
+    vi.stubGlobal('confirm', confirm);
+    render(<ModelsCard />);
+    await waitFor(() => expect(screen.getByText('DeepSeek')).toBeTruthy());
+    fireEvent.click(screen.getAllByText('删除')[0]);
+    expect(screen.getByText('DeepSeek 是当前使用的模型，删掉后编导会用不了，确定删除吗？')).toBeTruthy();
+    expect(f.mock.calls.filter((c) => (c[1] as { method?: string } | undefined)?.method === 'DELETE')).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: '确定' }));
+    await waitFor(() => expect(f.mock.calls.filter((c) => (c[1] as { method?: string } | undefined)?.method === 'DELETE').map((c) => c[0])).toEqual(['/api/settings/models/a']));
+    expect(confirm).not.toHaveBeenCalled();
   });
   it('lets the film model be switched between Opus and Sonnet', async () => {
     const f = stub((url, init) => (url === '/api/settings/film-model' ? { success: true, data: { model: init?.method === 'PUT' ? 'sonnet' : 'opus' } } : null));
