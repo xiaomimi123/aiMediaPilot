@@ -126,6 +126,8 @@ export async function scaffoldFilm(bundle: FilmBundle, version: number, root = f
   const tmp = `${dir}.tmp-${process.pid}-${Date.now()}`;
   try {
     await fs.mkdir(path.join(tmp, 'public'), { recursive: true });
+    // 抽帧放这里: 无界面出片时 mkdir 总要审批, 目录先建好
+    await fs.mkdir(path.join(tmp, 'frames'));
     const videoFile = `raw${bundle.video.ext}`;
     await linkOrCopy(bundle.video.path, path.join(tmp, 'public', videoFile));
     const materials = [];

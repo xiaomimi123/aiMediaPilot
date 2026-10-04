@@ -111,4 +111,10 @@ describe('scaffoldFilm', () => {
     expect(await fs.readFile(path.join(por, 'index.tsx'), 'utf8')).toContain('width={W} height={H}');
     expect(await fs.readFile(path.join(por, 'index.tsx'), 'utf8')).not.toContain('OrientationProvider');
   });
+  it('creates an empty frames/ folder so frame extraction needs no mkdir', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mp-src-'));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mp-films-'));
+    const filmDir = await scaffoldFilm(await bundleIn(dir), 1, root);
+    expect(await fs.readdir(path.join(filmDir, 'frames'))).toEqual([]);
+  });
 });

@@ -64,4 +64,7 @@ describe('film session args', () => {
     );
     expect(firstMessage({ kind: 'new', projectId: 'p1', title: 'U盘', orientation: 'portrait' })).toBe('给项目 p1（U盘）出一版成片。');
   });
+  it('does not rely on mkdir (headless mode always asks before mkdir)', () => {
+    expect(FILM_ALLOWED_TOOLS.some((t) => t.includes('mkdir'))).toBe(false);
+  });
 });

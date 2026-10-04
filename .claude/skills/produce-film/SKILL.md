@@ -21,10 +21,11 @@ description: 给 MediaPilot 项目出一条口播成片(竖版默认, 也可横�
 
 1. **找项目**: `npm run -s mp -- project list`(不熟悉命令时先 `npm run -s mp -- help`)。用户说的项目名对不上就问。
 2. **读资料**: `npm run -s mp -- project export <id>`。读稿子、逐句转写、素材说明。
-   - 视频素材: `mkdir -p /tmp/mp-film && ffmpeg -i <path> -vf fps=1/2,scale=480:-1 /tmp/mp-film/mat-<id>-%03d.jpg` 抽帧后逐张看; 图片直接看。
+   - 图片素材直接看; 视频素材(含口播原片)等第 3 步建好片子目录后再抽帧看。
 3. **建片子**: `npm run -s mp -- film new <id>` → 得到片子目录 `remotion/films/<id>-v<N>/`。
    - 修改旧版时: 建新版本后, 从旧版目录复制 `Film.tsx`、`copy.ts`、`shots.json` 过来再改, 旧版不动(同一版本不能重复登记)。
    - `film new` 提示"素材文件不在了, 已跳过"时, 告诉用户哪个素材丢了。
+   - 抽帧: `ffmpeg -i <path> -vf fps=1/2,scale=480:-1 <片子目录>/frames/mat-<id>-%03d.jpg`(`frames/` 已由 film new 建好, 不要 mkdir), 然后用 Read 逐张看。
 4. **排镜头表** `shots.json`: 按句子边界切成 2–8 秒的镜头(硬限制 1–12 秒), 首尾相接覆盖 0 到口播结束。每镜 `intent` 写这镜讲什么; 用素材时写 `material: { id, clipFromSec, clipToSec, speed }`。
    - 素材有说明 → 照说明放。没说明 → 看抽帧 + 转写自己判断放哪、截哪段。
    - 视频素材比镜头长: 先加速(≤2 倍), 还放不下就截最相关的一段; 比镜头短: 停在最后一帧或接一张卡。

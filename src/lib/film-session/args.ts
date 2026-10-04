@@ -19,7 +19,6 @@ export const FILM_ALLOWED_TOOLS = [
   'Bash(npm run -s mp -- film register:*)',
   'Bash(ffmpeg:*)',
   'Bash(ffprobe:*)',
-  'Bash(mkdir -p /tmp/mp-film:*)',
   'Bash(ls:*)',
 ];
 
