@@ -7,6 +7,14 @@ description: 给 MediaPilot 项目出一条竖屏口播成片(Remotion, 风格 C
 
 画框固定: 1080×1920, 人物小窗右上角全程在, 底部字幕, 中间内容区(790×560, 位置见 `remotion/kit/tokens.ts` 的 `ZONE`)。你只创作内容区。上下与右侧会被抖音的频道栏、点赞列、作者文案挡住(`DOUYIN_OVERLAYS`), 内容区已避开它们, 所以内容区比画面窄: 卡片按 790 宽设计, 字少一些、行数少一些。设计依据: `docs/superpowers/specs/2026-09-28-film-production-design.md`。
 
+## 横版
+
+`data.json` 里 `orientation` 为 `landscape` 时是横版(1920×1080): 内容区 1360×765(正好 16:9), 右栏上面人物小窗、下面段落标题, 字幕在内容区下方; 遮挡区见 `remotion/kit/tokens.ts` 的 `LANDSCAPE_OVERLAYS`。
+- 录屏和操作演示素材优先整块铺满内容区(16:9 录屏等比铺满不裁); 卡片可以横向并排、字可以多一些。
+- 不要改 `index.tsx`(版式由它决定, 改了 film check 不通过)。
+- 被要求了版式时, 检查用 `npm run -s mp -- film check <片子目录> --expect landscape`。
+- 其余流程与竖版完全相同。
+
 ## 流程(每一步都要做, 不许跳)
 
 1. **找项目**: `npm run -s mp -- project list`(不熟悉命令时先 `npm run -s mp -- help`)。用户说的项目名对不上就问。
