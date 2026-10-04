@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { FilmPane } from '@/components/project/film-pane';
 
 // 出片助手卡片会读出片状态; 各用例需要别的返回值时自己再 stub
@@ -63,5 +63,25 @@ describe('FilmPane', () => {
     const videos = container.querySelectorAll('li.card video');
     expect(videos[0].className).toContain('w-full');
     expect(videos[1].className).toContain('max-h-[60vh]');
+  });
+  it('deletes a film version only after confirming in the page (no native dialog)', async () => {
+    const films = [{ id: 'f1', version: 1, url: '/f1', createdAt: '2026-09-28T01:00:00Z', summary: '首版', usage: [], orientation: 'portrait' as const }];
+    const onChanged = vi.fn();
+    const fetchMock = vi.fn(async (_url: string, _init?: { method?: string }) => ({ json: async () => ({ success: true, data: { version: 1 } }) }));
+    vi.stubGlobal('fetch', fetchMock);
+    const confirm = vi.fn(() => false);
+    vi.stubGlobal('confirm', confirm);
+    render(<FilmPane projectId="p1" materials={[]} films={films} onChanged={onChanged} />);
+    const deletes = () => fetchMock.mock.calls.filter((c) => c[1]?.method === 'DELETE');
+    fireEvent.click(screen.getByRole('button', { name: '删除成片 v1' }));
+    expect(screen.getByText('删除 v1？视频和片子目录都会删掉，不能恢复。')).toBeTruthy();
+    fireEvent.click(screen.getByText('取消'));
+    expect(screen.queryByText('确定删除')).toBeNull();
+    expect(deletes()).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: '删除成片 v1' }));
+    fireEvent.click(screen.getByText('确定删除'));
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+    expect(deletes().map((c) => c[0])).toEqual(['/api/projects/p1/films/f1']);
+    expect(confirm).not.toHaveBeenCalled();
   });
 });

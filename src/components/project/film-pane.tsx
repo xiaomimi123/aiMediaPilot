@@ -38,6 +38,8 @@ export function FilmPane({ projectId, materials, films, onChanged }: { projectId
   const [uploading, setUploading] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  // 删除在页面里确认(不用 confirm(): 内置浏览器等环境会屏蔽原生弹窗, 点了没反应)
+  const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   // 最近一次保存的说明; 不能拿 props 比(保存后 props 不刷新, 清空说明会被当成"没改"而漏存)
   const savedNotes = useRef(new Map(materials.map((m) => [m.id, m.note])));
@@ -68,6 +70,16 @@ export function FilmPane({ projectId, materials, films, onChanged }: { projectId
   async function remove(id: string) {
     const res = await fetch(`/api/projects/${projectId}/materials/${id}`, { method: 'DELETE' });
     const j = await res.json();
+    if (!j.success) setError(j.message);
+    onChanged();
+  }
+
+  async function removeFilm(f: FilmView) {
+    setConfirmDel(null);
+    setError(null);
+    const j = await fetch(`/api/projects/${projectId}/films/${f.id}`, { method: 'DELETE' })
+      .then((r) => r.json())
+      .catch(() => ({ success: false, message: '服务没有响应' }));
     if (!j.success) setError(j.message);
     onChanged();
   }
@@ -145,7 +157,22 @@ export function FilmPane({ projectId, materials, films, onChanged }: { projectId
                     <a className="text-xs text-[var(--accent)]" href={f.url} download={`成片v${f.version}.mp4`}>
                       下载
                     </a>
+                    <button className="text-xs text-[var(--danger)]" aria-label={`删除成片 v${f.version}`} onClick={() => setConfirmDel(f.id)}>
+                      删除
+                    </button>
                   </div>
+                  {confirmDel === f.id && (
+                    <div className="mb-2 flex flex-wrap items-center gap-2 rounded-[var(--r-md)] bg-[var(--danger-subtle)] px-3 py-2 text-sm">
+                      <span className="text-[var(--danger)]">{`删除 v${f.version}？视频和片子目录都会删掉，不能恢复。`}</span>
+                      <div className="flex-1" />
+                      <button className="rounded-[var(--r-md)] bg-[var(--danger)] px-3 py-1 text-xs text-white" onClick={() => void removeFilm(f)}>
+                        确定删除
+                      </button>
+                      <button className="btn-secondary text-xs" onClick={() => setConfirmDel(null)}>
+                        取消
+                      </button>
+                    </div>
+                  )}
                   {f.summary && <p className="mb-2 text-sm text-[var(--text-secondary)]">{f.summary}</p>}
                   <video src={f.url} controls className={cn('mb-2 rounded bg-black', f.orientation === 'landscape' ? 'w-full' : 'max-h-[60vh]')} />
                   {f.usage.length > 0 && (

@@ -13,7 +13,8 @@ const exists = (p: string) => fs.access(p).then(() => true, () => false);
 
 /** 已登记的最大版本 +1; 若该版本目录已存在(上次没登记), 继续往后找 */
 export async function nextFilmVersion(db: PrismaClient, projectId: string, root = filmsRoot()): Promise<number> {
-  const films = await db.projectFile.findMany({ where: { projectId, kind: 'final_mp4' } });
+  // 删掉的版本(final_mp4_deleted)也算: 版本号不重复使用
+  const films = await db.projectFile.findMany({ where: { projectId, kind: { in: ['final_mp4', 'final_mp4_deleted'] } } });
   let v = films.reduce((max, f) => Math.max(max, Number((f.meta as { filmVersion?: unknown })?.filmVersion) || 0), 0) + 1;
   while (await exists(path.join(root, `${projectId}-v${v}`))) v++;
   return v;
