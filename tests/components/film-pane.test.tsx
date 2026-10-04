@@ -27,8 +27,8 @@ describe('FilmPane', () => {
   });
   it('shows films newest first with summary and usage table', () => {
     const films = [
-      { id: 'f2', version: 2, url: '/f2', createdAt: '2026-09-28T02:00:00Z', summary: '冷知识段换成录屏', usage: [{ materialName: 'rec.mov', atSec: 35, durSec: 8, clipFromSec: 10, clipToSec: 22, speed: 1.5 }] },
-      { id: 'f1', version: 1, url: '/f1', createdAt: '2026-09-28T01:00:00Z', summary: '首版', usage: [] },
+      { id: 'f2', version: 2, url: '/f2', createdAt: '2026-09-28T02:00:00Z', summary: '冷知识段换成录屏', usage: [{ materialName: 'rec.mov', atSec: 35, durSec: 8, clipFromSec: 10, clipToSec: 22, speed: 1.5 }], orientation: 'portrait' as const },
+      { id: 'f1', version: 1, url: '/f1', createdAt: '2026-09-28T01:00:00Z', summary: '首版', usage: [], orientation: 'portrait' as const },
     ];
     render(<FilmPane projectId="p1" materials={materials} films={films} onChanged={vi.fn()} />);
     const titles = screen.getAllByText(/^成片 v\d$/).map((e) => e.textContent);
@@ -52,5 +52,16 @@ describe('FilmPane', () => {
     await Promise.resolve();
     const bodies = fetchMock.mock.calls.filter((c) => c[1]?.body).map((c) => JSON.parse(c[1]!.body).note);
     expect(bodies).toEqual(['讲安装', '']);
+  });
+  it('marks landscape films and plays them full width', () => {
+    const films = [
+      { id: 'f4', version: 4, url: '/f4', createdAt: '2026-10-04T02:00:00Z', summary: '录屏版', usage: [], orientation: 'landscape' as const },
+      { id: 'f3', version: 3, url: '/f3', createdAt: '2026-10-04T01:00:00Z', summary: '口播版', usage: [], orientation: 'portrait' as const },
+    ];
+    const { container } = render(<FilmPane projectId="p1" materials={[]} films={films} onChanged={vi.fn()} />);
+    expect(screen.getAllByText('横版')).toHaveLength(1);
+    const videos = container.querySelectorAll('li.card video');
+    expect(videos[0].className).toContain('w-full');
+    expect(videos[1].className).toContain('max-h-[60vh]');
   });
 });

@@ -5,7 +5,8 @@ import { buildFilmBundle } from '@/lib/film/bundle';
 import { nextFilmVersion, scaffoldFilm } from '@/lib/film/scaffold';
 import { registerFilm } from '@/lib/film/register';
 import { ShotsFileSchema } from '@/lib/film/shots';
-import { checkShots, checkNumbers, checkFilmSource, type FilmData } from '@/lib/film/check';
+import { checkShots, checkNumbers, checkFilmSource, checkOrientation, type FilmData } from '@/lib/film/check';
+import { orientationLabel, type FilmOrientation } from '@/lib/film/orientation';
 import { ScriptSchema } from '@/lib/script/model';
 import { CliError, needArg, type Command } from '../registry';
 
@@ -50,12 +51,12 @@ export const FILM_COMMANDS: Command[] = [
     path: ['film', 'new'],
     tier: 'heavy',
     hermes: false,
-    usage: 'mp film new <项目>',
+    usage: 'mp film new <项目> [--landscape]',
     summary: '新建片子目录',
     async run(ctx, p) {
       const id = needArg(p, 0, '项目');
       const bundle = await buildFilmBundle(ctx.db, id);
-      return scaffoldFilm(bundle, await nextFilmVersion(ctx.db, id));
+      return scaffoldFilm(bundle, await nextFilmVersion(ctx.db, id), undefined, { orientation: p.flags.landscape ? 'landscape' : 'portrait' });
     },
     format: (d) => String(d),
   },
@@ -63,7 +64,7 @@ export const FILM_COMMANDS: Command[] = [
     path: ['film', 'check'],
     tier: 'heavy',
     hermes: false,
-    usage: 'mp film check <片子目录>',
+    usage: 'mp film check <片子目录> [--expect landscape|portrait]',
     summary: '检查片子',
     async run(ctx, p) {
       const filmDir = path.resolve(needArg(p, 0, '片子目录'));
@@ -73,6 +74,8 @@ export const FILM_COMMANDS: Command[] = [
       await fs.writeFile(tsconfig, JSON.stringify({ extends: '../../tsconfig.json', include: ['../../kit', '.'] }, null, 2));
       if (run('npx', ['tsc', '--noEmit', '-p', tsconfig]) !== 0) issues.push('类型检查没通过（见上方报错）');
       const { data, shots } = await readFilm(filmDir);
+      const orient = checkOrientation(data as { orientation?: unknown }, await fs.readFile(path.join(filmDir, 'index.tsx'), 'utf8').catch(() => ''), p.flags.expect);
+      issues.push(...orient.issues);
       const missing = (data as unknown as { missingMaterials?: { originalName: string }[] }).missingMaterials ?? [];
       for (const m of missing) ctx.progress(`! 素材文件不在了，已跳过：${m.originalName}`);
       issues.push(...checkFilmSource(await fs.readFile(path.join(filmDir, 'Film.tsx'), 'utf8'), shots));
@@ -85,9 +88,9 @@ export const FILM_COMMANDS: Command[] = [
       const copy = await fs.readFile(path.join(filmDir, 'copy.ts'), 'utf8');
       issues.push(...checkNumbers(copy, [scriptText, data.captions.map((c) => c.text).join('\n')]));
       if (issues.length) throw new CliError('failed', issues.map((i) => `✗ ${i}`).join('\n'));
-      return { passed: true };
+      return { passed: true, orientation: orient.orientation };
     },
-    format: () => 'film check 通过',
+    format: (d) => `film check 通过（${orientationLabel((d as { orientation: FilmOrientation }).orientation)}）`,
   },
   {
     path: ['film', 'render'],

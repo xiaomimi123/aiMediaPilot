@@ -1,4 +1,6 @@
 import type { ShotsFile } from './shots';
+import { isFilmOrientation, orientationLabel, type FilmOrientation } from './orientation';
+import { INDEX, INDEX_LANDSCAPE } from './scaffold';
 
 export interface FilmData {
   durationSec: number;
@@ -187,4 +189,21 @@ export function checkFilmSource(src: string, shots: ShotsFile): string[] {
     }
   }
   return issues;
+}
+
+/** 版式: 不认识的值、index.tsx 与模板不一致、与 --expect 不符, 都不通过 */
+export function checkOrientation(data: { orientation?: unknown }, indexSrc: string, expect?: string | true): { orientation: FilmOrientation; issues: string[] } {
+  const issues: string[] = [];
+  const raw = data.orientation;
+  if (raw !== undefined && !isFilmOrientation(raw)) issues.push(`data.json 里的版式不认识：${String(raw)}（只能是 portrait 或 landscape）`);
+  const orientation: FilmOrientation = raw === 'landscape' ? 'landscape' : 'portrait';
+  // index.tsx 由 film new 生成、不许改: 必须和该版式的模板逐字一致(旧片子 v1–v3 与竖版模板一致)
+  if (indexSrc !== (orientation === 'landscape' ? INDEX_LANDSCAPE : INDEX)) {
+    issues.push(`index.tsx 被改动了（和${orientationLabel(orientation)}模板不一致）：不要改 index.tsx，用 film new${orientation === 'landscape' ? ' --landscape' : ''} 重建`);
+  }
+  if (expect !== undefined) {
+    if (!isFilmOrientation(expect)) issues.push('--expect 只能是 landscape 或 portrait');
+    else if (expect !== orientation) issues.push(`要${orientationLabel(expect)}，但这个片子目录是${orientationLabel(orientation)}：用 film new${expect === 'landscape' ? ' --landscape' : ''} 重建`);
+  }
+  return { orientation, issues };
 }

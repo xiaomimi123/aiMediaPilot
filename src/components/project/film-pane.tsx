@@ -139,6 +139,7 @@ export function FilmPane({ projectId, materials, films, onChanged }: { projectId
                 <li key={f.id} className="card">
                   <div className="mb-2 flex items-center gap-3 text-sm">
                     <b>{`成片 v${f.version}`}</b>
+                    {f.orientation === 'landscape' && <span className="chip">横版</span>}
                     <span className="text-xs text-[var(--text-tertiary)]">{new Date(f.createdAt).toLocaleString('zh-CN')}</span>
                     <div className="flex-1" />
                     <a className="text-xs text-[var(--accent)]" href={f.url} download={`成片v${f.version}.mp4`}>
@@ -146,7 +147,7 @@ export function FilmPane({ projectId, materials, films, onChanged }: { projectId
                     </a>
                   </div>
                   {f.summary && <p className="mb-2 text-sm text-[var(--text-secondary)]">{f.summary}</p>}
-                  <video src={f.url} controls className="mb-2 max-h-[60vh] rounded bg-black" />
+                  <video src={f.url} controls className={cn('mb-2 rounded bg-black', f.orientation === 'landscape' ? 'w-full' : 'max-h-[60vh]')} />
                   {f.usage.length > 0 && (
                     <ul className="space-y-1 text-xs text-[var(--text-secondary)]">
                       {f.usage.map((u, i) => (

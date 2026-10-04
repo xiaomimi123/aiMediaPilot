@@ -29,9 +29,46 @@ export const DOUYIN_OVERLAYS: Record<'topTabs' | 'rightActions' | 'bottomCaption
   bottomCaption: { left: 0, top: 1590, width: W, height: H - 1590 },
 };
 
-export const ZONE: { pip: Rect; title: Rect; content: Rect; captions: Rect } = {
+type Zones = { pip: Rect; title: Rect; content: Rect; captions: Rect };
+
+export const ZONE: Zones = {
   pip: { left: W - 60 - 350, top: 300, width: 350, height: 470 },
   title: { left: 60, top: 300, width: 590, height: 470 },
   content: { left: 60, top: 790, width: 790, height: 560 },
   captions: { left: 60, top: 1380, width: 790, height: 120 },
 };
+
+export type Orientation = 'portrait' | 'landscape';
+
+/** 横版 1920×1080: 通用 16:9 安全区(平台未定) —— 顶部标题栏/暂停浮层、底部进度条/控件、左右边距 */
+const LW = 1920;
+const LH = 1080;
+export const LANDSCAPE_OVERLAYS: Record<'top' | 'bottom' | 'left' | 'right', Rect> = {
+  top: { left: 0, top: 0, width: LW, height: 120 },
+  bottom: { left: 0, top: 1005, width: LW, height: LH - 1005 },
+  left: { left: 0, top: 0, width: 96, height: LH },
+  right: { left: LW - 96, top: 0, width: 96, height: LH },
+};
+
+/** 横版: 左边内容区正好 16:9(录屏等比铺满不裁), 右栏上小窗下段落标题, 字幕在内容区下方 */
+export const LANDSCAPE_ZONE: Zones = {
+  content: { left: 96, top: 120, width: 1360, height: 765 },
+  pip: { left: 1488, top: 120, width: 336, height: 448 },
+  title: { left: 1488, top: 568, width: 336, height: 317 },
+  captions: { left: 96, top: 905, width: 1360, height: 100 },
+};
+
+/** captionMaxHeight: 字幕框不能超过的高度(横版字幕带只有 100, 两行会压进底部进度条); 竖版不限 */
+export const LAYOUT: Record<Orientation, { W: number; H: number; ZONE: Zones; OVERLAYS: Record<string, Rect>; captionMaxHeight?: number }> = {
+  portrait: { W, H, ZONE, OVERLAYS: DOUYIN_OVERLAYS },
+  landscape: {
+    W: LW,
+    H: LH,
+    ZONE: LANDSCAPE_ZONE,
+    OVERLAYS: LANDSCAPE_OVERLAYS,
+    captionMaxHeight: 100,
+  },
+};
+
+/** 没写或写错的版式一律按竖版(旧片子 data.json 没有 orientation) */
+export const layoutFor = (o: unknown) => (o === 'landscape' ? LAYOUT.landscape : LAYOUT.portrait);

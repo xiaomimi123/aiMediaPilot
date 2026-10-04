@@ -3,12 +3,13 @@ import path from 'node:path';
 import type { PrismaClient, Prisma } from '@prisma/client';
 import { projectDir } from '@/lib/files/storage';
 import { ShotsFileSchema } from './shots';
+import { isFilmOrientation } from './orientation';
 
 const ADVANCE_FROM = ['draft', 'scripted', 'recorded'];
 
 /** 登记成片: 移入项目目录 → 建 final_mp4 行(带素材使用表) → 推进阶段 → 对话里发通知 */
 export async function registerFilm(db: PrismaClient, filmDir: string, summary: string): Promise<{ fileId: string; version: number }> {
-  const data = JSON.parse(await fs.readFile(path.join(filmDir, 'data.json'), 'utf8')) as { projectId: string; version: number };
+  const data = JSON.parse(await fs.readFile(path.join(filmDir, 'data.json'), 'utf8')) as { projectId: string; version: number; orientation?: unknown };
   const mp4 = path.join(filmDir, 'out', 'final.mp4');
   const stat = await fs.stat(mp4).catch(() => null);
   if (!stat || stat.size === 0) throw new Error(`没找到成片：${mp4}（先运行 mp film render）`);
@@ -44,7 +45,7 @@ export async function registerFilm(db: PrismaClient, filmDir: string, summary: s
       kind: 'final_mp4',
       path: dest,
       version: data.version,
-      meta: { filmVersion: data.version, sourceDir: filmDir, summary, usage } as Prisma.InputJsonValue,
+      meta: { filmVersion: data.version, sourceDir: filmDir, summary, usage, orientation: isFilmOrientation(data.orientation) ? data.orientation : 'portrait' } as Prisma.InputJsonValue,
     },
   });
   const p = await db.project.findUniqueOrThrow({ where: { id: data.projectId } });

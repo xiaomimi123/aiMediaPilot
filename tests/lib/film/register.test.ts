@@ -54,4 +54,16 @@ describe('registerFilm', () => {
     expect(files.filter((f) => f.kind === 'final_mp4')).toHaveLength(1);
     await expect(fs.access(path.join(projRoot, 'p1', 'final.v2.mp4'))).rejects.toThrow();
   });
+  it('records the film orientation (old films count as portrait)', async () => {
+    const { dir } = await filmDir();
+    const data = JSON.parse(await fs.readFile(path.join(dir, 'data.json'), 'utf8'));
+    await fs.writeFile(path.join(dir, 'data.json'), JSON.stringify({ ...data, orientation: 'landscape' }));
+    const { db, files } = createFakeDb({ project: { stage: 'recorded' } });
+    await registerFilm(db, dir, '横版首版');
+    expect(files.find((x) => x.kind === 'final_mp4')!.meta).toMatchObject({ orientation: 'landscape' });
+    const old = await filmDir();
+    const second = createFakeDb({ project: { stage: 'recorded' } });
+    await registerFilm(second.db, old.dir, '竖版');
+    expect(second.files.find((x) => x.kind === 'final_mp4')!.meta).toMatchObject({ orientation: 'portrait' });
+  });
 });

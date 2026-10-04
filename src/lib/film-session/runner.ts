@@ -4,8 +4,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { FilmSession, PrismaClient } from '@prisma/client';
-import { buildClaudeArgs, childEnv, firstMessage, resolveClaudeBin } from './args';
+import { buildClaudeArgs, childEnv, firstMessage, resolveClaudeBin, restartMessage } from './args';
 import { parseLog, type ParsedLog } from './parse';
+import type { FilmOrientation } from '@/lib/film/orientation';
 import { deriveState } from './state';
 
 export class FilmBusy extends Error {}
@@ -24,6 +25,8 @@ export interface RunnerDeps {
   isAlive(pid: number, since?: Date | null): boolean;
   killGroup(pid: number): void;
   readLines(p: string): Promise<string[]>;
+  /** 日志最后写入时间(判断是否卡住); 文件不在 = null */
+  lastWrite(p: string): Date | null;
   append(p: string, line: string): Promise<void>;
   now(): Date;
   uuid(): string;
@@ -75,6 +78,13 @@ export function createRunnerDeps(): RunnerDeps {
       };
       sig('SIGTERM');
       setTimeout(() => sig('SIGKILL'), 3000).unref();
+    },
+    lastWrite(p) {
+      try {
+        return fs.statSync(p).mtime;
+      } catch {
+        return null;
+      }
     },
     readLines: async (p) => (await fs.promises.readFile(p, 'utf8').catch(() => '')).split('\n').filter(Boolean),
     append: (p, line) => fs.promises.mkdir(path.dirname(p), { recursive: true }).then(() => fs.promises.appendFile(p, line + '\n')),
@@ -132,7 +142,7 @@ async function lostRace(db: PrismaClient, s: FilmSession) {
   return p?.title ?? other.projectId;
 }
 
-export async function startFilm(db: PrismaClient, deps: RunnerDeps, i: { projectId: string; kind: 'new' | 'revise'; baseVersion?: number; note?: string; model: string }): Promise<FilmSession> {
+export async function startFilm(db: PrismaClient, deps: RunnerDeps, i: { projectId: string; kind: 'new' | 'revise'; baseVersion?: number; note?: string; model: string; orientation?: FilmOrientation }): Promise<FilmSession> {
   if (!deps.claudeBin) throw new FilmBusy(NO_CLAUDE);
   const other = await runningElsewhere(db, deps, i.projectId);
   if (other) throw new FilmBusy(`「${other.title}」正在出片，等它做完再开始`);
@@ -140,16 +150,26 @@ export async function startFilm(db: PrismaClient, deps: RunnerDeps, i: { project
   const p = await db.project.findUnique({ where: { id: i.projectId } });
   if (!p) throw new Error('项目不存在或已删除');
   const baseFilmDir = i.kind === 'revise' && i.baseVersion ? `remotion/films/${p.id}-v${i.baseVersion}` : null;
+  // 改片沿用基础版本的版式(读它的 data.json, 没写 = 竖版); 新出按选择
+  let orientation: FilmOrientation = i.orientation === 'landscape' ? 'landscape' : 'portrait';
+  if (baseFilmDir) {
+    const raw = (await deps.readLines(path.join(deps.cwd, baseFilmDir, 'data.json'))).join('\n');
+    try {
+      orientation = (JSON.parse(raw) as { orientation?: unknown }).orientation === 'landscape' ? 'landscape' : 'portrait';
+    } catch {
+      orientation = 'portrait';
+    }
+  }
   const id = deps.uuid();
   const s = await db.filmSession.create({
-    data: { projectId: p.id, kind: i.kind, baseFilmDir, claudeSessionId: id, status: 'running', turnStartedAt: deps.now(), logPath: path.join(deps.logDir, `${id}.jsonl`) },
+    data: { projectId: p.id, kind: i.kind, baseFilmDir, orientation, claudeSessionId: id, status: 'running', turnStartedAt: deps.now(), logPath: path.join(deps.logDir, `${id}.jsonl`) },
   });
   const lost = await lostRace(db, s);
   if (lost) {
     await db.filmSession.update({ where: { id: s.id }, data: { status: 'abandoned', message: '同时开始了两次，这次已取消' } });
     throw new FilmBusy(`「${lost}」正在出片，等它做完再开始`);
   }
-  return launch(db, deps, s, firstMessage({ kind: i.kind, projectId: p.id, title: p.title, baseFilmDir: baseFilmDir ?? undefined, baseVersion: i.baseVersion, note: i.note }), false, i.model);
+  return launch(db, deps, s, firstMessage({ kind: i.kind, projectId: p.id, title: p.title, baseFilmDir: baseFilmDir ?? undefined, baseVersion: i.baseVersion, note: i.note, orientation }), false, i.model);
 }
 
 export async function replyFilm(db: PrismaClient, deps: RunnerDeps, id: string, text: string, model: string): Promise<FilmSession> {
@@ -177,6 +197,26 @@ export async function replyFilm(db: PrismaClient, deps: RunnerDeps, id: string, 
   return launch(db, deps, (await db.filmSession.findUnique({ where: { id } }))!, text.trim(), true, model);
 }
 
+/** 换个新对话接着做: 旧对话太长(模型服务拒收)时, 用新的 Claude 会话继续同一个片子目录 */
+export async function restartFilm(db: PrismaClient, deps: RunnerDeps, id: string, model: string): Promise<FilmSession> {
+  if (!deps.claudeBin) throw new FilmBusy(NO_CLAUDE);
+  const { session: s } = await refreshFilm(db, deps, id);
+  if (s.status !== 'failed' && s.status !== 'stopped') throw new FilmBusy('只有停了的出片才能换新对话接着做');
+  if (!s.filmDir) throw new FilmBusy('这次出片还没有片子目录，直接「接着做」');
+  if (s.pid && deps.isAlive(s.pid, s.turnStartedAt)) throw new FilmBusy('上一轮还没完全停下，等几秒再试');
+  const other = await runningElsewhere(db, deps, s.projectId);
+  if (other) throw new FilmBusy(`「${other.title}」正在出片，等它做完再继续`);
+  const claimed = await db.filmSession.updateMany({
+    where: { id, status: { in: ['failed', 'stopped'] } },
+    data: { status: 'running', checkpoint: null, message: null, pid: null, turnStartedAt: deps.now(), claudeSessionId: deps.uuid() },
+  });
+  if (!claimed.count) throw new FilmBusy('还在做，等这一步停下来再说');
+  const fresh = (await db.filmSession.findUnique({ where: { id } }))!;
+  const p = await db.project.findUnique({ where: { id: s.projectId } });
+  const orientation: FilmOrientation = s.orientation === 'landscape' ? 'landscape' : 'portrait';
+  return launch(db, deps, fresh, restartMessage({ projectId: s.projectId, title: p?.title ?? s.projectId, filmDir: s.filmDir, orientation }), false, model);
+}
+
 export async function stopFilm(db: PrismaClient, deps: RunnerDeps, id: string): Promise<FilmSession> {
   const s = await db.filmSession.findUnique({ where: { id } });
   if (!s) throw new Error('找不到这次出片');
@@ -201,7 +241,7 @@ export async function refreshFilm(db: PrismaClient, deps: RunnerDeps, id: string
   // 刚占位还没 pid 的几秒算在跑(此时日志里最后一轮还是上一轮, 不能按它判); 本轮已有结果事件就算结束(不看 pid)
   const starting = s.pid === null && !!s.turnStartedAt && deps.now().getTime() - s.turnStartedAt.getTime() < START_GRACE_MS;
   const alive = starting || (!!s.pid && !parsed.last.ended && deps.isAlive(s.pid, s.turnStartedAt));
-  const st = deriveState({ last: parsed.last, alive, turnStartedAt: s.turnStartedAt, now: deps.now() });
+  const st = deriveState({ last: parsed.last, alive, turnStartedAt: s.turnStartedAt, lastActivity: deps.lastWrite(s.logPath), now: deps.now() });
   if (st.timedOut && s.pid) deps.killGroup(s.pid);
   if (st.status === 'running') {
     if (parsed.filmDir && parsed.filmDir !== s.filmDir) s = await db.filmSession.update({ where: { id }, data: { filmDir: parsed.filmDir } });

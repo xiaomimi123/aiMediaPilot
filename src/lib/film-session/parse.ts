@@ -97,7 +97,7 @@ export function parseLog(lines: string[]): ParsedLog {
           continue;
         }
         const file = String(u.input.file_path ?? '');
-        if (u.name === 'Read' && /\/stills\/[^/]+\.png$/.test(file)) {
+        if (u.name === 'Read' && /\/stills\/[^/]+\.(png|jpe?g)$/.test(file)) {
           items.push({ kind: 'still', path: file.slice(file.indexOf('stills/')) });
           continue;
         }

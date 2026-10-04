@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { PrismaClient } from '@prisma/client';
-import { abandonFilm, createRunnerDeps, FilmBusy, refreshFilm, replyFilm, startFilm, stopFilm, type RunnerDeps } from '@/lib/film-session/runner';
+import { abandonFilm, createRunnerDeps, restartFilm, FilmBusy, refreshFilm, replyFilm, startFilm, stopFilm, type RunnerDeps } from '@/lib/film-session/runner';
 
 type Row = Record<string, unknown> & { id: string; projectId: string; status: string };
 
@@ -17,7 +17,7 @@ function fakeDb() {
     project: { findUnique: async ({ where }: { where: { id: string } }) => ({ id: where.id, title: where.id === 'p2' ? '另一个' : 'U盘' }) },
     filmSession: {
       create: async ({ data }: { data: Row }) => {
-        const r = { createdAt: new Date(), updatedAt: new Date(), checkpoint: null, message: null, filmDir: null, version: null, summary: null, pid: null, turnStartedAt: null, ...data, id: `fs${++seq}` } as Row;
+        const r = { createdAt: new Date(), updatedAt: new Date(), orientation: 'portrait', checkpoint: null, message: null, filmDir: null, version: null, summary: null, pid: null, turnStartedAt: null, ...data, id: `fs${++seq}` } as Row;
         sessions.push(r);
         return { ...r };
       },
@@ -155,8 +155,9 @@ describe('film runner', () => {
   it('does not let a finished-but-unrefreshed session block other projects', async () => {
     const { db } = fakeDb();
     const deps = realDeps({ spawn: (bin, args, log) => createRunnerDeps().spawn.call(realDeps(), bin, args, log, () => {}) });
-    await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
-    await new Promise((x) => setTimeout(x, 800));
+    const s1 = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    // 等 p1 的假 claude 跑完(日志出现结果), 但不刷新它 —— 模拟服务重启后没人看过 p1
+    for (let i = 0; i < 100 && !(await deps.readLines(s1.logPath)).some((l) => l.includes('"type":"result"')); i++) await new Promise((x) => setTimeout(x, 50));
     process.env.FAKE_SCENARIO = 'slow';
     const s2 = await startFilm(db, deps, { projectId: 'p2', kind: 'new', model: 'opus' });
     expect(s2.status).toBe('running');
@@ -216,5 +217,51 @@ describe('film runner', () => {
     expect(killed).toEqual([]);
     await settle(db, deps, s.id);
   });
+  it('starts a landscape film and records the orientation', async () => {
+    const { db } = fakeDb();
+    const deps = realDeps();
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus', orientation: 'landscape' });
+    expect(s.orientation).toBe('landscape');
+    expect((await deps.readLines(s.logPath))[0]).toContain('横版成片');
+    await settle(db, deps, s.id);
+  });
+  it('revise follows the base version orientation', async () => {
+    const { db } = fakeDb();
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'mp-cwd-'));
+    fs.mkdirSync(path.join(cwd, 'remotion/films/p1-v4'), { recursive: true });
+    fs.writeFileSync(path.join(cwd, 'remotion/films/p1-v4/data.json'), JSON.stringify({ orientation: 'landscape' }));
+    const deps = realDeps({ cwd });
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'revise', baseVersion: 4, note: 'x', model: 'opus', orientation: 'portrait' });
+    expect(s.orientation).toBe('landscape');
+    expect((await deps.readLines(s.logPath))[0]).toContain('横版');
+    await settle(db, deps, s.id);
+  });
+  it('restarts a failed film in a fresh claude conversation on the same film dir', async () => {
+    process.env.FAKE_SCENARIO = 'limit';
+    const { db } = fakeDb();
+    const spawned: string[][] = [];
+    const deps = realDeps({ spawn: (bin, args, log, onExit) => (spawned.push(args), createRunnerDeps().spawn.call(realDeps(), bin, args, log, onExit)) });
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus', orientation: 'landscape' });
+    await settle(db, deps, s.id);
+    await db.filmSession.update({ where: { id: s.id }, data: { filmDir: 'remotion/films/p1-v4' } });
+    const oldClaude = s.claudeSessionId;
+    delete process.env.FAKE_SCENARIO;
+    const r = await restartFilm(db, deps, s.id, 'opus');
+    expect(r.status).toBe('running');
+    expect(r.claudeSessionId).not.toBe(oldClaude);
+    const args = spawned.at(-1)!;
+    expect(args[args.indexOf('--session-id') + 1]).toBe(r.claudeSessionId);
+    expect(args).not.toContain('--resume');
+    expect(args.at(-1)).toContain('片子目录 remotion/films/p1-v4');
+    expect(args.at(-1)).toContain('横版');
+    await settle(db, deps, s.id);
+  });
+  it('only restarts a stopped or failed film that has a film dir', async () => {
+    process.env.FAKE_SCENARIO = 'limit';
+    const { db } = fakeDb();
+    const deps = realDeps();
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    await settle(db, deps, s.id);
+    await expect(restartFilm(db, deps, s.id, 'opus')).rejects.toThrow('还没有片子目录');
+  });
 });
-

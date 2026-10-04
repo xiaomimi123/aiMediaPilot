@@ -2,7 +2,7 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import { prisma } from '@/lib/prisma';
 import { ok, fail } from '@/lib/api';
-import { abandonFilm, createRunnerDeps, currentFilm, FilmBusy, refreshFilm, replyFilm, runningElsewhere, startFilm, stopFilm } from '@/lib/film-session/runner';
+import { abandonFilm, createRunnerDeps, restartFilm, currentFilm, FilmBusy, refreshFilm, replyFilm, runningElsewhere, startFilm, stopFilm } from '@/lib/film-session/runner';
 import { getFilmModel } from '@/lib/film-session/settings';
 import { ShotsFileSchema } from '@/lib/film/shots';
 import type { Item } from '@/lib/film-session/parse';
@@ -72,16 +72,17 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 }
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
-  const b = (await req.json().catch(() => ({}))) as { action?: string; kind?: string; baseVersion?: number; note?: string; text?: string };
+  const b = (await req.json().catch(() => ({}))) as { action?: string; kind?: string; baseVersion?: number; note?: string; text?: string; orientation?: string };
   const deps = createRunnerDeps();
   try {
-    if (b.action === 'start') await startFilm(prisma, deps, { projectId: params.id, kind: b.kind === 'revise' ? 'revise' : 'new', baseVersion: b.baseVersion, note: b.note, model: await model() });
+    if (b.action === 'start') await startFilm(prisma, deps, { projectId: params.id, kind: b.kind === 'revise' ? 'revise' : 'new', baseVersion: b.baseVersion, note: b.note, model: await model(), orientation: b.orientation === 'landscape' ? 'landscape' : 'portrait' });
     else {
       const cur = await currentFilm(prisma, params.id);
       if (!cur) return fail('没有进行中的出片', 404);
       if (b.action === 'reply') await replyFilm(prisma, deps, cur.id, String(b.text ?? ''), await model());
       else if (b.action === 'stop') await stopFilm(prisma, deps, cur.id);
       else if (b.action === 'abandon') await abandonFilm(prisma, cur.id);
+      else if (b.action === 'restart') await restartFilm(prisma, deps, cur.id, await model());
       else return fail('action 不对', 400);
     }
   } catch (e) {
