@@ -155,8 +155,9 @@ describe('film runner', () => {
   it('does not let a finished-but-unrefreshed session block other projects', async () => {
     const { db } = fakeDb();
     const deps = realDeps({ spawn: (bin, args, log) => createRunnerDeps().spawn.call(realDeps(), bin, args, log, () => {}) });
-    await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
-    await new Promise((x) => setTimeout(x, 800));
+    const s1 = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    // 等 p1 的假 claude 跑完(日志出现结果), 但不刷新它 —— 模拟服务重启后没人看过 p1
+    for (let i = 0; i < 100 && !(await deps.readLines(s1.logPath)).some((l) => l.includes('"type":"result"')); i++) await new Promise((x) => setTimeout(x, 50));
     process.env.FAKE_SCENARIO = 'slow';
     const s2 = await startFilm(db, deps, { projectId: 'p2', kind: 'new', model: 'opus' });
     expect(s2.status).toBe('running');
