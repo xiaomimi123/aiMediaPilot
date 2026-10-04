@@ -73,4 +73,12 @@ describe('FilmAssistant', () => {
     render(<FilmAssistant projectId="p1" onChanged={() => {}} />);
     await waitFor(() => expect(screen.getByText(/本机没有可用的 Claude Code/)).toBeTruthy());
   });
+  it('lets the user say something else after a failure', async () => {
+    const f = stub(data({ current: session({ status: 'failed', message: '超时' }) }));
+    render(<FilmAssistant projectId="p1" onChanged={() => {}} />);
+    const input = await screen.findByPlaceholderText(/或者写你的意见/);
+    fireEvent.change(input, { target: { value: '换个思路' } });
+    fireEvent.click(screen.getByText('发送'));
+    await waitFor(() => expect(posted(f)).toEqual([{ action: 'reply', text: '换个思路' }]));
+  });
 });

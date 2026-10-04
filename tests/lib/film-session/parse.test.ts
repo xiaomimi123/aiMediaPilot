@@ -80,4 +80,16 @@ describe('parseLog', () => {
     const p = parseLog([turn(1, 'go'), 'null', j({ type: 'assistant', message: { content: [null] } }), j({ type: 'user', message: null })]);
     expect(p.items).toEqual([{ kind: 'you', text: 'go' }]);
   });
+  it('shows the real headless approval refusals as denied', () => {
+    const p = parseLog([
+      turn(1, 'go'),
+      use('a', 'Bash', { command: 'cp a b' }),
+      res('a', 'This Bash command contains multiple operations. The following parts require approval: cp a b', true),
+      use('b', 'Bash', { command: 'cp c d' }),
+      res('b', 'This command requires approval', true),
+      use('c', 'Bash', { command: 'ffmpeg -i x' }),
+      res('c', 'x: Permission denied', true),
+    ]);
+    expect(p.items.filter((i) => i.kind === 'denied')).toEqual([{ kind: 'denied', text: 'Bash：cp a b' }, { kind: 'denied', text: 'Bash：cp c d' }]);
+  });
 });

@@ -161,6 +161,10 @@ export function FilmAssistant({ projectId, onChanged }: { projectId: string; onC
                 <button className="btn-primary" disabled={busy || !!blocked} onClick={() => void post({ action: 'reply', text: '接着做' })}>接着做</button>
                 <button className="btn-secondary" disabled={busy} onClick={() => void post({ action: 'abandon' })}>放弃</button>
               </div>
+              <div className="flex gap-2">
+                <input className="min-w-0 flex-1 rounded-[var(--r-md)] bg-[var(--bg-inset)] px-2 py-1.5" placeholder="或者写你的意见，再接着做…" value={reply} onChange={(e) => setReply(e.target.value)} />
+                <button className="btn-secondary" disabled={busy || !!blocked || !reply.trim()} onClick={() => void post({ action: 'reply', text: reply.trim() })}>发送</button>
+              </div>
             </div>
           )}
         </div>

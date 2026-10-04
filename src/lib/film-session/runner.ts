@@ -20,7 +20,8 @@ export interface RunnerDeps {
   cwd: string;
   logDir: string;
   spawn(bin: string, args: string[], logPath: string, onExit: () => void): number;
-  isAlive(pid: number): boolean;
+  /** since: 本轮开始时间; 刚开始的一分钟内只看进程在不在(子进程 exec 之前命令行还是父进程的) */
+  isAlive(pid: number, since?: Date | null): boolean;
   killGroup(pid: number): void;
   readLines(p: string): Promise<string[]>;
   append(p: string, line: string): Promise<void>;
@@ -49,13 +50,14 @@ export function createRunnerDeps(): RunnerDeps {
       fs.closeSync(err);
       return child.pid ?? 0;
     },
-    /** pid 可能被系统复用: 还要确认它确实是我们启动的 claude(参数里带 stream-json) */
-    isAlive(pid) {
+    /** pid 可能被系统复用(隔了很久才查): 久了还要确认它确实是我们启动的 claude(参数里带 stream-json) */
+    isAlive(pid, since) {
       try {
         process.kill(pid, 0);
       } catch {
         return false;
       }
+      if (since && Date.now() - since.getTime() < 60_000) return true;
       try {
         return execFileSync('ps', ['-o', 'command=', '-p', String(pid)], { encoding: 'utf8' }).includes('stream-json');
       } catch {
@@ -152,11 +154,16 @@ export async function startFilm(db: PrismaClient, deps: RunnerDeps, i: { project
 
 export async function replyFilm(db: PrismaClient, deps: RunnerDeps, id: string, text: string, model: string): Promise<FilmSession> {
   if (!deps.claudeBin) throw new FilmBusy(NO_CLAUDE);
-  const { session: s } = await refreshFilm(db, deps, id);
+  const { session: s, parsed } = await refreshFilm(db, deps, id);
   if (s.status === 'running') throw new FilmBusy('还在做，等这一步停下来再回复');
   if (!OPEN.includes(s.status)) throw new FilmBusy('这次出片已经结束');
   if (!text.trim()) throw new FilmBusy('回复是空的');
-  if (s.pid && deps.isAlive(s.pid)) throw new FilmBusy('上一轮还没完全停下，等几秒再试');
+  if (s.pid && deps.isAlive(s.pid, s.turnStartedAt)) {
+    // 本轮已写出结果、进程还在收尾: 等它最多 5 秒, 还不退就结束它; 没有结果(停止中)的不许续
+    if (!parsed.last.ended) throw new FilmBusy('上一轮还没完全停下，等几秒再试');
+    for (let i = 0; i < 25 && deps.isAlive(s.pid, s.turnStartedAt); i++) await new Promise((r) => setTimeout(r, 200));
+    if (deps.isAlive(s.pid, s.turnStartedAt)) deps.killGroup(s.pid);
+  }
   const other = await runningElsewhere(db, deps, s.projectId);
   if (other) throw new FilmBusy(`「${other.title}」正在出片，等它做完再继续`);
   // 条件更新占位: 两次同时回复只有一次能占到
@@ -175,7 +182,7 @@ export async function stopFilm(db: PrismaClient, deps: RunnerDeps, id: string): 
   if (!s) throw new Error('找不到这次出片');
   // 先改状态再结束进程: 进程退出时的刷新看到已不是 running, 不会再报"意外退出"
   const claimed = await db.filmSession.updateMany({ where: { id, status: 'running' }, data: { status: 'stopped', message: '已停止' } });
-  if (claimed.count && s.pid && deps.isAlive(s.pid)) deps.killGroup(s.pid);
+  if (claimed.count && s.pid && deps.isAlive(s.pid, s.turnStartedAt)) deps.killGroup(s.pid);
   return (await db.filmSession.findUnique({ where: { id } }))!;
 }
 
@@ -193,7 +200,7 @@ export async function refreshFilm(db: PrismaClient, deps: RunnerDeps, id: string
   if (s.status !== 'running') return { session: s, parsed };
   // 刚占位还没 pid 的几秒算在跑(此时日志里最后一轮还是上一轮, 不能按它判); 本轮已有结果事件就算结束(不看 pid)
   const starting = s.pid === null && !!s.turnStartedAt && deps.now().getTime() - s.turnStartedAt.getTime() < START_GRACE_MS;
-  const alive = starting || (!!s.pid && !parsed.last.ended && deps.isAlive(s.pid));
+  const alive = starting || (!!s.pid && !parsed.last.ended && deps.isAlive(s.pid, s.turnStartedAt));
   const st = deriveState({ last: parsed.last, alive, turnStartedAt: s.turnStartedAt, now: deps.now() });
   if (st.timedOut && s.pid) deps.killGroup(s.pid);
   if (st.status === 'running') {

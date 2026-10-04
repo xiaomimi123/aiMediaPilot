@@ -92,7 +92,7 @@ export function parseLog(lines: string[]): ParsedLog {
         if (!u) continue;
         const out = text(c.content);
         const ok = !c.is_error;
-        if (!ok && /requested permissions|haven't granted|not allowed|permission/i.test(out)) {
+        if (!ok && /requested permissions|haven't granted|requires? approval/i.test(out)) {
           items.push({ kind: 'denied', text: `${u.name}：${String(u.input.command ?? u.input.file_path ?? '').slice(0, 80)}` });
           continue;
         }

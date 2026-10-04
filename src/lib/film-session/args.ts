@@ -59,7 +59,7 @@ export const FILM_DENIED_TOOLS = [
 
 export const FILM_RULES = `你在 MediaPilot 网页里被调用，用户在网页上看你的进度、在停顿时回复你。
 - 按 .claude/skills/produce-film/SKILL.md 的流程出片（先用 Read 读它），只做出片相关的事。
-- 镜头表 shots.json 写好后停下：用一段话说明切了几镜、怎么用素材，然后问"镜头表可以吗？可以就回复继续"。本轮到此结束。
+- 镜头表 shots.json 写好后停下（改片时镜头表沿用旧版也要停）：用一段话说明切了几镜、怎么用素材，然后问"镜头表可以吗？可以就回复继续"。本轮到此结束。
 - 渲染成片（film render，不带 --stills）完成后，不要运行 film register：说明这一版做了什么、用了哪些素材、做了哪些取舍，问"要登记为新版本吗？"。本轮到此结束。
 - 用户回复"可以，登记"后再运行 film register（--summary 写这一版做了什么）。
 - 拿不准的事（素材丢了、不确定放哪里、要求矛盾）停下来问，不要猜。

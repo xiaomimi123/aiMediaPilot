@@ -52,4 +52,7 @@ describe('film session args', () => {
     for (const t of ['Bash(git:*)', 'Bash(rm:*)', 'Bash(node:*)', 'Bash(npx:*)', 'Bash(killall:*)', 'Bash(npm run dev:*)', 'Write(src/**)', 'Edit(remotion/kit/**)', 'Read(./.env)']) expect(denied).toContain(t);
     expect(FILM_RULES).toContain('.claude/skills/produce-film/SKILL.md');
   });
+  it('stops after the shot list even when it is reused from the base version', () => {
+    expect(FILM_RULES).toContain('改片时镜头表沿用旧版也要停');
+  });
 });

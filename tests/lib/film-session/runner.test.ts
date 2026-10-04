@@ -197,4 +197,24 @@ describe('film runner', () => {
     expect(r.session.status).toBe('failed');
     expect(r.session.message).toContain('启动 claude 失败');
   });
+  it('trusts a just-started pid before its command line switches to claude', () => {
+    const deps = createRunnerDeps();
+    // 本测试进程的命令行里没有 stream-json: 刚启动时只看进程在不在, 久了才核对命令行
+    expect(deps.isAlive(process.pid, new Date())).toBe(true);
+    expect(deps.isAlive(process.pid, new Date(Date.now() - 10 * 60_000))).toBe(false);
+  });
+  it('lets a reply through right after the result while the old process is still exiting', async () => {
+    const { db } = fakeDb();
+    let alive = true;
+    const killed: number[] = [];
+    const deps = realDeps({ isAlive: (pid) => (pid === 4242 ? alive : createRunnerDeps().isAlive(pid)), killGroup: (pid) => void killed.push(pid) });
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    await settle(db, deps, s.id);
+    await db.filmSession.update({ where: { id: s.id }, data: { pid: 4242 } });
+    setTimeout(() => (alive = false), 300);
+    expect((await replyFilm(db, deps, s.id, '可以，继续', 'opus')).status).toBe('running');
+    expect(killed).toEqual([]);
+    await settle(db, deps, s.id);
+  });
 });
+
