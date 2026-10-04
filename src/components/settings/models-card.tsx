@@ -123,6 +123,35 @@ export function ModelsCard() {
         </ul>
       )}
       {msg && <p className={`mt-2 text-xs ${msg.ok ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>{msg.text}</p>}
+      <FilmModelRow />
     </section>
+  );
+}
+
+/** 网页里出片用本机 Claude Code, 模型单独选 */
+function FilmModelRow() {
+  const [model, setModel] = useState<string>('opus');
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    void call('/api/settings/film-model').then((j) => {
+      if (j.success && typeof j.data?.model === 'string') setModel(j.data.model);
+    });
+  }, []);
+  const change = async (v: string) => {
+    setErr(null);
+    const j = await call('/api/settings/film-model', 'PUT', { model: v });
+    if (j.success) setModel(j.data.model);
+    else setErr(j.message);
+  };
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--border-subtle)] pt-3 text-sm">
+      <label htmlFor="film-model">出片模型</label>
+      <select id="film-model" className="rounded-md border border-[var(--border-default)] bg-[var(--bg-inset)] px-2 py-1 text-sm" value={model} onChange={(e) => void change(e.target.value)}>
+        <option value="opus">Opus</option>
+        <option value="sonnet">Sonnet</option>
+      </select>
+      <span className="text-xs text-[var(--text-tertiary)]">网页里出片用（本机 Claude Code）</span>
+      {err && <span className="text-xs text-[var(--danger)]">{err}</span>}
+    </div>
   );
 }

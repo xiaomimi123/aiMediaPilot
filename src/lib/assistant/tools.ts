@@ -3,7 +3,7 @@ import type { Tool } from '@/lib/tools/types';
 import { toCliError, type Command, type CommandCtx } from '@/lib/cli/registry';
 import { loadSkillTool } from './skills';
 
-/** 出片要在 Claude Code 里做; 装 Hermes 改用户系统 —— 不给总助手 */
+/** 出片在成片页由本机 Claude Code 做; 装 Hermes 改用户系统 —— 不给总助手 */
 export const ASSISTANT_EXCLUDED = ['film new', 'film check', 'film render', 'film register', 'project export', 'agents install-hermes'];
 
 export const toolName = (cmd: Command) => cmd.path.join('_');

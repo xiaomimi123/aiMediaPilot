@@ -1,7 +1,7 @@
 import React from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { C, FONT, ZONE } from './tokens';
-import { balanceLines, displayWidth } from './text';
+import { captionLayout } from './text';
 
 export type CaptionLine = { startSec: number; endSec: number; text: string };
 
@@ -26,9 +26,8 @@ export const Captions: React.FC<{ lines: CaptionLine[]; highlights?: string[] }>
   const t = frame / fps;
   const line = lines.find((l) => t >= l.startSec && t < l.endSec);
   if (!line) return null;
-  // 按宽度拆成长度接近的两行(不再出现单字孤行); 特别长的句子缩小字号
-  const long = displayWidth(line.text) > 36;
-  const rows = balanceLines(line.text, long ? 20 : 18);
+  // 按字幕区宽度拆成长度接近的两行(不再出现单字孤行); 放不下就逐级缩小字号
+  const { fontSize, rows } = captionLayout(line.text, ZONE.captions.width);
   return (
     <div style={{ position: 'absolute', ...ZONE.captions, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div
@@ -38,7 +37,7 @@ export const Captions: React.FC<{ lines: CaptionLine[]; highlights?: string[] }>
           color: '#fff',
           fontFamily: FONT,
           fontWeight: 700,
-          fontSize: long ? 44 : 50,
+          fontSize,
           lineHeight: 1.3,
           padding: '14px 30px',
           borderRadius: 22,

@@ -32,6 +32,7 @@ model Project {
   publishedWorks PublishedWork[]
   noteProposals  NoteProposal[]
   predictions    Prediction[]
+  filmSessions   FilmSession[]
 
   @@index([updatedAt])
 }
@@ -422,4 +423,36 @@ model AccountDailySnapshot {
   views      Int?           // 公开作品播放合计
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+/// 一次出片过程(新出或改片), 可多轮
+model FilmSession {
+  id              String    @id @default(cuid())
+  projectId       String
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// new | revise
+  kind            String
+  /// 改片时基于的片子目录
+  baseFilmDir     String?
+  /// Claude 会话 id(--session-id / --resume)
+  claudeSessionId String
+  /// running | waiting | done | failed | stopped | abandoned(放弃: 结束且不能再接着做)
+  status          String    @default("running")
+  /// shots | render | question(status=waiting 时)
+  checkpoint      String?
+  /// 失败原因或它最后的提问
+  message         String?   @db.Text
+  /// 本次产出的片子目录(film new 之后)
+  filmDir         String?
+  /// 登记后的版本号
+  version         Int?
+  summary         String?
+  pid             Int?
+  turnStartedAt   DateTime?
+  logPath         String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([projectId, createdAt])
+  @@index([status])
 }

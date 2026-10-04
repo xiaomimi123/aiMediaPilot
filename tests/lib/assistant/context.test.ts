@@ -5,7 +5,7 @@ describe('formatAssistantPrompt', () => {
   it('includes rules, persona, status, lessons and the skill list', () => {
     const p = formatAssistantPrompt({ persona: '定位摘要：真实是差异化', status: '粉丝 408', lessons: '- 第一句直接说结果（1 条作品）', skills: [{ name: 'daily-kickoff', description: '每日开工' }] });
     expect(p).toContain('你是用户的抖音创作总助手');
-    expect(p).toContain('出片要在 Claude Code 里做');
+    expect(p).toContain('出片在作品的「成片」一步点「出一版」');
     expect(p).toContain('【账号定位】\n定位摘要：真实是差异化');
     expect(p).toContain('【账号概况】\n粉丝 408');
     expect(p).toContain('【写法经验】\n- 第一句直接说结果（1 条作品）');

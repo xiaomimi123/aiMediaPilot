@@ -5,13 +5,13 @@ description: 给 MediaPilot 项目出一条竖屏口播成片(Remotion, 风格 C
 
 # 出片
 
-画框固定: 1080×1920, 人物小窗右上角全程在, 底部字幕, 中间内容区。你只创作内容区。设计依据: `docs/superpowers/specs/2026-09-28-film-production-design.md`。
+画框固定: 1080×1920, 人物小窗右上角全程在, 底部字幕, 中间内容区(790×560, 位置见 `remotion/kit/tokens.ts` 的 `ZONE`)。你只创作内容区。上下与右侧会被抖音的频道栏、点赞列、作者文案挡住(`DOUYIN_OVERLAYS`), 内容区已避开它们, 所以内容区比画面窄: 卡片按 790 宽设计, 字少一些、行数少一些。设计依据: `docs/superpowers/specs/2026-09-28-film-production-design.md`。
 
 ## 流程(每一步都要做, 不许跳)
 
 1. **找项目**: `npm run -s mp -- project list`(不熟悉命令时先 `npm run -s mp -- help`)。用户说的项目名对不上就问。
 2. **读资料**: `npm run -s mp -- project export <id>`。读稿子、逐句转写、素材说明。
-   - 视频素材: `ffmpeg -i <path> -vf fps=1/2,scale=480:-1 /tmp/mat-<id>-%03d.jpg` 抽帧后逐张看; 图片直接看。
+   - 视频素材: `mkdir -p /tmp/mp-film && ffmpeg -i <path> -vf fps=1/2,scale=480:-1 /tmp/mp-film/mat-<id>-%03d.jpg` 抽帧后逐张看; 图片直接看。
 3. **建片子**: `npm run -s mp -- film new <id>` → 得到片子目录 `remotion/films/<id>-v<N>/`。
    - 修改旧版时: 建新版本后, 从旧版目录复制 `Film.tsx`、`copy.ts`、`shots.json` 过来再改, 旧版不动(同一版本不能重复登记)。
    - `film new` 提示"素材文件不在了, 已跳过"时, 告诉用户哪个素材丢了。
@@ -27,7 +27,7 @@ description: 给 MediaPilot 项目出一条竖屏口播成片(Remotion, 风格 C
    - `Frame` 的 `highlights` 放 1–3 个关键词(字幕荧光笔); `pipFocus` 按人脸位置调(默认 `'50% 20%'`)。
 6. **检查**: `npm run -s mp -- film check <片子目录>`。有 ✗ 就改到通过。
 7. **看关键帧**: `npm run -s mp -- film render <片子目录> --stills`, 用 Read 逐张看 `stills/*.png`:
-   - 小窗里脸完整、没被裁歪; 内容不挤、不溢出、不被裁; 字能读清(手机上看); 中文字体正常;
+   - 小窗里脸完整、没被裁歪; 内容不挤、不溢出、不被裁(内容区只有 790×560); 字能读清(手机上看); 中文字体正常;
    - 同一镜的积木对齐、留白舒服; 与上下镜的节奏有变化。
    - 有问题改完重跑第 6、7 步。
 8. **渲染成片**: `npm run -s mp -- film render <片子目录>`(79 秒口播实测约 2 分钟; 卡片多时略久)。
