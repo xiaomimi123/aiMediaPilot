@@ -53,6 +53,7 @@ export function createFakeDb(
     persona?: Record<string, unknown> | null;
     jobs?: Partial<FakeJob>[];
     files?: Partial<FakeFile>[];
+    filmSessions?: { projectId: string; status: string; filmDir?: string | null; baseFilmDir?: string | null }[];
     lessons?: { text: string; evidence: unknown[] }[];
     benchmarkVideo?: { id: string; transcript: string | null; analysis: unknown; ratio: number | null; account: { nickname: string } };
   } = {},
@@ -93,6 +94,8 @@ export function createFakeDb(
     createdAt: new Date(),
     ...f,
   }));
+  const filmSessions = seed.filmSessions ?? [];
+  const kindMatch = (k: string, w?: string | { in: string[] }) => !w || (typeof w === 'string' ? k === w : w.in.includes(k));
   const jobMatch = (j: FakeJob, w: JobWhere) =>
     (!w.id || j.id === w.id) &&
     (!w.projectId || j.projectId === w.projectId) &&
@@ -158,19 +161,25 @@ export function createFakeDb(
         return take ? rows.slice(0, take) : rows;
       },
     },
+    filmSession: {
+      findFirst: async ({ where }: { where: { projectId: string; status: { in: string[] }; OR: { filmDir?: string; baseFilmDir?: string }[] } }) =>
+        filmSessions.find(
+          (s) => s.projectId === where.projectId && where.status.in.includes(s.status) && where.OR.some((o) => ('filmDir' in o ? s.filmDir === o.filmDir : s.baseFilmDir === o.baseFilmDir)),
+        ) ?? null,
+    },
     projectFile: {
       create: async ({ data }: { data: Partial<FakeFile> & { projectId: string; kind: string; path: string } }) => {
         const f: FakeFile = { id: `f${++seq}`, meta: {}, version: 1, createdAt: now(), ...data };
         files.push(f);
         return { ...f };
       },
-      findFirst: async ({ where }: { where: { id?: string; projectId?: string; kind?: string } }) =>
+      findFirst: async ({ where }: { where: { id?: string; projectId?: string; kind?: string | { in: string[] } } }) =>
         files
-          .filter((f) => (!where.id || f.id === where.id) && (!where.projectId || f.projectId === where.projectId) && (!where.kind || f.kind === where.kind))
+          .filter((f) => (!where.id || f.id === where.id) && (!where.projectId || f.projectId === where.projectId) && kindMatch(f.kind, where.kind))
           .sort((a, b) => b.version - a.version)[0] ?? null,
-      findMany: async ({ where }: { where: { projectId?: string; kind?: string } }) =>
+      findMany: async ({ where }: { where: { projectId?: string; kind?: string | { in: string[] } } }) =>
         files
-          .filter((f) => (!where.projectId || f.projectId === where.projectId) && (!where.kind || f.kind === where.kind))
+          .filter((f) => (!where.projectId || f.projectId === where.projectId) && kindMatch(f.kind, where.kind))
           .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
           .map((f) => ({ ...f })),
       update: async ({ where, data }: { where: { id: string }; data: Partial<FakeFile> }) => {

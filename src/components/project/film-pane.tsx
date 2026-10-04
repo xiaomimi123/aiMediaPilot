@@ -72,6 +72,16 @@ export function FilmPane({ projectId, materials, films, onChanged }: { projectId
     onChanged();
   }
 
+  async function removeFilm(f: FilmView) {
+    if (!confirm(`确定删除成片 v${f.version}？视频和片子目录都会删掉，不能恢复。`)) return;
+    setError(null);
+    const j = await fetch(`/api/projects/${projectId}/films/${f.id}`, { method: 'DELETE' })
+      .then((r) => r.json())
+      .catch(() => ({ success: false, message: '服务没有响应' }));
+    if (!j.success) setError(j.message);
+    onChanged();
+  }
+
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-6">
       <FilmAssistant projectId={projectId} onChanged={onChanged} />
@@ -145,6 +155,9 @@ export function FilmPane({ projectId, materials, films, onChanged }: { projectId
                     <a className="text-xs text-[var(--accent)]" href={f.url} download={`成片v${f.version}.mp4`}>
                       下载
                     </a>
+                    <button className="text-xs text-[var(--danger)]" aria-label={`删除成片 v${f.version}`} onClick={() => void removeFilm(f)}>
+                      删除
+                    </button>
                   </div>
                   {f.summary && <p className="mb-2 text-sm text-[var(--text-secondary)]">{f.summary}</p>}
                   <video src={f.url} controls className={cn('mb-2 rounded bg-black', f.orientation === 'landscape' ? 'w-full' : 'max-h-[60vh]')} />
