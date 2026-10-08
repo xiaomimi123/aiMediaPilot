@@ -26,23 +26,20 @@ export interface RunLogSpec {
   done: string;
   noun: string;
   install: string;
-  checkCmd: string;
 }
 
 export const COLLECT_SPEC: RunLogSpec = {
   start: '开始回采',
   done: '回采完成',
   noun: '回采',
-  install: '在项目目录运行 sh scripts/install-collect-cron.sh 装上每晚 20:00 的回采，或先手动运行 npm run collect:douyin。',
-  checkCmd: 'launchctl list | grep mediapilot',
+  install: '在「设置 · 每晚任务」开启每晚定时，或点「立即运行」先跑一次。',
 };
 
 export const SCAN_SPEC: RunLogSpec = {
   start: '开始巡检',
   done: '巡检完成',
   noun: '对标巡检',
-  install: '在项目目录运行 sh scripts/install-scan-cron.sh 装上每晚 20:30 的对标巡检，或先手动运行 npm run scan:benchmarks。',
-  checkCmd: 'launchctl list | grep scan-benchmarks',
+  install: '在「设置 · 每晚任务」开启每晚定时，或点「立即运行」先跑一次。',
 };
 
 export function parseRunLog(text: string, now: Date, spec: RunLogSpec): CollectStatus {
@@ -95,18 +92,20 @@ export function parseRunLog(text: string, now: Date, spec: RunLogSpec): CollectS
   }
   const hours = (now.getTime() - new Date(lastSuccessAt!).getTime()) / 3600_000;
   if (hours > STALE_HOURS) {
-    return { state: 'stale', lastRun, lastSuccessAt, consecutiveFailures: 0, hint: `超过 36 小时没有成功${spec.noun}（上次 ${Math.floor(hours)} 小时前）。检查定时任务是否还在：${spec.checkCmd}` };
+    return { state: 'stale', lastRun, lastSuccessAt, consecutiveFailures: 0, hint: `超过 36 小时没有成功${spec.noun}（上次 ${Math.floor(hours)} 小时前）：去「设置 · 每晚任务」看定时开着没有，或点「立即运行」。` };
   }
   return { state: 'ok', lastRun, lastSuccessAt, consecutiveFailures: 0, hint: '' };
 }
 
-/** 定时补跑: 这么多小时内回采成功过就跳过(不开浏览器、不访问抖音) */
+/** 定时补跑(回采与巡检): 这么多小时内成功过就跳过(不开浏览器、不访问抖音) */
 export const RETRY_SKIP_HOURS = 6;
 
-export function shouldSkipScheduledCollect(status: CollectStatus, now: Date): boolean {
+export function shouldSkipScheduled(status: CollectStatus, now: Date): boolean {
   if (status.state === 'failing' || !status.lastSuccessAt) return false;
   return now.getTime() - new Date(status.lastSuccessAt).getTime() < RETRY_SKIP_HOURS * 3600_000;
 }
+
+export const shouldSkipScheduledCollect = shouldSkipScheduled;
 
 export function parseCollectLog(text: string, now: Date): CollectStatus {
   return parseRunLog(text, now, COLLECT_SPEC);

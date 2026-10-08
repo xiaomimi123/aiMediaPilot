@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import os from 'node:os';
 import path from 'node:path';
-import { parseCollectLog, readCollectStatus, parseRunLog, SCAN_SPEC, shouldSkipScheduledCollect } from '@/lib/douyin/collect-log';
+import { parseCollectLog, readCollectStatus, parseRunLog, SCAN_SPEC, shouldSkipScheduled, shouldSkipScheduledCollect } from '@/lib/douyin/collect-log';
 
 const now = new Date('2026-09-28T12:00:00Z');
 const okRun = (d: string) => `[${d}T12:00:06.000Z] 开始回采\n[${d}T12:00:24.000Z] 回采完成: 共 101 条(新增 0 / 更新 101), 其中公开 5 条\n`;
@@ -39,11 +39,13 @@ describe('parseCollectLog', () => {
     const s = parseCollectLog(okRun('2026-09-26'), now);
     expect(s.state).toBe('stale');
     expect(s.hint).toContain('超过 36 小时没有成功回采');
+    expect(s.hint).toContain('去「设置 · 每晚任务」');
+    expect(s.hint).not.toContain('launchctl');
   });
   it('reports never-run when the log is missing', async () => {
     const s = await readCollectStatus(now, path.join(os.tmpdir(), 'definitely-missing.log'));
     expect(s.state).toBe('never');
-    expect(s.hint).toContain('sh scripts/install-collect-cron.sh');
+    expect(s.hint).toContain('在「设置 · 每晚任务」开启每晚定时');
   });
 });
 
@@ -77,5 +79,14 @@ describe('scheduled retry skip', () => {
     expect(parseCollectLog(skipped, now)).toEqual(parseCollectLog(ok, now));
     const failThenSkip = fail + '[2026-10-08T13:00:01.000Z] 刚回采成功过（1 小时前），这次定时补跑跳过\n';
     expect(parseCollectLog(failThenSkip, now).state).toBe('failing');
+  });
+});
+
+describe('scheduled scan skip', () => {
+  it('skips a scheduled scan within 6 hours of a successful one', () => {
+    const now = new Date('2026-10-08T13:30:00.000Z');
+    const ok = '[2026-10-08T12:30:00.000Z] 开始巡检\n[2026-10-08T12:31:00.000Z] 巡检完成: 账号 3 个(失败 0) / 新作品 0 条 / 爆款 0 条 / 拆解 0 条\n';
+    expect(shouldSkipScheduled(parseRunLog(ok, now, SCAN_SPEC), now)).toBe(true);
+    expect(shouldSkipScheduled(parseRunLog('', now, SCAN_SPEC), now)).toBe(false);
   });
 });

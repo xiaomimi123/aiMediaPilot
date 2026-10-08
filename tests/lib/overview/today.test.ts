@@ -3,13 +3,13 @@ import { buildToday } from '@/lib/overview/today';
 import { stepsOf } from '@/lib/overview/steps';
 
 const card = (id: string, stage: string, center: number | null, published = false) => ({ id, title: id, stage, steps: stepsOf({ stage, hasBenchmark: false, hasScript: true, published, hasRetro: false }), durationSec: 60, center, views: null, updatedAt: '' });
-const none = { failingTasks: [], pendingLinks: [], lessonCandidates: 0, pendingNotes: [], lagging: [], formulaProposed: false, works: [] };
+const none = { tasks: [], pendingLinks: [], lessonCandidates: 0, pendingNotes: [], lagging: [], formulaProposed: false, works: [] };
 
 describe('today', () => {
   it('lists every kind of todo with a link', () => {
     const t = buildToday({
       ...none,
-      failingTasks: [{ hint: '超过 36 小时没有成功对标巡检' }],
+      tasks: [{ label: '对标巡检', ok: false, hint: '超过 36 小时没有成功对标巡检', scheduleEnabled: true }],
       pendingLinks: [{ projectId: 'p1', title: 'U盘' }],
       lessonCandidates: 2,
       pendingNotes: [{ projectId: 'p2', title: 'AI 剪辑' }],
@@ -35,4 +35,9 @@ describe('today', () => {
   it('shows the empty day prompt when there is nothing to do', () => {
     expect(buildToday(none)).toMatchObject({ todos: [], inProgress: [], empty: true });
   });
+  it('says plainly when a nightly task schedule is off', () => {
+    const t = buildToday({ ...none, tasks: [{ label: '对标巡检', ok: true, hint: '', scheduleEnabled: false }, { label: '作品数据回采', ok: true, hint: '', scheduleEnabled: true }] });
+    expect(t.todos).toEqual([{ kind: 'task', text: '对标巡检的每晚定时没开：去「设置 · 每晚任务」打开', href: '/settings#tasks' }]);
+  });
 });
+

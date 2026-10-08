@@ -30,8 +30,8 @@ export const NIGHTLY_TASKS = {
     log: 'logs/scan-benchmarks.log',
     defaultHour: 20,
     defaultMinute: 30,
-    /** 巡检脚本没有"刚成功过就跳过", 不补跑 */
-    retryAfterMin: [] as number[],
+    /** 同回采: 失败时 60、120 分钟后补跑; 脚本带 --scheduled, 刚成功过就跳过 */
+    retryAfterMin: [60, 120] as number[],
   },
 } as const;
 

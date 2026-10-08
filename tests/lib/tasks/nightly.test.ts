@@ -107,8 +107,7 @@ describe('collect retries', () => {
   it('wraps retries past midnight', () => {
     expect(times(renderPlist(T, '/p', 23, 30, NIGHTLY_TASKS.collect.retryAfterMin))).toEqual(['23:30', '0:30', '1:30']);
   });
-  it('does not retry the benchmark scan (it has no skip guard)', () => {
-    expect(NIGHTLY_TASKS.scan.retryAfterMin).toEqual([]);
-    expect(times(renderPlist(T, '/p', 20, 30, NIGHTLY_TASKS.scan.retryAfterMin))).toEqual(['20:30']);
+  it('retries the benchmark scan too (20:30, 21:30, 22:30)', () => {
+    expect(times(renderPlist(T, '/p', 20, 30, NIGHTLY_TASKS.scan.retryAfterMin))).toEqual(['20:30', '21:30', '22:30']);
   });
 });
