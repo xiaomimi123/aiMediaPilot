@@ -172,18 +172,21 @@ export async function startFilm(db: PrismaClient, deps: RunnerDeps, i: { project
   return launch(db, deps, s, firstMessage({ kind: i.kind, projectId: p.id, title: p.title, baseFilmDir: baseFilmDir ?? undefined, baseVersion: i.baseVersion, note: i.note, orientation }), false, i.model);
 }
 
+/** 上一轮进程还在: 已写出结果(只是在收尾)就等它最多 5 秒, 还不退就结束它; 没有结果(停止中)的不许续 */
+async function waitOldTurnExit(deps: RunnerDeps, s: FilmSession, parsed: ParsedLog) {
+  if (!s.pid || !deps.isAlive(s.pid, s.turnStartedAt)) return;
+  if (!parsed.last.ended) throw new FilmBusy('上一轮还没完全停下，等几秒再试');
+  for (let i = 0; i < 25 && deps.isAlive(s.pid, s.turnStartedAt); i++) await new Promise((r) => setTimeout(r, 200));
+  if (deps.isAlive(s.pid, s.turnStartedAt)) deps.killGroup(s.pid);
+}
+
 export async function replyFilm(db: PrismaClient, deps: RunnerDeps, id: string, text: string, model: string): Promise<FilmSession> {
   if (!deps.claudeBin) throw new FilmBusy(NO_CLAUDE);
   const { session: s, parsed } = await refreshFilm(db, deps, id);
   if (s.status === 'running') throw new FilmBusy('还在做，等这一步停下来再回复');
   if (!OPEN.includes(s.status)) throw new FilmBusy('这次出片已经结束');
   if (!text.trim()) throw new FilmBusy('回复是空的');
-  if (s.pid && deps.isAlive(s.pid, s.turnStartedAt)) {
-    // 本轮已写出结果、进程还在收尾: 等它最多 5 秒, 还不退就结束它; 没有结果(停止中)的不许续
-    if (!parsed.last.ended) throw new FilmBusy('上一轮还没完全停下，等几秒再试');
-    for (let i = 0; i < 25 && deps.isAlive(s.pid, s.turnStartedAt); i++) await new Promise((r) => setTimeout(r, 200));
-    if (deps.isAlive(s.pid, s.turnStartedAt)) deps.killGroup(s.pid);
-  }
+  await waitOldTurnExit(deps, s, parsed);
   const other = await runningElsewhere(db, deps, s.projectId);
   if (other) throw new FilmBusy(`「${other.title}」正在出片，等它做完再继续`);
   // 条件更新占位: 两次同时回复只有一次能占到
@@ -200,10 +203,10 @@ export async function replyFilm(db: PrismaClient, deps: RunnerDeps, id: string, 
 /** 换个新对话接着做: 旧对话太长(模型服务拒收)时, 用新的 Claude 会话继续同一个片子目录 */
 export async function restartFilm(db: PrismaClient, deps: RunnerDeps, id: string, model: string): Promise<FilmSession> {
   if (!deps.claudeBin) throw new FilmBusy(NO_CLAUDE);
-  const { session: s } = await refreshFilm(db, deps, id);
+  const { session: s, parsed } = await refreshFilm(db, deps, id);
   if (s.status !== 'failed' && s.status !== 'stopped') throw new FilmBusy('只有停了的出片才能换新对话接着做');
   if (!s.filmDir) throw new FilmBusy('这次出片还没有片子目录，直接「接着做」');
-  if (s.pid && deps.isAlive(s.pid, s.turnStartedAt)) throw new FilmBusy('上一轮还没完全停下，等几秒再试');
+  await waitOldTurnExit(deps, s, parsed);
   const other = await runningElsewhere(db, deps, s.projectId);
   if (other) throw new FilmBusy(`「${other.title}」正在出片，等它做完再继续`);
   const claimed = await db.filmSession.updateMany({

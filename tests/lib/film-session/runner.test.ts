@@ -264,4 +264,20 @@ describe('film runner', () => {
     await settle(db, deps, s.id);
     await expect(restartFilm(db, deps, s.id, 'opus')).rejects.toThrow('还没有片子目录');
   });
+  it('lets a restart through right after the result while the old process is still exiting', async () => {
+    process.env.FAKE_SCENARIO = 'limit';
+    const { db } = fakeDb();
+    let alive = true;
+    const killed: number[] = [];
+    const deps = realDeps({ isAlive: (pid) => (pid === 4242 ? alive : createRunnerDeps().isAlive(pid)), killGroup: (pid) => void killed.push(pid) });
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    await settle(db, deps, s.id);
+    await db.filmSession.update({ where: { id: s.id }, data: { pid: 4242, filmDir: 'remotion/films/p1-v4' } });
+    delete process.env.FAKE_SCENARIO;
+    setTimeout(() => (alive = false), 300);
+    expect((await restartFilm(db, deps, s.id, 'opus')).status).toBe('running');
+    expect(killed).toEqual([]);
+    await settle(db, deps, s.id);
+  });
 });
+
