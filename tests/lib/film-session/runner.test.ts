@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { PrismaClient } from '@prisma/client';
-import { abandonFilm, createRunnerDeps, restartFilm, FilmBusy, refreshFilm, replyFilm, startFilm, stopFilm, type RunnerDeps } from '@/lib/film-session/runner';
+import { abandonFilm, createRunnerDeps, restartFilm, registerFilmSession, summaryFromMessage, FilmBusy, refreshFilm, replyFilm, startFilm, stopFilm, type RunnerDeps } from '@/lib/film-session/runner';
 
 type Row = Record<string, unknown> & { id: string; projectId: string; status: string };
 
@@ -279,5 +279,40 @@ describe('film runner', () => {
     expect(killed).toEqual([]);
     await settle(db, deps, s.id);
   });
+  it('turns the render checkpoint message into a short plain summary', () => {
+    const msg = '成片渲染完成：`remotion/films/p1-v4/out/final.mp4`（79 秒，1920×1080 横版）。\n\n这一版的情况：\n\n**镜头与素材**\n- 共 16 镜，覆盖 0–79.2 秒\n- 千川后台照片铺满内容区\n\n要登记为新版本吗？可以就回复「可以，登记」。';
+    const s = summaryFromMessage(msg);
+    expect(s).toContain('共 16 镜');
+    expect(s).not.toMatch(/\*\*|`|要登记为新版本吗/);
+    expect(s.length).toBeLessThanOrEqual(300);
+    expect(summaryFromMessage(null)).toBe('网页里出片登记');
+  });
+  it('registers a rendered film directly without another claude turn', async () => {
+    const { db } = fakeDb();
+    const spawned: string[][] = [];
+    const deps = realDeps({ spawn: (bin, args, log, onExit) => (spawned.push(args), createRunnerDeps().spawn.call(realDeps(), bin, args, log, onExit)) });
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    await settle(db, deps, s.id);
+    await replyFilm(db, deps, s.id, '可以，继续', 'opus');
+    await settle(db, deps, s.id);
+    const before = spawned.length;
+    const calls: [string, string][] = [];
+    const r = await registerFilmSession(db, deps, s.id, async (dir, summary) => (calls.push([dir, summary]), { version: 3 }));
+    expect(spawned.length).toBe(before);
+    expect(calls).toEqual([[path.join(deps.cwd, 'remotion/films/p1-v3'), '要登记为新版本吗？'.length ? summaryFromMessage('要登记为新版本吗？') : '']]);
+    expect(r).toMatchObject({ status: 'done', version: 3 });
+    const { parsed } = await refreshFilm(db, deps, s.id);
+    expect(parsed.items.slice(-2)).toEqual([{ kind: 'you', text: '登记为新版本' }, { kind: 'step', text: '登记 v3', ok: true }]);
+  });
+  it('only registers a film waiting at the render checkpoint and keeps it waiting on error', async () => {
+    const { db } = fakeDb();
+    const deps = realDeps();
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    await settle(db, deps, s.id);
+    await expect(registerFilmSession(db, deps, s.id, async () => ({ version: 1 }))).rejects.toThrow('只有渲染好、等你确认的成片才能登记');
+    await replyFilm(db, deps, s.id, '可以，继续', 'opus');
+    await settle(db, deps, s.id);
+    await expect(registerFilmSession(db, deps, s.id, async () => { throw new Error('没找到成片'); })).rejects.toThrow('没找到成片');
+    expect((await refreshFilm(db, deps, s.id)).session).toMatchObject({ status: 'waiting', checkpoint: 'render' });
+  });
 });
-

@@ -17,4 +17,8 @@ describe('film commands', () => {
     expect(check.usage).toBe('mp film check <片子目录> [--expect landscape|portrait]');
     expect(FILM_COMMANDS.find((c) => c.path.join(' ') === 'film new')!.usage).toBe('mp film new <项目> [--landscape]');
   });
+  it('film render can re-render keyframes for only some shots', () => {
+    expect(FILM_COMMANDS.find((c) => c.path.join(' ') === 'film render')!.usage).toBe('mp film render <片子目录> [--stills [--shots 镜头id,…]]');
+  });
 });
+

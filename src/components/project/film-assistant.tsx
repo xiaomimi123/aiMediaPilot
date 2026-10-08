@@ -154,7 +154,7 @@ export function FilmAssistant({ projectId, onChanged }: { projectId: string; onC
                   <button className="btn-primary" disabled={busy} onClick={() => void post({ action: 'reply', text: '可以，继续' })}>可以，继续</button>
                 )}
                 {c.checkpoint === 'render' && (
-                  <button className="btn-primary" disabled={busy} onClick={() => void post({ action: 'reply', text: '可以，登记' })}>登记为新版本</button>
+                  <button className="btn-primary" disabled={busy} onClick={() => void post({ action: 'register' })}>登记为新版本</button>
                 )}
                 <input className="min-w-0 flex-1 rounded-[var(--r-md)] bg-[var(--bg-surface)] px-2 py-1.5" placeholder="或者写你的意见…" value={reply} onChange={(e) => setReply(e.target.value)} />
                 <button className="btn-secondary" disabled={busy || !reply.trim()} onClick={() => void post({ action: 'reply', text: reply.trim() })}>发送</button>

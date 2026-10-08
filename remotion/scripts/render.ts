@@ -20,8 +20,7 @@ async function main() {
 
   if (flag === '--stills') {
     const dir = path.join(filmDir, 'stills');
-    // 每次重出: 清掉上一轮的(含旧的全尺寸 png), 只留这一轮
-    fs.rmSync(dir, { recursive: true, force: true });
+    // 清不清上一轮由 mp film render 决定(全部重出才清; --shots 只重出几镜时保留其余的)
     fs.mkdirSync(dir, { recursive: true });
     for (const s of value.split(',').map(Number)) {
       const frame = Math.min(composition.durationInFrames - 1, Math.max(0, Math.round(s * composition.fps)));
