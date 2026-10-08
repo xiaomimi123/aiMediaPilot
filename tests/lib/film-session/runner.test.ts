@@ -315,4 +315,12 @@ describe('film runner', () => {
     await expect(registerFilmSession(db, deps, s.id, async () => { throw new Error('没找到成片'); })).rejects.toThrow('没找到成片');
     expect((await refreshFilm(db, deps, s.id)).session).toMatchObject({ status: 'waiting', checkpoint: 'render' });
   });
+  it('takes only the "what this version did" section for the summary, without paths or status lines', () => {
+    const msg = '横版成片（1920×1080，79.2 秒）渲染完成，我还没登记。成片在 `remotion/films/p1-v5/out/final.mp4`。\n\n**这一版做了什么**\n- 从头设计。\n- 18 镜，十个圆点（九个亮）。\n\n**素材**\n- 后台照片放在「第一」那一镜。\n\n要登记为新版本吗？回复「可以，登记」，我就运行 `film register`。';
+    const s = summaryFromMessage(msg);
+    expect(s.startsWith('从头设计。')).toBe(true);
+    expect(s).toContain('十个圆点');
+    expect(s).toContain('后台照片');
+    expect(s).not.toMatch(/渲染完成|还没登记|remotion\/films|这一版做了什么|要登记/);
+  });
 });

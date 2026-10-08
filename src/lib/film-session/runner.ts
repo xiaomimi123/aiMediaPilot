@@ -221,12 +221,18 @@ export async function restartFilm(db: PrismaClient, deps: RunnerDeps, id: string
   return launch(db, deps, fresh, restartMessage({ projectId: s.projectId, title: p?.title ?? s.projectId, filmDir: s.filmDir, orientation }), false, model);
 }
 
-/** 「这一版做了什么」那段话 → 登记摘要: 去掉 markdown 记号和末尾的"要登记吗"提问, 压成一段, 最长 300 字 */
+/**
+ * 渲染完那段话 → 登记摘要: 有「这一版做了什么」就只取它之后的内容; 去掉"渲染完成/还没登记"这类状态行、
+ * 文件路径、markdown 记号和末尾的"要登记吗"提问, 压成一段, 最长 300 字
+ */
 export function summaryFromMessage(message: string | null): string {
-  const text = (message ?? '')
-    .split('\n')
-    .filter((l) => !/要登记为新版本吗|可以就回复/.test(l))
+  let lines = (message ?? '').split('\n');
+  const head = lines.findIndex((l) => /这一版做了什么/.test(l));
+  if (head >= 0) lines = lines.slice(head + 1);
+  const text = lines
+    .filter((l) => !/要登记为新版本吗|可以就回复|可以，登记|渲染完成|还没登记/.test(l))
     .join(' ')
+    .replace(/`[^`]*remotion\/films[^`]*`/g, '')
     .replace(/\*\*|`|^#+\s*/g, '')
     .replace(/\s*-\s+/g, ' ')
     .replace(/\s+/g, ' ')
