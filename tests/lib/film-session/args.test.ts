@@ -87,5 +87,8 @@ describe('film session args', () => {
     expect(denied).toContain('Read(~/.ssh/**)');
     expect(FILM_RULES).toContain('不要用 cd');
   });
+  it('asks for material to fill the content area and for a written verdict on every keyframe review', () => {
+    expect(FILM_RULES).toContain('铺满内容区');
+    expect(FILM_RULES).toContain('逐镜写出结论');
+  });
 });
-

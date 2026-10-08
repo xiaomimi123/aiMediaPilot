@@ -65,7 +65,9 @@ export const FILM_RULES = `你在 MediaPilot 网页里被调用，用户在网�
 - 拿不准的事（素材丢了、不确定放哪里、要求矛盾）停下来问，不要猜。
 - film check 或渲染同一个错误连续 3 次没修好，停下来把报错和你的判断告诉用户。
 - 不改 remotion/kit、不删除文件、不碰片子目录以外的文件。
-- 不要用 cd 切换目录，命令和文件都写完整路径。`;
+- 不要用 cd 切换目录，命令和文件都写完整路径。
+- 录屏、截图、照片素材要整块铺满内容区（横版 1360×765、竖版 790×560），不要缩成小图。
+- 每次看关键帧都要逐镜写出结论：这一镜通过，或者有什么问题、怎么改；有问题就改完只重出改过的镜头再看。`;
 
 export function firstMessage(i: { kind: 'new' | 'revise'; projectId: string; title: string; baseFilmDir?: string; baseVersion?: number; note?: string; orientation?: FilmOrientation }): string {
   const note = i.note?.trim();
