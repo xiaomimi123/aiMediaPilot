@@ -15,7 +15,7 @@ describe('AssistantView', () => {
   it('lists threads and opens the latest one', async () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string) => ({
       json: async () =>
-        url === '/api/assistant/threads'
+        url.startsWith('/api/assistant/threads?') || url === '/api/assistant/threads'
           ? { success: true, data: [{ id: 't1', title: '今天做什么', updatedAt: '2026-09-29T10:00:00.000Z' }] }
           : { success: true, data: { id: 't1', title: '今天做什么', messages: [{ id: 'm1', role: 'assistant', content: '去 /projects/p9 看看', toolName: null, ok: null, detail: null }] } },
     })));
@@ -31,7 +31,7 @@ describe('AssistantView threads', () => {
   it('creates only one thread on a fresh start, even under StrictMode', async () => {
     const { StrictMode } = await import('react');
     const f = vi.fn(async (url: string, init?: RequestInit) => ({
-      json: async () => (init?.method === 'POST' ? { success: true, data: thread('new') } : url === '/api/assistant/threads' ? { success: true, data: [] } : { success: true, data: { id: 'new', title: 'new', messages: [] } }),
+      json: async () => (init?.method === 'POST' ? { success: true, data: thread('new') } : url.startsWith('/api/assistant/threads?') || url === '/api/assistant/threads' ? { success: true, data: [] } : { success: true, data: { id: 'new', title: 'new', messages: [] } }),
     }));
     vi.stubGlobal('fetch', f);
     render(
@@ -45,7 +45,7 @@ describe('AssistantView threads', () => {
   });
   it('reuses the current thread when it has no messages yet', async () => {
     const f = vi.fn(async (url: string, init?: RequestInit) => ({
-      json: async () => (init?.method === 'POST' ? { success: true, data: thread('t2') } : url === '/api/assistant/threads' ? { success: true, data: [thread('t1')] } : { success: true, data: { id: 't1', title: 't1', messages: [] } }),
+      json: async () => (init?.method === 'POST' ? { success: true, data: thread('t2') } : url.startsWith('/api/assistant/threads?') || url === '/api/assistant/threads' ? { success: true, data: [thread('t1')] } : { success: true, data: { id: 't1', title: 't1', messages: [] } }),
     }));
     vi.stubGlobal('fetch', f);
     render(<AssistantView />);
@@ -57,7 +57,7 @@ describe('AssistantView threads', () => {
   it('shows the last clicked thread even if an earlier one answers later', async () => {
     let releaseA: () => void = () => {};
     const f = vi.fn(async (url: string) => {
-      if (url === '/api/assistant/threads') return { json: async () => ({ success: true, data: [thread('A'), thread('B')] }) };
+      if (url.startsWith('/api/assistant/threads?') || url === '/api/assistant/threads') return { json: async () => ({ success: true, data: [thread('A'), thread('B')] }) };
       if (url === '/api/assistant/threads/A' && f.mock.calls.filter((c) => c[0] === url).length > 1) await new Promise<void>((r) => (releaseA = r));
       const id = url.split('/').pop()!;
       return { json: async () => ({ success: true, data: { id, title: id, messages: [{ id: `m${id}`, role: 'assistant', content: `内容${id}`, toolName: null, ok: null }] } }) };
@@ -80,7 +80,7 @@ describe('AssistantView threads', () => {
       json: async () =>
         init?.method === 'POST' && url === '/api/assistant/threads'
           ? { success: true, data: thread('t2') }
-          : url === '/api/assistant/threads'
+          : url.startsWith('/api/assistant/threads?') || url === '/api/assistant/threads'
             ? { success: true, data: [thread('t1')] }
             : url.endsWith('/chat')
               ? { message: 'x' }
