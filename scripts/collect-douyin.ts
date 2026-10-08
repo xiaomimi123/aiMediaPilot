@@ -8,6 +8,7 @@ import { runDueRetros } from '../src/lib/retro/generate';
 import { postLagAlerts } from '../src/lib/predict/lag';
 import { recordDailySnapshot } from '../src/lib/account/daily';
 import { importWorks, type IncomingWork } from '../src/lib/works/import';
+import { readCollectStatus, shouldSkipScheduledCollect } from '../src/lib/douyin/collect-log';
 
 /**
  * 每晚定时回采抖音作品数据。
@@ -166,6 +167,16 @@ function log(msg: string): void {
 }
 
 async function main(): Promise<void> {
+  // 定时触发(含失败补跑): 刚成功过就不再开浏览器访问抖音; 手动运行不带 --scheduled, 照常跑
+  if (process.argv.includes('--scheduled')) {
+    const now = new Date();
+    const status = await readCollectStatus(now);
+    if (shouldSkipScheduledCollect(status, now)) {
+      const h = Math.max(1, Math.round((now.getTime() - new Date(status.lastSuccessAt!).getTime()) / 3600_000));
+      log(`刚回采成功过（${h} 小时前），这次定时补跑跳过`);
+      return;
+    }
+  }
   log('开始回采');
 
   let stdout: string;

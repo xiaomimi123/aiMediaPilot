@@ -19,6 +19,8 @@ export const NIGHTLY_TASKS = {
     log: 'logs/collect-douyin.log',
     defaultHour: 20,
     defaultMinute: 0,
+    /** 失败补跑: 设定时间后 60、120 分钟各再触发一次; 脚本带 --scheduled, 刚成功过就跳过 */
+    retryAfterMin: [60, 120] as number[],
   },
   scan: {
     label: '对标巡检',
@@ -28,6 +30,8 @@ export const NIGHTLY_TASKS = {
     log: 'logs/scan-benchmarks.log',
     defaultHour: 20,
     defaultMinute: 30,
+    /** 巡检脚本没有"刚成功过就跳过", 不补跑 */
+    retryAfterMin: [] as number[],
   },
 } as const;
 
@@ -50,11 +54,16 @@ export function isTaskKey(k: string): k is TaskKey {
   return k in NIGHTLY_TASKS;
 }
 
-export function renderPlist(template: string, projectDir: string, hour: number, minute: number): string {
-  return template
-    .replace(/__PROJECT_DIR__/g, projectDir)
-    .replace(/(<key>Hour<\/key>\s*<integer>)\d+(<\/integer>)/, `$1${hour}$2`)
-    .replace(/(<key>Minute<\/key>\s*<integer>)\d+(<\/integer>)/, `$1${minute}$2`);
+export function renderPlist(template: string, projectDir: string, hour: number, minute: number, retryAfterMin: number[] = []): string {
+  const s = template.replace(/__PROJECT_DIR__/g, projectDir);
+  if (retryAfterMin.length === 0) {
+    return s.replace(/(<key>Hour<\/key>\s*<integer>)\d+(<\/integer>)/, `$1${hour}$2`).replace(/(<key>Minute<\/key>\s*<integer>)\d+(<\/integer>)/, `$1${minute}$2`);
+  }
+  // 多个时间: launchd 的 StartCalendarInterval 写成数组; 第一个是设定时间(readSchedule 读它), 其后是补跑(跨午夜取模)
+  const at = (m: number) => `    <dict>\n      <key>Hour</key>\n      <integer>${Math.floor(m / 60) % 24}</integer>\n      <key>Minute</key>\n      <integer>${m % 60}</integer>\n    </dict>`;
+  const base = hour * 60 + minute;
+  const block = `<key>StartCalendarInterval</key>\n  <array>\n${[0, ...retryAfterMin].map((d) => at((base + d) % 1440)).join('\n')}\n  </array>`;
+  return s.replace(/<key>StartCalendarInterval<\/key>\s*<(dict|array)>[\s\S]*?<\/\1>/, block);
 }
 
 export function readSchedule(plist: string | null, task: TaskDef): { enabled: boolean; hour: number; minute: number } {
@@ -77,7 +86,7 @@ export async function enableSchedule(d: TaskDeps, key: TaskKey, hour: number, mi
   await fsp.mkdir(d.agentsDir, { recursive: true });
   await fsp.mkdir(path.join(d.projectDir, 'logs'), { recursive: true });
   const file = plistPath(d, t);
-  await fsp.writeFile(file, renderPlist(template, d.projectDir, hour, minute));
+  await fsp.writeFile(file, renderPlist(template, d.projectDir, hour, minute, t.retryAfterMin));
   // 先卸再装, 改过时间才会生效(卸载失败 = 本来没装, 不管)
   await d.exec('launchctl', ['unload', '-w', file], 10_000);
   const r = await d.exec('launchctl', ['load', '-w', file], 10_000);

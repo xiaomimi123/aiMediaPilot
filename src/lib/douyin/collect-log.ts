@@ -100,6 +100,14 @@ export function parseRunLog(text: string, now: Date, spec: RunLogSpec): CollectS
   return { state: 'ok', lastRun, lastSuccessAt, consecutiveFailures: 0, hint: '' };
 }
 
+/** 定时补跑: 这么多小时内回采成功过就跳过(不开浏览器、不访问抖音) */
+export const RETRY_SKIP_HOURS = 6;
+
+export function shouldSkipScheduledCollect(status: CollectStatus, now: Date): boolean {
+  if (status.state === 'failing' || !status.lastSuccessAt) return false;
+  return now.getTime() - new Date(status.lastSuccessAt).getTime() < RETRY_SKIP_HOURS * 3600_000;
+}
+
 export function parseCollectLog(text: string, now: Date): CollectStatus {
   return parseRunLog(text, now, COLLECT_SPEC);
 }

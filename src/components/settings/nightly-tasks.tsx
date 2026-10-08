@@ -49,6 +49,7 @@ function TaskCard({ t, onChanged }: { t: TaskView; onChanged: (justStarted?: boo
         <span className={`text-xs ${t.schedule.enabled ? 'text-[var(--success)]' : 'text-[var(--text-tertiary)]'}`}>
           {t.schedule.enabled ? `定时已开 · 每晚 ${pad(t.schedule.hour)}:${pad(t.schedule.minute)}` : '定时未开'}
         </span>
+        {t.key === 'collect' && t.schedule.enabled && <span className="text-xs text-[var(--text-tertiary)]">失败会在 1 小时、2 小时后各自动补跑一次</span>}
       </div>
       <p className={`mt-1 text-xs ${running || t.state === 'ok' ? 'text-[var(--text-secondary)]' : 'text-[var(--warning)]'}`}>{status}</p>
       <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
