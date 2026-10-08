@@ -67,7 +67,10 @@ describe('FilmPane', () => {
   it('deletes a film version only after confirming in the page (no native dialog)', async () => {
     const films = [{ id: 'f1', version: 1, url: '/f1', createdAt: '2026-09-28T01:00:00Z', summary: '首版', usage: [], orientation: 'portrait' as const }];
     const onChanged = vi.fn();
-    const fetchMock = vi.fn(async (_url: string, _init?: { method?: string }) => ({ json: async () => ({ success: true, data: { version: 1 } }) }));
+    // 出片助手也会读状态: 按地址分别返回, 否则它拿到删除接口的数据会报错
+    const fetchMock = vi.fn(async (url: string, _init?: { method?: string }) => ({
+      json: async () => ({ success: true, data: url.endsWith('/film-session') ? { current: null, history: [], busyElsewhere: null, claudeAvailable: true, versions: [] } : { version: 1 } }),
+    }));
     vi.stubGlobal('fetch', fetchMock);
     const confirm = vi.fn(() => false);
     vi.stubGlobal('confirm', confirm);
