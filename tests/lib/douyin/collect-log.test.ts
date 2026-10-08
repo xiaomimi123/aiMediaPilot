@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import os from 'node:os';
 import path from 'node:path';
-import { parseCollectLog, readCollectStatus, parseRunLog, SCAN_SPEC } from '@/lib/douyin/collect-log';
+import { parseCollectLog, readCollectStatus, parseRunLog, SCAN_SPEC, shouldSkipScheduledCollect } from '@/lib/douyin/collect-log';
 
 const now = new Date('2026-09-28T12:00:00Z');
 const okRun = (d: string) => `[${d}T12:00:06.000Z] 开始回采\n[${d}T12:00:24.000Z] 回采完成: 共 101 条(新增 0 / 更新 101), 其中公开 5 条\n`;
@@ -57,5 +57,25 @@ describe('parseRunLog with the scan spec', () => {
   it('is ok after a completed scan', () => {
     const text = '[2026-09-28T11:30:00.000Z] 开始巡检\n[2026-09-28T11:33:00.000Z] 巡检完成: 账号 3 个(失败 0) / 新作品 5 条 / 爆款 1 条 / 拆解 1 条\n';
     expect(parseRunLog(text, now, SCAN_SPEC).state).toBe('ok');
+  });
+});
+
+describe('scheduled retry skip', () => {
+  const now = new Date('2026-10-08T13:00:00.000Z');
+  const ok = '[2026-10-08T12:00:00.000Z] 开始回采\n[2026-10-08T12:00:20.000Z] 回采完成: 共 101 条(新增 0 / 更新 101), 其中公开 5 条\n';
+  const fail = '[2026-10-08T12:00:00.000Z] 开始回采\n[2026-10-08T12:00:20.000Z] ego-browser 执行失败: 退出码 1\n';
+  it('skips a scheduled run when a collect succeeded within 6 hours', () => {
+    expect(shouldSkipScheduledCollect(parseCollectLog(ok, now), now)).toBe(true);
+    expect(shouldSkipScheduledCollect(parseCollectLog(ok, new Date('2026-10-08T18:01:00.000Z')), new Date('2026-10-08T18:01:00.000Z'))).toBe(false);
+  });
+  it('runs when the last collect failed or never ran', () => {
+    expect(shouldSkipScheduledCollect(parseCollectLog(fail, now), now)).toBe(false);
+    expect(shouldSkipScheduledCollect(parseCollectLog('', now), now)).toBe(false);
+  });
+  it('does not let the skip line change the status', () => {
+    const skipped = ok + '[2026-10-08T13:00:01.000Z] 刚回采成功过（1 小时前），这次定时补跑跳过\n';
+    expect(parseCollectLog(skipped, now)).toEqual(parseCollectLog(ok, now));
+    const failThenSkip = fail + '[2026-10-08T13:00:01.000Z] 刚回采成功过（1 小时前），这次定时补跑跳过\n';
+    expect(parseCollectLog(failThenSkip, now).state).toBe('failing');
   });
 });

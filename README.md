@@ -77,6 +77,8 @@ sh scripts/install-collect-cron.sh uninstall  # 卸载
 npm run collect:douyin                        # 手动跑一次
 ```
 
+在设置页「每晚任务」开启定时时，会排三个时间：设定时间、1 小时后、2 小时后；定时触发带 `--scheduled`，6 小时内回采成功过就跳过（不访问抖音），所以只有失败时才会补跑，一晚最多 3 次。手动运行不受影响。
+
 依赖 ego lite（共享已登录的浏览器状态），全程只读。日志在 `logs/collect-douyin.log`；抓到 0 条会判定为异常并拒绝写库。写入 `PublishedWork`、`DouyinOverviewSnapshot`、`DouyinMetricSummary` 三张表。
 
 旧库导出的人设与回采数据可用 `npm run import:legacy` 导入（读 `data/legacy-export.json`，幂等，不回退已回采的新数据）。

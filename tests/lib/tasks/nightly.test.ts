@@ -85,3 +85,30 @@ describe('startManualRun', () => {
     expect(await startManualRun(d, 'collect')).toEqual({ ok: false, reason: '作品数据回采今天已经手动跑了 3 次（保护账号），明天再试，或等每晚定时的那次。' });
   });
 });
+
+describe('collect retries', () => {
+  const T = `<plist><dict>
+  <key>ProgramArguments</key><array><string>cd "__PROJECT_DIR__" || exit 1; exec npm run collect:douyin -- --scheduled</string></array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>20</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+</dict></plist>`;
+  const times = (p: string) => [...p.matchAll(/<key>Hour<\/key>\s*<integer>(\d+)<\/integer>\s*<key>Minute<\/key>\s*<integer>(\d+)<\/integer>/g)].map((m) => `${m[1]}:${m[2]}`);
+  it('schedules the set time plus retries 1 and 2 hours later', () => {
+    const p = renderPlist(T, '/p', 20, 0, NIGHTLY_TASKS.collect.retryAfterMin);
+    expect(times(p)).toEqual(['20:0', '21:0', '22:0']);
+    expect(p).toContain('<key>StartCalendarInterval</key>\n  <array>');
+    expect(readSchedule(p, NIGHTLY_TASKS.collect)).toEqual({ enabled: true, hour: 20, minute: 0 });
+  });
+  it('wraps retries past midnight', () => {
+    expect(times(renderPlist(T, '/p', 23, 30, NIGHTLY_TASKS.collect.retryAfterMin))).toEqual(['23:30', '0:30', '1:30']);
+  });
+  it('does not retry the benchmark scan (it has no skip guard)', () => {
+    expect(NIGHTLY_TASKS.scan.retryAfterMin).toEqual([]);
+    expect(times(renderPlist(T, '/p', 20, 30, NIGHTLY_TASKS.scan.retryAfterMin))).toEqual(['20:30']);
+  });
+});
