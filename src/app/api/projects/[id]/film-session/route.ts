@@ -27,6 +27,8 @@ export interface FilmSessionData {
   busyElsewhere: { projectId: string; title: string } | null;
   claudeAvailable: boolean;
   versions: number[];
+  /** 版本号 → 版式(没记 = 竖版), 「改这一版」下拉里标出来 */
+  orientations: Record<number, 'portrait' | 'landscape'>;
 }
 
 const model = () => getFilmModel(prisma);
@@ -64,6 +66,12 @@ async function view(projectId: string): Promise<FilmSessionData> {
     busyElsewhere: await runningElsewhere(prisma, deps, projectId),
     claudeAvailable: !!deps.claudeBin,
     versions: films.map((f) => Number((f.meta as { filmVersion?: unknown } | null)?.filmVersion) || 0).filter(Boolean).sort((a, b) => b - a),
+    orientations: Object.fromEntries(
+      films.map((f) => {
+        const m = (f.meta ?? {}) as { filmVersion?: unknown; orientation?: unknown };
+        return [Number(m.filmVersion) || 0, m.orientation === 'landscape' ? 'landscape' : 'portrait'];
+      }),
+    ),
   };
 }
 

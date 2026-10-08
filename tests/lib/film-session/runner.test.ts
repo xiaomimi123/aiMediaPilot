@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { PrismaClient } from '@prisma/client';
-import { abandonFilm, createRunnerDeps, restartFilm, registerFilmSession, summaryFromMessage, FilmBusy, refreshFilm, replyFilm, startFilm, stopFilm, type RunnerDeps } from '@/lib/film-session/runner';
+import { abandonFilm, createRunnerDeps, pruneOldLogs, restartFilm, registerFilmSession, summaryFromMessage, FilmBusy, refreshFilm, replyFilm, startFilm, stopFilm, type RunnerDeps } from '@/lib/film-session/runner';
 
 type Row = Record<string, unknown> & { id: string; projectId: string; status: string };
 
@@ -323,4 +323,28 @@ describe('film runner', () => {
     expect(s).toContain('后台照片');
     expect(s).not.toMatch(/渲染完成|还没登记|remotion\/films|这一版做了什么|要登记/);
   });
+  it('removes logs of films closed more than 30 days ago and keeps the rest', async () => {
+    const mk = (name: string) => {
+      const p = path.join(dir, `${name}.jsonl`);
+      fs.writeFileSync(p, 'x');
+      fs.writeFileSync(p.replace(/\.jsonl$/, '.err'), 'x');
+      return p;
+    };
+    const now = new Date('2026-10-09T00:00:00Z');
+    const old = new Date('2026-09-01T00:00:00Z');
+    const rows = [
+      { id: 'a', status: 'done', updatedAt: old, logPath: mk('a') },
+      { id: 'b', status: 'abandoned', updatedAt: old, logPath: mk('b') },
+      { id: 'c', status: 'done', updatedAt: new Date('2026-10-01T00:00:00Z'), logPath: mk('c') },
+      { id: 'd', status: 'failed', updatedAt: old, logPath: mk('d') },
+    ];
+    const db = { filmSession: { findMany: async ({ where }: { where: { status: { in: string[] }; updatedAt: { lt: Date } } }) => rows.filter((r) => where.status.in.includes(r.status) && r.updatedAt < where.updatedAt.lt) } } as unknown as PrismaClient;
+    expect(await pruneOldLogs(db, now)).toBe(2);
+    expect(fs.existsSync(rows[0].logPath)).toBe(false);
+    expect(fs.existsSync(rows[0].logPath.replace(/\.jsonl$/, '.err'))).toBe(false);
+    expect(fs.existsSync(rows[1].logPath)).toBe(false);
+    expect(fs.existsSync(rows[2].logPath)).toBe(true);
+    expect(fs.existsSync(rows[3].logPath)).toBe(true);
+  });
 });
+

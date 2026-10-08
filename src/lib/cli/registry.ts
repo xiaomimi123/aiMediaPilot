@@ -44,6 +44,8 @@ export interface Command {
   summary: string;
   run(ctx: CommandCtx, p: Parsed): Promise<unknown>;
   format?(data: unknown): string;
+  /** 这个命令认识的参数(不含 --json); 写了就严格检查, 拼错的参数直接报错而不是被悄悄忽略 */
+  flags?: string[];
 }
 
 export function agentFromEnv(env: { MP_AGENT?: string }): Agent {
@@ -51,7 +53,7 @@ export function agentFromEnv(env: { MP_AGENT?: string }): Agent {
 }
 
 /** 开关型参数: 永远不带值, 放在位置参数前面也不会吞掉它(agent 常把 --json 写在前面) */
-export const BOOLEAN_FLAGS = new Set(['json', 'stills']);
+export const BOOLEAN_FLAGS = new Set(['json', 'stills', 'landscape']);
 
 export function parseArgv(argv: string[]): Parsed {
   const positionals: string[] = [];
@@ -63,6 +65,11 @@ export function parseArgv(argv: string[]): Parsed {
       break;
     }
     if (a.startsWith('--') && a.length > 2) {
+      const eq = a.indexOf('=');
+      if (eq > 2) {
+        flags[a.slice(2, eq)] = a.slice(eq + 1);
+        continue;
+      }
       if (BOOLEAN_FLAGS.has(a.slice(2))) {
         flags[a.slice(2)] = true;
         continue;
@@ -124,6 +131,13 @@ export async function execute(cmds: Command[], argv: string[], env: { agent: Age
   const found = findCommand(cmds, parsed.positionals);
   if (!found) return fail(new CliError('bad_args', `没有这个命令：${parsed.positionals.join(' ')}。运行 mp help 看可用命令。`));
   const { cmd, rest } = found;
+  if (cmd.flags) {
+    const unknown = Object.keys(parsed.flags).filter((k) => k !== 'json' && !cmd.flags!.includes(k));
+    if (unknown.length) {
+      const can = cmd.flags.length ? cmd.flags.map((f) => `--${f}`).join('、') : '没有参数';
+      return fail(new CliError('bad_args', `不认识的参数：${unknown.map((k) => `--${k}`).join('、')}（这个命令能用：${can}）`), cmd);
+    }
+  }
   if (env.agent === 'hermes' && !cmd.hermes) return fail(new CliError('forbidden', `Hermes 不能做「${cmd.summary}」，这个要回电脑上做。`, 2), cmd);
   const ctx: CommandCtx = {
     db: deps.db,

@@ -35,6 +35,8 @@ export const Frame: React.FC<{
           style={{
             position: 'absolute',
             ...Z.title,
+            // 标题太长时裁掉, 不压到小窗/内容区(横版标题区只有 336 宽)
+            overflow: 'hidden',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'flex-end',

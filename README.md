@@ -39,6 +39,8 @@ npx prisma db push          # 首次或改了 schema 后
 npm run dev                 # http://localhost:3000
 ```
 
+**开机自动启动**（推荐）：`sh scripts/install-dev-autostart.sh` 装好后，登录电脑就自动启动网页服务（固定 3000 端口，日志 `logs/dev.log`），不用再手动 `npm run dev`；卸载用 `sh scripts/install-dev-autostart.sh uninstall`。数据库容器随 Docker 自动起来，在 Docker Desktop 的 Settings → General 里勾选「Start Docker Desktop when you sign in」即可。重启网页服务：`launchctl kickstart -k gui/$(id -u)/com.mediapilot.dev`。
+
 改了 `prisma/schema.prisma` 之后必须 `npx prisma generate` 并重启 `npm run dev`。不要在 dev 运行时跑 `npm run build`。
 
 ## 环境变量（`.env`）

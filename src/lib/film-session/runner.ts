@@ -143,8 +143,24 @@ async function lostRace(db: PrismaClient, s: FilmSession) {
   return p?.title ?? other.projectId;
 }
 
+/** 已结束(登记/放弃)超过 30 天的出片, 日志(.jsonl / .err)删掉; 进行中、可接着做的不动。返回删了几次出片的日志 */
+export const LOG_KEEP_DAYS = 30;
+export async function pruneOldLogs(db: PrismaClient, now: Date): Promise<number> {
+  const old = await db.filmSession.findMany({ where: { status: { in: ['done', 'abandoned'] }, updatedAt: { lt: new Date(now.getTime() - LOG_KEEP_DAYS * 86400_000) } } });
+  let n = 0;
+  for (const s of old) {
+    if (!fs.existsSync(s.logPath)) continue;
+    fs.rmSync(s.logPath, { force: true });
+    fs.rmSync(s.logPath.replace(/\.jsonl$/, '.err'), { force: true });
+    n++;
+  }
+  return n;
+}
+
 export async function startFilm(db: PrismaClient, deps: RunnerDeps, i: { projectId: string; kind: 'new' | 'revise'; baseVersion?: number; note?: string; model: string; orientation?: FilmOrientation }): Promise<FilmSession> {
   if (!deps.claudeBin) throw new FilmBusy(NO_CLAUDE);
+  // 顺手清理老日志(失败不影响出片)
+  await pruneOldLogs(db, deps.now()).catch(() => 0);
   const other = await runningElsewhere(db, deps, i.projectId);
   if (other) throw new FilmBusy(`「${other.title}」正在出片，等它做完再开始`);
   if (await currentFilm(db, i.projectId)) throw new FilmBusy('这个项目还有一次出片没结束：先接着做或放弃');

@@ -11,8 +11,9 @@ export function AssistantView() {
   const [threads, setThreads] = useState<Thread[] | null>(null);
   const [current, setCurrent] = useState<{ id: string; messages: MessageView[] } | null>(null);
 
-  const loadThreads = useCallback(async () => {
-    const j = await (await fetch('/api/assistant/threads')).json().catch(() => ({ success: false }));
+  // 列表不显示空对话; 正打开的那个(可能还是空的)要带上
+  const loadThreads = useCallback(async (currentId?: string) => {
+    const j = await (await fetch(currentId ? `/api/assistant/threads?current=${currentId}` : '/api/assistant/threads')).json().catch(() => ({ success: false }));
     const list: Thread[] = j.success ? j.data : [];
     setThreads(list);
     return list;
@@ -36,7 +37,7 @@ export function AssistantView() {
     if (j.success) {
       wanted.current = j.data.id;
       setCurrent({ id: j.data.id, messages: [] });
-      await loadThreads();
+      await loadThreads(j.data.id);
     }
   }, [loadThreads]);
 
