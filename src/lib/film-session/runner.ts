@@ -123,7 +123,7 @@ export async function runningElsewhere(db: PrismaClient, deps: RunnerDeps, proje
 /** 调用前会话已被占为 running(pid 为空): 写本轮分隔行, 启动子进程, 再写 pid */
 async function launch(db: PrismaClient, deps: RunnerDeps, s: FilmSession, message: string, resume: boolean, model: string) {
   await deps.append(s.logPath, JSON.stringify({ type: 'mp_turn', n: Date.now(), message, at: deps.now().toISOString() }));
-  const pid = deps.spawn(deps.claudeBin!, buildClaudeArgs({ message, sessionId: s.claudeSessionId, resume, model }), s.logPath, () => {
+  const pid = deps.spawn(deps.claudeBin!, buildClaudeArgs({ message, sessionId: s.claudeSessionId, resume, model, root: deps.cwd }), s.logPath, () => {
     void refreshFilm(db, deps, s.id).catch(() => {});
   });
   // 只在仍是本轮占位时写 pid: 进程秒退已被判定时不把状态改回 running

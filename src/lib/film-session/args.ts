@@ -64,7 +64,8 @@ export const FILM_RULES = `你在 MediaPilot 网页里被调用，用户在网�
 - 用户回复"可以，登记"后再运行 film register（--summary 写这一版做了什么）。
 - 拿不准的事（素材丢了、不确定放哪里、要求矛盾）停下来问，不要猜。
 - film check 或渲染同一个错误连续 3 次没修好，停下来把报错和你的判断告诉用户。
-- 不改 remotion/kit、不删除文件、不碰片子目录以外的文件。`;
+- 不改 remotion/kit、不删除文件、不碰片子目录以外的文件。
+- 不要用 cd 切换目录，命令和文件都写完整路径。`;
 
 export function firstMessage(i: { kind: 'new' | 'revise'; projectId: string; title: string; baseFilmDir?: string; baseVersion?: number; note?: string; orientation?: FilmOrientation }): string {
   const note = i.note?.trim();
@@ -80,7 +81,20 @@ export function restartMessage(i: { projectId: string; title: string; filmDir: s
   return `继续给项目 ${i.projectId}（${i.title}）出${land ? '横版' : ''}成片。上一段对话太长中断了，这是新对话：片子目录 ${i.filmDir} 里的镜头表 shots.json 和画面 Film.tsx、copy.ts 都已经写好。不要 film new，不要重排镜头表。先读 .claude/skills/produce-film/SKILL.md 和这几个文件，从第 6 步开始：检查（\`npm run -s mp -- film check ${i.filmDir}${land ? ' --expect landscape' : ''}\`）→ 出关键帧逐张看 → 有问题就改 → 渲染成片，然后停下来等我确认。`;
 }
 
-export function buildClaudeArgs(i: { message: string; sessionId: string; resume: boolean; model: string }): string[] {
+/**
+ * 文件类规则(Write/Edit/Read 带路径)改成绝对路径 `//<仓库>/...`: 相对路径按 Claude 当前目录算,
+ * 它在会话里 cd 一次(实测 Sonnet 会 cd remotion/films), 相对规则就全对不上, 写片子目录被拒。
+ */
+export function anchorRules(rules: string[], root: string): string[] {
+  const base = root.replace(/\/+$/, '');
+  return rules.map((r) => {
+    const m = /^(Write|Edit|Read)\((?!~|\/\/)(?:\.\/)?(.+)\)$/.exec(r);
+    return m ? `${m[1]}(/${base}/${m[2]})` : r;
+  });
+}
+
+export function buildClaudeArgs(i: { message: string; sessionId: string; resume: boolean; model: string; root?: string }): string[] {
+  const root = i.root ?? process.cwd();
   return [
     '-p',
     ...(i.resume ? ['--resume', i.sessionId] : ['--session-id', i.sessionId]),
@@ -90,14 +104,14 @@ export function buildClaudeArgs(i: { message: string; sessionId: string; resume:
     '--model',
     i.model,
     '--allowedTools',
-    FILM_ALLOWED_TOOLS.join(','),
+    anchorRules(FILM_ALLOWED_TOOLS, root).join(','),
     '--append-system-prompt',
     FILM_RULES,
     // 不读项目里的 .claude/settings*.json(那里放行了很多命令), 白名单只来自上面
     '--setting-sources',
     'user',
     '--disallowedTools',
-    FILM_DENIED_TOOLS.join(','),
+    anchorRules(FILM_DENIED_TOOLS, root).join(','),
     // 消息放在 -- 之后: 以 - 开头的回复不会被当成参数
     '--',
     i.message,

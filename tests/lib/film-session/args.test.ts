@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildClaudeArgs, childEnv, restartMessage, FILM_ALLOWED_TOOLS, FILM_RULES, firstMessage, resolveClaudeBin } from '@/lib/film-session/args';
+import { anchorRules, buildClaudeArgs, childEnv, restartMessage, FILM_ALLOWED_TOOLS, FILM_RULES, firstMessage, resolveClaudeBin } from '@/lib/film-session/args';
 
 describe('film session args', () => {
   it('whitelists only film work', () => {
@@ -24,7 +24,7 @@ describe('film session args', () => {
     expect(first[0]).toBe('-p');
     expect(first.at(-1)).toBe('出片');
     expect(first).toEqual(expect.arrayContaining(['--session-id', 'abc', '--output-format', 'stream-json', '--verbose', '--model', 'opus', '--append-system-prompt', FILM_RULES]));
-    expect(first[first.indexOf('--allowedTools') + 1]).toBe(FILM_ALLOWED_TOOLS.join(','));
+    expect(first[first.indexOf('--allowedTools') + 1]).toBe(anchorRules(FILM_ALLOWED_TOOLS, process.cwd()).join(','));
     const next = buildClaudeArgs({ message: '可以，继续', sessionId: 'abc', resume: true, model: 'sonnet' });
     expect(next).toEqual(expect.arrayContaining(['--resume', 'abc', '--model', 'sonnet']));
     expect(next).not.toContain('--session-id');
@@ -49,7 +49,8 @@ describe('film session args', () => {
     const a = buildClaudeArgs({ message: 'x', sessionId: 'abc', resume: false, model: 'opus' });
     expect(a[a.indexOf('--setting-sources') + 1]).toBe('user');
     const denied = a[a.indexOf('--disallowedTools') + 1].split(',');
-    for (const t of ['Bash(git:*)', 'Bash(rm:*)', 'Bash(node:*)', 'Bash(npx:*)', 'Bash(killall:*)', 'Bash(npm run dev:*)', 'Write(src/**)', 'Edit(remotion/kit/**)', 'Read(./.env)']) expect(denied).toContain(t);
+    const r = process.cwd();
+    for (const t of ['Bash(git:*)', 'Bash(rm:*)', 'Bash(node:*)', 'Bash(npx:*)', 'Bash(killall:*)', 'Bash(npm run dev:*)', `Write(/${r}/src/**)`, `Edit(/${r}/remotion/kit/**)`, `Read(/${r}/.env)`]) expect(denied).toContain(t);
     expect(FILM_RULES).toContain('.claude/skills/produce-film/SKILL.md');
   });
   it('stops after the shot list even when it is reused from the base version', () => {
@@ -74,4 +75,17 @@ describe('film session args', () => {
     expect(restartMessage({ projectId: 'p1', title: 'U盘', filmDir: 'remotion/films/p1-v4', orientation: 'portrait' })).toContain('出成片。');
     expect(restartMessage({ projectId: 'p1', title: 'U盘', filmDir: 'remotion/films/p1-v4', orientation: 'portrait' })).toContain('`npm run -s mp -- film check remotion/films/p1-v4`）');
   });
+  it('anchors file rules to the repo root so a cd inside the session cannot break them', () => {
+    const a = buildClaudeArgs({ message: 'x', sessionId: 'abc', resume: false, model: 'sonnet', root: '/r/repo' });
+    const allowed = a[a.indexOf('--allowedTools') + 1].split(',');
+    expect(allowed).toContain('Write(//r/repo/remotion/films/**)');
+    expect(allowed).toContain('Edit(//r/repo/remotion/films/**)');
+    expect(allowed).toContain('Bash(npm run -s mp -- film render:*)');
+    const denied = a[a.indexOf('--disallowedTools') + 1].split(',');
+    expect(denied).toContain('Write(//r/repo/src/**)');
+    expect(denied).toContain('Read(//r/repo/.env)');
+    expect(denied).toContain('Read(~/.ssh/**)');
+    expect(FILM_RULES).toContain('不要用 cd');
+  });
 });
+
