@@ -15,7 +15,7 @@ export interface InProgressItem {
 }
 
 export function buildToday(i: {
-  failingTasks: { hint: string }[];
+  tasks: { label: string; ok: boolean; hint: string; scheduleEnabled: boolean }[];
   pendingLinks: { projectId: string; title: string }[];
   lessonCandidates: number;
   pendingNotes: { projectId: string; title: string }[];
@@ -24,7 +24,9 @@ export function buildToday(i: {
   works: WorkCardData[];
 }): { todos: TodoItem[]; inProgress: InProgressItem[]; empty: boolean } {
   const todos: TodoItem[] = [
-    ...i.failingTasks.map((t): TodoItem => ({ kind: 'task', text: t.hint, href: '/settings#tasks' })),
+    ...i.tasks
+      .filter((t) => !t.scheduleEnabled || !t.ok)
+      .map((t): TodoItem => ({ kind: 'task', text: t.scheduleEnabled ? t.hint : `${t.label}的每晚定时没开：去「设置 · 每晚任务」打开`, href: '/settings#tasks' })),
     ...i.pendingLinks.map((p): TodoItem => ({ kind: 'link', text: `「${p.title}」有一条作品等你确认`, href: `/projects/${p.projectId}` })),
     ...(i.lessonCandidates ? [{ kind: 'lesson' as const, text: `${i.lessonCandidates} 条写法经验等你决定`, href: '/settings#lessons' }] : []),
     ...i.pendingNotes.map((p): TodoItem => ({ kind: 'note', text: `「${p.title}」要不要存进 Obsidian`, href: `/projects/${p.projectId}` })),

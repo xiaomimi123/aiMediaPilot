@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  每晚 20:30 巡检对标账号(排在 20:00 回采之后)。
+  每晚 20:30 巡检对标账号(排在 20:00 回采之后); 设置页开启时会写成三个时间(设定时间、+1 小时、+2 小时)。
+  定时触发带 --scheduled: 6 小时内巡检成功过就跳过, 所以只有失败时才会真的补跑。
 
   装: cp 到 ~/Library/LaunchAgents/ 后 launchctl load -w
   卸: launchctl unload -w ~/Library/LaunchAgents/com.mediapilot.scan-benchmarks.plist
@@ -23,7 +24,7 @@
   <array>
     <string>/bin/zsh</string>
     <string>-lc</string>
-    <string>cd "__PROJECT_DIR__" || exit 1; exec npm run scan:benchmarks</string>
+    <string>cd "__PROJECT_DIR__" || exit 1; exec npm run scan:benchmarks -- --scheduled</string>
   </array>
 
   <key>StartCalendarInterval</key>

@@ -3,6 +3,7 @@ import { toProjectView } from '@/lib/project/view';
 import { latestForDisplay } from '@/lib/cli/commands/predict';
 import { stepsOf, type WorkCardData } from './steps';
 import { readCollectStatus, readScanStatus } from '@/lib/douyin/collect-log';
+import { createTaskDeps, getSchedule, NIGHTLY_TASKS } from '@/lib/tasks/nightly';
 import { buildAccountSummary } from '@/lib/account/summary';
 import { findCandidate } from '@/lib/retro/match';
 import { findLagging } from '@/lib/predict/lag';
@@ -68,7 +69,14 @@ export async function loadOverview(db: PrismaClient, now: Date): Promise<Overvie
   const notes = await db.noteProposal.findMany({ where: { status: 'pending' }, include: { project: { select: { title: true } } } });
   const lagging = await findLagging(db, now).catch(() => []);
   const today = buildToday({
-    failingTasks: [collect, scan].filter((s) => s.state !== 'ok'),
+    tasks: await Promise.all(
+      ([['collect', collect], ['scan', scan]] as const).map(async ([key, s]) => ({
+        label: NIGHTLY_TASKS[key].label,
+        ok: s.state === 'ok',
+        hint: s.hint,
+        scheduleEnabled: (await getSchedule(createTaskDeps(), key)).enabled,
+      })),
+    ),
     pendingLinks,
     lessonCandidates: await db.writingLesson.count({ where: { status: 'candidate' } }),
     pendingNotes: notes.map((n) => ({ projectId: n.projectId, title: n.project.title })),
