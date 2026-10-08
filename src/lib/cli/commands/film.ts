@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { buildFilmBundle } from '@/lib/film/bundle';
 import { nextFilmVersion, scaffoldFilm } from '@/lib/film/scaffold';
 import { registerFilm } from '@/lib/film/register';
-import { ShotsFileSchema } from '@/lib/film/shots';
+import { ShotsFileSchema, stillSecs } from '@/lib/film/shots';
 import { checkShots, checkNumbers, checkFilmSource, checkOrientation, type FilmData } from '@/lib/film/check';
 import { orientationLabel, type FilmOrientation } from '@/lib/film/orientation';
 import { ScriptSchema } from '@/lib/script/model';
@@ -96,14 +96,22 @@ export const FILM_COMMANDS: Command[] = [
     path: ['film', 'render'],
     tier: 'heavy',
     hermes: false,
-    usage: 'mp film render <片子目录> [--stills]',
+    usage: 'mp film render <片子目录> [--stills [--shots 镜头id,…]]',
     summary: '渲染片子',
     async run(_ctx, p) {
       const filmDir = path.resolve(needArg(p, 0, '片子目录'));
       let code: number;
       if (p.flags.stills) {
         const { shots } = await readFilm(filmDir);
-        const secs = shots.shots.map((s) => Math.round(Math.min(s.fromSec + 1.2, (s.fromSec + s.toSec) / 2) * 10) / 10);
+        const only = typeof p.flags.shots === 'string' ? p.flags.shots.split(',').map((x) => x.trim()).filter(Boolean) : undefined;
+        let secs: number[];
+        try {
+          secs = stillSecs(shots, only);
+        } catch (e) {
+          throw new CliError('bad_args', e instanceof Error ? e.message : String(e));
+        }
+        // 全部重出时清掉上一轮的图; 只重出几镜时保留其余的
+        if (!only) await fs.rm(path.join(filmDir, 'stills'), { recursive: true, force: true });
         code = run(TSX, [RENDER, filmDir, '--stills', secs.join(',')]);
       } else {
         await fs.mkdir(path.join(filmDir, 'out'), { recursive: true });

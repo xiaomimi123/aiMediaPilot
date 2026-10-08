@@ -54,7 +54,7 @@ describe('FilmAssistant', () => {
     await waitFor(() => expect(screen.getByText('等你确认成片')).toBeTruthy());
     expect(container.querySelector('video')?.getAttribute('src')).toBe('/api/film-sessions/fs1/file?path=out/final.mp4');
     fireEvent.click(screen.getByText('登记为新版本'));
-    await waitFor(() => expect(posted(f)).toEqual([{ action: 'reply', text: '可以，登记' }]));
+    await waitFor(() => expect(posted(f)).toEqual([{ action: 'register' }]));
   });
   it('offers resume and abandon after a failure', async () => {
     stub(data({ current: session({ status: 'failed', message: 'usage limit reached' }) }));

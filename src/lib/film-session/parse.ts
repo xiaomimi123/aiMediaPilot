@@ -36,7 +36,10 @@ function describe(u: Use, out: string, ok: boolean): string {
     if (/mp -- project list/.test(cmd)) return '找项目';
     if (/mp -- film new/.test(cmd)) return `建片子目录 v${/-v(\d+)/.exec(out)?.[1] ?? '?'}`;
     if (/mp -- film check/.test(cmd)) return ok ? '检查：通过' : `检查：有 ${(out.match(/✗/g) ?? []).length || 1} 处问题`;
-    if (/mp -- film render .*--stills/.test(cmd)) return '渲染关键帧';
+    if (/mp -- film render .*--stills/.test(cmd)) {
+      const only = /--shots\s+(\S+)/.exec(cmd)?.[1];
+      return only ? `重出关键帧（${only.split(',').filter(Boolean).length} 镜）` : '渲染关键帧';
+    }
     if (/mp -- film render/.test(cmd)) return '渲染成片（约 2 分钟）';
     if (/mp -- film register/.test(cmd)) return `登记 v${/v(\d+)/.exec(out)?.[1] ?? '?'}`;
     if (/^ffmpeg/.test(cmd)) return '抽帧看素材';
@@ -70,6 +73,11 @@ export function parseLog(lines: string[]): ParsedLog {
       turns++;
       last = blank();
       items.push({ kind: 'you', text: String(ev.message ?? '') });
+      continue;
+    }
+    if (ev.type === 'mp_note') {
+      // 网页服务自己做的步骤(如直接登记), 不经过 Claude
+      items.push({ kind: 'step', text: String(ev.text ?? ''), ok: true });
       continue;
     }
     if (ev.type === 'result') {

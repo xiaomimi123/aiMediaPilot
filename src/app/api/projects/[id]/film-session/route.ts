@@ -2,7 +2,7 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import { prisma } from '@/lib/prisma';
 import { ok, fail } from '@/lib/api';
-import { abandonFilm, createRunnerDeps, restartFilm, currentFilm, FilmBusy, refreshFilm, replyFilm, runningElsewhere, startFilm, stopFilm } from '@/lib/film-session/runner';
+import { abandonFilm, createRunnerDeps, restartFilm, registerFilmSession, currentFilm, FilmBusy, refreshFilm, replyFilm, runningElsewhere, startFilm, stopFilm } from '@/lib/film-session/runner';
 import { getFilmModel } from '@/lib/film-session/settings';
 import { ShotsFileSchema } from '@/lib/film/shots';
 import type { Item } from '@/lib/film-session/parse';
@@ -83,6 +83,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       else if (b.action === 'stop') await stopFilm(prisma, deps, cur.id);
       else if (b.action === 'abandon') await abandonFilm(prisma, cur.id);
       else if (b.action === 'restart') await restartFilm(prisma, deps, cur.id, await model());
+      else if (b.action === 'register') await registerFilmSession(prisma, deps, cur.id);
       else return fail('action 不对', 400);
     }
   } catch (e) {

@@ -96,4 +96,9 @@ describe('parseLog', () => {
     const p = parseLog([turn(1, 'go'), use('e', 'Read', { file_path: '/r/remotion/films/p1-v4/stills/12.2.jpg' }), res('e', '[image]')]);
     expect(p.items).toContainEqual({ kind: 'still', path: 'stills/12.2.jpg' });
   });
+  it('describes a partial keyframe re-render', () => {
+    const p = parseLog([turn(1, 'go'), use('a', 'Bash', { command: 'npm run -s mp -- film render remotion/films/p1-v4 --stills --shots hook,stuck' }), res('a', '渲染完成')]);
+    expect(p.items).toContainEqual({ kind: 'step', text: '重出关键帧（2 镜）', ok: true });
+  });
 });
+

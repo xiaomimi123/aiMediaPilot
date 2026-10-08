@@ -8,6 +8,7 @@ import { buildClaudeArgs, childEnv, firstMessage, resolveClaudeBin, restartMessa
 import { parseLog, type ParsedLog } from './parse';
 import type { FilmOrientation } from '@/lib/film/orientation';
 import { deriveState } from './state';
+import { registerFilm } from '@/lib/film/register';
 
 export class FilmBusy extends Error {}
 const NO_CLAUDE = '本机没有可用的 Claude Code：安装后在终端运行 claude 登录，再回来点出片';
@@ -218,6 +219,39 @@ export async function restartFilm(db: PrismaClient, deps: RunnerDeps, id: string
   const p = await db.project.findUnique({ where: { id: s.projectId } });
   const orientation: FilmOrientation = s.orientation === 'landscape' ? 'landscape' : 'portrait';
   return launch(db, deps, fresh, restartMessage({ projectId: s.projectId, title: p?.title ?? s.projectId, filmDir: s.filmDir, orientation }), false, model);
+}
+
+/** 「这一版做了什么」那段话 → 登记摘要: 去掉 markdown 记号和末尾的"要登记吗"提问, 压成一段, 最长 300 字 */
+export function summaryFromMessage(message: string | null): string {
+  const text = (message ?? '')
+    .split('\n')
+    .filter((l) => !/要登记为新版本吗|可以就回复/.test(l))
+    .join(' ')
+    .replace(/\*\*|`|^#+\s*/g, '')
+    .replace(/\s*-\s+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return (text || '网页里出片登记').slice(0, 300);
+}
+
+/**
+ * 登记: 网页服务直接执行(不再开一轮 Claude) —— 那一轮只是跑一条命令, 却要把整段长对话重发一遍,
+ * 实测每次 1–2 分钟、$1–4。摘要取它渲染完时「这一版做了什么」那段。
+ */
+export async function registerFilmSession(
+  db: PrismaClient,
+  deps: RunnerDeps,
+  id: string,
+  register: (filmDirAbs: string, summary: string) => Promise<{ version: number }> = (dir, summary) => registerFilm(db, dir, summary),
+): Promise<FilmSession> {
+  const { session: s, parsed } = await refreshFilm(db, deps, id);
+  if (s.status !== 'waiting' || s.checkpoint !== 'render' || !s.filmDir) throw new FilmBusy('只有渲染好、等你确认的成片才能登记');
+  await waitOldTurnExit(deps, s, parsed);
+  const summary = summaryFromMessage(s.message);
+  const { version } = await register(path.join(deps.cwd, s.filmDir), summary);
+  await deps.append(s.logPath, JSON.stringify({ type: 'mp_turn', n: Date.now(), message: '登记为新版本', at: deps.now().toISOString() }));
+  await deps.append(s.logPath, JSON.stringify({ type: 'mp_note', text: `登记 v${version}` }));
+  return db.filmSession.update({ where: { id }, data: { status: 'done', checkpoint: null, version, summary } });
 }
 
 export async function stopFilm(db: PrismaClient, deps: RunnerDeps, id: string): Promise<FilmSession> {
