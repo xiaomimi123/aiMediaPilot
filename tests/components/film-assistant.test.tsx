@@ -8,7 +8,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const data = (over = {}) => ({ current: null, history: [], busyElsewhere: null, claudeAvailable: true, versions: [], ...over });
+const data = (over = {}) => ({ current: null, history: [], busyElsewhere: null, claudeAvailable: true, versions: [], orientations: {}, ...over });
 const session = (over = {}) => ({ id: 'fs1', status: 'running', checkpoint: null, message: null, filmDir: 'remotion/films/p1-v3', version: null, createdAt: '2026-10-03T00:00:00.000Z', items: [{ kind: 'you', text: '给项目 p1 出一版' }, { kind: 'step', text: '读稿子和素材', ok: true }], shots: null, previewUrl: null, ...over });
 const stub = (d: unknown) => {
   const f = vi.fn(async () => ({ json: async () => ({ success: true, data: d }) }));
@@ -96,4 +96,12 @@ describe('FilmAssistant', () => {
     fireEvent.click(await screen.findByText('换个新对话接着做'));
     await waitFor(() => expect(posted(f)).toEqual([{ action: 'restart' }]));
   });
+  it('shows each base version orientation and says a revision keeps it', async () => {
+    stub(data({ versions: [4, 3], orientations: { 4: 'landscape', 3: 'portrait' } }));
+    render(<FilmAssistant projectId="p1" onChanged={() => {}} />);
+    await waitFor(() => expect(screen.getByText('改这一版')).toBeTruthy());
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['基于 v4（横版）', '基于 v3（竖版）']);
+    expect(screen.getByText('改片沿用原版本的版式')).toBeTruthy();
+  });
 });
+

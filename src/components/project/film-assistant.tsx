@@ -84,13 +84,14 @@ export function FilmAssistant({ projectId, onChanged }: { projectId: string; onC
                 <>
                   <select className="rounded-[var(--r-md)] bg-[var(--bg-inset)] px-2 py-1" value={baseVersion ?? ''} onChange={(e) => setBase(Number(e.target.value))}>
                     {d.versions.map((v) => (
-                      <option key={v} value={v}>{`基于 v${v}`}</option>
+                      <option key={v} value={v}>{`基于 v${v}（${d.orientations?.[v] === 'landscape' ? '横版' : '竖版'}）`}</option>
                     ))}
                   </select>
                   <input className="min-w-0 flex-1 rounded-[var(--r-md)] bg-[var(--bg-inset)] px-2 py-1.5" placeholder="修改意见，比如：第 3 镜太挤，换成对比卡" value={reply} onChange={(e) => setReply(e.target.value)} />
                   <button className="btn-secondary" disabled={busy || !!blocked || !reply.trim()} onClick={() => void post({ action: 'start', kind: 'revise', baseVersion, note: reply.trim() })}>
                     改这一版
                   </button>
+                  <span className="w-full text-xs text-[var(--text-tertiary)]">改片沿用原版本的版式</span>
                 </>
               )}
             </div>
