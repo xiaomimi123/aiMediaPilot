@@ -14,7 +14,7 @@ export function AssistantView() {
   // 列表不显示空对话; 正打开的那个(可能还是空的)要带上
   const loadThreads = useCallback(async (currentId?: string) => {
     const j = await (await fetch(currentId ? `/api/assistant/threads?current=${currentId}` : '/api/assistant/threads')).json().catch(() => ({ success: false }));
-    const list: Thread[] = j.success ? j.data : [];
+    const list: Thread[] = j.success && Array.isArray(j.data) ? j.data : [];
     setThreads(list);
     return list;
   }, []);
