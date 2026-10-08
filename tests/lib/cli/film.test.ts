@@ -20,5 +20,12 @@ describe('film commands', () => {
   it('film render can re-render keyframes for only some shots', () => {
     expect(FILM_COMMANDS.find((c) => c.path.join(' ') === 'film render')!.usage).toBe('mp film render <片子目录> [--stills [--shots 镜头id,…]]');
   });
+  it('every film command declares its flags so typos are caught', () => {
+    const f = (n: string) => FILM_COMMANDS.find((c) => c.path.join(' ') === n)!.flags;
+    expect(f('film new')).toEqual(['landscape']);
+    expect(f('film check')).toEqual(['expect']);
+    expect(f('film render')).toEqual(['stills', 'shots']);
+    expect(f('film register')).toEqual(['summary']);
+  });
 });
 

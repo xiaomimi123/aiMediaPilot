@@ -28,6 +28,7 @@ async function readFilm(filmDir: string) {
 export const FILM_COMMANDS: Command[] = [
   {
     path: ['project', 'list'],
+    flags: [],
     tier: 'read',
     hermes: true,
     usage: 'mp project list',
@@ -40,6 +41,7 @@ export const FILM_COMMANDS: Command[] = [
   },
   {
     path: ['project', 'export'],
+    flags: [],
     tier: 'read',
     hermes: false,
     usage: 'mp project export <项目>',
@@ -49,6 +51,7 @@ export const FILM_COMMANDS: Command[] = [
   },
   {
     path: ['film', 'new'],
+    flags: ['landscape'],
     tier: 'heavy',
     hermes: false,
     usage: 'mp film new <项目> [--landscape]',
@@ -62,6 +65,7 @@ export const FILM_COMMANDS: Command[] = [
   },
   {
     path: ['film', 'check'],
+    flags: ['expect'],
     tier: 'heavy',
     hermes: false,
     usage: 'mp film check <片子目录> [--expect landscape|portrait]',
@@ -94,6 +98,7 @@ export const FILM_COMMANDS: Command[] = [
   },
   {
     path: ['film', 'render'],
+    flags: ['stills', 'shots'],
     tier: 'heavy',
     hermes: false,
     usage: 'mp film render <片子目录> [--stills [--shots 镜头id,…]]',
@@ -124,6 +129,7 @@ export const FILM_COMMANDS: Command[] = [
   },
   {
     path: ['film', 'register'],
+    flags: ['summary'],
     tier: 'heavy',
     hermes: false,
     usage: 'mp film register <片子目录> --summary <这一版改了什么>',

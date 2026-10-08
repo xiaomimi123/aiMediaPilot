@@ -11,6 +11,7 @@ const cmds: Command[] = [
   { path: ['chat'], tier: 'write', hermes: false, usage: 'mp chat <项目> <消息>', summary: '对话', run: async (_c, p) => ({ msg: needArg(p, 1, '消息') }) },
   { path: ['boom'], tier: 'read', hermes: true, usage: 'mp boom', summary: 'x', run: async () => { throw new Prisma.PrismaClientInitializationError("Can't reach database server", '5.22.0'); } },
   { path: ['ego'], tier: 'read', hermes: true, usage: 'mp ego', summary: 'x', run: async () => { throw new EgoUnavailableError('ego lite 没有响应'); } },
+  { path: ['film', 'render'], tier: 'heavy', hermes: false, usage: 'mp film render <目录> [--stills]', summary: '渲染', flags: ['stills', 'shots'], run: async (_c, p) => p.flags },
 ];
 const run = (argv: string[], agent: 'hermes' | 'claude-code' = 'claude-code') => execute(cmds, argv, { agent }, { db });
 
@@ -75,3 +76,22 @@ describe('agentFromEnv', () => {
     expect(new CliError('forbidden', 'x', 2).exitCode).toBe(2);
   });
 });
+
+describe('strict flags', () => {
+  it('accepts --key=value', () => {
+    expect(parseArgv(['film', 'check', 'd', '--expect=landscape'])).toEqual({ positionals: ['film', 'check', 'd'], flags: { expect: 'landscape' } });
+  });
+  it('--landscape before the project does not swallow it', () => {
+    expect(parseArgv(['film', 'new', '--landscape', 'p1'])).toEqual({ positionals: ['film', 'new', 'p1'], flags: { landscape: true } });
+  });
+  it('rejects a misspelled flag on a command that declares its flags', async () => {
+    const r = await run(['film', 'render', 'd', '--stils']);
+    expect(r.exitCode).toBe(1);
+    expect(r.stderr).toContain('不认识的参数：--stils（这个命令能用：--stills、--shots）');
+    expect((await run(['film', 'render', 'd', '--stills', '--json'])).exitCode).toBe(0);
+  });
+  it('leaves commands without a flag list as they were', async () => {
+    expect((await run(['status', '--whatever'])).exitCode).toBe(0);
+  });
+});
+
