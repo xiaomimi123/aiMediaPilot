@@ -22,7 +22,7 @@ export function toScript(raw: LlmScript): Script {
   };
 }
 
-function segmentGuide(targetSec: number): string {
+export function segmentGuide(targetSec: number): string {
   return SEGMENT_ROLES.map((role, i) => {
     const sec = segmentBudgetSec(role, targetSec);
     return `${i + 1}. ${ROLE_LABEL[role]}：约 ${sec} 秒，≈ ${Math.round(sec * CHARS_PER_SEC)} 字`;
@@ -63,7 +63,7 @@ function firstMessage(o: { direction: string; targetSec: number; personaText: st
   return parts.join('\n\n');
 }
 
-function repairMessage(script: Script, report: DurationReport, targetSec: number): string {
+export function repairMessage(script: Script, report: DurationReport, targetSec: number): string {
   const current = script.segments.map((s, i) => `${i + 1}. ${ROLE_LABEL[s.role]}：${s.text}`).join('\n');
   return `下面这版稿子超时了，请删掉重复和啰嗦的话，优先删偏长的段落，意思不变。\n\n【超标情况】\n${[...report.issues, ...report.hints].join('\n')}\n\n【当前稿子】\n${current}\n\n【6 段结构与字数】\n${segmentGuide(targetSec)}`;
 }
