@@ -114,6 +114,12 @@ function applyCut(script: Script, remove: string[]): { script: Script; removed: 
   return { script: { segments }, removed };
 }
 
+/** 「xx 保留原文未改」这类不是改动; 去掉这些说法后还有改动动词的就是真改动 */
+function isNoOp(what: string): boolean {
+  if (!/未改|未作|保留原/.test(what)) return false;
+  return !/删|挪|改|调|换|合并|拆/.test(what.replace(/未改动?|未作[^，。；]*|保留原(文|字|说法|话|写法|意)?/g, ''));
+}
+
 export async function polishScript(opts: { llm: StructuredLLM; text: string; targetSec: number }): Promise<PolishResult> {
   const original = opts.text.trim();
   if (!original) throw new Error('稿子是空的');
@@ -132,7 +138,7 @@ export async function polishScript(opts: { llm: StructuredLLM; text: string; tar
   let script = toScript(out);
   let report = checkDuration(script, opts.targetSec);
   // 模型常把"没改"也列进来(「xx 保留原文未改」), 去掉
-  const changes: Change[] = out.changes.filter((c) => !/未改|未作|保留原(文|字|说法|话|写法)?(?!.*(删|挪|改成|改为))/.test(c.what));
+  const changes: Change[] = out.changes.filter((c) => !isNoOp(c.what));
   for (let round = 0; !report.ok && round < MAX_REPAIR_ROUNDS; round++) {
     try {
       const { result } = await opts.llm.callStructured({ systemPrompt: SYSTEM_PROMPT, userMessage: [{ type: 'text', text: cutMessage(script, limitChars) }], responseSchema: CutSchema });

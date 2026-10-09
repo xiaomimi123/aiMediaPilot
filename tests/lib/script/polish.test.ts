@@ -46,6 +46,9 @@ describe('polishScript', () => {
     const changes = [{ kind: '错字', what: '「gpt」保留原文写法未改' }, { kind: '改', what: '「两眼一瞪」保留原说法' }, { kind: '删', what: '删了「然后」' }];
     const r = await polishScript({ llm: fakeLLM([out(sentences, { changes })]), text: original, targetSec: 75 });
     expect(r.changes).toEqual([{ kind: '删', what: '删了「然后」' }]);
+    const real = [{ kind: '删', what: '删掉开头重复的一句，其余未改' }, { kind: '挪', what: '第二段未作删减，把结尾挪到开头' }, { kind: '改', what: '把「然后」改成「接着」，保留原意' }];
+    const r2 = await polishScript({ llm: fakeLLM([out(sentences, { changes: real })]), text: original, targetSec: 75 });
+    expect(r2.changes).toEqual(real);
   });
 
   it('flags sentences that are not in the original', async () => {
