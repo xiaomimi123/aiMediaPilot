@@ -71,7 +71,7 @@ describe('daily topics', () => {
   it('adoptDaily creates a project whose script is the draft and stores the same prediction', async () => {
     const { db, topics, projects, predictions, bench } = fakeDb({ topics: [topic('d1', '2026-10-09', 4500, { source: 'benchmark', sourceId: 'bv1' })] });
     const r = await adoptDaily(db, 'd1');
-    expect(projects[0]).toMatchObject({ title: '题d1', targetSec: 60, benchmarkVideoId: 'bv1', script: { segments: [{ id: 'a', role: 'hook', text: '开头' }] } });
+    expect(projects[0]).toMatchObject({ title: '题d1', targetSec: 75, benchmarkVideoId: 'bv1', script: { segments: [{ id: 'a', role: 'hook', text: '开头' }] } });
     expect(predictions[0]).toMatchObject({ projectId: r.projectId, kind: 'draft', inputHash: 'h4500', formulaVersion: 2 });
     expect(topics[0]).toMatchObject({ status: 'adopted', projectId: r.projectId });
     expect(bench.bv1).toBe('adopted');

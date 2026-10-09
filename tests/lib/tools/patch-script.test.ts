@@ -5,7 +5,7 @@ import { SEGMENT_ROLES } from '@/lib/script/model';
 import type { StructuredLLM } from '@/lib/script/write';
 
 const llm = {} as StructuredLLM;
-const lengths = [30, 67, 67, 187, 67, 22];
+const lengths = [30, 45, 60, 187, 75, 30];
 const script = { segments: SEGMENT_ROLES.map((role, i) => ({ id: `s${i + 1}`, role, text: '字'.repeat(lengths[i]) })) };
 
 describe('patch_script tool', () => {
@@ -13,7 +13,7 @@ describe('patch_script tool', () => {
     const { db, project } = createFakeDb({ project: { script } });
     const r = await patchScriptTool.execute({ projectId: 'p1', db, llm }, { segmentId: 's4', text: '字'.repeat(45) });
     expect(r.ok).toBe(true);
-    expect(r.summary).toBe('改稿：第4段「冷知识」37.4s → 9s');
+    expect(r.summary).toBe('改稿：第4段「怎么做的」37.4s → 9s');
     expect(r.segmentIds).toEqual(['s4']);
     expect((project.script as typeof script).segments[3].text).toHaveLength(45);
     expect(r.data).toMatchObject({ durationOk: true, issues: [] });
@@ -24,7 +24,7 @@ describe('patch_script tool', () => {
     const r = await patchScriptTool.execute({ projectId: 'p1', db, llm }, { segmentId: 's4', text: '字'.repeat(100) });
     expect(r.ok).toBe(true);
     expect(r.data).toMatchObject({ durationOk: false });
-    expect((r.data as { issues: string[] }).issues[0]).toContain('第4段「冷知识」约 20 秒，上限 11.3 秒');
+    expect((r.data as { issues: string[] }).issues.join('\n')).toContain('第4段「怎么做的」约 20 秒，参考 12 秒');
   });
 
   it('fails readably when there is no script yet', async () => {

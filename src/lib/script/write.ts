@@ -36,7 +36,7 @@ const SYSTEM_PROMPT = `你是抖音 AI 知识类口播博主的编导，负责�
 - 不写用户没提供的第一人称经历、试用结果、小故事（如"我试过一次，它挑出了……"）。需要亲身例子时写「【待补：你的真实经历】」，让用户自己补。
 - 有【用户提供的事实】时：稿子里的第一人称经历、测试结果、数字只能来自【用户提供的事实】，其余一律写「【待补：…】」（写清要补什么，如「【待补：低档跑出来的结果】」）。
 - 账号定位里举的例子是描述受众和方向的，不是用户的经历，不能写成"我…过"。
-- 严格按给定的 6 段结构与每段字数写，字数是硬约束。
+- 严格按给定的 6 段结构写；每段字数是参考，全片总时长是硬约束。
 - 只输出 JSON：{"title": "视频标题", "segments": [{"role": "段名", "text": "逐字稿"}, ...共 6 段]}。`;
 
 function firstMessage(direction: string, targetSec: number, personaText: string, reference = '', lessons = '', facts = ''): string {
@@ -46,7 +46,7 @@ function firstMessage(direction: string, targetSec: number, personaText: string,
 
 function repairMessage(script: Script, report: DurationReport, targetSec: number): string {
   const current = script.segments.map((s, i) => `${i + 1}. ${ROLE_LABEL[s.role]}：${s.text}`).join('\n');
-  return `下面这版稿子超时了，请只修改超标的段落，其他段落原样保留，意思不变。\n\n【超标情况】\n${report.issues.join('\n')}\n\n【当前稿子】\n${current}\n\n【6 段结构与字数】\n${segmentGuide(targetSec)}`;
+  return `下面这版稿子超时了，请删掉重复和啰嗦的话，优先删偏长的段落，意思不变。\n\n【超标情况】\n${[...report.issues, ...report.hints].join('\n')}\n\n【当前稿子】\n${current}\n\n【6 段结构与字数】\n${segmentGuide(targetSec)}`;
 }
 
 export async function writeScript(opts: {

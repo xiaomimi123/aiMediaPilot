@@ -1,11 +1,11 @@
 import { z } from 'zod';
-import type { Script } from '@/lib/script/model';
+import { DEFAULT_TARGET_SEC, type Script } from '@/lib/script/model';
 import type { StructuredLLM, writeScript } from '@/lib/script/write';
 import { findCopiedInScript, type CopiedRun } from '@/lib/benchmark/copy-check';
 import type { ScriptPrediction } from '@/lib/predict/run';
 import { loadPools, localDay, pickCandidates, type Candidate, type CandidateStore, type TopicSource } from './candidates';
 
-export const TARGET_SEC = 60;
+export const TARGET_SEC = DEFAULT_TARGET_SEC;
 export const NO_SOURCE_REASON = '没有可用的选题来源：加几个对标账号，或在点子池里写几句';
 
 export const RECENT_HOURS = 6;

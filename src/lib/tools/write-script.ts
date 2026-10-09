@@ -46,7 +46,7 @@ export const writeScriptTool: Tool<z.infer<typeof Input>> = {
       ok: true,
       summary,
       segmentIds: script.segments.map((s) => s.id),
-      data: { title, durationOk: report.ok, totalSec: report.totalSec, issues: report.issues, copied },
+      data: { title, durationOk: report.ok, totalSec: report.totalSec, issues: [...report.issues, ...report.hints], copied },
     };
   },
 };

@@ -85,8 +85,8 @@ export function ScriptPane({
                 {highlighted.has(s.id) && <span className="text-[var(--warning)]">刚改</span>}
                 {quoted === s.id && !highlighted.has(s.id) && <span className="text-[var(--accent)]">依据</span>}
                 <div className="flex-1" />
-                <span className={cn('font-mono', r.over ? 'text-[var(--danger)]' : 'text-[var(--text-tertiary)]')}>
-                  {r.over ? `${r.estSec} / ${r.limitSec} 秒 · 超了` : `${r.estSec} / ${r.budgetSec} 秒`}
+                <span className={cn('font-mono', r.over ? 'text-[var(--warning)]' : 'text-[var(--text-tertiary)]')}>
+                  {r.over ? `${r.estSec} / ${r.budgetSec} 秒 · 偏长` : `${r.estSec} / ${r.budgetSec} 秒`}
                 </span>
               </div>
               {isEditing ? (

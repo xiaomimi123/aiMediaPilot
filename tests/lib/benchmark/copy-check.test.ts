@@ -21,6 +21,6 @@ describe('findCopiedInScript', () => {
       { id: 's1', role: 'hook' as const, text: '我的开场' },
       { id: 's2', role: 'conceptA' as const, text: '其实很多人对AI的印象还停留在聊天写代码' },
     ] };
-    expect(findCopiedInScript(script as never, ref)).toEqual([{ segmentId: 's2', segment: '概念A', text: '很多人对AI的印象还停留在聊天写代码' }]);
+    expect(findCopiedInScript(script as never, ref)).toEqual([{ segmentId: 's2', segment: '我是谁·当时', text: '很多人对AI的印象还停留在聊天写代码' }]);
   });
 });

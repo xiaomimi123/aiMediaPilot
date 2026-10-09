@@ -14,7 +14,7 @@ model Project {
   stage            String          @default("draft")
   /// Script | null, 形状见 src/lib/script/model.ts
   script           Json?
-  targetSec        Int             @default(60)
+  targetSec        Int             @default(75)
   /// 建项目时的人设快照, 事后改人设不影响已有项目的上下文
   personaSnapshot  Json?
   /// 从哪条对标作品建的项目(选题模块)

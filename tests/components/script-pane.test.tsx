@@ -18,8 +18,8 @@ describe('ScriptPane', () => {
   it('shows total vs target and marks the over-limit segment in plain language', () => {
     render(<ScriptPane project={project} highlighted={new Set()} onEdit={vi.fn()} onFinalize={vi.fn()} />);
     expect(screen.getByText('约 88 秒 / 目标 60 秒')).toBeTruthy();
-    expect(screen.getByText('冷知识')).toBeTruthy();
-    expect(screen.getByText('37.4 / 11.3 秒 · 超了')).toBeTruthy();
+    expect(screen.getByText('怎么做的')).toBeTruthy();
+    expect(screen.getByText('37.4 / 12 秒 · 偏长')).toBeTruthy();
   });
 
   it('marks highlighted segments as just changed', () => {

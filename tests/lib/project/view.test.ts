@@ -41,7 +41,7 @@ describe('buildRecordingView', () => {
     expect(v.videoUrl).toBe('/api/projects/p1/files/f9');
     expect(v.durationSec).toBe(6.2);
     expect(v.transcript?.lines.at(-1)).toMatchObject({ text: '顺便说个题外话', adlib: true });
-    expect(v.transcript?.skipped).toEqual(['冷知识']);
+    expect(v.transcript?.skipped).toEqual(['怎么做的']);
   });
 });
 

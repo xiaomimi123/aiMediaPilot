@@ -45,7 +45,7 @@ describe('writeScript', () => {
     const r = await writeScript({ llm, direction: '让AI挑刺', targetSec: 60, personaText: '' });
     expect(r.rounds).toBe(1);
     expect(r.report.ok).toBe(true);
-    expect(llm.calls[1]).toContain('第4段「冷知识」约 37.4 秒，上限 11.3 秒');
+    expect(llm.calls[1]).toContain('第4段「怎么做的」约 37.4 秒，参考 12 秒');
   });
 
   it('gives up after MAX_REPAIR_ROUNDS and reports honestly', async () => {
