@@ -23,6 +23,7 @@ function deps(over: Partial<GenDeps> = {}) {
     },
     personaText: '定位',
     lessons: undefined,
+    samples: [],
     write: (async ({ direction }: { direction: string }) => ({ title: 't', script: script(direction), report: { ok: true }, rounds: 0 })) as unknown as GenDeps['write'],
     predict: async () => ({ scores: [], inputHash: 'h', formulaVersion: 1, result: { center: 4500 } as never }),
     save: async (t) => (saved.push(t), 'saved'),
@@ -105,6 +106,13 @@ describe('generateDailyTopics', () => {
     expect(runOutcome({ created: 0, skipped: [{ reason: '还没有可用的模型' }] })).toBe('failed');
     expect(runOutcome({ created: 0, skipped: [{ source: 'idea', reason: '写稿失败：x' }] })).toBe('failed');
     expect(runOutcome({ created: 1, skipped: [] })).toBe('done');
+  });
+  it('passes the speaking samples to the writer', async () => {
+    const got: (string[] | undefined)[] = [];
+    const { d } = deps({ samples: ['样本原文'], write: (async (o: { direction: string; samples?: string[] }) => (got.push(o.samples), { title: 't', script: script(o.direction), report: { ok: true }, rounds: 0 })) as unknown as GenDeps['write'] });
+    await generateDailyTopics(d);
+    expect(got.length).toBeGreaterThan(0);
+    expect(got.every((s) => s?.[0] === '样本原文')).toBe(true);
   });
   it('passes the candidate material as facts and tells the planner not to invent results', async () => {
     const systems: string[] = [];

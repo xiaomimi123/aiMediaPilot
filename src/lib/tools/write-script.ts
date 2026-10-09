@@ -5,6 +5,7 @@ import { formatPersona, type PersonaLike, type Tool } from './types';
 import { formatReference, loadReference } from '@/lib/benchmark/adopt';
 import { copiedSummary, findCopiedInScript } from '@/lib/benchmark/copy-check';
 import { formatLessons, loadActiveLessons } from '@/lib/retro/lessons';
+import { recentSampleTexts } from '@/lib/voice/samples';
 
 const Input = z.object({
   direction: z.string().min(1).describe('这条视频讲什么、从什么角度切入、用什么例子'),
@@ -29,6 +30,7 @@ export const writeScriptTool: Tool<z.infer<typeof Input>> = {
       personaText: formatPersona(persona),
       reference: ref ? formatReference(ref) : undefined,
       lessons: lessons.length ? formatLessons(lessons) : undefined,
+      samples: await recentSampleTexts(ctx.db),
     });
     await ctx.db.project.update({
       where: { id: ctx.projectId },

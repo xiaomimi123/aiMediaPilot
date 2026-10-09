@@ -79,7 +79,7 @@ export function dailyReason(lastRun: { day?: string; created: number; reasons: s
 /** 按用户填的实测结果重写初稿(只对还没处理的选题) */
 export async function rewriteDaily(
   db: PrismaClient,
-  deps: Pick<GenDeps, 'llm' | 'noModelReason' | 'write' | 'predict' | 'personaText' | 'lessons'>,
+  deps: Pick<GenDeps, 'llm' | 'noModelReason' | 'write' | 'predict' | 'personaText' | 'lessons' | 'samples'>,
   id: string,
   results: string[],
 ): Promise<void> {

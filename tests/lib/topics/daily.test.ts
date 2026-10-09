@@ -131,7 +131,7 @@ describe('daily topics', () => {
       llm: {} as never,
       noModelReason: '没有模型',
       personaText: '',
-      lessons: undefined,
+      lessons: undefined, samples: [],
       write: (async () => ({ title: 't', script: { segments: [{ id: 'a', role: 'hook', text: '按实测重写' }] }, report: { ok: true }, rounds: 0 })) as unknown as GenDeps['write'],
       predict: async () => pred(6000) as never,
     };

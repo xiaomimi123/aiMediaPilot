@@ -55,6 +55,7 @@ export function createFakeDb(
     files?: Partial<FakeFile>[];
     filmSessions?: { projectId: string; status: string; filmDir?: string | null; baseFilmDir?: string | null }[];
     lessons?: { text: string; evidence: unknown[] }[];
+    voiceSamples?: string[];
     benchmarkVideo?: { id: string; transcript: string | null; analysis: unknown; ratio: number | null; account: { nickname: string } };
   } = {},
 ) {
@@ -104,6 +105,9 @@ export function createFakeDb(
     (!w.updatedAt || j.updatedAt < w.updatedAt.lt);
 
   const db = {
+    voiceSample: {
+      findMany: async ({ take }: { take?: number } = {}) => (seed.voiceSamples ?? []).slice(0, take).map((text, i) => ({ id: `v${i}`, title: '', text, source: 'manual', createdAt: new Date() })),
+    },
     writingLesson: {
       findMany: async () => (seed.lessons ?? []).map((l, i) => ({ id: `L${i}`, text: l.text, evidence: l.evidence, status: 'active', confirmedAt: new Date() })),
     },

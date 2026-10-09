@@ -68,6 +68,8 @@ export interface GenDeps {
   store: CandidateStore;
   personaText: string;
   lessons: string | undefined;
+  /** 说话样本(最近几篇用户自己写的口播) */
+  samples: string[];
   write: typeof writeScript;
   predict(script: Script, benchmarkVideoId: string | undefined): Promise<ScriptPrediction | null>;
   save(t: NewDailyTopic): Promise<'saved' | 'duplicate'>;
@@ -119,7 +121,7 @@ async function oneTopic(d: GenDeps, llm: StructuredLLM, c: Candidate, day: strin
   }
   let script: Script;
   try {
-    script = (await d.write({ llm, direction: `${plan.title}。${plan.direction}\n开头钩子：${plan.hook}`, targetSec: TARGET_SEC, personaText: d.personaText, reference: c.reference, lessons: d.lessons, facts: c.material })).script;
+    script = (await d.write({ llm, direction: `${plan.title}。${plan.direction}\n开头钩子：${plan.hook}`, targetSec: TARGET_SEC, personaText: d.personaText, reference: c.reference, lessons: d.lessons, samples: d.samples, facts: c.material })).script;
   } catch (e) {
     return { error: `写稿失败：${msg(e)}` };
   }
@@ -133,7 +135,7 @@ async function oneTopic(d: GenDeps, llm: StructuredLLM, c: Candidate, day: strin
 
 /** 用户填了实测结果后重写: 结果作为事实交给编导, 没填的项不写进事实(稿子里仍留【待补】); 重新预测 */
 export async function rewriteWithResults(
-  d: Pick<GenDeps, 'llm' | 'noModelReason' | 'write' | 'predict' | 'personaText' | 'lessons'>,
+  d: Pick<GenDeps, 'llm' | 'noModelReason' | 'write' | 'predict' | 'personaText' | 'lessons' | 'samples'>,
   t: { title: string; hook: string; direction: string; source: string; sourceId: string; checklist: ChecklistItem[] },
   results: string[],
 ): Promise<{ script: Script; prediction: ScriptPrediction | null }> {
@@ -141,7 +143,7 @@ export async function rewriteWithResults(
   if (!filled.length) throw new Error('先填至少一项实测结果');
   if (!d.llm) throw new Error(d.noModelReason);
   const facts = filled.map(({ c, r }) => `实测：${c.test}（记下：${c.record}）→ ${r}`).join('\n');
-  const { script } = await d.write({ llm: d.llm, direction: `${t.title}。${t.direction}\n开头钩子：${t.hook}`, targetSec: TARGET_SEC, personaText: d.personaText, lessons: d.lessons, facts });
+  const { script } = await d.write({ llm: d.llm, direction: `${t.title}。${t.direction}\n开头钩子：${t.hook}`, targetSec: TARGET_SEC, personaText: d.personaText, lessons: d.lessons, samples: d.samples, facts });
   const prediction = await d.predict(script, t.source === 'benchmark' ? t.sourceId : undefined).catch(() => null);
   return { script, prediction };
 }
