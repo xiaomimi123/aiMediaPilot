@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateDailyTopics, normalizePlan, rewriteWithResults, runOutcome, succeededRecently, type GenDeps, type NewDailyTopic } from '@/lib/topics/generate';
+import { generateDailyTopics, normalizePlan, rewriteWithAnswers, runOutcome, succeededRecently, type GenDeps, type NewDailyTopic } from '@/lib/topics/generate';
 import type { StructuredLLM } from '@/lib/script/write';
 import type { Script } from '@/lib/script/model';
 
@@ -125,37 +125,39 @@ describe('generateDailyTopics', () => {
     expect(systems[0]).toContain('direction 里不要写任何测试结果、亲身经历或数字');
     expect(facts).toContain('讲讲 vibe coding 踩过的坑');
   });
-  it('keeps a checklist for hands-on test topics and drops it for talk topics or bad formats', () => {
+  it('plans questions to collect real material and folds a test checklist into them', () => {
     const base = { title: 't', why: 'w', hook: 'h', direction: '要实测三档的速度和质量差别' };
-    const list = [{ test: '低中高三档各问一次同一个问题', record: '各自用时、答案有没有要点' }];
-    expect(normalizePlan({ ...base, kind: 'test', checklist: list }).checklist).toEqual(list);
-    expect(normalizePlan({ ...base, kind: 'talk', checklist: list }).checklist).toEqual([]);
-    expect(normalizePlan({ ...base, kind: 'test', checklist: [{ test: '' }] }).checklist).toEqual([]);
-    expect(normalizePlan({ ...base, kind: 'test', checklist: 'x' }).checklist).toEqual([]);
+    const list = [{ test: '低中高三档各问一次同一个问题', record: '各自用时' }];
+    const qs = ['你平时用哪一档？', '哪一次让你觉得档位有用？', '当时什么感受？', '你平时用哪一档？'];
+    expect(normalizePlan({ ...base, questions: qs }).questions).toEqual(['你平时用哪一档？', '哪一次让你觉得档位有用？', '当时什么感受？']);
+    expect(normalizePlan({ ...base, kind: 'test', checklist: list, questions: ['你平时用哪一档？'] }).questions).toEqual(['你平时用哪一档？', '实测：低中高三档各问一次同一个问题，记下：各自用时']);
+    expect(normalizePlan({ ...base, kind: 'talk', checklist: list, questions: 'x' }).questions).toEqual([]);
+    expect(normalizePlan({ ...base, questions: Array.from({ length: 9 }, (_, i) => `问题${i}`) }).questions).toHaveLength(6);
     expect(() => normalizePlan({ ...base, title: '' })).toThrow();
   });
-  it('saves the checklist with the topic and tells the planner to make one for test topics', async () => {
+  it('saves the questions with the topic and asks the planner for story material', async () => {
     const systems: string[] = [];
     const { d, saved } = deps({
-      llm: { callStructured: async ({ systemPrompt }: { systemPrompt: string }) => (systems.push(systemPrompt), { result: { ...plan('实测题'), kind: 'test', checklist: [{ test: '三档各问一次', record: '用时' }] }, usage: {} }) } as unknown as StructuredLLM,
+      llm: { callStructured: async ({ systemPrompt }: { systemPrompt: string }) => (systems.push(systemPrompt), { result: { ...plan('实测题'), questions: ['收藏了多少个？', '留下哪几个？', '哪一次最惊喜？', '当时什么感受？'] }, usage: {} }) } as unknown as StructuredLLM,
     });
     await generateDailyTopics(d);
-    expect(saved[0].checklist).toEqual([{ test: '三档各问一次', record: '用时' }]);
-    expect(systems[0]).toContain('kind');
-    expect(systems[0]).toContain('checklist');
+    expect(saved[0].questions).toHaveLength(4);
+    expect(systems[0]).toContain('questions');
+    expect(systems[0]).toContain('能讲成故事的真事');
   });
-  it('rewrites a draft from filled test results and re-predicts', async () => {
-    const calls: { direction: string; facts?: string }[] = [];
-    const { d } = deps({ write: (async (o: { direction: string; facts?: string }) => (calls.push(o), { title: 't', script: script('新稿'), report: { ok: true }, rounds: 0 })) as unknown as GenDeps['write'] });
-    const r = await rewriteWithResults(d, { title: '档位实测', hook: '开头', direction: '方向', source: 'idea', sourceId: 'i1', checklist: [{ test: '低档', record: '用时' }, { test: '高档', record: '用时' }] }, ['3 秒，答案太浅', '']);
-    expect(calls[0].facts).toContain('实测：低档（记下：用时）→ 3 秒，答案太浅');
-    expect(calls[0].facts).not.toContain('高档（记下');
+  it('writes from answers and keeps unanswered gaps as 待补', async () => {
+    const calls: { direction: string; facts?: string; answers?: { q: string; a: string }[]; samples?: string[] }[] = [];
+    const { d } = deps({ samples: ['样本'], write: (async (o: (typeof calls)[number]) => (calls.push(o), { title: 't', script: script('新稿'), report: { ok: true }, rounds: 0 })) as unknown as GenDeps['write'] });
+    const r = await rewriteWithAnswers(d, { title: '收藏夹', hook: '开头', direction: '方向', source: 'idea', sourceId: 'i1', questions: ['收藏了多少个？', '留下哪几个？'] }, ['一百多个', ' ']);
+    expect(calls[0].answers).toEqual([{ q: '收藏了多少个？', a: '一百多个' }]);
+    expect(calls[0].facts ?? '').not.toContain('留下哪几个');
+    expect(calls[0].samples).toEqual(['样本']);
     expect(r.script.segments[0].text).toBe('新稿');
     expect(r.prediction).toMatchObject({ inputHash: 'h' });
   });
-  it('refuses to rewrite with no results filled', async () => {
+  it('refuses to write with no answers', async () => {
     const { d } = deps();
-    await expect(rewriteWithResults(d, { title: 't', hook: 'h', direction: 'd', source: 'idea', sourceId: 'i1', checklist: [{ test: 'a', record: 'b' }] }, ['  '])).rejects.toThrow('先填至少一项实测结果');
+    await expect(rewriteWithAnswers(d, { title: 't', hook: 'h', direction: 'd', source: 'idea', sourceId: 'i1', questions: ['a'] }, ['  '])).rejects.toThrow('先答至少一个问题');
   });
 });
 

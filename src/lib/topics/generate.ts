@@ -21,28 +21,35 @@ export function runOutcome(r: { created: number; skipped: { source?: TopicSource
   return r.skipped.length > 0 && r.skipped.every((s) => s.reason === NO_SOURCE_REASON || s.reason === DUPLICATE_REASON) ? 'done' : 'failed';
 }
 
-/** kind / checklist 宽松接收(格式不对就当非实测类), 不能因为清单写坏了丢掉整个选题 */
-export const TopicPlanSchema = z.object({ title: z.string().min(1), why: z.string().min(1), hook: z.string().min(1), direction: z.string().min(10), kind: z.string().optional(), checklist: z.unknown().optional() });
+/** kind / checklist / questions 宽松接收(格式不对就当没有), 不能因为问题写坏了丢掉整个选题 */
+export const TopicPlanSchema = z.object({ title: z.string().min(1), why: z.string().min(1), hook: z.string().min(1), direction: z.string().min(10), kind: z.string().optional(), checklist: z.unknown().optional(), questions: z.unknown().optional() });
 export const ChecklistSchema = z.array(z.object({ test: z.string().min(1), record: z.string().min(1) })).min(1).max(6);
 export type ChecklistItem = z.infer<typeof ChecklistSchema>[number];
-export type TopicPlan = { title: string; why: string; hook: string; direction: string; checklist: ChecklistItem[] };
+export type TopicPlan = { title: string; why: string; hook: string; direction: string; questions: string[] };
+export const MAX_QUESTIONS = 6;
+
+/** 实测清单的一项转成一个问题(旧数据读取时也用) */
+export const checklistQuestion = (c: ChecklistItem) => `实测：${c.test}，记下：${c.record}`;
 
 export function normalizePlan(raw: unknown): TopicPlan {
   const p = TopicPlanSchema.parse(raw);
+  const asked = z.array(z.string()).safeParse(p.questions);
   const list = p.kind === 'test' ? ChecklistSchema.safeParse(p.checklist) : null;
-  return { title: p.title, why: p.why, hook: p.hook, direction: p.direction, checklist: list?.success ? list.data : [] };
+  const all = [...(asked.success ? asked.data : []), ...(list?.success ? list.data.map(checklistQuestion) : [])].map((q) => q.trim()).filter(Boolean);
+  return { title: p.title, why: p.why, hook: p.hook, direction: p.direction, questions: [...new Set(all)].slice(0, MAX_QUESTIONS) };
 }
 
 const PLAN_SYSTEM = `你是抖音 AI 知识类博主的编导，根据给你的一条素材定一个今天能做的选题。
 - 只基于素材和账号定位，不编"最近很火的XX"这类素材里没有的热点，不编数字。
 - 对标素材：借选题和角度，换成博主自己的经历和视角，不照抄原话。
 - 续集素材：接着原片结尾留下的话头讲，或把原片里最受欢迎的点展开。
-- 点子素材：把博主的一句话点子展开成能讲 60 秒的选题。
+- 点子素材：把博主的一句话点子展开成能讲 60–90 秒的选题。
 - direction 里不要写任何测试结果、亲身经历或数字（素材里没有的一律不写）；实测类选题写成「要实测什么、记下哪几项结果」，结果留给博主自己测。
+- questions（3–5 个）：问博主能讲成故事的真事，好让他用自己的话答——数量（收藏了多少个）、具体是哪个（哪个工具、哪个人）、哪一次（第一次、翻车那次）、当时什么感受。每个问题一句口语，具体，能几句话答完。
 - kind：需要博主亲手测了才能讲的（对比、实测、试用）填 "test"，讲观点或经历的填 "talk"。
 - checklist（只有 test 才写，2–5 项）：每项 {"test": "要测什么（具体动作）", "record": "记下什么（具体结果）"}，让博主照着测。
 - title：选题标题（20 字内）；why：为什么值得做（一句）；hook：开头钩子（一句口语）；direction：给写稿的方向说明（讲什么、什么角度、用什么例子）。
-只输出 JSON：{"title": "", "why": "", "hook": "", "direction": "", "kind": "talk", "checklist": []}`;
+只输出 JSON：{"title": "", "why": "", "hook": "", "direction": "", "questions": [], "kind": "talk", "checklist": []}`;
 
 const SOURCE_LABEL: Record<TopicSource, string> = { benchmark: '对标', sequel: '续集', idea: '点子' };
 
@@ -57,8 +64,8 @@ export interface NewDailyTopic {
   script: Script;
   copied: CopiedRun[];
   prediction: ScriptPrediction | null;
-  /** 实测清单(非实测类为 []) */
-  checklist: ChecklistItem[];
+  /** 要问博主的问题(含实测项) */
+  questions: string[];
 }
 
 export interface GenDeps {
@@ -133,18 +140,16 @@ async function oneTopic(d: GenDeps, llm: StructuredLLM, c: Candidate, day: strin
   return { ok: true };
 }
 
-/** 用户填了实测结果后重写: 结果作为事实交给编导, 没填的项不写进事实(稿子里仍留【待补】); 重新预测 */
-export async function rewriteWithResults(
+/** 用户答了问题后重写: 只把答了的问答交给编导(没答的不进去, 稿子里仍留【待补】); 带说话样本; 重新预测 */
+export async function rewriteWithAnswers(
   d: Pick<GenDeps, 'llm' | 'noModelReason' | 'write' | 'predict' | 'personaText' | 'lessons' | 'samples'>,
-  t: { title: string; hook: string; direction: string; source: string; sourceId: string; checklist: ChecklistItem[] },
-  results: string[],
+  t: { title: string; hook: string; direction: string; source: string; sourceId: string; questions: string[] },
+  answers: string[],
 ): Promise<{ script: Script; prediction: ScriptPrediction | null }> {
-  const filled = t.checklist.map((c, i) => ({ c, r: (results[i] ?? '').trim() })).filter((x) => x.r);
-  if (!filled.length) throw new Error('先填至少一项实测结果');
+  const answered = t.questions.map((q, i) => ({ q, a: (answers[i] ?? '').trim() })).filter((x) => x.a);
+  if (!answered.length) throw new Error('先答至少一个问题');
   if (!d.llm) throw new Error(d.noModelReason);
-  const facts = filled.map(({ c, r }) => `实测：${c.test}（记下：${c.record}）→ ${r}`).join('\n');
-  const { script } = await d.write({ llm: d.llm, direction: `${t.title}。${t.direction}\n开头钩子：${t.hook}`, targetSec: TARGET_SEC, personaText: d.personaText, lessons: d.lessons, samples: d.samples, facts });
+  const { script } = await d.write({ llm: d.llm, direction: `${t.title}。${t.direction}\n开头钩子：${t.hook}`, targetSec: TARGET_SEC, personaText: d.personaText, lessons: d.lessons, samples: d.samples, answers: answered });
   const prediction = await d.predict(script, t.source === 'benchmark' ? t.sourceId : undefined).catch(() => null);
   return { script, prediction };
 }
-

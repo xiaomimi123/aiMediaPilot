@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
-import { addIdea, adoptDaily, dailyReason, deleteIdea, dismissDaily, listDaily, listIdeas, rewriteDaily } from '@/lib/topics/daily';
+import { addIdea, adoptDaily, dailyReason, deleteIdea, dismissDaily, listDaily, listIdeas, answerDaily, topicQuestions } from '@/lib/topics/daily';
 import type { GenDeps } from '@/lib/topics/generate';
 import { createCandidateStore } from '@/lib/topics/deps';
 
@@ -121,30 +121,50 @@ describe('daily topics', () => {
     expect(dailyReason(null)).toBeNull();
   });
   const list = [{ test: '低中高三档各问一次', record: '各自用时' }, { test: '对比答案', record: '有没有要点' }];
-  it('lists the checklist and filled results on the card', async () => {
+  const qs = ['你收藏了多少个开源项目？', '最后留下了哪几个？'];
+  const deps = (written: unknown[] = []) => ({
+    llm: {} as never,
+    noModelReason: '没有模型',
+    personaText: '',
+    lessons: undefined,
+    samples: ['样本'],
+    write: (async (o: unknown) => (written.push(o), { title: 't', script: { segments: [{ id: 'a', role: 'hook', text: '按你的话写' }] }, report: { ok: true }, rounds: 0 })) as unknown as GenDeps['write'],
+    predict: async () => pred(6000) as never,
+  });
+  it('turns an old checklist into questions with its results as answers', async () => {
+    expect(topicQuestions({ checklist: list, results: ['3 秒', ''] })).toEqual({ questions: ['实测：低中高三档各问一次，记下：各自用时', '实测：对比答案，记下：有没有要点'], answers: ['3 秒', ''] });
+    expect(topicQuestions({ questions: qs, answers: null })).toEqual({ questions: qs, answers: ['', ''] });
+    expect(topicQuestions({})).toEqual({ questions: [], answers: [] });
     const { db } = fakeDb({ topics: [topic('d1', '2026-10-09', 1000, { checklist: list, results: ['3 秒', ''] })] });
-    expect((await listDaily(db, now)).topics[0]).toMatchObject({ checklist: list, results: ['3 秒', ''] });
+    expect((await listDaily(db, now)).topics[0]).toMatchObject({ questions: ['实测：低中高三档各问一次，记下：各自用时', '实测：对比答案，记下：有没有要点'], answers: ['3 秒', ''], answered: true });
   });
-  it('rewrites a topic from filled results and stores script, results and prediction', async () => {
+  it('answerDaily stores answers, rewrites and marks the card as written from your words', async () => {
+    const written: { answers?: unknown; samples?: unknown }[] = [];
+    const { db, topics } = fakeDb({ topics: [topic('d1', '2026-10-09', 1000, { questions: qs })] });
+    await answerDaily(db, deps(written as unknown[]), 'd1', ['一百多个', '']);
+    expect(topics[0]).toMatchObject({ answers: ['一百多个', ''], script: { segments: [{ text: '按你的话写' }] }, prediction: { inputHash: 'h6000' } });
+    expect(written[0]).toMatchObject({ answers: [{ q: qs[0], a: '一百多个' }], samples: ['样本'] });
+    expect((await listDaily(db, now)).topics[0]).toMatchObject({ answered: true });
+  });
+  it('answers an old checklist topic and stores it as questions', async () => {
     const { db, topics } = fakeDb({ topics: [topic('d1', '2026-10-09', 1000, { checklist: list })] });
-    const deps = {
-      llm: {} as never,
-      noModelReason: '没有模型',
-      personaText: '',
-      lessons: undefined, samples: [],
-      write: (async () => ({ title: 't', script: { segments: [{ id: 'a', role: 'hook', text: '按实测重写' }] }, report: { ok: true }, rounds: 0 })) as unknown as GenDeps['write'],
-      predict: async () => pred(6000) as never,
-    };
-    await rewriteDaily(db, deps, 'd1', ['3 秒', '有']);
-    expect(topics[0]).toMatchObject({ results: ['3 秒', '有'], script: { segments: [{ text: '按实测重写' }] }, prediction: { inputHash: 'h6000' } });
+    await answerDaily(db, deps(), 'd1', ['3 秒', '有']);
+    expect(topics[0]).toMatchObject({ questions: ['实测：低中高三档各问一次，记下：各自用时', '实测：对比答案，记下：有没有要点'], answers: ['3 秒', '有'] });
   });
-  it('carries an unfinished checklist into the new project chat on adopt', async () => {
-    const { db, chats } = fakeDb({ topics: [topic('d1', '2026-10-09', null, { checklist: list, results: ['3 秒', ''] })] });
+  it('carries answered and unanswered questions into the project chat on adopt', async () => {
+    const { db, chats } = fakeDb({ topics: [topic('d1', '2026-10-09', null, { questions: qs, answers: ['一百多个', ''] })] });
     const r = await adoptDaily(db, 'd1');
     expect(chats).toHaveLength(1);
     expect(chats[0]).toMatchObject({ projectId: r.projectId, role: 'system', toolName: 'job:topic' });
-    expect(String(chats[0].content)).toContain('1. 低中高三档各问一次 → 记下：各自用时（已测：3 秒）');
-    expect(String(chats[0].content)).toContain('2. 对比答案 → 记下：有没有要点');
+    const c = String(chats[0].content);
+    expect(c).toContain('你答过的材料：\n问：你收藏了多少个开源项目？\n答：一百多个');
+    expect(c).toContain('还没答的问题：\n1. 最后留下了哪几个？');
+  });
+  it('carries an old unfinished checklist into the chat as questions', async () => {
+    const { db, chats } = fakeDb({ topics: [topic('d1', '2026-10-09', null, { checklist: list, results: ['3 秒', ''] })] });
+    await adoptDaily(db, 'd1');
+    expect(String(chats[0].content)).toContain('问：实测：低中高三档各问一次，记下：各自用时\n答：3 秒');
+    expect(String(chats[0].content)).toContain('1. 实测：对比答案，记下：有没有要点');
   });
   it('adds no chat message for a talk topic', async () => {
     const { db, chats } = fakeDb({ topics: [topic('d1', '2026-10-09', null)] });

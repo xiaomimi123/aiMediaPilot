@@ -488,10 +488,14 @@ model DailyTopic {
   copied      Json     @default("[]")
   /// 预测: { scores, inputHash, formulaVersion, result } | null
   prediction  Json?
-  /// 实测清单 [{ test, record }](非实测类为 [])
+  /// 旧数据: 实测清单 [{ test, record }]; 新数据不再写入, 读取时转成 questions
   checklist   Json     @default("[]")
-  /// 用户填的实测结果(与清单逐项对应), 没填为 null
+  /// 旧数据: 实测结果(与清单逐项对应); 读取时转成 answers
   results     Json?
+  /// 要问博主的问题(字符串数组, 含实测项)
+  questions   Json     @default("[]")
+  /// 博主的回答(与问题逐项对应), 没答为 null
+  answers     Json?
   /// new | adopted | dismissed | expired
   status      String   @default("new")
   projectId   String?
