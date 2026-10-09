@@ -33,8 +33,8 @@ export function VoiceSamplesCard() {
     setError(null);
     const j = await fetch('/api/voice-samples', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, text }) })
       .then((r) => r.json())
-      .catch(() => ({ success: false, error: '保存失败，检查网页服务是否在运行' }));
-    if (!j.success) return setError(j.error ?? '保存失败');
+      .catch(() => ({ success: false, message: '保存失败，检查网页服务是否在运行' }));
+    if (!j.success) return setError(j.message ?? '保存失败');
     setAdding(false);
     setTitle('');
     setText('');

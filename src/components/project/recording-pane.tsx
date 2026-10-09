@@ -59,8 +59,8 @@ export function RecordingPane({
       body: JSON.stringify({ title: project.title, text: recording.transcript.lines.map((l) => l.text).join('\n'), source: 'transcript' }),
     })
       .then((r) => r.json())
-      .catch(() => ({ success: false, error: '没加上，检查网页服务是否在运行' }));
-    setSampleState(j.success ? 'saved' : (j.error ?? '没加上'));
+      .catch(() => ({ success: false, message: '没加上，检查网页服务是否在运行' }));
+    setSampleState(j.success ? 'saved' : (j.message ?? '没加上'));
   }
 
   return (

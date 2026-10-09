@@ -157,6 +157,12 @@ export function ProjectWorkspace({
                 setHighlighted(new Set());
                 await patch({ edit: { segmentId, text } });
               }}
+              onReplace={async (script, note) => {
+                setHighlighted(new Set(script.segments.map((x) => x.id)));
+                await patch({ replaceScript: { script, note } });
+                // 替换会在编导对话里记一条: 拉一次对话
+                await refresh();
+              }}
               onHighlight={(id) => setQuoted(id)}
               quoted={quoted}
               predictionKey={predictionKey}

@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import { ROLE_LABEL } from '@/lib/script/model';
 import type { ProjectView } from '@/lib/project/view';
 import { PredictionPanel } from './prediction-panel';
+import { PolishPanel } from './polish-panel';
+import type { PolishResult } from '@/lib/script/polish';
+import type { Script } from '@/lib/script/model';
 import { cn } from '@/lib/utils';
 
 export function ScriptPane({
@@ -11,6 +14,7 @@ export function ScriptPane({
   highlighted,
   onEdit,
   onFinalize,
+  onReplace = async () => {},
   onHighlight = () => {},
   onAskEditor = () => {},
   onPredictionChanged = () => {},
@@ -21,6 +25,8 @@ export function ScriptPane({
   highlighted: Set<string>;
   onEdit: (segmentId: string, text: string) => Promise<void>;
   onFinalize: () => Promise<void>;
+  /** 整篇替换(润色后「用润色版」) */
+  onReplace?: (script: Script, note: string) => Promise<void>;
   onHighlight?: (segmentId: string) => void;
   onAskEditor?: (text: string) => void;
   onPredictionChanged?: () => void;
@@ -30,6 +36,9 @@ export function ScriptPane({
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  const [polished, setPolished] = useState<PolishResult | null>(null);
+  const [polishing, setPolishing] = useState(false);
+  const [polishErr, setPolishErr] = useState<string | null>(null);
   useEffect(() => {
     if (quoted) document.getElementById(`seg-${quoted}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }, [quoted]);
@@ -43,6 +52,25 @@ export function ScriptPane({
   }
   const { script, report } = project;
 
+  async function polish() {
+    setPolishing(true);
+    setPolishErr(null);
+    const j = await fetch('/api/scripts/polish', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: script.segments.map((s) => s.text).join('\n'), targetSec: project.targetSec }) })
+      .then((r) => r.json())
+      .catch(() => ({ success: false, message: '服务没有响应' }));
+    setPolishing(false);
+    if (!j.success) return setPolishErr(j.message);
+    setPolished(j.data);
+  }
+
+  async function usePolished(p: PolishResult) {
+    setPolishing(true);
+    const what = p.changes.slice(0, 3).map((c) => c.what).join('；');
+    await onReplace(p.script, `稿子换成了润色版（改动 ${p.changes.length} 处${what ? `：${what}` : ''}）`);
+    setPolishing(false);
+    setPolished(null);
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] px-6 py-3 text-sm">
@@ -50,6 +78,11 @@ export function ScriptPane({
           约 {report.totalSec} 秒 / 目标 {report.targetSec} 秒
         </span>
         <div className="flex-1" />
+        {project.stage === 'draft' && (
+          <button className="btn-secondary" disabled={polishing} onClick={() => void polish()}>
+            {polishing && !polished ? '正在润色…' : '润色'}
+          </button>
+        )}
         {project.stage === 'draft' ? (
           <button
             className="btn-primary"
@@ -63,6 +96,8 @@ export function ScriptPane({
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto p-6">
+        {polishErr && <p className="text-sm text-[var(--danger)]">{polishErr}</p>}
+        {polished && <PolishPanel result={polished} useLabel="用润色版" keepLabel="保留原文" busy={polishing} onUse={() => void usePolished(polished)} onKeep={() => setPolished(null)} />}
         <PredictionPanel projectId={project.id} reloadKey={predictionKey} onHighlight={onHighlight} onAskEditor={onAskEditor} onChanged={onPredictionChanged} />
         {script.segments.map((s, i) => {
           const r = report.segments[i];
