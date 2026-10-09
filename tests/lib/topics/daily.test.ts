@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
-import { addIdea, adoptDaily, dailyReason, deleteIdea, dismissDaily, listDaily, listIdeas } from '@/lib/topics/daily';
+import { addIdea, adoptDaily, dailyReason, deleteIdea, dismissDaily, listDaily, listIdeas, rewriteDaily } from '@/lib/topics/daily';
+import type { GenDeps } from '@/lib/topics/generate';
 import { createCandidateStore } from '@/lib/topics/deps';
 
 type Row = Record<string, unknown> & { id: string };
@@ -11,6 +12,7 @@ function fakeDb(seed: { topics?: Row[]; runs?: Row[]; ideas?: Row[] } = {}) {
   const runs: Row[] = seed.runs ?? [];
   const ideas: Row[] = seed.ideas ?? [];
   const projects: Row[] = [];
+  const chats: Row[] = [];
   const predictions: Row[] = [];
   const bench: Record<string, string> = {};
   const seenWhere: unknown[] = [];
@@ -36,6 +38,7 @@ function fakeDb(seed: { topics?: Row[]; runs?: Row[]; ideas?: Row[] } = {}) {
     personaProfile: { findUnique: async () => null },
     project: { create: async ({ data }: { data: Row }) => { const p = { ...data, id: `p${++seq}` }; projects.push(p); return p; } },
     prediction: { create: async ({ data }: { data: Row }) => { predictions.push(data); return data; } },
+    chatMessage: { create: async ({ data }: { data: Row }) => { chats.push(data); return data; } },
     benchmarkVideo: {
       findUnique: async ({ where }: { where: { id: string } }) => (where.id === 'gone' ? null : { id: where.id }),
       update: async ({ where, data }: { where: { id: string }; data: { status: string } }) => void (bench[where.id] = data.status),
@@ -48,7 +51,7 @@ function fakeDb(seed: { topics?: Row[]; runs?: Row[]; ideas?: Row[] } = {}) {
     },
   };
   db.$transaction = async (fn: (tx: unknown) => unknown) => fn(db);
-  return { db: db as unknown as PrismaClient, topics, projects, predictions, bench, ideas, seenWhere };
+  return { db: db as unknown as PrismaClient, topics, projects, predictions, bench, ideas, seenWhere, chats };
 }
 
 const pred = (center: number) => ({ scores: [{ dim: 'hook', score: 4, reason: 'x' }], inputHash: `h${center}`, formulaVersion: 2, result: { center } });
@@ -117,4 +120,36 @@ describe('daily topics', () => {
     expect(dailyReason({ day: '2026-10-09', created: 2, reasons: ['写稿失败：x'] })).toBeNull();
     expect(dailyReason(null)).toBeNull();
   });
+  const list = [{ test: '低中高三档各问一次', record: '各自用时' }, { test: '对比答案', record: '有没有要点' }];
+  it('lists the checklist and filled results on the card', async () => {
+    const { db } = fakeDb({ topics: [topic('d1', '2026-10-09', 1000, { checklist: list, results: ['3 秒', ''] })] });
+    expect((await listDaily(db, now)).topics[0]).toMatchObject({ checklist: list, results: ['3 秒', ''] });
+  });
+  it('rewrites a topic from filled results and stores script, results and prediction', async () => {
+    const { db, topics } = fakeDb({ topics: [topic('d1', '2026-10-09', 1000, { checklist: list })] });
+    const deps = {
+      llm: {} as never,
+      noModelReason: '没有模型',
+      personaText: '',
+      lessons: undefined,
+      write: (async () => ({ title: 't', script: { segments: [{ id: 'a', role: 'hook', text: '按实测重写' }] }, report: { ok: true }, rounds: 0 })) as unknown as GenDeps['write'],
+      predict: async () => pred(6000) as never,
+    };
+    await rewriteDaily(db, deps, 'd1', ['3 秒', '有']);
+    expect(topics[0]).toMatchObject({ results: ['3 秒', '有'], script: { segments: [{ text: '按实测重写' }] }, prediction: { inputHash: 'h6000' } });
+  });
+  it('carries an unfinished checklist into the new project chat on adopt', async () => {
+    const { db, chats } = fakeDb({ topics: [topic('d1', '2026-10-09', null, { checklist: list, results: ['3 秒', ''] })] });
+    const r = await adoptDaily(db, 'd1');
+    expect(chats).toHaveLength(1);
+    expect(chats[0]).toMatchObject({ projectId: r.projectId, role: 'system', toolName: 'job:topic' });
+    expect(String(chats[0].content)).toContain('1. 低中高三档各问一次 → 记下：各自用时（已测：3 秒）');
+    expect(String(chats[0].content)).toContain('2. 对比答案 → 记下：有没有要点');
+  });
+  it('adds no chat message for a talk topic', async () => {
+    const { db, chats } = fakeDb({ topics: [topic('d1', '2026-10-09', null)] });
+    await adoptDaily(db, 'd1');
+    expect(chats).toEqual([]);
+  });
 });
+
