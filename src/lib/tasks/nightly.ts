@@ -33,6 +33,17 @@ export const NIGHTLY_TASKS = {
     /** 同回采: 失败时 60、120 分钟后补跑; 脚本带 --scheduled, 刚成功过就跳过 */
     retryAfterMin: [60, 120] as number[],
   },
+  topics: {
+    label: '每日选题',
+    launchdLabel: 'com.mediapilot.daily-topics',
+    npmScript: 'topics:daily',
+    scriptFile: 'scripts/daily-topics.ts',
+    log: 'logs/daily-topics.log',
+    defaultHour: 23,
+    defaultMinute: 0,
+    /** 失败时 0:00、1:00 补跑; 脚本带 --scheduled, 今天已生成过就跳过 */
+    retryAfterMin: [60, 120] as number[],
+  },
 } as const;
 
 export type TaskKey = keyof typeof NIGHTLY_TASKS;

@@ -111,3 +111,13 @@ describe('collect retries', () => {
     expect(times(renderPlist(T, '/p', 20, 30, NIGHTLY_TASKS.scan.retryAfterMin))).toEqual(['20:30', '21:30', '22:30']);
   });
 });
+
+describe('daily topics task', () => {
+  it('runs at 23:00 with retries at 0:00 and 1:00', () => {
+    const t = NIGHTLY_TASKS.topics;
+    expect(t).toMatchObject({ label: '每日选题', launchdLabel: 'com.mediapilot.daily-topics', npmScript: 'topics:daily', scriptFile: 'scripts/daily-topics.ts', log: 'logs/daily-topics.log', defaultHour: 23, defaultMinute: 0 });
+    const T = `<plist><dict><key>StartCalendarInterval</key><dict><key>Hour</key><integer>23</integer><key>Minute</key><integer>0</integer></dict></dict></plist>`;
+    const times = [...renderPlist(T, '/p', 23, 0, t.retryAfterMin).matchAll(/<integer>(\d+)<\/integer>\s*<key>Minute<\/key>\s*<integer>(\d+)<\/integer>/g)].map((m) => `${m[1]}:${m[2]}`);
+    expect(times).toEqual(['23:0', '0:0', '1:0']);
+  });
+});

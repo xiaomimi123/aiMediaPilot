@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import os from 'node:os';
 import path from 'node:path';
-import { parseCollectLog, readCollectStatus, parseRunLog, SCAN_SPEC, shouldSkipScheduled, shouldSkipScheduledCollect } from '@/lib/douyin/collect-log';
+import { parseCollectLog, readCollectStatus, parseRunLog, SCAN_SPEC, shouldSkipScheduled, shouldSkipScheduledCollect, TOPICS_SPEC } from '@/lib/douyin/collect-log';
 
 const now = new Date('2026-09-28T12:00:00Z');
 const okRun = (d: string) => `[${d}T12:00:06.000Z] 开始回采\n[${d}T12:00:24.000Z] 回采完成: 共 101 条(新增 0 / 更新 101), 其中公开 5 条\n`;
@@ -88,5 +88,13 @@ describe('scheduled scan skip', () => {
     const ok = '[2026-10-08T12:30:00.000Z] 开始巡检\n[2026-10-08T12:31:00.000Z] 巡检完成: 账号 3 个(失败 0) / 新作品 0 条 / 爆款 0 条 / 拆解 0 条\n';
     expect(shouldSkipScheduled(parseRunLog(ok, now, SCAN_SPEC), now)).toBe(true);
     expect(shouldSkipScheduled(parseRunLog('', now, SCAN_SPEC), now)).toBe(false);
+  });
+});
+describe('daily topics log', () => {
+  it('reads runs started with 开始生成 and finished with 生成完成', () => {
+    const now = new Date('2026-10-09T15:30:00.000Z');
+    const ok = '[2026-10-09T15:00:00.000Z] 开始生成\n[2026-10-09T15:04:00.000Z] 生成完成: 3 个\n';
+    expect(parseRunLog(ok, now, TOPICS_SPEC).state).toBe('ok');
+    expect(parseRunLog('[2026-10-09T15:00:00.000Z] 开始生成\n[2026-10-09T15:00:01.000Z] 生成失败: 还没有可用的模型\n', now, TOPICS_SPEC)).toMatchObject({ state: 'failing' });
   });
 });

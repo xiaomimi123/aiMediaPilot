@@ -2,7 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 import { toProjectView } from '@/lib/project/view';
 import { latestForDisplay } from '@/lib/cli/commands/predict';
 import { stepsOf, type WorkCardData } from './steps';
-import { readCollectStatus, readScanStatus } from '@/lib/douyin/collect-log';
+import { readCollectStatus, readScanStatus, readTopicsStatus } from '@/lib/douyin/collect-log';
 import { createTaskDeps, getSchedule, NIGHTLY_TASKS } from '@/lib/tasks/nightly';
 import { buildAccountSummary } from '@/lib/account/summary';
 import { findCandidate } from '@/lib/retro/match';
@@ -70,7 +70,7 @@ export async function loadOverview(db: PrismaClient, now: Date): Promise<Overvie
   const lagging = await findLagging(db, now).catch(() => []);
   const today = buildToday({
     tasks: await Promise.all(
-      ([['collect', collect], ['scan', scan]] as const).map(async ([key, s]) => ({
+      ([['collect', collect], ['scan', scan], ['topics', await readTopicsStatus(now)]] as const).map(async ([key, s]) => ({
         label: NIGHTLY_TASKS[key].label,
         ok: s.state === 'ok',
         hint: s.hint,

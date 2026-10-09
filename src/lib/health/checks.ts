@@ -34,6 +34,8 @@ export async function runHealthChecks(deps: {
   collect: CollectStatus;
   model: { label: string; grade: 'able_agent' | 'analysis_only' | 'unusable' | null } | null;
   scan: CollectStatus;
+  /** 每日选题(没传 = 不检查) */
+  topics?: CollectStatus;
   /** 本机 claude 命令路径(网页出片用); null = 没找到 */
   claudeBin: string | null;
 }): Promise<HealthItem[]> {
@@ -110,5 +112,12 @@ export async function runHealthChecks(deps: {
       ? { key: 'scan', label: '对标巡检', status: 'ok', detail: `上次成功：${new Date(deps.scan.lastSuccessAt!).toLocaleString('zh-CN')}` }
       : { key: 'scan', label: '对标巡检', status: 'warn', detail: deps.scan.hint },
   );
+  if (deps.topics) {
+    items.push(
+      deps.topics.state === 'ok'
+        ? { key: 'topics', label: '每日选题', status: 'ok', detail: `上次成功：${new Date(deps.topics.lastSuccessAt!).toLocaleString('zh-CN')}` }
+        : { key: 'topics', label: '每日选题', status: 'warn', detail: deps.topics.hint },
+    );
+  }
   return items;
 }
