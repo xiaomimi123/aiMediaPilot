@@ -110,7 +110,7 @@ describe('daily topics', () => {
   it('does not offer benchmark hits that were already made into projects', async () => {
     const { db, seenWhere } = fakeDb();
     await createCandidateStore(db).benchmarkHits(now);
-    expect(seenWhere[0]).toMatchObject({ where: { status: { notIn: ['ignored', 'adopted'] } } });
+    expect(seenWhere[0]).toMatchObject({ where: { status: { notIn: ['ignored', 'adopted'] }, OR: [{ isHit: true }, { ratio: { gte: 3 } }] } });
   });
   it('only explains an empty day when the last run produced nothing', () => {
     expect(dailyReason({ day: '2026-10-09', created: 0, reasons: ['还没有可用的模型'] })).toBe('还没有可用的模型');

@@ -34,11 +34,14 @@ const SYSTEM_PROMPT = `你是抖音 AI 知识类口播博主的编导，负责�
 - 口语、短句，不用书面转折词（然而、综上所述、值得注意的是）。
 - 不编造数字和事实；没有出处的数字直接不写，不要换成"好几倍"这种听起来像事实的说法。
 - 不写用户没提供的第一人称经历、试用结果、小故事（如"我试过一次，它挑出了……"）。需要亲身例子时写「【待补：你的真实经历】」，让用户自己补。
+- 有【用户提供的事实】时：稿子里的第一人称经历、测试结果、数字只能来自【用户提供的事实】，其余一律写「【待补：…】」（写清要补什么，如「【待补：低档跑出来的结果】」）。
+- 账号定位里举的例子是描述受众和方向的，不是用户的经历，不能写成"我…过"。
 - 严格按给定的 6 段结构与每段字数写，字数是硬约束。
 - 只输出 JSON：{"title": "视频标题", "segments": [{"role": "段名", "text": "逐字稿"}, ...共 6 段]}。`;
 
-function firstMessage(direction: string, targetSec: number, personaText: string, reference = '', lessons = ''): string {
-  return `${personaText ? `【账号定位】\n${personaText}\n\n` : ''}${lessons ? `【写法经验】（来自用户自己的复盘，写稿遵守）\n${lessons}\n\n` : ''}【这条讲什么】\n${direction}${reference ? `\n\n【参考的对标作品】（只借选题、开头钩子的写法、标题思路；不得照抄原句，连续 12 字相同即算照抄）\n${reference}` : ''}\n\n【目标时长】${targetSec} 秒，按口语 ${CHARS_PER_SEC} 字/秒\n\n【6 段结构与字数】\n${segmentGuide(targetSec)}`;
+function firstMessage(direction: string, targetSec: number, personaText: string, reference = '', lessons = '', facts = ''): string {
+  const what = facts ? `【用户提供的事实】\n${facts}\n\n【这条讲什么】（选题方向，不是事实；里面提到的经历、测试结果、数字都只是设想，不能当成真的写进稿子）\n${direction}` : `【这条讲什么】\n${direction}`;
+  return `${personaText ? `【账号定位】\n${personaText}\n\n` : ''}${lessons ? `【写法经验】（来自用户自己的复盘，写稿遵守）\n${lessons}\n\n` : ''}${what}${reference ? `\n\n【参考的对标作品】（只借选题、开头钩子的写法、标题思路；不得照抄原句，连续 12 字相同即算照抄）\n${reference}` : ''}\n\n【目标时长】${targetSec} 秒，按口语 ${CHARS_PER_SEC} 字/秒\n\n【6 段结构与字数】\n${segmentGuide(targetSec)}`;
 }
 
 function repairMessage(script: Script, report: DurationReport, targetSec: number): string {
@@ -53,6 +56,8 @@ export async function writeScript(opts: {
   personaText: string;
   reference?: string;
   lessons?: string;
+  /** 用户真正提供过的事实(点子原话、原片结尾、对标摘要); 给了就只许从这里取经历和数字 */
+  facts?: string;
 }): Promise<{ title: string; script: Script; report: DurationReport; rounds: number }> {
   const call = async (text: string) =>
     (
@@ -65,7 +70,7 @@ export async function writeScript(opts: {
 
   let raw: LlmScript;
   try {
-    raw = await call(firstMessage(opts.direction, opts.targetSec, opts.personaText, opts.reference, opts.lessons));
+    raw = await call(firstMessage(opts.direction, opts.targetSec, opts.personaText, opts.reference, opts.lessons, opts.facts));
   } catch (e) {
     // 原始报错(多为 zod 的英文 JSON)不给用户看
     throw new Error('模型这次没按 6 段格式交稿，没写成。再说一次，或者把方向说具体些。', { cause: e });

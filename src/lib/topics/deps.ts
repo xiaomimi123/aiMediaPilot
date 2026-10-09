@@ -3,6 +3,7 @@ import { getActiveModel, NO_MODEL_MESSAGE } from '@/lib/llm/provider';
 import { writeScript } from '@/lib/script/write';
 import { ScriptSchema } from '@/lib/script/model';
 import { AnalysisSchema } from '@/lib/benchmark/analyze';
+import { HIT_RATIO } from '@/lib/benchmark/rules';
 import { formatPersona, type PersonaLike } from '@/lib/tools/types';
 import { formatLessons, loadActiveLessons } from '@/lib/retro/lessons';
 import { loadCurrentTranscript } from '@/lib/recording/transcript';
@@ -17,7 +18,7 @@ export function createCandidateStore(db: PrismaClient): CandidateStore {
       return new Set(rows.map((r) => `${r.source}:${r.sourceId}`));
     },
     async benchmarkHits(since) {
-      const rows = await db.benchmarkVideo.findMany({ where: { isHit: true, status: { notIn: ['ignored', 'adopted'] }, publishedAt: { gte: since } }, include: { account: true } });
+      const rows = await db.benchmarkVideo.findMany({ where: { status: { notIn: ['ignored', 'adopted'] }, publishedAt: { gte: since }, OR: [{ isHit: true }, { ratio: { gte: HIT_RATIO } }] }, include: { account: true } });
       return rows.map((v) => {
         const a = AnalysisSchema.safeParse(v.analysis);
         return { id: v.id, ratio: v.ratio, author: v.account.nickname, topic: a.success ? a.data.topic : null, desc: v.desc, transcript: v.transcript };

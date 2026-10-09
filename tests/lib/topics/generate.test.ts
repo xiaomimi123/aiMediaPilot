@@ -106,4 +106,15 @@ describe('generateDailyTopics', () => {
     expect(runOutcome({ created: 0, skipped: [{ source: 'idea', reason: '写稿失败：x' }] })).toBe('failed');
     expect(runOutcome({ created: 1, skipped: [] })).toBe('done');
   });
+  it('passes the candidate material as facts and tells the planner not to invent results', async () => {
+    const systems: string[] = [];
+    const facts: (string | undefined)[] = [];
+    const { d } = deps({
+      llm: { callStructured: async ({ systemPrompt }: { systemPrompt: string }) => (systems.push(systemPrompt), { result: plan('点子题'), usage: {} }) } as unknown as StructuredLLM,
+      write: (async (o: { direction: string; facts?: string }) => (facts.push(o.facts), { title: 't', script: script(o.direction), report: { ok: true }, rounds: 0 })) as unknown as GenDeps['write'],
+    });
+    await generateDailyTopics(d);
+    expect(systems[0]).toContain('direction 里不要写任何测试结果、亲身经历或数字');
+    expect(facts).toContain('讲讲 vibe coding 踩过的坑');
+  });
 });
