@@ -2,12 +2,12 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import type { Script } from '@/lib/script/model';
 import type { ScriptPrediction } from '@/lib/predict/run';
 import { localDay, type TopicSource } from './candidates';
-import { TARGET_SEC } from './generate';
+import { rewriteWithResults, TARGET_SEC, type ChecklistItem, type GenDeps } from './generate';
 
 export const EXPIRE_DAYS = 3;
 const LABEL: Record<TopicSource, string> = { benchmark: '对标', sequel: '续集', idea: '点子' };
 
-export interface DailyCard { id: string; day: string; source: TopicSource; sourceLabel: string; title: string; why: string; hook: string; script: Script; copied: number; predictedCenter: number | null; status: string }
+export interface DailyCard { id: string; day: string; source: TopicSource; sourceLabel: string; title: string; why: string; hook: string; script: Script; copied: number; predictedCenter: number | null; status: string; checklist: ChecklistItem[]; results: string[] }
 
 export async function listDaily(db: PrismaClient, now: Date) {
   const cutoff = localDay(new Date(now.getTime() - EXPIRE_DAYS * 86400_000));
@@ -16,7 +16,7 @@ export async function listDaily(db: PrismaClient, now: Date) {
   const topics: DailyCard[] = rows
     .map((t) => {
       const p = t.prediction as unknown as ScriptPrediction | null;
-      return { id: t.id, day: t.day, source: t.source as TopicSource, sourceLabel: LABEL[t.source as TopicSource], title: t.title, why: t.why, hook: t.hook, script: t.script as unknown as Script, copied: (t.copied as unknown[]).length, predictedCenter: p?.result?.center ?? null, status: t.status };
+      return { id: t.id, day: t.day, source: t.source as TopicSource, sourceLabel: LABEL[t.source as TopicSource], title: t.title, why: t.why, hook: t.hook, script: t.script as unknown as Script, copied: (t.copied as unknown[]).length, predictedCenter: p?.result?.center ?? null, status: t.status, checklist: ((t.checklist ?? []) as unknown as ChecklistItem[]), results: ((t.results ?? []) as unknown as string[]) };
     })
     .sort((a, b) => (b.predictedCenter ?? -1) - (a.predictedCenter ?? -1));
   const run = await db.dailyTopicRun.findFirst({ orderBy: { createdAt: 'desc' } });
@@ -45,6 +45,13 @@ export async function adoptDaily(db: PrismaClient, id: string): Promise<{ projec
     if (pred) await tx.prediction.create({ data: { projectId: p.id, kind: 'draft', formulaVersion: pred.formulaVersion, inputHash: pred.inputHash, scores: pred.scores as unknown as Prisma.InputJsonValue, result: pred.result as unknown as Prisma.InputJsonValue } });
     if (bv) await tx.benchmarkVideo.update({ where: { id: bv.id }, data: { status: 'adopted' } });
     await tx.dailyTopic.update({ where: { id }, data: { projectId: p.id } });
+    // 实测类: 清单还没测完, 放进作品的编导对话里, 测完直接在对话里把结果告诉编导
+    const list = ((t.checklist ?? []) as unknown as ChecklistItem[]) ?? [];
+    const res = ((t.results ?? []) as unknown as string[]) ?? [];
+    if (list.length && list.some((_, i) => !(res[i] ?? '').trim())) {
+      const lines = list.map((c, i) => `${i + 1}. ${c.test} → 记下：${c.record}${(res[i] ?? '').trim() ? `（已测：${res[i].trim()}）` : ''}`);
+      await tx.chatMessage.create({ data: { projectId: p.id, role: 'system', content: `这条是实测类选题，测完把结果告诉编导，让它按真实结果改稿。实测清单：\n${lines.join('\n')}`, toolName: 'job:topic', toolResult: { ok: true } } });
+    }
     return { projectId: p.id };
   });
 }
@@ -68,3 +75,22 @@ export const deleteIdea = (db: PrismaClient, id: string) => db.topicIdea.update(
 export function dailyReason(lastRun: { day?: string; created: number; reasons: string[] } | null): string | null {
   return lastRun && lastRun.created === 0 ? (lastRun.reasons[0] ?? null) : null;
 }
+
+/** 按用户填的实测结果重写初稿(只对还没处理的选题) */
+export async function rewriteDaily(
+  db: PrismaClient,
+  deps: Pick<GenDeps, 'llm' | 'noModelReason' | 'write' | 'predict' | 'personaText' | 'lessons'>,
+  id: string,
+  results: string[],
+): Promise<void> {
+  const t = await db.dailyTopic.findUniqueOrThrow({ where: { id } });
+  if (t.status !== 'new') throw new Error('这个选题已经处理过了');
+  const checklist = (t.checklist ?? []) as unknown as ChecklistItem[];
+  if (!checklist.length) throw new Error('这个选题没有实测清单');
+  const r = await rewriteWithResults(deps, { ...t, checklist }, results);
+  await db.dailyTopic.update({
+    where: { id },
+    data: { script: r.script as unknown as Prisma.InputJsonValue, results: results as unknown as Prisma.InputJsonValue, prediction: (r.prediction ?? undefined) as unknown as Prisma.InputJsonValue },
+  });
+}
+

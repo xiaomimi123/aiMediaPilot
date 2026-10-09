@@ -12,6 +12,9 @@ export function DailyTopics() {
   const router = useRouter();
   const [d, setD] = useState<Data | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [testOpen, setTestOpen] = useState<string | null>(null);
+  // 正在填的实测结果(按选题 id)
+  const [draft, setDraft] = useState<Record<string, string[]>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const load = useCallback(async () => {
@@ -21,6 +24,19 @@ export function DailyTopics() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const rewrite = async (t: DailyCard) => {
+    setBusy(t.id);
+    setErr(null);
+    const results = t.checklist.map((_, i) => (draft[t.id] ?? t.results)[i] ?? '');
+    const j = await fetch(`/api/topics/daily/${t.id}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'rewrite', results }) })
+      .then((r) => r.json())
+      .catch(() => ({ success: false, message: '服务没有响应' }));
+    setBusy(null);
+    if (!j.success) return setErr(j.message);
+    setOpen(t.id);
+    await load();
+  };
 
   const act = async (id: string, action: 'adopt' | 'dismiss') => {
     setBusy(id);
@@ -61,6 +77,36 @@ export function DailyTopics() {
                       {s.text}
                     </p>
                   ))}
+                </div>
+              )}
+              {t.checklist.length > 0 && (
+                <div className="mt-2">
+                  <button className="text-xs text-[var(--accent)]" onClick={() => setTestOpen(testOpen === t.id ? null : t.id)}>{`实测清单（${t.checklist.length} 项）`}</button>
+                  {testOpen === t.id && (
+                    <div className="mt-2 space-y-2 rounded-[var(--r-md)] bg-[var(--bg-surface)] p-3">
+                      {t.checklist.map((c, i) => {
+                        const vals = draft[t.id] ?? t.results;
+                        return (
+                          <div key={i} className="space-y-1">
+                            <div>{c.test}</div>
+                            <div className="text-xs text-[var(--text-tertiary)]">{`记下：${c.record}`}</div>
+                            <input
+                              className="w-full rounded-[var(--r-md)] bg-[var(--bg-inset)] px-2 py-1.5"
+                              placeholder="填你实测的结果"
+                              value={vals[i] ?? ''}
+                              onChange={(e) => {
+                                const next = t.checklist.map((_, k) => (k === i ? e.target.value : vals[k] ?? ''));
+                                setDraft({ ...draft, [t.id]: next });
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
+                      <button className="btn-secondary" disabled={busy === t.id || !(draft[t.id] ?? t.results).some((v) => (v ?? '').trim())} onClick={() => void rewrite(t)}>
+                        {busy === t.id ? '正在按实测结果重写…' : '按实测结果重写'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
               <div className="mt-2 flex flex-wrap gap-2">

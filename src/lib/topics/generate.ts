@@ -21,7 +21,17 @@ export function runOutcome(r: { created: number; skipped: { source?: TopicSource
   return r.skipped.length > 0 && r.skipped.every((s) => s.reason === NO_SOURCE_REASON || s.reason === DUPLICATE_REASON) ? 'done' : 'failed';
 }
 
-export const TopicPlanSchema = z.object({ title: z.string().min(1), why: z.string().min(1), hook: z.string().min(1), direction: z.string().min(10) });
+/** kind / checklist 宽松接收(格式不对就当非实测类), 不能因为清单写坏了丢掉整个选题 */
+export const TopicPlanSchema = z.object({ title: z.string().min(1), why: z.string().min(1), hook: z.string().min(1), direction: z.string().min(10), kind: z.string().optional(), checklist: z.unknown().optional() });
+export const ChecklistSchema = z.array(z.object({ test: z.string().min(1), record: z.string().min(1) })).min(1).max(6);
+export type ChecklistItem = z.infer<typeof ChecklistSchema>[number];
+export type TopicPlan = { title: string; why: string; hook: string; direction: string; checklist: ChecklistItem[] };
+
+export function normalizePlan(raw: unknown): TopicPlan {
+  const p = TopicPlanSchema.parse(raw);
+  const list = p.kind === 'test' ? ChecklistSchema.safeParse(p.checklist) : null;
+  return { title: p.title, why: p.why, hook: p.hook, direction: p.direction, checklist: list?.success ? list.data : [] };
+}
 
 const PLAN_SYSTEM = `你是抖音 AI 知识类博主的编导，根据给你的一条素材定一个今天能做的选题。
 - 只基于素材和账号定位，不编"最近很火的XX"这类素材里没有的热点，不编数字。
@@ -29,8 +39,10 @@ const PLAN_SYSTEM = `你是抖音 AI 知识类博主的编导，根据给你的�
 - 续集素材：接着原片结尾留下的话头讲，或把原片里最受欢迎的点展开。
 - 点子素材：把博主的一句话点子展开成能讲 60 秒的选题。
 - direction 里不要写任何测试结果、亲身经历或数字（素材里没有的一律不写）；实测类选题写成「要实测什么、记下哪几项结果」，结果留给博主自己测。
+- kind：需要博主亲手测了才能讲的（对比、实测、试用）填 "test"，讲观点或经历的填 "talk"。
+- checklist（只有 test 才写，2–5 项）：每项 {"test": "要测什么（具体动作）", "record": "记下什么（具体结果）"}，让博主照着测。
 - title：选题标题（20 字内）；why：为什么值得做（一句）；hook：开头钩子（一句口语）；direction：给写稿的方向说明（讲什么、什么角度、用什么例子）。
-只输出 JSON：{"title": "", "why": "", "hook": "", "direction": ""}`;
+只输出 JSON：{"title": "", "why": "", "hook": "", "direction": "", "kind": "talk", "checklist": []}`;
 
 const SOURCE_LABEL: Record<TopicSource, string> = { benchmark: '对标', sequel: '续集', idea: '点子' };
 
@@ -45,6 +57,8 @@ export interface NewDailyTopic {
   script: Script;
   copied: CopiedRun[];
   prediction: ScriptPrediction | null;
+  /** 实测清单(非实测类为 []) */
+  checklist: ChecklistItem[];
 }
 
 export interface GenDeps {
@@ -92,14 +106,14 @@ export async function generateDailyTopics(d: GenDeps, opts: { scheduled?: boolea
 }
 
 async function oneTopic(d: GenDeps, llm: StructuredLLM, c: Candidate, day: string): Promise<{ ok: true } | { error: string }> {
-  let plan: z.infer<typeof TopicPlanSchema>;
+  let plan: TopicPlan;
   try {
     const { result } = await llm.callStructured({
       systemPrompt: PLAN_SYSTEM,
       userMessage: [{ type: 'text', text: `【账号定位】\n${d.personaText || '（未填写）'}\n\n【素材（${SOURCE_LABEL[c.source]}）】\n${c.material}` }],
       responseSchema: TopicPlanSchema,
     });
-    plan = TopicPlanSchema.parse(result);
+    plan = normalizePlan(result);
   } catch (e) {
     return { error: `定选题失败：${msg(e).slice(0, 80)}` };
   }
@@ -116,3 +130,19 @@ async function oneTopic(d: GenDeps, llm: StructuredLLM, c: Candidate, day: strin
   if (c.source === 'idea') await d.markIdeaUsed(c.sourceId);
   return { ok: true };
 }
+
+/** 用户填了实测结果后重写: 结果作为事实交给编导, 没填的项不写进事实(稿子里仍留【待补】); 重新预测 */
+export async function rewriteWithResults(
+  d: Pick<GenDeps, 'llm' | 'noModelReason' | 'write' | 'predict' | 'personaText' | 'lessons'>,
+  t: { title: string; hook: string; direction: string; source: string; sourceId: string; checklist: ChecklistItem[] },
+  results: string[],
+): Promise<{ script: Script; prediction: ScriptPrediction | null }> {
+  const filled = t.checklist.map((c, i) => ({ c, r: (results[i] ?? '').trim() })).filter((x) => x.r);
+  if (!filled.length) throw new Error('先填至少一项实测结果');
+  if (!d.llm) throw new Error(d.noModelReason);
+  const facts = filled.map(({ c, r }) => `实测：${c.test}（记下：${c.record}）→ ${r}`).join('\n');
+  const { script } = await d.write({ llm: d.llm, direction: `${t.title}。${t.direction}\n开头钩子：${t.hook}`, targetSec: TARGET_SEC, personaText: d.personaText, lessons: d.lessons, facts });
+  const prediction = await d.predict(script, t.source === 'benchmark' ? t.sourceId : undefined).catch(() => null);
+  return { script, prediction };
+}
+
