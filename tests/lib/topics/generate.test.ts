@@ -144,6 +144,7 @@ describe('generateDailyTopics', () => {
     expect(saved[0].questions).toHaveLength(4);
     expect(systems[0]).toContain('questions');
     expect(systems[0]).toContain('能讲成故事的真事');
+    expect(systems[0]).toContain('问题里不要假设博主做过什么');
   });
   it('writes from answers and keeps unanswered gaps as 待补', async () => {
     const calls: { direction: string; facts?: string; answers?: { q: string; a: string }[]; samples?: string[] }[] = [];
