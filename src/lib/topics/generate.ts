@@ -143,13 +143,14 @@ async function oneTopic(d: GenDeps, llm: StructuredLLM, c: Candidate, day: strin
 /** 用户答了问题后重写: 只把答了的问答交给编导(没答的不进去, 稿子里仍留【待补】); 带说话样本; 重新预测 */
 export async function rewriteWithAnswers(
   d: Pick<GenDeps, 'llm' | 'noModelReason' | 'write' | 'predict' | 'personaText' | 'lessons' | 'samples'>,
-  t: { title: string; hook: string; direction: string; source: string; sourceId: string; questions: string[] },
+  /** material: 点子来源的原话(用户自己的话, 可作事实) */
+  t: { title: string; hook: string; direction: string; source: string; sourceId: string; questions: string[]; material?: string },
   answers: string[],
 ): Promise<{ script: Script; prediction: ScriptPrediction | null }> {
   const answered = t.questions.map((q, i) => ({ q, a: (answers[i] ?? '').trim() })).filter((x) => x.a);
   if (!answered.length) throw new Error('先答至少一个问题');
   if (!d.llm) throw new Error(d.noModelReason);
-  const { script } = await d.write({ llm: d.llm, direction: `${t.title}。${t.direction}\n开头钩子：${t.hook}`, targetSec: TARGET_SEC, personaText: d.personaText, lessons: d.lessons, samples: d.samples, answers: answered });
+  const { script } = await d.write({ llm: d.llm, direction: `${t.title}。${t.direction}\n开头钩子：${t.hook}`, targetSec: TARGET_SEC, personaText: d.personaText, lessons: d.lessons, samples: d.samples, answers: answered, facts: t.material || undefined });
   const prediction = await d.predict(script, t.source === 'benchmark' ? t.sourceId : undefined).catch(() => null);
   return { script, prediction };
 }

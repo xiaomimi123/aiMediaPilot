@@ -111,7 +111,9 @@ export async function answerDaily(
   const { questions } = topicQuestions(t);
   if (!questions.length) throw new Error('这个选题没有要问你的问题');
   const filled = questions.map((_, i) => String(answers[i] ?? ''));
-  const r = await rewriteWithAnswers(deps, { ...t, questions }, filled);
+  // 点子是用户自己的原话, 和回答一样算事实
+  const idea = t.source === 'idea' ? await db.topicIdea.findUnique({ where: { id: t.sourceId } }) : null;
+  const r = await rewriteWithAnswers(deps, { ...t, questions, material: idea?.text }, filled);
   await db.dailyTopic.update({
     where: { id },
     data: {

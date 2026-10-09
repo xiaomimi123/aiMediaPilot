@@ -48,6 +48,7 @@ function fakeDb(seed: { topics?: Row[]; runs?: Row[]; ideas?: Row[] } = {}) {
       findMany: async ({ where }: { where: Record<string, unknown> }) => ideas.filter((i) => match(i, where)),
       create: async ({ data }: { data: { text: string } }) => { const i = { id: `i${++seq}`, status: 'fresh', createdAt: now, ...data }; ideas.push(i); return i; },
       update: async ({ where, data }: { where: { id: string }; data: Partial<Row> }) => Object.assign(ideas.find((i) => i.id === where.id)!, data),
+      findUnique: async ({ where }: { where: { id: string } }) => ideas.find((i) => i.id === where.id) ?? null,
     },
   };
   db.$transaction = async (fn: (tx: unknown) => unknown) => fn(db);
@@ -140,10 +141,10 @@ describe('daily topics', () => {
   });
   it('answerDaily stores answers, rewrites and marks the card as written from your words', async () => {
     const written: { answers?: unknown; samples?: unknown }[] = [];
-    const { db, topics } = fakeDb({ topics: [topic('d1', '2026-10-09', 1000, { questions: qs })] });
+    const { db, topics } = fakeDb({ topics: [topic('d1', '2026-10-09', 1000, { questions: qs, sourceId: 'i7' })], ideas: [{ id: 'i7', text: '点子原话', status: 'used' }] });
     await answerDaily(db, deps(written as unknown[]), 'd1', ['一百多个', '']);
     expect(topics[0]).toMatchObject({ answers: ['一百多个', ''], script: { segments: [{ text: '按你的话写' }] }, prediction: { inputHash: 'h6000' } });
-    expect(written[0]).toMatchObject({ answers: [{ q: qs[0], a: '一百多个' }], samples: ['样本'] });
+    expect(written[0]).toMatchObject({ answers: [{ q: qs[0], a: '一百多个' }], samples: ['样本'], facts: '点子原话' });
     expect((await listDaily(db, now)).topics[0]).toMatchObject({ answered: true });
   });
   it('answers an old checklist topic and stores it as questions', async () => {

@@ -155,6 +155,12 @@ describe('generateDailyTopics', () => {
     expect(r.script.segments[0].text).toBe('新稿');
     expect(r.prediction).toMatchObject({ inputHash: 'h' });
   });
+  it('keeps the user idea as facts when rewriting from answers', async () => {
+    const calls: { facts?: string }[] = [];
+    const { d } = deps({ write: (async (o: { facts?: string }) => (calls.push(o), { title: 't', script: script('新稿'), report: { ok: true }, rounds: 0 })) as unknown as GenDeps['write'] });
+    await rewriteWithAnswers(d, { title: 't', hook: 'h', direction: 'd', source: 'idea', sourceId: 'i1', questions: ['a'], material: '讲讲 vibe coding 踩过的坑' }, ['答']);
+    expect(calls[0].facts).toBe('讲讲 vibe coding 踩过的坑');
+  });
   it('refuses to write with no answers', async () => {
     const { d } = deps();
     await expect(rewriteWithAnswers(d, { title: 't', hook: 'h', direction: 'd', source: 'idea', sourceId: 'i1', questions: ['a'] }, ['  '])).rejects.toThrow('先答至少一个问题');
