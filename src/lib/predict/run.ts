@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import type { StructuredLLM } from '@/lib/script/write';
-import { ScriptSchema, ROLE_LABEL } from '@/lib/script/model';
+import { ScriptSchema, ROLE_LABEL, type Script } from '@/lib/script/model';
 import { checkDuration } from '@/lib/script/duration';
 import { loadCurrentTranscript } from '@/lib/recording/transcript';
 import { AnalysisSchema } from '@/lib/benchmark/analyze';
@@ -76,7 +76,7 @@ export async function runPrediction(deps: PredictDeps, projectId: string, kind: 
     if (input.published) throw new PredictRefused(PUBLISHED_REFUSAL);
     const useTranscript = kind === 'recorded';
     if (useTranscript ? !input.transcript?.length : !input.segments?.length) throw new PredictRefused(useTranscript ? '还没有转写，不能按口播预测' : '还没有稿子，不能预测');
-    const inputHash = createHash('sha256').update(JSON.stringify(useTranscript ? input.transcript : input.segments)).digest('hex').slice(0, 12);
+    const inputHash = segmentsHash(useTranscript ? input.transcript : input.segments);
     const scoreInput: ScoreInput = { segments: useTranscript ? null : input.segments, transcript: useTranscript ? input.transcript : null, persona: input.persona, benchmark: input.benchmark };
     let scores = (await deps.findScores?.(projectId, inputHash)) ?? null;
     if (!scores) {
@@ -91,33 +91,65 @@ export async function runPrediction(deps: PredictDeps, projectId: string, kind: 
   });
 }
 
+/** 稿子 → 打分用的分段(带估算秒数); 作品预测与每日选题共用, 保证同一篇稿子 hash 相同 */
+export function scriptSegments(script: Script, targetSec: number): NonNullable<ScoreInput['segments']> {
+  const report = checkDuration(script, targetSec);
+  return script.segments.map((s, i) => ({ id: s.id, label: ROLE_LABEL[s.role], text: s.text, estSec: report.segments[i].estSec }));
+}
+
+/** 所依据文本的 sha256 前 12 位(同一段文字不再重打分) */
+export const segmentsHash = (x: unknown) => createHash('sha256').update(JSON.stringify(x)).digest('hex').slice(0, 12);
+
+export type PredictContext = Omit<PredictInput, 'published' | 'segments' | 'transcript'>;
+
+/** 与具体作品无关的预测上下文: 账号定位、播放基线、公式、对标加成 */
+export async function loadPredictContext(db: PrismaClient, benchmarkVideoId: string | null): Promise<PredictContext> {
+  const bv = benchmarkVideoId ? await db.benchmarkVideo.findUnique({ where: { id: benchmarkVideoId } }) : null;
+  const a = bv ? AnalysisSchema.safeParse(bv.analysis) : null;
+  const persona = await db.personaProfile.findUnique({ where: { id: 'me' } });
+  const history = await db.publishedWork.findMany({ where: { isPrivate: false, viewCount: { gt: 0 } }, orderBy: { publishedAt: 'desc' }, take: 10 });
+  const views = history.map((w) => w.viewCount).filter((v): v is number => v !== null && v > 0);
+  return {
+    persona: formatPersona(persona as PersonaLike | null),
+    benchmark: a?.success ? `选题：${a.data.topic}；钩子（${a.data.hook.type}）：${a.data.hook.quote}；标题写法：${a.data.titlePattern}` : '',
+    benchmarkHit: (bv?.ratio ?? 0) >= 3,
+    baselines: computeBaseline(history.map(toMetricSet)).medians,
+    baselineViews: views.length >= 3 ? Math.round(median(views)) : null,
+    calibratedCount: await calibratedCount(db),
+    publicWorks: views.length,
+    formula: await ensureActiveFormula(db),
+  };
+}
+
+export interface ScriptPrediction {
+  scores: DimScore[];
+  inputHash: string;
+  formulaVersion: number;
+  result: PredictionResult;
+}
+
+/** 不依赖作品, 直接给一篇稿子打分并算预测(每日选题用; 采用后存成作品的稿子预测) */
+export async function predictScript(llm: StructuredLLM, modelLabel: string, ctx: PredictContext, segments: NonNullable<ScoreInput['segments']>): Promise<ScriptPrediction> {
+  const scores = await scoreStable({ llm, modelLabel } as PredictDeps, { segments, transcript: null, persona: ctx.persona, benchmark: ctx.benchmark });
+  const result = computePrediction({ scores: scoreMap(scores), baselines: ctx.baselines, baselineViews: ctx.baselineViews, benchmarkHit: ctx.benchmarkHit, calibratedCount: ctx.calibratedCount, params: ctx.formula.params, publicWorks: ctx.publicWorks });
+  return { scores, inputHash: segmentsHash(segments), formulaVersion: ctx.formula.version, result };
+}
+
 export async function createPredictDeps(db: PrismaClient, llm?: StructuredLLM | null, label?: string): Promise<PredictDeps> {
   const active = llm === undefined ? await getActiveModel(db) : null;
   return {
     llm: llm === undefined ? active?.llm ?? null : llm,
     modelLabel: label ?? active?.label ?? '模型',
     async load(projectId) {
-      const p = await db.project.findUniqueOrThrow({ where: { id: projectId }, include: { benchmarkVideo: true } });
+      const p = await db.project.findUniqueOrThrow({ where: { id: projectId } });
       const published = (await db.publishedWork.count({ where: { projectId } })) > 0;
       const script = ScriptSchema.safeParse(p.script);
-      const report = script.success ? checkDuration(script.data, p.targetSec) : null;
       const t = await loadCurrentTranscript(db, projectId);
-      const a = p.benchmarkVideo ? AnalysisSchema.safeParse(p.benchmarkVideo.analysis) : null;
-      const persona = await db.personaProfile.findUnique({ where: { id: 'me' } });
-      const history = await db.publishedWork.findMany({ where: { isPrivate: false, viewCount: { gt: 0 } }, orderBy: { publishedAt: 'desc' }, take: 10 });
-      const views = history.map((w) => w.viewCount).filter((v): v is number => v !== null && v > 0);
       return {
+        ...(await loadPredictContext(db, p.benchmarkVideoId)),
         published,
-        segments: script.success ? script.data.segments.map((s, i) => ({ id: s.id, label: ROLE_LABEL[s.role], text: s.text, estSec: report!.segments[i].estSec })) : null,
+        segments: script.success ? scriptSegments(script.data, p.targetSec) : null,
         transcript: t ? t.data.lines.map((l) => l.text) : null,
-        persona: formatPersona(persona as PersonaLike | null),
-        benchmark: a?.success ? `选题：${a.data.topic}；钩子（${a.data.hook.type}）：${a.data.hook.quote}；标题写法：${a.data.titlePattern}` : '',
-        benchmarkHit: (p.benchmarkVideo?.ratio ?? 0) >= 3,
-        baselines: computeBaseline(history.map(toMetricSet)).medians,
-        baselineViews: views.length >= 3 ? Math.round(median(views)) : null,
-        calibratedCount: await calibratedCount(db),
-        publicWorks: views.length,
-        formula: await ensureActiveFormula(db),
       };
     },
     async save(row) {
