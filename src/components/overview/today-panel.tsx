@@ -40,6 +40,27 @@ export function TodayPanel({ data }: { data: OverviewData }) {
             </Link>
           ))
         )}
+        {(data.daily.topics.length > 0 || data.daily.reason) && (
+          <Link href="/topics#daily" className="card min-w-[260px] snap-start">
+            <div className="t-label mb-2">今日选题</div>
+            {data.daily.topics.length ? (
+              <ul className="space-y-2 text-sm">
+                {data.daily.topics.map((t) => (
+                  <li key={t.id}>
+                    <div className="flex items-center gap-2">
+                      <span className="chip shrink-0 text-xs">{t.sourceLabel}</span>
+                      <span className="min-w-0 flex-1 truncate">{t.title}</span>
+                      <span className="shrink-0 text-xs text-[var(--text-tertiary)]">{t.predictedCenter !== null ? `预测 ~${t.predictedCenter.toLocaleString('en-US')}` : '预测没算出来'}</span>
+                    </div>
+                    <div className="truncate text-xs text-[var(--text-secondary)]">{t.why}</div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="text-sm text-[var(--text-secondary)]">{data.daily.reason}</div>
+            )}
+          </Link>
+        )}
         <Link href="/topics" className="card min-w-[260px] snap-start">
           <div className="t-label mb-2">今日对标爆款</div>
           {data.hits.length ? (

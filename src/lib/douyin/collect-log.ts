@@ -42,6 +42,13 @@ export const SCAN_SPEC: RunLogSpec = {
   install: '在「设置 · 每晚任务」开启每晚定时，或点「立即运行」先跑一次。',
 };
 
+export const TOPICS_SPEC: RunLogSpec = {
+  start: '开始生成',
+  done: '生成完成',
+  noun: '每日选题',
+  install: '在「设置 · 每晚任务」开启每晚定时，或点「立即运行」先跑一次。',
+};
+
 export function parseRunLog(text: string, now: Date, spec: RunLogSpec): CollectStatus {
   const runs: { startedAt: string; lines: { at: string; msg: string }[] }[] = [];
   let pendingReason: { at: string; msg: string } | null = null;
@@ -123,4 +130,8 @@ export function readCollectStatus(now = new Date(), file = path.join(process.cwd
 
 export function readScanStatus(now = new Date(), file = path.join(process.cwd(), 'logs', 'scan-benchmarks.log')): Promise<CollectStatus> {
   return readRunStatus(file, now, SCAN_SPEC);
+}
+
+export function readTopicsStatus(now = new Date(), file = path.join(process.cwd(), 'logs', 'daily-topics.log')): Promise<CollectStatus> {
+  return readRunStatus(file, now, TOPICS_SPEC);
 }

@@ -15,6 +15,7 @@ function deps(over: Partial<Parameters<typeof runHealthChecks>[0]> = {}) {
     cwd: '/repo',
     collect: okCollect,
     scan: okCollect,
+    topics: okCollect,
     claudeBin: '/x/claude' as string | null,
     ...over,
   };
@@ -24,7 +25,7 @@ describe('runHealthChecks', () => {
   it('reports every item ok on a healthy machine', async () => {
     const items = await runHealthChecks(deps());
     expect(items.map((i) => [i.key, i.status])).toEqual([
-      ['db', 'ok'], ['model', 'ok'], ['ffmpeg', 'ok'], ['whisper', 'ok'], ['remotion', 'ok'], ['claude', 'ok'], ['collect', 'ok'], ['scan', 'ok'],
+      ['db', 'ok'], ['model', 'ok'], ['ffmpeg', 'ok'], ['whisper', 'ok'], ['remotion', 'ok'], ['claude', 'ok'], ['collect', 'ok'], ['scan', 'ok'], ['topics', 'ok'],
     ]);
   });
   it('gives an actionable fix for each failure', async () => {
@@ -61,4 +62,9 @@ describe('runHealthChecks', () => {
     expect(missing).toMatchObject({ status: 'warn' });
     expect(missing?.fix).toContain('安装 Claude Code 后在终端运行 claude 登录');
   });
+  it('reports the nightly daily-topics run', async () => {
+    const items = await runHealthChecks(deps({ topics: { ...okCollect, state: 'failing', hint: '连续 1 次每日选题失败：还没有可用的模型' } }));
+    expect(items.find((i) => i.key === 'topics')).toMatchObject({ label: '每日选题', status: 'warn', detail: '连续 1 次每日选题失败：还没有可用的模型' });
+  });
 });
+

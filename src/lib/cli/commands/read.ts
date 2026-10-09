@@ -1,5 +1,5 @@
 import { buildAccountSummary } from '@/lib/account/summary';
-import { readCollectStatus, readScanStatus, type CollectStatus } from '@/lib/douyin/collect-log';
+import { readCollectStatus, readScanStatus, readTopicsStatus, type CollectStatus } from '@/lib/douyin/collect-log';
 import { findCandidate } from '@/lib/retro/match';
 import { createPrismaStore } from '@/lib/benchmark/store';
 import { toVideoView, type VideoView } from '@/lib/benchmark/view';
@@ -246,7 +246,7 @@ export const READ_COMMANDS: Command[] = [
     summary: '每晚任务状态',
     async run(ctx) {
       const d = createTaskDeps();
-      const st = { collect: await readCollectStatus(ctx.now), scan: await readScanStatus(ctx.now) };
+      const st = { collect: await readCollectStatus(ctx.now), scan: await readScanStatus(ctx.now), topics: await readTopicsStatus(ctx.now) };
       const out = [];
       for (const key of Object.keys(NIGHTLY_TASKS) as TaskKey[]) {
         out.push({ key, label: NIGHTLY_TASKS[key].label, schedule: await getSchedule(d, key), running: await isTaskRunning(d, key), status: taskLine(st[key]), manualLeft: await manualRunsLeft(d, key) });

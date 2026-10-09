@@ -12,6 +12,7 @@
     "db:studio": "prisma studio",
     "collect:douyin": "tsx scripts/collect-douyin.ts",
     "scan:benchmarks": "tsx scripts/scan-benchmarks.ts",
+    "topics:daily": "tsx scripts/daily-topics.ts",
     "import:legacy": "tsx scripts/import-legacy.ts",
     "test": "vitest run",
     "test:watch": "vitest",
