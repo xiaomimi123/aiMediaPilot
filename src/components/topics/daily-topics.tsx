@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { DailyCard } from '@/lib/topics/daily';
+import { dailyReason, type DailyCard } from '@/lib/topics/daily';
 import { fmtViews } from '@/lib/predict/formula';
 import { ROLE_LABEL } from '@/lib/script/model';
 
@@ -40,7 +40,7 @@ export function DailyTopics() {
       <h2 className="text-[15px] font-semibold">今日选题</h2>
       {err && <p className="text-sm text-[var(--danger)]">{err}</p>}
       {d.topics.length === 0 ? (
-        <p className="text-sm text-[var(--text-secondary)]">{d.lastRun?.reasons[0] ?? '今晚 23:00 会自动生成；也可以在「设置 · 每晚任务」立即运行'}</p>
+        <p className="text-sm text-[var(--text-secondary)]">{dailyReason(d.lastRun) ?? '今晚 23:00 会自动生成；也可以在「设置 · 每晚任务」立即运行'}</p>
       ) : (
         <ul className="space-y-3">
           {d.topics.map((t) => (

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateDailyTopics, type GenDeps, type NewDailyTopic } from '@/lib/topics/generate';
+import { generateDailyTopics, runOutcome, succeededRecently, type GenDeps, type NewDailyTopic } from '@/lib/topics/generate';
 import type { StructuredLLM } from '@/lib/script/write';
 import type { Script } from '@/lib/script/model';
 
@@ -28,7 +28,7 @@ function deps(over: Partial<GenDeps> = {}) {
     save: async (t) => (saved.push(t), 'saved'),
     markIdeaUsed: async (id) => void used.push(id),
     recordRun: async (r) => void runs.push(r),
-    doneToday: async () => false,
+    doneRecently: async () => false,
     ...over,
   };
   return { d, saved, runs, used };
@@ -87,9 +87,23 @@ describe('generateDailyTopics', () => {
     expect(noModel.runs).toHaveLength(1);
   });
   it('a scheduled run skips when today already succeeded; a manual run does not', async () => {
-    const { d, saved } = deps({ doneToday: async () => true });
+    const { d, saved } = deps({ doneRecently: async () => true });
     expect(await generateDailyTopics(d, { scheduled: true })).toMatchObject({ alreadyDone: true, created: 0 });
     expect(saved).toEqual([]);
     expect((await generateDailyTopics(d)).created).toBe(3);
+  });
+  it('a retry after midnight skips when the 23:00 run succeeded, but the next night runs', () => {
+    const at2300 = new Date('2026-10-09T15:00:00Z');
+    expect(succeededRecently([at2300], new Date('2026-10-09T16:00:00Z'))).toBe(true);
+    expect(succeededRecently([at2300], new Date('2026-10-09T17:00:00Z'))).toBe(true);
+    expect(succeededRecently([at2300], new Date('2026-10-10T15:00:00Z'))).toBe(false);
+    expect(succeededRecently([], new Date('2026-10-10T15:00:00Z'))).toBe(false);
+  });
+  it('a run whose candidates were all taken by another run is not a failure', () => {
+    expect(runOutcome({ created: 0, skipped: [{ source: 'idea', reason: '这个选题刚被另一次运行生成过' }] })).toBe('done');
+    expect(runOutcome({ created: 0, skipped: [{ reason: '没有可用的选题来源：加几个对标账号，或在点子池里写几句' }] })).toBe('done');
+    expect(runOutcome({ created: 0, skipped: [{ reason: '还没有可用的模型' }] })).toBe('failed');
+    expect(runOutcome({ created: 0, skipped: [{ source: 'idea', reason: '写稿失败：x' }] })).toBe('failed');
+    expect(runOutcome({ created: 1, skipped: [] })).toBe('done');
   });
 });

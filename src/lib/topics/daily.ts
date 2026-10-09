@@ -30,18 +30,20 @@ export async function adoptDaily(db: PrismaClient, id: string): Promise<{ projec
     if (!claimed.count) throw new Error('这个选题已经处理过了');
     const t = await tx.dailyTopic.findUniqueOrThrow({ where: { id } });
     const persona = await tx.personaProfile.findUnique({ where: { id: 'me' } });
+    // 对标作品可能已被删(删对标账号会连带删作品): 那就不关联它
+    const bv = t.source === 'benchmark' ? await tx.benchmarkVideo.findUnique({ where: { id: t.sourceId } }) : null;
     const p = await tx.project.create({
       data: {
         title: t.title,
         script: t.script as Prisma.InputJsonValue,
         targetSec: TARGET_SEC,
         personaSnapshot: persona ? (JSON.parse(JSON.stringify(persona)) as Prisma.InputJsonValue) : undefined,
-        ...(t.source === 'benchmark' ? { benchmarkVideoId: t.sourceId } : {}),
+        ...(bv ? { benchmarkVideoId: bv.id } : {}),
       },
     });
     const pred = t.prediction as unknown as ScriptPrediction | null;
     if (pred) await tx.prediction.create({ data: { projectId: p.id, kind: 'draft', formulaVersion: pred.formulaVersion, inputHash: pred.inputHash, scores: pred.scores as unknown as Prisma.InputJsonValue, result: pred.result as unknown as Prisma.InputJsonValue } });
-    if (t.source === 'benchmark') await tx.benchmarkVideo.update({ where: { id: t.sourceId }, data: { status: 'adopted' } });
+    if (bv) await tx.benchmarkVideo.update({ where: { id: bv.id }, data: { status: 'adopted' } });
     await tx.dailyTopic.update({ where: { id }, data: { projectId: p.id } });
     return { projectId: p.id };
   });
@@ -61,3 +63,8 @@ export async function addIdea(db: PrismaClient, text: string) {
 }
 
 export const deleteIdea = (db: PrismaClient, id: string) => db.topicIdea.update({ where: { id }, data: { status: 'deleted' } });
+
+/** 今天没有选题时显示的原因: 只在最近一次生成一个都没出时才说(否则是用户已经处理完了) */
+export function dailyReason(lastRun: { day?: string; created: number; reasons: string[] } | null): string | null {
+  return lastRun && lastRun.created === 0 ? (lastRun.reasons[0] ?? null) : null;
+}

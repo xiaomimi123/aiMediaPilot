@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
-import { addIdea, adoptDaily, deleteIdea, dismissDaily, listDaily, listIdeas } from '@/lib/topics/daily';
+import { addIdea, adoptDaily, dailyReason, deleteIdea, dismissDaily, listDaily, listIdeas } from '@/lib/topics/daily';
 import { createCandidateStore } from '@/lib/topics/deps';
 
 type Row = Record<string, unknown> & { id: string };
@@ -13,6 +13,7 @@ function fakeDb(seed: { topics?: Row[]; runs?: Row[]; ideas?: Row[] } = {}) {
   const projects: Row[] = [];
   const predictions: Row[] = [];
   const bench: Record<string, string> = {};
+  const seenWhere: unknown[] = [];
   let seq = 0;
   const match = (r: Row, w: Record<string, unknown>) =>
     Object.entries(w).every(([k, v]) => {
@@ -35,7 +36,11 @@ function fakeDb(seed: { topics?: Row[]; runs?: Row[]; ideas?: Row[] } = {}) {
     personaProfile: { findUnique: async () => null },
     project: { create: async ({ data }: { data: Row }) => { const p = { ...data, id: `p${++seq}` }; projects.push(p); return p; } },
     prediction: { create: async ({ data }: { data: Row }) => { predictions.push(data); return data; } },
-    benchmarkVideo: { update: async ({ where, data }: { where: { id: string }; data: { status: string } }) => void (bench[where.id] = data.status) },
+    benchmarkVideo: {
+      findUnique: async ({ where }: { where: { id: string } }) => (where.id === 'gone' ? null : { id: where.id }),
+      update: async ({ where, data }: { where: { id: string }; data: { status: string } }) => void (bench[where.id] = data.status),
+      findMany: async (args: unknown) => (seenWhere.push(args), []),
+    },
     topicIdea: {
       findMany: async ({ where }: { where: Record<string, unknown> }) => ideas.filter((i) => match(i, where)),
       create: async ({ data }: { data: { text: string } }) => { const i = { id: `i${++seq}`, status: 'fresh', createdAt: now, ...data }; ideas.push(i); return i; },
@@ -43,7 +48,7 @@ function fakeDb(seed: { topics?: Row[]; runs?: Row[]; ideas?: Row[] } = {}) {
     },
   };
   db.$transaction = async (fn: (tx: unknown) => unknown) => fn(db);
-  return { db: db as unknown as PrismaClient, topics, projects, predictions, bench, ideas };
+  return { db: db as unknown as PrismaClient, topics, projects, predictions, bench, ideas, seenWhere };
 }
 
 const pred = (center: number) => ({ scores: [{ dim: 'hook', score: 4, reason: 'x' }], inputHash: `h${center}`, formulaVersion: 2, result: { center } });
@@ -96,5 +101,20 @@ describe('daily topics', () => {
       { id: 'r2', day: '2026-10-09', created: 0, skipped: [{ reason: '还没有可用的模型' }], createdAt: new Date('2026-10-09T15:00:00Z') },
     ] });
     expect((await listDaily(db, now)).lastRun).toEqual({ day: '2026-10-09', created: 0, reasons: ['还没有可用的模型'] });
+  });
+  it('adopts a benchmark topic whose benchmark video was deleted, without linking it', async () => {
+    const { db, projects } = fakeDb({ topics: [topic('d1', '2026-10-09', null, { source: 'benchmark', sourceId: 'gone' })] });
+    await adoptDaily(db, 'd1');
+    expect(projects[0].benchmarkVideoId).toBeUndefined();
+  });
+  it('does not offer benchmark hits that were already made into projects', async () => {
+    const { db, seenWhere } = fakeDb();
+    await createCandidateStore(db).benchmarkHits(now);
+    expect(seenWhere[0]).toMatchObject({ where: { status: { notIn: ['ignored', 'adopted'] } } });
+  });
+  it('only explains an empty day when the last run produced nothing', () => {
+    expect(dailyReason({ day: '2026-10-09', created: 0, reasons: ['还没有可用的模型'] })).toBe('还没有可用的模型');
+    expect(dailyReason({ day: '2026-10-09', created: 2, reasons: ['写稿失败：x'] })).toBeNull();
+    expect(dailyReason(null)).toBeNull();
   });
 });

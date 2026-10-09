@@ -46,10 +46,13 @@ export function TodayPanel({ data }: { data: OverviewData }) {
             {data.daily.topics.length ? (
               <ul className="space-y-2 text-sm">
                 {data.daily.topics.map((t) => (
-                  <li key={t.id} className="flex items-center gap-2">
-                    <span className="chip shrink-0 text-xs">{t.sourceLabel}</span>
-                    <span className="min-w-0 flex-1 truncate">{t.title}</span>
-                    {t.predictedCenter !== null && <span className="shrink-0 text-xs text-[var(--text-tertiary)]">{`预测 ~${t.predictedCenter.toLocaleString('en-US')}`}</span>}
+                  <li key={t.id}>
+                    <div className="flex items-center gap-2">
+                      <span className="chip shrink-0 text-xs">{t.sourceLabel}</span>
+                      <span className="min-w-0 flex-1 truncate">{t.title}</span>
+                      <span className="shrink-0 text-xs text-[var(--text-tertiary)]">{t.predictedCenter !== null ? `预测 ~${t.predictedCenter.toLocaleString('en-US')}` : '预测没算出来'}</span>
+                    </div>
+                    <div className="truncate text-xs text-[var(--text-secondary)]">{t.why}</div>
                   </li>
                 ))}
               </ul>

@@ -37,6 +37,8 @@ describe('TodayPanel', () => {
     expect(screen.getByText('U盘生意的账本')).toBeTruthy();
     expect(screen.getByText('续集')).toBeTruthy();
     expect(screen.getByText('预测 ~4,500')).toBeTruthy();
+    expect(screen.getByText('片尾留了钩子')).toBeTruthy();
+    expect(screen.getByText('预测没算出来')).toBeTruthy();
     expect(container.querySelector('a[href="/topics#daily"]')).toBeTruthy();
   });
   it('explains why there are no topics today, and hides the block when there is nothing to say', () => {

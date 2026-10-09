@@ -41,8 +41,10 @@ export async function loadPools(store: CandidateStore, now: Date): Promise<Recor
     benchmarkVideoId: h.id,
   }));
 
-  const works = (await store.ownWorks()).filter((w) => w.lastText && fresh('sequel', w.projectId));
-  const mid = median(works.map((w) => w.play));
+  const all = await store.ownWorks();
+  // 播放中位数按近期全部作品算(不随续集用掉而变低)
+  const mid = median(all.map((w) => w.play));
+  const works = all.filter((w) => w.lastText && fresh('sequel', w.projectId));
   const sequel = works
     .map((w) => ({ w, hook: SEQUEL_HOOK.test(w.lastText!), strong: mid > 0 && w.play >= mid * 2 }))
     .filter((x) => x.hook || x.strong)

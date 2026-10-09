@@ -59,7 +59,7 @@ describe('DailyTopics', () => {
     render(<DailyTopics />);
     expect(await screen.findByText('还没有可用的模型')).toBeTruthy();
     cleanup();
-    stub({ topics: [], lastRun: null });
+    stub({ topics: [], lastRun: { day: '2026-10-09', created: 2, reasons: ['写稿失败：x'] } });
     render(<DailyTopics />);
     expect(await screen.findByText('今晚 23:00 会自动生成；也可以在「设置 · 每晚任务」立即运行')).toBeTruthy();
   });

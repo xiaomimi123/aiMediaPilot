@@ -72,4 +72,20 @@ describe('loadPools', () => {
     for (const t of ['下期讲', '下一期', '单独讲', '值得单独来讲一期', '下次说', '后面再说', '账本留着']) expect(SEQUEL_HOOK.test(t)).toBe(true);
     expect(SEQUEL_HOOK.test('谢谢大家')).toBe(false);
   });
+  it('judges strong sequels against all recent works, not just the unused ones', async () => {
+    const p = await loadPools(
+      store({
+        usedKeys: async () => new Set(['sequel:a', 'sequel:b']),
+        ownWorks: async () => [
+          { projectId: 'a', title: 'A', lastText: '好', play: 2000 },
+          { projectId: 'b', title: 'B', lastText: '好', play: 2000 },
+          { projectId: 'c', title: 'C', lastText: '好', play: 900 },
+          { projectId: 'd', title: 'D', lastText: '好', play: 100 },
+          { projectId: 'e', title: 'E', lastText: '好', play: 100 },
+        ],
+      }),
+      now,
+    );
+    expect(p.sequel).toEqual([]);
+  });
 });

@@ -8,7 +8,7 @@ import { formatLessons, loadActiveLessons } from '@/lib/retro/lessons';
 import { loadCurrentTranscript } from '@/lib/recording/transcript';
 import { loadPredictContext, predictScript, scriptSegments } from '@/lib/predict/run';
 import type { CandidateStore } from './candidates';
-import { TARGET_SEC, type GenDeps } from './generate';
+import { RECENT_HOURS, succeededRecently, TARGET_SEC, type GenDeps } from './generate';
 
 export function createCandidateStore(db: PrismaClient): CandidateStore {
   return {
@@ -17,7 +17,7 @@ export function createCandidateStore(db: PrismaClient): CandidateStore {
       return new Set(rows.map((r) => `${r.source}:${r.sourceId}`));
     },
     async benchmarkHits(since) {
-      const rows = await db.benchmarkVideo.findMany({ where: { isHit: true, status: { not: 'ignored' }, publishedAt: { gte: since } }, include: { account: true } });
+      const rows = await db.benchmarkVideo.findMany({ where: { isHit: true, status: { notIn: ['ignored', 'adopted'] }, publishedAt: { gte: since } }, include: { account: true } });
       return rows.map((v) => {
         const a = AnalysisSchema.safeParse(v.analysis);
         return { id: v.id, ratio: v.ratio, author: v.account.nickname, topic: a.success ? a.data.topic : null, desc: v.desc, transcript: v.transcript };
@@ -71,6 +71,9 @@ export async function createGenDeps(db: PrismaClient, now: Date): Promise<GenDep
     },
     markIdeaUsed: async (id) => void (await db.topicIdea.update({ where: { id }, data: { status: 'used' } })),
     recordRun: async (r) => void (await db.dailyTopicRun.create({ data: { day: r.day, created: r.created, skipped: r.skipped as unknown as Prisma.InputJsonValue } })),
-    doneToday: async (day) => (await db.dailyTopicRun.count({ where: { day, created: { gte: 1 } } })) > 0,
+    async doneRecently(now) {
+      const rows = await db.dailyTopicRun.findMany({ where: { created: { gte: 1 }, createdAt: { gte: new Date(now.getTime() - RECENT_HOURS * 3600_000) } }, select: { createdAt: true } });
+      return succeededRecently(rows.map((r) => r.createdAt), now);
+    },
   };
 }

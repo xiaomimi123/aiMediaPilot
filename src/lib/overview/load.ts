@@ -4,7 +4,7 @@ import { latestForDisplay } from '@/lib/cli/commands/predict';
 import { stepsOf, type WorkCardData } from './steps';
 import { readCollectStatus, readScanStatus, readTopicsStatus } from '@/lib/douyin/collect-log';
 import { createTaskDeps, getSchedule, NIGHTLY_TASKS } from '@/lib/tasks/nightly';
-import { listDaily } from '@/lib/topics/daily';
+import { dailyReason, listDaily } from '@/lib/topics/daily';
 import { buildAccountSummary } from '@/lib/account/summary';
 import { findCandidate } from '@/lib/retro/match';
 import { findLagging } from '@/lib/predict/lag';
@@ -140,6 +140,6 @@ async function loadDailyCards(db: PrismaClient, now: Date): Promise<OverviewData
   const d = await listDaily(db, now).catch(() => ({ topics: [], lastRun: null }));
   return {
     topics: d.topics.slice(0, 3).map((t) => ({ id: t.id, title: t.title, sourceLabel: t.sourceLabel, why: t.why, predictedCenter: t.predictedCenter })),
-    reason: d.topics.length ? null : (d.lastRun?.reasons[0] ?? null),
+    reason: d.topics.length ? null : dailyReason(d.lastRun),
   };
 }

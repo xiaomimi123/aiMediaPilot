@@ -8,6 +8,19 @@ import { loadPools, localDay, pickCandidates, type Candidate, type CandidateStor
 export const TARGET_SEC = 60;
 export const NO_SOURCE_REASON = '没有可用的选题来源：加几个对标账号，或在点子池里写几句';
 
+export const RECENT_HOURS = 6;
+export const DUPLICATE_REASON = '这个选题刚被另一次运行生成过';
+
+export function succeededRecently(successTimes: Date[], now: Date, hours = RECENT_HOURS): boolean {
+  return successTimes.some((t) => now.getTime() - t.getTime() < hours * 3600_000);
+}
+
+/** 一个都没生成时: 没有来源、或都被另一次运行抢先生成了 → 算完成(补跑也没用); 其他(没模型、写稿都失败) → 失败, 等补跑 */
+export function runOutcome(r: { created: number; skipped: { source?: TopicSource; reason: string }[] }): 'done' | 'failed' {
+  if (r.created > 0) return 'done';
+  return r.skipped.length > 0 && r.skipped.every((s) => s.reason === NO_SOURCE_REASON || s.reason === DUPLICATE_REASON) ? 'done' : 'failed';
+}
+
 export const TopicPlanSchema = z.object({ title: z.string().min(1), why: z.string().min(1), hook: z.string().min(1), direction: z.string().min(10) });
 
 const PLAN_SYSTEM = `你是抖音 AI 知识类博主的编导，根据给你的一条素材定一个今天能做的选题。
@@ -45,14 +58,15 @@ export interface GenDeps {
   save(t: NewDailyTopic): Promise<'saved' | 'duplicate'>;
   markIdeaUsed(id: string): Promise<void>;
   recordRun(r: { day: string; created: number; skipped: { source?: TopicSource; reason: string }[] }): Promise<void>;
-  doneToday(day: string): Promise<boolean>;
+  /** 最近 6 小时内有过成功的生成(按时间算, 不按日历天: 23:00 成功后 0:00、1:00 的补跑要跳过) */
+  doneRecently(now: Date): Promise<boolean>;
 }
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export async function generateDailyTopics(d: GenDeps, opts: { scheduled?: boolean } = {}) {
   const day = localDay(d.now);
-  if (opts.scheduled && (await d.doneToday(day))) return { created: 0, skipped: [], alreadyDone: true };
+  if (opts.scheduled && (await d.doneRecently(d.now))) return { created: 0, skipped: [], alreadyDone: true };
   const skipped: { source?: TopicSource; reason: string }[] = [];
   let created = 0;
   const finish = async () => {
@@ -97,7 +111,7 @@ async function oneTopic(d: GenDeps, llm: StructuredLLM, c: Candidate, day: strin
   const copied = c.reference ? findCopiedInScript(script, c.reference) : [];
   const prediction = await d.predict(script, c.benchmarkVideoId).catch(() => null);
   const saved = await d.save({ day, source: c.source, sourceId: c.sourceId, ...plan, script, copied, prediction });
-  if (saved === 'duplicate') return { error: '这个选题刚被另一次运行生成过' };
+  if (saved === 'duplicate') return { error: DUPLICATE_REASON };
   if (c.source === 'idea') await d.markIdeaUsed(c.sourceId);
   return { ok: true };
 }
