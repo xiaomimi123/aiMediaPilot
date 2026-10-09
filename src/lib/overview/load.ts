@@ -4,6 +4,7 @@ import { latestForDisplay } from '@/lib/cli/commands/predict';
 import { stepsOf, type WorkCardData } from './steps';
 import { readCollectStatus, readScanStatus, readTopicsStatus } from '@/lib/douyin/collect-log';
 import { createTaskDeps, getSchedule, NIGHTLY_TASKS } from '@/lib/tasks/nightly';
+import { listDaily } from '@/lib/topics/daily';
 import { buildAccountSummary } from '@/lib/account/summary';
 import { findCandidate } from '@/lib/retro/match';
 import { findLagging } from '@/lib/predict/lag';
@@ -57,6 +58,8 @@ export interface OverviewData {
   trend: { day: string; fans: number | null; likes: number | null; views: number | null }[];
   trendDays: number;
   works: WorkRow[];
+  /** 今日选题(最多 3 个); 没有时 reason 是最近一次生成没出来的原因 */
+  daily: { topics: { id: string; title: string; sourceLabel: string; why: string; predictedCenter: number | null }[]; reason: string | null };
 }
 
 export async function loadOverview(db: PrismaClient, now: Date): Promise<OverviewData> {
@@ -129,5 +132,14 @@ export async function loadOverview(db: PrismaClient, now: Date): Promise<Overvie
     trend: await loadTrend(db, 30, now),
     trendDays: await snapshotDays(db),
     works: rows,
+    daily: await loadDailyCards(db, now),
+  };
+}
+
+async function loadDailyCards(db: PrismaClient, now: Date): Promise<OverviewData['daily']> {
+  const d = await listDaily(db, now).catch(() => ({ topics: [], lastRun: null }));
+  return {
+    topics: d.topics.slice(0, 3).map((t) => ({ id: t.id, title: t.title, sourceLabel: t.sourceLabel, why: t.why, predictedCenter: t.predictedCenter })),
+    reason: d.topics.length ? null : (d.lastRun?.reasons[0] ?? null),
   };
 }

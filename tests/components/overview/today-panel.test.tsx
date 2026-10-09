@@ -17,6 +17,7 @@ const data = (over = {}) => ({
   trend: [],
   trendDays: 0,
   works: [],
+  daily: { topics: [], reason: null },
   ...over,
 });
 
@@ -30,4 +31,20 @@ describe('TodayPanel', () => {
     render(<TodayPanel data={data({ todos: [], empty: true })} />);
     expect(screen.getByText(/添叔AI雷达/)).toBeTruthy();
   });
+  it('shows today\'s topics with source and prediction, linking to the topics page', () => {
+    const { container } = render(<TodayPanel data={data({ daily: { topics: [{ id: 'd1', title: 'U盘生意的账本', sourceLabel: '续集', why: '片尾留了钩子', predictedCenter: 4500 }, { id: 'd2', title: 'AI 帮老板回消息', sourceLabel: '对标', why: '对标爆了', predictedCenter: null }], reason: null } })} />);
+    expect(screen.getByText('今日选题')).toBeTruthy();
+    expect(screen.getByText('U盘生意的账本')).toBeTruthy();
+    expect(screen.getByText('续集')).toBeTruthy();
+    expect(screen.getByText('预测 ~4,500')).toBeTruthy();
+    expect(container.querySelector('a[href="/topics#daily"]')).toBeTruthy();
+  });
+  it('explains why there are no topics today, and hides the block when there is nothing to say', () => {
+    render(<TodayPanel data={data({ daily: { topics: [], reason: '还没有可用的模型' } })} />);
+    expect(screen.getByText('还没有可用的模型')).toBeTruthy();
+    cleanup();
+    render(<TodayPanel data={data()} />);
+    expect(screen.queryByText('今日选题')).toBeNull();
+  });
 });
+
