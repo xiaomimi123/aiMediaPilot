@@ -26,6 +26,7 @@ export function RecordingPane({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [sampleState, setSampleState] = useState<'idle' | 'saving' | 'saved' | string>('idle');
   const input = useRef<HTMLInputElement>(null);
 
   if (!project.script) {
@@ -47,6 +48,19 @@ export function RecordingPane({
     setUploading(null);
     if (r.ok) onUploaded();
     else setUploadError(r.message);
+  }
+
+  async function addAsSample() {
+    if (!recording?.transcript) return;
+    setSampleState('saving');
+    const j = await fetch('/api/voice-samples', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: project.title, text: recording.transcript.lines.map((l) => l.text).join('\n'), source: 'transcript' }),
+    })
+      .then((r) => r.json())
+      .catch(() => ({ success: false, error: '没加上，检查网页服务是否在运行' }));
+    setSampleState(j.success ? 'saved' : (j.error ?? '没加上'));
   }
 
   return (
@@ -130,6 +144,16 @@ export function RecordingPane({
                 {recording.transcript.skipped.length > 0 && (
                   <p className="mb-2 text-sm text-[var(--warning)]">没讲到：{recording.transcript.skipped.join('、')}</p>
                 )}
+                <div className="mb-2 flex items-center gap-2 text-xs">
+                  {sampleState === 'saved' ? (
+                    <span className="text-[var(--text-tertiary)]">已加为说话样本</span>
+                  ) : (
+                    <button className="btn-secondary text-xs" disabled={sampleState === 'saving'} onClick={() => void addAsSample()}>
+                      加为说话样本
+                    </button>
+                  )}
+                  {sampleState !== 'idle' && sampleState !== 'saving' && sampleState !== 'saved' && <span className="text-[var(--danger)]">{sampleState}</span>}
+                </div>
                 {recording.transcript.proofread === 'failed' && (
                   <p className="mb-2 text-xs text-[var(--text-tertiary)]">自动校对没成功，下面是原始识别结果。</p>
                 )}

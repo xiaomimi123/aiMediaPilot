@@ -514,3 +514,15 @@ model DailyTopicRun {
 
   @@index([day])
 }
+
+/// 用户自己写的口播原文(或真实转写), 写稿时作说话样本
+model VoiceSample {
+  id        String   @id @default(cuid())
+  title     String   @default("")
+  text      String   @db.Text
+  /// manual(手动加) | own_script(「我自己写了一篇」自动存) | transcript(作品转写加入)
+  source    String   @default("manual")
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}

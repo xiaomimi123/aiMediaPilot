@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { RecordingPane } from '@/components/project/recording-pane';
 import { toProjectView } from '@/lib/project/view';
 import { SEGMENT_ROLES } from '@/lib/script/model';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 const script = { segments: SEGMENT_ROLES.map((role, i) => ({ id: `s${i + 1}`, role, text: `第${i + 1}段` })) };
 const project = toProjectView({ id: 'p1', title: 't', stage: 'scripted', targetSec: 60, script, updatedAt: new Date() });
 const noop = { onUploaded: vi.fn(), onRetry: vi.fn(async () => {}) };
@@ -76,5 +79,20 @@ describe('RecordingPane', () => {
     fireEvent.click(btn);
     expect(onRetry).toHaveBeenCalledTimes(1);
     expect(btn.disabled).toBe(true);
+  });
+
+  it('adds the transcript as a speaking sample', async () => {
+    const fetchMock = vi.fn(async () => ({ json: async () => ({ success: true, data: {} }) }));
+    vi.stubGlobal('fetch', fetchMock);
+    const recording = {
+      videoFileId: 'f1',
+      videoUrl: '/v',
+      durationSec: 10,
+      transcript: { lines: [{ startSec: 0, endSec: 2, text: '大家好', adlib: false }, { startSec: 2, endSec: 4, text: '我是二耳朵', adlib: false }], skipped: [], proofread: 'done' as const },
+    };
+    render(<RecordingPane project={project} recording={recording} job={null} {...noop} />);
+    fireEvent.click(screen.getByText('加为说话样本'));
+    await waitFor(() => expect(screen.getByText('已加为说话样本')).toBeTruthy());
+    expect(fetchMock).toHaveBeenCalledWith('/api/voice-samples', expect.objectContaining({ method: 'POST', body: JSON.stringify({ title: 't', text: '大家好\n我是二耳朵', source: 'transcript' }) }));
   });
 });
