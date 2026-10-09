@@ -458,3 +458,55 @@ model FilmSession {
   @@index([projectId, createdAt])
   @@index([status])
 }
+
+/// 点子池: 用户随手写的选题点子
+model TopicIdea {
+  id        String   @id @default(cuid())
+  text      String   @db.Text
+  /// fresh(没用过) | used(已出选题) | deleted
+  status    String   @default("fresh")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// 每晚生成的选题(带初稿与预测)
+model DailyTopic {
+  id          String   @id @default(cuid())
+  /// 生成那天(本机时区 YYYY-MM-DD)
+  day         String
+  /// benchmark | sequel | idea
+  source      String
+  /// 来源的 id: BenchmarkVideo.id / Project.id / TopicIdea.id
+  sourceId    String
+  title       String
+  why         String   @db.Text
+  hook        String   @db.Text
+  direction   String   @db.Text
+  /// Script(6 段), 形状见 src/lib/script/model.ts
+  script      Json
+  /// 照抄片段(对标来源), 没有为 []
+  copied      Json     @default("[]")
+  /// 预测: { scores, inputHash, formulaVersion, result } | null
+  prediction  Json?
+  /// new | adopted | dismissed | expired
+  status      String   @default("new")
+  projectId   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([day])
+  @@index([status])
+  @@unique([source, sourceId])
+}
+
+/// 每晚生成记录(给「今天」显示原因、给补跑判断是否已生成)
+model DailyTopicRun {
+  id        String   @id @default(cuid())
+  day       String
+  created   Int
+  /// [{ source?, reason }]
+  skipped   Json     @default("[]")
+  createdAt DateTime @default(now())
+
+  @@index([day])
+}
