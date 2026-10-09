@@ -38,7 +38,14 @@ describe('polishScript', () => {
     expect(r.added).toEqual([]);
     expect(r.title).toBe('两年半');
     expect(llm.calls[0]).toContain(`【原文】\n${original}`);
-    for (const s of ['只用原文里的内容，不加新内容', '不改用户的说法和口头禅', '改动必须全部列进 changes']) expect(llm.systems[0]).toContain(s);
+    expect(llm.calls[0]).toContain('原文念出来约 16.4 秒（82 字），目标 75 秒，全片不能超过 412 字');
+    for (const s of ['只用原文里的内容，不加新内容', '不改用户的说法和口头禅', '改动必须全部列进 changes', '还超就删离题或次要的整句', '没改的地方不要列']) expect(llm.systems[0]).toContain(s);
+  });
+
+  it('drops listed "changes" that say nothing was changed', async () => {
+    const changes = [{ kind: '错字', what: '「gpt」保留原文写法未改' }, { kind: '改', what: '「两眼一瞪」保留原说法' }, { kind: '删', what: '删了「然后」' }];
+    const r = await polishScript({ llm: fakeLLM([out(sentences, { changes })]), text: original, targetSec: 75 });
+    expect(r.changes).toEqual([{ kind: '删', what: '删了「然后」' }]);
   });
 
   it('flags sentences that are not in the original', async () => {
@@ -47,17 +54,32 @@ describe('polishScript', () => {
     expect(r.added).toEqual(['这句是模型自己加的内容哦']);
   });
 
-  it('repairs once when still over the target, keeping both rounds of changes', async () => {
-    const long = sentences.map((s) => s + '字'.repeat(80));
-    const llm = fakeLLM([out(long, { changes: [{ kind: '挪', what: '把结论挪到最后' }] }), out(sentences, { changes: [{ kind: '删', what: '删了啰嗦的话' }] })]);
+  const filler = '字'.repeat(80) + '。';
+  const long = sentences.map((x) => x + filler);
+  const all = (n: number) => Array.from({ length: n }, (_, i) => `${i + 1}.2`);
+
+  it('cuts by sentences the model picks, listing each removed sentence as a change', async () => {
+    const llm = fakeLLM([out(long, { changes: [{ kind: '挪', what: '把结论挪到最后' }] }), { remove: all(6) }]);
     const r = await polishScript({ llm, text: original, targetSec: 75 });
     expect(llm.calls).toHaveLength(2);
+    expect(llm.calls[1]).toContain('现在 562 字，至少要删掉 150 字');
+    expect(llm.calls[1]).toContain(`[1.2]（80 字）${filler}`);
     expect(r.report.ok).toBe(true);
-    expect(r.changes.map((c) => c.kind)).toEqual(['挪', '删']);
+    expect(r.script.segments.map((x) => x.text)).toEqual(sentences);
+    expect(r.changes[0]).toEqual({ kind: '挪', what: '把结论挪到最后' });
+    expect(r.changes.slice(1)).toHaveLength(6);
+    expect(r.changes[1]).toEqual({ kind: '删', what: `删了「${filler}」` });
   });
 
-  it('gives back the over-long version when the repair round fails', async () => {
-    const long = sentences.map((s) => s + '字'.repeat(80));
+  it('asks again when the first pick is not enough, and never empties a segment', async () => {
+    const llm = fakeLLM([out(long), { remove: ['1.2', '9.9', '2.1'] }, { remove: all(6) }]);
+    const r = await polishScript({ llm, text: original, targetSec: 75 });
+    expect(llm.calls).toHaveLength(3);
+    expect(r.report.ok).toBe(true);
+    expect(r.script.segments.every((x) => x.text.length > 0)).toBe(true);
+  });
+
+  it('gives back the over-long version when the cut round fails', async () => {
     const llm = fakeLLM([out(long), new Error('bad json')]);
     const r = await polishScript({ llm, text: original, targetSec: 75 });
     expect(r.report.ok).toBe(false);
