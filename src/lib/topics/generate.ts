@@ -28,6 +28,7 @@ const PLAN_SYSTEM = `你是抖音 AI 知识类博主的编导，根据给你的�
 - 对标素材：借选题和角度，换成博主自己的经历和视角，不照抄原话。
 - 续集素材：接着原片结尾留下的话头讲，或把原片里最受欢迎的点展开。
 - 点子素材：把博主的一句话点子展开成能讲 60 秒的选题。
+- direction 里不要写任何测试结果、亲身经历或数字（素材里没有的一律不写）；实测类选题写成「要实测什么、记下哪几项结果」，结果留给博主自己测。
 - title：选题标题（20 字内）；why：为什么值得做（一句）；hook：开头钩子（一句口语）；direction：给写稿的方向说明（讲什么、什么角度、用什么例子）。
 只输出 JSON：{"title": "", "why": "", "hook": "", "direction": ""}`;
 
@@ -104,7 +105,7 @@ async function oneTopic(d: GenDeps, llm: StructuredLLM, c: Candidate, day: strin
   }
   let script: Script;
   try {
-    script = (await d.write({ llm, direction: `${plan.title}。${plan.direction}\n开头钩子：${plan.hook}`, targetSec: TARGET_SEC, personaText: d.personaText, reference: c.reference, lessons: d.lessons })).script;
+    script = (await d.write({ llm, direction: `${plan.title}。${plan.direction}\n开头钩子：${plan.hook}`, targetSec: TARGET_SEC, personaText: d.personaText, reference: c.reference, lessons: d.lessons, facts: c.material })).script;
   } catch (e) {
     return { error: `写稿失败：${msg(e)}` };
   }

@@ -75,4 +75,18 @@ describe('writeScript', () => {
     await writeScript({ llm, direction: '让AI挑刺', targetSec: 60, personaText: '' });
     expect(llm.systems[0]).toContain('【待补：你的真实经历】');
   });
+  it('keeps supplied facts apart from the direction and only allows experiences from the facts', async () => {
+    const llm = fakeLLM([raw(onBudget)]);
+    await writeScript({ llm, direction: '我拿同一道题跑了三档，结果很意外', targetSec: 60, personaText: '例：帮妈妈写广场舞通知', facts: '讲讲 vibe coding 两年半踩过的坑' });
+    expect(llm.calls[0]).toContain('【用户提供的事实】\n讲讲 vibe coding 两年半踩过的坑');
+    expect(llm.calls[0]).toContain('（选题方向，不是事实；里面提到的经历、测试结果、数字都只是设想，不能当成真的写进稿子）');
+    expect(llm.systems[0]).toContain('稿子里的第一人称经历、测试结果、数字只能来自【用户提供的事实】');
+    expect(llm.systems[0]).toContain('账号定位里举的例子是描述受众和方向的，不是用户的经历');
+  });
+  it('keeps the old message shape when no facts are given', async () => {
+    const llm = fakeLLM([raw(onBudget)]);
+    await writeScript({ llm, direction: '让AI挑刺', targetSec: 60, personaText: '' });
+    expect(llm.calls[0]).not.toContain('【用户提供的事实】');
+    expect(llm.calls[0]).toContain('【这条讲什么】\n让AI挑刺');
+  });
 });
