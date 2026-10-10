@@ -9,13 +9,13 @@ const script = { segments: SEGMENT_ROLES.map((role, i) => ({ id: `s${i + 1}`, ro
 describe('formatSystemPrompt', () => {
   it('includes segment ids with est/limit seconds and current issues', () => {
     const p = formatSystemPrompt({ title: '让AI当反方', stage: 'draft', targetSec: 60, script, persona: null });
-    expect(p).toContain('[s4] 冷知识（约 37.4 秒 / 上限 11.3 秒，超标）');
-    expect(p).toContain('第4段「冷知识」约 37.4 秒');
+    expect(p).toContain('[s4] 怎么做的（约 37.4 秒 / 参考 12 秒，偏长）');
+    expect(p).toContain('第4段「怎么做的」约 37.4 秒');
     expect(p).toContain('write_script');
   });
   it('tells the model to name segments in Chinese, never by internal id', () => {
     const p = formatSystemPrompt({ title: 't', stage: 'draft', targetSec: 60, script: null, persona: null });
-    expect(p).toContain('跟用户说话时用段落的中文名（如「冷知识」），不要说 s1、s4 这类编号');
+    expect(p).toContain('跟用户说话时用段落的中文名（如「怎么做的」），不要说 s1、s4 这类编号');
   });
   it('forbids inventing first-person experiences', () => {
     const p = formatSystemPrompt({ title: 't', stage: 'draft', targetSec: 60, script: null, persona: null });

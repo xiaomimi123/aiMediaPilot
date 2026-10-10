@@ -1,17 +1,19 @@
 import { prisma } from '@/lib/prisma';
 import { fail, ok } from '@/lib/api';
-import { adoptDaily, dismissDaily, rewriteDaily } from '@/lib/topics/daily';
+import { adoptDaily, answerDaily, dismissDaily } from '@/lib/topics/daily';
 import { createGenDeps } from '@/lib/topics/deps';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
-  const b = (await req.json().catch(() => ({}))) as { action?: string; results?: unknown };
+  const b = (await req.json().catch(() => ({}))) as { action?: string; answers?: unknown; results?: unknown };
   try {
     if (b.action === 'adopt') return ok(await adoptDaily(prisma, params.id));
-    if (b.action === 'rewrite') {
-      const results = Array.isArray(b.results) ? b.results.map((x) => String(x ?? '')) : [];
-      await rewriteDaily(prisma, await createGenDeps(prisma, new Date()), params.id, results);
+    // rewrite / results: 旧页面(实测清单)的叫法, 同义
+    if (b.action === 'answer' || b.action === 'rewrite') {
+      const raw = b.answers ?? b.results;
+      const answers = Array.isArray(raw) ? raw.map((x) => String(x ?? '')) : [];
+      await answerDaily(prisma, await createGenDeps(prisma, new Date()), params.id, answers);
       return ok({});
     }
     if (b.action === 'dismiss') {

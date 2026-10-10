@@ -14,7 +14,7 @@ model Project {
   stage            String          @default("draft")
   /// Script | null, 形状见 src/lib/script/model.ts
   script           Json?
-  targetSec        Int             @default(60)
+  targetSec        Int             @default(75)
   /// 建项目时的人设快照, 事后改人设不影响已有项目的上下文
   personaSnapshot  Json?
   /// 从哪条对标作品建的项目(选题模块)
@@ -488,10 +488,16 @@ model DailyTopic {
   copied      Json     @default("[]")
   /// 预测: { scores, inputHash, formulaVersion, result } | null
   prediction  Json?
-  /// 实测清单 [{ test, record }](非实测类为 [])
+  /// 旧数据: 实测清单 [{ test, record }]; 新数据不再写入, 读取时转成 questions
   checklist   Json     @default("[]")
-  /// 用户填的实测结果(与清单逐项对应), 没填为 null
+  /// 旧数据: 实测结果(与清单逐项对应); 读取时转成 answers
   results     Json?
+  /// 要问博主的问题(字符串数组, 含实测项)
+  questions   Json     @default("[]")
+  /// 博主的回答(与问题逐项对应), 没答为 null; 写稿失败也先存下
+  answers     Json?
+  /// 按回答重写成功的时间(卡片标「按你的话写的」)
+  rewrittenAt DateTime?
   /// new | adopted | dismissed | expired
   status      String   @default("new")
   projectId   String?
@@ -513,4 +519,16 @@ model DailyTopicRun {
   createdAt DateTime @default(now())
 
   @@index([day])
+}
+
+/// 用户自己写的口播原文(或真实转写), 写稿时作说话样本
+model VoiceSample {
+  id        String   @id @default(cuid())
+  title     String   @default("")
+  text      String   @db.Text
+  /// manual(手动加) | own_script(「我自己写了一篇」自动存) | transcript(作品转写加入)
+  source    String   @default("manual")
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }

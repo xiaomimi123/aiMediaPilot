@@ -40,8 +40,10 @@ export interface DurationReport {
   totalLimitSec: number;
   ok: boolean;
   segments: SegmentReport[];
-  /** 给模型也给人看的超标说明, 必须带实际值(模型拿不到数值就只能盲改) */
+  /** 全片超标说明(只有它触发自修), 必须带实际值(模型拿不到数值就只能盲改) */
   issues: string[];
+  /** 单段明显偏长的提示: 每段字数只作参考, 不算超标 */
+  hints: string[];
 }
 
 export function checkDuration(script: Script, targetSec: number): DurationReport {
@@ -53,12 +55,9 @@ export function checkDuration(script: Script, targetSec: number): DurationReport
   });
   const totalSec = round1(segments.reduce((n, s) => n + s.estSec, 0));
   const totalLimitSec = round1(targetSec * TOTAL_TOLERANCE);
-  const issues = segments
+  const hints = segments
     .filter((s) => s.over)
-    .map(
-      (s) =>
-        `第${s.index}段「${ROLE_LABEL[s.role]}」约 ${s.estSec} 秒，上限 ${s.limitSec} 秒 —— 删到约 ${Math.floor(s.limitSec * CHARS_PER_SEC)} 字以内，只改这一段`,
-    );
-  if (totalSec > totalLimitSec) issues.push(`全片约 ${totalSec} 秒，目标 ${targetSec} 秒（上限 ${totalLimitSec} 秒）`);
-  return { totalSec, targetSec, totalLimitSec, ok: issues.length === 0, segments, issues };
+    .map((s) => `第${s.index}段「${ROLE_LABEL[s.role]}」约 ${s.estSec} 秒，参考 ${s.budgetSec} 秒（约 ${Math.round(s.budgetSec * CHARS_PER_SEC)} 字）`);
+  const issues = totalSec > totalLimitSec ? [`全片约 ${totalSec} 秒，目标 ${targetSec} 秒（上限 ${totalLimitSec} 秒） —— 删到约 ${Math.floor(totalLimitSec * CHARS_PER_SEC)} 字以内`] : [];
+  return { totalSec, targetSec, totalLimitSec, ok: issues.length === 0, segments, issues, hints };
 }

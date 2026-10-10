@@ -40,7 +40,7 @@ export const patchScriptTool: Tool<z.infer<typeof Input>> = {
       ok: true,
       summary: `改稿：第${seg.index}段「${ROLE_LABEL[seg.role]}」${estimateSec(before!.text)}s → ${seg.estSec}s${copiedSummary(copied)}`,
       segmentIds: [input.segmentId],
-      data: { durationOk: report.ok, totalSec: report.totalSec, issues: report.issues, copied },
+      data: { durationOk: report.ok, totalSec: report.totalSec, issues: [...report.issues, ...report.hints], copied },
     };
   },
 };

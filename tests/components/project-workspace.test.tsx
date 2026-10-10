@@ -66,7 +66,7 @@ describe('ProjectWorkspace', () => {
     await waitFor(() => {
       const marks = screen.queryAllByText('刚改');
       expect(marks).toHaveLength(1);
-      expect(marks[0].parentElement?.textContent).toContain('冷知识');
+      expect(marks[0].parentElement?.textContent).toContain('怎么做的');
     });
   });
   it('polls while a job runs, forwards the job notice to chat and switches to the recording tab when done', async () => {

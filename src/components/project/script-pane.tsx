@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import { ROLE_LABEL } from '@/lib/script/model';
 import type { ProjectView } from '@/lib/project/view';
 import { PredictionPanel } from './prediction-panel';
+import { PolishPanel } from './polish-panel';
+import type { PolishResult } from '@/lib/script/polish';
+import type { Script } from '@/lib/script/model';
 import { cn } from '@/lib/utils';
 
 export function ScriptPane({
@@ -11,6 +14,7 @@ export function ScriptPane({
   highlighted,
   onEdit,
   onFinalize,
+  onReplace = async () => {},
   onHighlight = () => {},
   onAskEditor = () => {},
   onPredictionChanged = () => {},
@@ -21,6 +25,8 @@ export function ScriptPane({
   highlighted: Set<string>;
   onEdit: (segmentId: string, text: string) => Promise<void>;
   onFinalize: () => Promise<void>;
+  /** 整篇替换(润色后「用润色版」); 返回 false 表示没换成 */
+  onReplace?: (script: Script, note: string) => Promise<boolean | void>;
   onHighlight?: (segmentId: string) => void;
   onAskEditor?: (text: string) => void;
   onPredictionChanged?: () => void;
@@ -30,6 +36,9 @@ export function ScriptPane({
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  const [polished, setPolished] = useState<PolishResult | null>(null);
+  const [polishing, setPolishing] = useState(false);
+  const [polishErr, setPolishErr] = useState<string | null>(null);
   useEffect(() => {
     if (quoted) document.getElementById(`seg-${quoted}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }, [quoted]);
@@ -43,6 +52,28 @@ export function ScriptPane({
   }
   const { script, report } = project;
 
+  async function polish() {
+    setPolishing(true);
+    setPolishErr(null);
+    const j = await fetch('/api/scripts/polish', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: script.segments.map((s) => s.text).join('\n'), targetSec: project.targetSec }) })
+      .then((r) => r.json())
+      .catch(() => ({ success: false, message: '服务没有响应' }));
+    setPolishing(false);
+    if (!j.success) return setPolishErr(j.message);
+    setPolished(j.data);
+  }
+
+  async function usePolished(p: PolishResult) {
+    setPolishing(true);
+    setPolishErr(null);
+    const what = p.changes.slice(0, 3).map((c) => c.what).join('；');
+    // 没换成时留着润色稿(花了模型额度), 按钮也要能再点
+    const done = await onReplace(p.script, `稿子换成了润色版（改动 ${p.changes.length} 处${what ? `：${what}` : ''}）`).catch(() => false);
+    setPolishing(false);
+    if (done === false) return setPolishErr('没换成，润色稿还在下面，可以再点一次');
+    setPolished(null);
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] px-6 py-3 text-sm">
@@ -50,6 +81,11 @@ export function ScriptPane({
           约 {report.totalSec} 秒 / 目标 {report.targetSec} 秒
         </span>
         <div className="flex-1" />
+        {project.stage === 'draft' && (
+          <button className="btn-secondary" disabled={polishing} onClick={() => void polish()}>
+            {polishing && !polished ? '正在润色…' : '润色'}
+          </button>
+        )}
         {project.stage === 'draft' ? (
           <button
             className="btn-primary"
@@ -63,6 +99,8 @@ export function ScriptPane({
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto p-6">
+        {polishErr && <p className="text-sm text-[var(--danger)]">{polishErr}</p>}
+        {polished && <PolishPanel result={polished} useLabel="用润色版" keepLabel="保留原文" busy={polishing} onUse={() => void usePolished(polished)} onKeep={() => setPolished(null)} />}
         <PredictionPanel projectId={project.id} reloadKey={predictionKey} onHighlight={onHighlight} onAskEditor={onAskEditor} onChanged={onPredictionChanged} />
         {script.segments.map((s, i) => {
           const r = report.segments[i];
@@ -85,8 +123,8 @@ export function ScriptPane({
                 {highlighted.has(s.id) && <span className="text-[var(--warning)]">刚改</span>}
                 {quoted === s.id && !highlighted.has(s.id) && <span className="text-[var(--accent)]">依据</span>}
                 <div className="flex-1" />
-                <span className={cn('font-mono', r.over ? 'text-[var(--danger)]' : 'text-[var(--text-tertiary)]')}>
-                  {r.over ? `${r.estSec} / ${r.limitSec} 秒 · 超了` : `${r.estSec} / ${r.budgetSec} 秒`}
+                <span className={cn('font-mono', r.over ? 'text-[var(--warning)]' : 'text-[var(--text-tertiary)]')}>
+                  {r.over ? `${r.estSec} / ${r.budgetSec} 秒 · 偏长` : `${r.estSec} / ${r.budgetSec} 秒`}
                 </span>
               </div>
               {isEditing ? (

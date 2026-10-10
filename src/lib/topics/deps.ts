@@ -7,6 +7,7 @@ import { HIT_RATIO } from '@/lib/benchmark/rules';
 import { formatPersona, type PersonaLike } from '@/lib/tools/types';
 import { formatLessons, loadActiveLessons } from '@/lib/retro/lessons';
 import { loadCurrentTranscript } from '@/lib/recording/transcript';
+import { recentSampleTexts } from '@/lib/voice/samples';
 import { loadPredictContext, predictScript, scriptSegments } from '@/lib/predict/run';
 import type { CandidateStore } from './candidates';
 import { RECENT_HOURS, succeededRecently, TARGET_SEC, type GenDeps } from './generate';
@@ -52,6 +53,7 @@ export async function createGenDeps(db: PrismaClient, now: Date): Promise<GenDep
     store: createCandidateStore(db),
     personaText: formatPersona(persona as PersonaLike | null),
     lessons: lessons.length ? formatLessons(lessons) : undefined,
+    samples: await recentSampleTexts(db),
     write: writeScript,
     async predict(script, benchmarkVideoId) {
       if (!model) return null;
@@ -63,7 +65,7 @@ export async function createGenDeps(db: PrismaClient, now: Date): Promise<GenDep
     },
     async save(t) {
       try {
-        await db.dailyTopic.create({ data: { ...t, script: t.script as unknown as Prisma.InputJsonValue, copied: t.copied as unknown as Prisma.InputJsonValue, checklist: t.checklist as unknown as Prisma.InputJsonValue, prediction: (t.prediction ?? undefined) as unknown as Prisma.InputJsonValue } });
+        await db.dailyTopic.create({ data: { ...t, script: t.script as unknown as Prisma.InputJsonValue, copied: t.copied as unknown as Prisma.InputJsonValue, questions: t.questions as unknown as Prisma.InputJsonValue, prediction: (t.prediction ?? undefined) as unknown as Prisma.InputJsonValue } });
         return 'saved';
       } catch (e) {
         if ((e as { code?: string }).code === 'P2002') return 'duplicate';

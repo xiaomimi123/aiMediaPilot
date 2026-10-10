@@ -4,7 +4,7 @@ import { ok, fail } from '@/lib/api';
 import { toProjectView } from '@/lib/project/view';
 import { loadProjectBundle } from '@/lib/project/load';
 import { ScriptSchema } from '@/lib/script/model';
-import { applySegmentEdit } from '@/lib/script/edit';
+import { applySegmentEdit, replaceScript } from '@/lib/script/edit';
 import { finalizeScript } from '@/lib/script/finalize';
 
 export const dynamic = 'force-dynamic';
@@ -22,9 +22,21 @@ export async function PATCH(req: Request, { params }: Ctx) {
     title?: string;
     finalize?: boolean;
     edit?: { segmentId: string; text: string };
+    /** 整篇替换(润色后「用润色版」), 仅定稿前 */
+    replaceScript?: { script: unknown; note?: string };
   };
   const p = await prisma.project.findUnique({ where: { id: params.id } });
   if (!p) return fail('项目不存在或已删除', 404);
+
+  if (body.replaceScript) {
+    try {
+      const updated = await replaceScript(prisma, p.id, body.replaceScript.script as never, body.replaceScript.note || '稿子换成了润色版');
+      return ok(toProjectView(updated));
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e);
+      return fail(m, m.startsWith('已定稿') ? 409 : 400);
+    }
+  }
 
   const data: Prisma.ProjectUpdateInput = {};
   if (typeof body.title === 'string' && body.title.trim()) data.title = body.title.trim();

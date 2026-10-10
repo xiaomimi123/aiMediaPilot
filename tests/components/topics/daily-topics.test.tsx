@@ -14,7 +14,7 @@ afterEach(() => {
 
 const card = (id: string, over = {}) => ({
   id, day: '2026-10-09', source: 'idea', sourceLabel: '点子', title: `题${id}`, why: `理由${id}`, hook: `钩子${id}`, status: 'new',
-  script: { segments: [{ id: 'a', role: 'hook', text: `开头${id}` }, { id: 'b', role: 'context', text: `背景${id}` }] }, copied: 0, predictedCenter: 4500, checklist: [], results: [], ...over,
+  script: { segments: [{ id: 'a', role: 'hook', text: `开头${id}` }, { id: 'b', role: 'context', text: `背景${id}` }] }, copied: 0, predictedCenter: 4500, questions: [], answers: [], answered: false, ...over,
 });
 function stub(data: unknown, post: (url: string, body: unknown) => unknown = () => ({ success: true, data: { projectId: 'p9' } })) {
   const f = vi.fn(async (url: string, init?: RequestInit) => ({ json: async () => (init?.method === 'POST' ? post(url, JSON.parse(String(init.body))) : { success: true, data }) }));
@@ -63,25 +63,30 @@ describe('DailyTopics', () => {
     render(<DailyTopics />);
     expect(await screen.findByText('今晚 23:00 会自动生成；也可以在「设置 · 每晚任务」立即运行')).toBeTruthy();
   });
-  it('shows the test checklist and rewrites from filled results', async () => {
-    const list = [{ test: '低中高三档各问一次', record: '各自用时' }, { test: '对比答案', record: '有没有要点' }];
-    const f = stub({ topics: [card('1', { checklist: list, results: ['3 秒', ''] })], lastRun: null }, () => ({ success: true, data: {} }));
+  it('shows the questions and writes from the answers', async () => {
+    const qs = ['你收藏了多少个？', '最后留下哪几个？'];
+    const f = stub({ topics: [card('1', { questions: qs, answers: ['一百多个', ''] })], lastRun: null }, () => ({ success: true, data: {} }));
     render(<DailyTopics />);
-    fireEvent.click(await screen.findByText('实测清单（2 项）'));
-    expect(screen.getByText('低中高三档各问一次')).toBeTruthy();
-    expect(screen.getByText('记下：各自用时')).toBeTruthy();
-    const inputs = screen.getAllByPlaceholderText('填你实测的结果') as HTMLInputElement[];
-    expect(inputs[0].value).toBe('3 秒');
-    fireEvent.change(inputs[1], { target: { value: '高档才有全部要点' } });
-    fireEvent.click(screen.getByText('按实测结果重写'));
-    await waitFor(() => expect(posts(f)).toEqual([['/api/topics/daily/1', { action: 'rewrite', results: ['3 秒', '高档才有全部要点'] }]]));
+    fireEvent.click(await screen.findByText('要问你的（2 个）'));
+    expect(screen.getByText('你收藏了多少个？')).toBeTruthy();
+    const inputs = screen.getAllByPlaceholderText('用你自己的话答，几句就行') as HTMLTextAreaElement[];
+    expect(inputs[0].value).toBe('一百多个');
+    fireEvent.change(inputs[1], { target: { value: '就留了三个' } });
+    fireEvent.click(screen.getByText('按我的话写'));
+    await waitFor(() => expect(posts(f)).toEqual([['/api/topics/daily/1', { action: 'answer', answers: ['一百多个', '就留了三个'] }]]));
   });
-  it('does not offer a rewrite until at least one result is filled, and hides the checklist for talk topics', async () => {
-    stub({ topics: [card('1', { checklist: [{ test: 'a', record: 'b' }], results: [] }), card('2')], lastRun: null });
+  it('does not offer writing until a question is answered, and hides the block without questions', async () => {
+    stub({ topics: [card('1', { questions: ['a'], answers: [] }), card('2')], lastRun: null });
     render(<DailyTopics />);
-    fireEvent.click(await screen.findByText('实测清单（1 项）'));
-    expect((screen.getByText('按实测结果重写') as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getAllByText(/实测清单/)).toHaveLength(1);
+    fireEvent.click(await screen.findByText('要问你的（1 个）'));
+    expect((screen.getByText('按我的话写') as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getAllByText(/要问你的/)).toHaveLength(1);
+  });
+  it('labels the draft as a reference until it is written from your answers', async () => {
+    stub({ topics: [card('1', { questions: ['a'] }), card('2', { questions: ['a'], answers: ['b'], answered: true })], lastRun: null });
+    render(<DailyTopics />);
+    expect(await screen.findByText('参考稿')).toBeTruthy();
+    expect(screen.getByText('按你的话写的')).toBeTruthy();
   });
 });
 

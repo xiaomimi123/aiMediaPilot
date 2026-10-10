@@ -6,12 +6,14 @@ import { HealthPanel } from '@/components/settings/health-panel';
 import { NightlyTasks } from '@/components/settings/nightly-tasks';
 import { ObsidianCard } from '@/components/settings/obsidian-card';
 import { LessonsCard } from '@/components/settings/lessons-card';
+import { VoiceSamplesCard } from '@/components/settings/voice-samples-card';
 import { FormulaCard } from '@/components/retro/formula-card';
 
 export const dynamic = 'force-dynamic';
 
 const SECTIONS = [
   { id: 'persona', label: '账号定位' },
+  { id: 'voice', label: '说话样本' },
   { id: 'models', label: '模型' },
   { id: 'obsidian', label: 'Obsidian' },
   { id: 'tasks', label: '每晚任务' },
@@ -38,6 +40,7 @@ export default async function SettingsPage() {
           {parsed !== null && !parsed.success && <p className="mb-3 text-sm text-[var(--warning)]">旧档案格式不完整，已按空白显示。保存会覆盖旧档案。</p>}
           <PersonaEditor initial={persona} />
         </section>
+        <div id="voice" className="scroll-mt-16"><VoiceSamplesCard /></div>
         <div id="models" className="scroll-mt-16"><ModelsCard /></div>
         <div id="obsidian" className="scroll-mt-16"><ObsidianCard /></div>
         <div id="tasks" className="scroll-mt-16"><NightlyTasks /></div>

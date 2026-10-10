@@ -6,6 +6,7 @@ import { VideoCard } from './video-card';
 import { AccountPanel } from './account-panel';
 import { SuggestPanel } from './suggest-panel';
 import { DailyTopics } from './daily-topics';
+import { OwnScript } from './own-script';
 import { IdeaPool } from './idea-pool';
 
 export function TopicsView() {
@@ -45,6 +46,7 @@ export function TopicsView() {
 
   return (
     <div className="space-y-4">
+      <OwnScript />
       <DailyTopics />
       <IdeaPool />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">

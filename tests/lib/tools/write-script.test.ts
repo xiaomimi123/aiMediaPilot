@@ -12,6 +12,16 @@ const llm: StructuredLLM = {
 };
 
 describe('write_script tool', () => {
+  it('passes the latest speaking samples to the writer', async () => {
+    const msgs: string[] = [];
+    const spy: StructuredLLM = {
+      callStructured: (async (o: { userMessage: { text: string }[] }) => (msgs.push(o.userMessage[0].text), { result: { title: 't', segments: onBudget.map((n) => ({ role: 'x', text: '字'.repeat(n) })) }, usage: {} })) as unknown as StructuredLLM['callStructured'],
+    };
+    const { db } = createFakeDb({ voiceSamples: ['我是一名程序员，平时爱折腾'] });
+    await writeScriptTool.execute({ projectId: 'p1', db, llm: spy }, { direction: '让AI挑刺' });
+    expect(msgs[0]).toContain('【说话样本】（模仿说话方式，不抄句子）\n我是一名程序员，平时爱折腾');
+  });
+
   it('saves the script, sets the title of an untitled project, reports duration', async () => {
     const { db, project } = createFakeDb();
     const r = await writeScriptTool.execute({ projectId: 'p1', db, llm }, { direction: '让AI挑刺' });
@@ -41,8 +51,8 @@ describe('write_script tool', () => {
     });
     const r = await writeScriptTool.execute({ projectId: 'p1', db, llm: copyLlm }, { direction: '讲 AI 帮人' });
     expect(firstMessages[0]).toContain('【参考的对标作品】');
-    expect((r.data as { copied: unknown[] }).copied).toEqual([{ segmentId: 's1', segment: '开场钩子', text: '很多人对AI的印象还停留在聊天写代码' }]);
-    expect(r.summary).toContain('「开场钩子」有 1 处照抄对标原句');
+    expect((r.data as { copied: unknown[] }).copied).toEqual([{ segmentId: 's1', segment: '钩子', text: '很多人对AI的印象还停留在聊天写代码' }]);
+    expect(r.summary).toContain('「钩子」有 1 处照抄对标原句');
   });
   it('passes active writing lessons to the writer', async () => {
     const msgs: string[] = [];
