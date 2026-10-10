@@ -494,8 +494,10 @@ model DailyTopic {
   results     Json?
   /// 要问博主的问题(字符串数组, 含实测项)
   questions   Json     @default("[]")
-  /// 博主的回答(与问题逐项对应), 没答为 null
+  /// 博主的回答(与问题逐项对应), 没答为 null; 写稿失败也先存下
   answers     Json?
+  /// 按回答重写成功的时间(卡片标「按你的话写的」)
+  rewrittenAt DateTime?
   /// new | adopted | dismissed | expired
   status      String   @default("new")
   projectId   String?

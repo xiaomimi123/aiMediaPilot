@@ -147,6 +147,13 @@ describe('daily topics', () => {
     expect(written[0]).toMatchObject({ answers: [{ q: qs[0], a: '一百多个' }], samples: ['样本'], facts: '点子原话' });
     expect((await listDaily(db, now)).topics[0]).toMatchObject({ answered: true });
   });
+  it('keeps the typed answers when the rewrite fails', async () => {
+    const { db, topics } = fakeDb({ topics: [topic('d1', '2026-10-09', 1000, { questions: qs })] });
+    const failing = { ...deps(), write: (async () => { throw new Error('模型这次没按 6 段格式交稿'); }) as unknown as GenDeps['write'] };
+    await expect(answerDaily(db, failing, 'd1', ['一百多个', ''])).rejects.toThrow('模型这次没按 6 段格式交稿');
+    expect(topics[0]).toMatchObject({ questions: qs, answers: ['一百多个', ''], script: { segments: [{ text: '开头' }] } });
+    expect((await listDaily(db, now)).topics[0]).toMatchObject({ answers: ['一百多个', ''], answered: false });
+  });
   it('answers an old checklist topic and stores it as questions', async () => {
     const { db, topics } = fakeDb({ topics: [topic('d1', '2026-10-09', 1000, { checklist: list })] });
     await answerDaily(db, deps(), 'd1', ['3 秒', '有']);

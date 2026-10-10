@@ -31,7 +31,9 @@ export async function listDaily(db: PrismaClient, now: Date) {
   const rows = await db.dailyTopic.findMany({ where: { status: 'new' } });
   const qa = (t: (typeof rows)[number]) => {
     const { questions, answers } = topicQuestions(t);
-    return { questions, answers, answered: answers.some((a) => a.trim()) };
+    // 旧数据: 只有实测结果、没有问题的, 当时已按结果重写过
+    const legacy = !strings(t.questions).length && strings(t.results).some((a) => a.trim());
+    return { questions, answers, answered: !!t.rewrittenAt || legacy };
   };
   const topics: DailyCard[] = rows
     .map((t) => {
@@ -113,12 +115,13 @@ export async function answerDaily(
   const filled = questions.map((_, i) => String(answers[i] ?? ''));
   // 点子是用户自己的原话, 和回答一样算事实
   const idea = t.source === 'idea' ? await db.topicIdea.findUnique({ where: { id: t.sourceId } }) : null;
+  // 先存回答: 写稿失败(没模型、模型出错)时用户填的不丢
+  await db.dailyTopic.update({ where: { id }, data: { questions: questions as unknown as Prisma.InputJsonValue, answers: filled as unknown as Prisma.InputJsonValue } });
   const r = await rewriteWithAnswers(deps, { ...t, questions, material: idea?.text }, filled);
   await db.dailyTopic.update({
     where: { id },
     data: {
-      questions: questions as unknown as Prisma.InputJsonValue,
-      answers: filled as unknown as Prisma.InputJsonValue,
+      rewrittenAt: new Date(),
       script: r.script as unknown as Prisma.InputJsonValue,
       prediction: (r.prediction ?? undefined) as unknown as Prisma.InputJsonValue,
     },
