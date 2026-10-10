@@ -124,6 +124,18 @@ describe('splitOriginal', () => {
     expect(s.segments.every((x) => x.text.length > 0)).toBe(true);
     expect(s.segments.map((x) => x.text).join('').replace(/\s/g, '')).toBe(original.replace(/\s/g, ''));
   });
+  it('splits text without punctuation at spaces, never inside a word', () => {
+    const s = splitOriginal('alpha bravo charlie delta echo foxtrot golf hotel');
+    expect(s.segments.every((x) => x.text.length > 0)).toBe(true);
+    for (const x of s.segments) for (const w of x.text.split(' ')) expect(['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel']).toContain(w);
+  });
+  it('splits only the longest piece when there are fewer than 6 clauses', () => {
+    const text = '第一句。第二句。第三句，有逗号，再一个很长很长的句子。';
+    const s = splitOriginal(text);
+    expect(s.segments.every((x) => x.text.length > 0)).toBe(true);
+    expect(s.segments.map((x) => x.text).join('')).toBe(text);
+    expect(s.segments.slice(0, 4).map((x) => x.text)).toEqual(['第一句。', '第二句。', '第三句，', '有逗号，']);
+  });
   it('splits a text with few sentences at commas', () => {
     const s = splitOriginal('一二三，四五六，七八九，十十一，十二十三，十四十五，十六十七');
     expect(s.segments.every((x) => x.text.length > 0)).toBe(true);

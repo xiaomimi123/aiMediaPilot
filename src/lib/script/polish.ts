@@ -62,12 +62,21 @@ export function findAdded(polished: string, original: string, run = COPY_RUN): s
   return out;
 }
 
-/** 不改字, 把原文切成 6 段: 先按句切(句子太少就按逗号), 再按各节拍占比找最接近的切点 */
+/**
+ * 不改字, 把原文切成 6 段: 先按句切, 不够就按逗号、再按空格; 还不够 6 块就把最长的一块对半拆(只拆必要的几块),
+ * 再按各节拍占比找最接近的切点。不足 6 个字的原文会有空段, 建作品时拒绝。
+ */
 export function splitOriginal(text: string): Script {
   const pieces = (re: RegExp) => text.match(re)?.filter((p) => p.trim()) ?? [];
-  let units = pieces(/[^。！？!?\n]+[。！？!?\n]*/g);
-  if (units.length < SEGMENT_ROLES.length) units = pieces(/[^。！？!?\n，,；;]+[。！？!?\n，,；;]*/g);
-  if (units.length < SEGMENT_ROLES.length) units = Array.from(text.trim());
+  const tries = [/[^。！？!?\n]+[。！？!?\n]*/g, /[^。！？!?\n，,；;]+[。！？!?\n，,；;]*/g, /\S+\s*/g].map(pieces);
+  let units = tries.find((u) => u.length >= SEGMENT_ROLES.length) ?? tries.reduce((a, b) => (b.length > a.length ? b : a));
+  while (units.length < SEGMENT_ROLES.length) {
+    const i = units.reduce((best, u, k) => (Array.from(u).length > Array.from(units[best]).length ? k : best), 0);
+    const chars = Array.from(units[i]);
+    if (chars.length < 2) break;
+    const mid = Math.ceil(chars.length / 2);
+    units = [...units.slice(0, i), chars.slice(0, mid).join(''), chars.slice(mid).join(''), ...units.slice(i + 1)];
+  }
   const cum = [0];
   for (const u of units) cum.push(cum[cum.length - 1] + u.length);
   const total = cum[cum.length - 1];
@@ -100,7 +109,7 @@ function cutMessage(script: Script, limitChars: number): string {
 ${lines.join('\n')}`;
 }
 
-/** 按编号删句; 不会把某一段删空(那一段的最后一句保留) */
+/** 按编号删句; 不会把某一段删空(要删光某一段时, 这一段的删除全部不做) */
 function applyCut(script: Script, remove: string[]): { script: Script; removed: string[] } {
   const ids = new Set(remove.map((x) => x.trim()));
   const removed: string[] = [];

@@ -37,6 +37,11 @@ describe('createFromOwnScript', () => {
     await createFromOwnScript(db, { script: splitOriginal(original), targetSec: 75, originalText: original });
     expect(projects[0]).toMatchObject({ title: '我是一名程序员' });
   });
+  it('rejects a text too short to fill 6 segments', async () => {
+    const { db, projects } = fakeDb();
+    await expect(createFromOwnScript(db, { script: splitOriginal('你好'), targetSec: 75, originalText: '你好' })).rejects.toThrow('稿子太短');
+    expect(projects).toEqual([]);
+  });
   it('rejects a script that is not 6 segments', async () => {
     const { db } = fakeDb();
     await expect(createFromOwnScript(db, { script: { segments: [] } as never, targetSec: 75, originalText: original })).rejects.toThrow('稿子格式不对');

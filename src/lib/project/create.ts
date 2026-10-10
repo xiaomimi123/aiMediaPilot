@@ -22,6 +22,7 @@ export async function createProject(db: Pick<PrismaClient, 'personaProfile' | 'p
 export async function createFromOwnScript(db: Db, o: { title?: string; script: Script; targetSec: number; originalText: string }) {
   const script = ScriptSchema.safeParse(o.script);
   if (!script.success) throw new Error('稿子格式不对：要 6 段');
+  if (script.data.segments.some((s) => !s.text.trim())) throw new Error('稿子太短，分不出 6 段：多写几句再建作品');
   const title = o.title?.trim() || o.originalText.trim().split(/[。！？!?\n，,]/)[0].slice(0, 20);
   const p = await createProject(db, title, { script: script.data, targetSec: o.targetSec });
   await addSample(db, { title, text: o.originalText, source: 'own_script' });
