@@ -51,6 +51,17 @@ describe('polishScript', () => {
     expect(r2.changes).toEqual(real);
   });
 
+  it('drops a claimed deletion whose sentence is still in the polished script', async () => {
+    const changes = [
+      { kind: '删', what: '删去「那时候我做了一个自动上架商品的小工具」这句' },
+      { kind: '删', what: '删了「我是一名程序员」' },
+      { kind: '删', what: '删了重复的「然后」' },
+    ];
+    const kept = sentences.filter((x) => !x.startsWith('我是一名程序员'));
+    const r = await polishScript({ llm: fakeLLM([out([...kept, '后来我学会了先让它写测试。'], { changes })]), text: original, targetSec: 75 });
+    expect(r.changes).toEqual([changes[1], changes[2]]);
+  });
+
   it('flags sentences that are not in the original', async () => {
     const llm = fakeLLM([out([...sentences.slice(0, 5), '这句是模型自己加的内容哦。'])]);
     const r = await polishScript({ llm, text: original, targetSec: 75 });

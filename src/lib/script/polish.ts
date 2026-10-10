@@ -120,6 +120,13 @@ function isNoOp(what: string): boolean {
   return !/删|挪|改|调|换|合并|拆/.test(what.replace(/未改动?|未作[^，。；]*|保留原(文|字|说法|话|写法|意)?/g, ''));
 }
 
+/** 模型会说「删了『某句』」, 那句其实还在(真机见过): 引号里的话(6 字以上)全都还在润色稿里, 这条就不算 */
+function claimedButKept(c: Change, polished: string): boolean {
+  if (c.kind !== '删') return false;
+  const quoted = [...c.what.matchAll(/[「“'‘"『]([^」”'’"』]+)[」”'’"』]/g)].map((m) => norm(m[1]).join('')).filter((q) => q.length >= 6);
+  return quoted.length > 0 && quoted.every((q) => polished.includes(q));
+}
+
 export async function polishScript(opts: { llm: StructuredLLM; text: string; targetSec: number }): Promise<PolishResult> {
   const original = opts.text.trim();
   if (!original) throw new Error('稿子是空的');
@@ -137,8 +144,9 @@ export async function polishScript(opts: { llm: StructuredLLM; text: string; tar
   }
   let script = toScript(out);
   let report = checkDuration(script, opts.targetSec);
-  // 模型常把"没改"也列进来(「xx 保留原文未改」), 去掉
-  const changes: Change[] = out.changes.filter((c) => !isNoOp(c.what));
+  // 模型常把"没改"也列进来(「xx 保留原文未改」), 也会说删了其实没删: 都去掉
+  const polishedText = norm(script.segments.map((x) => x.text).join('')).join('');
+  const changes: Change[] = out.changes.filter((c) => !isNoOp(c.what) && !claimedButKept(c, polishedText));
   for (let round = 0; !report.ok && round < MAX_REPAIR_ROUNDS; round++) {
     try {
       const { result } = await opts.llm.callStructured({ systemPrompt: SYSTEM_PROMPT, userMessage: [{ type: 'text', text: cutMessage(script, limitChars) }], responseSchema: CutSchema });
