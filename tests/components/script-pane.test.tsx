@@ -38,6 +38,21 @@ describe('ScriptPane', () => {
     await waitFor(() => expect(screen.queryByText('删：删了啰嗦的话')).toBeNull());
   });
 
+  it('keeps the polished version and the button usable when replacing fails', async () => {
+    const polished = splitOriginal('甲。乙。丙。丁。戊。己。');
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => ({ json: async () => (url === '/api/scripts/polish' ? { success: true, data: { title: 't', script: polished, report: checkDuration(polished, 60), changes: [{ kind: '删', what: '删了啰嗦的话' }], questions: [], added: [] } } : { success: false, message: 'x' }) })));
+    for (const onReplace of [vi.fn(async () => false), vi.fn(async () => { throw new Error('offline'); })]) {
+      render(<ScriptPane project={project} highlighted={new Set()} onEdit={vi.fn()} onFinalize={vi.fn()} onReplace={onReplace} />);
+      fireEvent.click(screen.getByText('润色'));
+      fireEvent.click(await screen.findByText('用润色版'));
+      await waitFor(() => expect(screen.getByText('没换成，润色稿还在下面，可以再点一次')).toBeTruthy());
+      expect(screen.getByText('删：删了啰嗦的话')).toBeTruthy();
+      expect((screen.getByText('用润色版') as HTMLButtonElement).disabled).toBe(false);
+      expect((screen.getByText('润色') as HTMLButtonElement).disabled).toBe(false);
+      cleanup();
+    }
+  });
+
   it('closes the polish panel when keeping the original', async () => {
     const polished = splitOriginal('甲。乙。丙。丁。戊。己。');
     vi.stubGlobal('fetch', vi.fn(async (url: string) => ({ json: async () => (url === '/api/scripts/polish' ? { success: true, data: { title: 't', script: polished, report: checkDuration(polished, 60), changes: [], questions: [], added: [] } } : { success: false, message: 'x' }) })));

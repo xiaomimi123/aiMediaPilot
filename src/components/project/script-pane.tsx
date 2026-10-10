@@ -25,8 +25,8 @@ export function ScriptPane({
   highlighted: Set<string>;
   onEdit: (segmentId: string, text: string) => Promise<void>;
   onFinalize: () => Promise<void>;
-  /** 整篇替换(润色后「用润色版」) */
-  onReplace?: (script: Script, note: string) => Promise<void>;
+  /** 整篇替换(润色后「用润色版」); 返回 false 表示没换成 */
+  onReplace?: (script: Script, note: string) => Promise<boolean | void>;
   onHighlight?: (segmentId: string) => void;
   onAskEditor?: (text: string) => void;
   onPredictionChanged?: () => void;
@@ -65,9 +65,12 @@ export function ScriptPane({
 
   async function usePolished(p: PolishResult) {
     setPolishing(true);
+    setPolishErr(null);
     const what = p.changes.slice(0, 3).map((c) => c.what).join('；');
-    await onReplace(p.script, `稿子换成了润色版（改动 ${p.changes.length} 处${what ? `：${what}` : ''}）`);
+    // 没换成时留着润色稿(花了模型额度), 按钮也要能再点
+    const done = await onReplace(p.script, `稿子换成了润色版（改动 ${p.changes.length} 处${what ? `：${what}` : ''}）`).catch(() => false);
     setPolishing(false);
+    if (done === false) return setPolishErr('没换成，润色稿还在下面，可以再点一次');
     setPolished(null);
   }
 

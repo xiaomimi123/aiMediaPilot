@@ -108,16 +108,18 @@ export function ProjectWorkspace({
   }, [transcribeJob, refresh]);
 
   const patch = useCallback(
-    async (body: object) => {
+    async (body: object): Promise<boolean> => {
       setError(null);
-      const res = await fetch(`/api/projects/${project.id}`, {
+      const j = await fetch(`/api/projects/${project.id}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
-      });
-      const j = await res.json();
+      })
+        .then((r) => r.json())
+        .catch(() => ({ success: false, message: '服务没有响应，检查网页服务是否在运行' }));
       if (j.success) setProject(j.data);
       else setError(j.message);
+      return Boolean(j.success);
     },
     [project.id],
   );
@@ -158,10 +160,11 @@ export function ProjectWorkspace({
                 await patch({ edit: { segmentId, text } });
               }}
               onReplace={async (script, note) => {
+                if (!(await patch({ replaceScript: { script, note } }))) return false;
                 setHighlighted(new Set(script.segments.map((x) => x.id)));
-                await patch({ replaceScript: { script, note } });
                 // 替换会在编导对话里记一条: 拉一次对话
                 await refresh();
+                return true;
               }}
               onHighlight={(id) => setQuoted(id)}
               quoted={quoted}
