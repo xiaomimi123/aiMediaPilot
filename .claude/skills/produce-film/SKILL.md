@@ -1,11 +1,23 @@
 ---
 name: produce-film
-description: 给 MediaPilot 项目出一条口播成片(竖版默认, 也可横版; Remotion, 风格 C 极客手账)。触发词:"给 X 项目出片"、"出片"、"改 X 项目的成片"、"重新出一版"。
+description: 给 MediaPilot 项目出一条口播成片(竖版默认用风格 D 章节档案, 横版用风格 C 极客手账; Remotion)。触发词:"给 X 项目出片"、"出片"、"改 X 项目的成片"、"重新出一版"。
 ---
 
 # 出片
 
-竖版(默认)画框: 1080×1920, 人物小窗右上角全程在, 底部字幕, 中间内容区(790×560, 位置见 `remotion/kit/tokens.ts` 的 `ZONE`)。你只创作内容区。上下与右侧会被抖音的频道栏、点赞列、作者文案挡住(`DOUYIN_OVERLAYS`), 内容区已避开它们, 所以内容区比画面窄: 竖版卡片按 790 宽设计, 字少一些、行数少一些。横版见下一节。设计依据: `docs/superpowers/specs/2026-09-28-film-production-design.md`。
+竖版(默认)用风格 D(见下一节)。旧风格 C 的竖版画框: 1080×1920, 人物小窗右上角全程在, 底部字幕, 中间内容区(790×560, 位置见 `remotion/kit/tokens.ts` 的 `ZONE`)。你只创作内容区。上下与右侧会被抖音的频道栏、点赞列、作者文案挡住(`DOUYIN_OVERLAYS`), 内容区已避开它们, 所以内容区比画面窄: 竖版卡片按 790 宽设计, 字少一些、行数少一些。横版见下一节。设计依据: `docs/superpowers/specs/2026-09-28-film-production-design.md`。
+
+## 竖版默认风格: D · 章节档案
+
+竖版一律用 `ChapterFrame`(不用 `Frame`), 除非用户点名要旧风格。范例: `remotion/films/cmujxgbz6000eg417ngfzoolz-v6/`(先读它的 `Film.tsx` 再写)。组件在 `remotion/kit/chapter.tsx`。
+- 画框: 暖白点阵纸; 顶部章节条(章节号 · 章节名 | 署名 · 时间码) + 每章一格的进度; 白字黑描边字幕; 右下警示条。章节号和时间码由组件生成, 不写进 copy.ts。
+- `chapters`: 按稿子分 4–6 章, `{ atSec: at.<镜头id>.from, label: COPY.chapters.x }`。`brand`: 署名, 写在 copy.ts(现用「亲测档案」)。
+- 人物窗 `pip` 按时间切形态(0.6 秒平滑过渡), 每条都要有变化, 不要全程一种:
+  - `hero`: 大圆角窗, 内容区只剩上方 960×270 的标题区 —— 开场钩子、转折、情绪最重的一句用。
+  - `circle`: 洋红描边圆窗(`pos: 'center' | 'left'`), 内容区 960×620 —— 正文默认, 中 / 左隔几镜换一次。
+  - `off`: 收起人物窗, 内容区 960×990 —— 全屏图形、大数字、素材特写用。
+- 积木: `NumberCard`(编号由 `n` 生成, 是序号不是事实)、`Tag`(黄标签)、`Pink`(洋红强调字)、`headline(size)`(粗黑大字样式)、`Polaroid`(相纸图, `blur` 可模糊敏感截图)、`D`(配色), 再加 kit 里原有的 `Marker` 与 `kit/motion/anim` 动效。卡片用黑描边 + 硬阴影(`boxShadow: 10px 12px 0 D.ink`), 和这套风格一致。
+- 素材上有账号 ID、金额等敏感信息时用 `Polaroid` 的 `blur`, 不引用图上的数字。
 
 ## 横版
 
@@ -33,10 +45,10 @@ description: 给 MediaPilot 项目出一条口播成片(竖版默认, 也可横�
 5. **写画面**:
    - 画面上**所有文字和数字**写进 `copy.ts` 的 `COPY`; `Film.tsx` 里不写中文字面量和数字文本(film check 会查)。`copy.ts` 只放画面文字, 时间、编号等数据放 `Film.tsx`。
    - 镜头时间只来自 `shots.json`: `const at = fromShots(shots)`, 每镜写 `<Shot {...at.<镜头id>}>`, 不手写 `from`/`to` 秒数; 镜头表里每个镜头都要用到。
-   - 只用 `remotion/kit` 的积木(Note、Kicker、Stat、StepList、Marker、Compare、Quote、Arrow、WindowFrame、MediaIn、Shot)与 `kit/motion/anim` 动效; 构图、节奏、积木搭配针对内容自己设计, 不要每镜同一种卡。
+   - 只用 `remotion/kit` 的积木(风格 D: ChapterFrame、NumberCard、Tag、Pink、headline、Polaroid; 通用: Note、Kicker、Stat、StepList、Marker、Compare、Quote、Arrow、WindowFrame、MediaIn、Shot)与 `kit/motion/anim` 动效; 构图、节奏、积木搭配针对内容自己设计, 不要每镜同一种卡。
    - 数字只能用稿子或转写里出现过的; 没把握的不写数字。
    - 不替用户编经历、案例、效果数据。
-   - `Frame` 的 `highlights` 放 1–3 个关键词(字幕荧光笔); `pipFocus` 按人脸位置调(默认 `'50% 20%'`)。
+   - 画框(`ChapterFrame` / `Frame`)的 `highlights` 放 1–4 个关键词(字幕高亮); `pipFocus` 按人脸位置调(风格 D 默认 `'50% 42%'`, 风格 C 默认 `'50% 20%'`)。
 6. **检查**: `npm run -s mp -- film check <片子目录>`。有 ✗ 就改到通过。
 7. **看关键帧**: `npm run -s mp -- film render <片子目录> --stills`, 用 Read 逐张看 `stills/*.jpg`(半尺寸, 只看布局与可读性):
    - 小窗里脸完整、没被裁歪; 内容不挤、不溢出、不被裁(竖版内容区只有 790×560, 横版 1360×765); 字能读清(手机上看); 中文字体正常;
