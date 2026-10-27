@@ -218,6 +218,20 @@ describe('film runner', () => {
     expect(killed).toEqual([]);
     await settle(db, deps, s.id);
   });
+  it('ends the old process when it is still running after waiting', async () => {
+    // 已写出结果但进程迟迟不退: 等满 5 秒就结束它, 不一直卡着(用注入的 sleep 跳过真等)
+    const { db } = fakeDb();
+    const killed: number[] = [];
+    let slept = 0;
+    const deps = realDeps({ isAlive: (pid, since) => (pid === 4242 ? true : createRunnerDeps().isAlive(pid, since)), killGroup: (pid) => void killed.push(pid), sleep: async () => void (slept += 1) });
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    await settle(db, deps, s.id);
+    await db.filmSession.update({ where: { id: s.id }, data: { pid: 4242 } });
+    expect((await replyFilm(db, deps, s.id, '可以，继续', 'opus')).status).toBe('running');
+    expect(slept).toBe(25);
+    expect(killed).toEqual([4242]);
+    await settle(db, deps, s.id);
+  });
   it('starts a landscape film and records the orientation', async () => {
     const { db } = fakeDb();
     const deps = realDeps();
@@ -264,6 +278,21 @@ describe('film runner', () => {
     const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
     await settle(db, deps, s.id);
     await expect(restartFilm(db, deps, s.id, 'opus')).rejects.toThrow('还没有片子目录');
+  });
+  it('refuses a restart while the failed turn has no result and its process is still running', async () => {
+    // crash: 进程没写出 result 就退了 —— 此时 ended 恒为 false, 旧进程还在就不许续
+    process.env.FAKE_SCENARIO = 'crash';
+    const { db } = fakeDb();
+    let alive = true;
+    const deps = realDeps({ isAlive: (pid, since) => (pid === 4242 ? alive : createRunnerDeps().isAlive(pid, since)), killGroup: () => {} });
+    const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
+    await settle(db, deps, s.id);
+    await db.filmSession.update({ where: { id: s.id }, data: { pid: 4242, filmDir: 'remotion/films/p1-v4' } });
+    delete process.env.FAKE_SCENARIO;
+    await expect(restartFilm(db, deps, s.id, 'opus')).rejects.toThrow('上一轮还没完全停下');
+    // 进程退掉之后重试就能继续(拦的是"还在跑", 不是"失败过")
+    alive = false;
+    expect((await restartFilm(db, deps, s.id, 'opus')).status).toBe('running');
   });
   it('lets a restart through right after the result while the old process is still exiting', async () => {
     process.env.FAKE_SCENARIO = 'limit';

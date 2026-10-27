@@ -29,6 +29,8 @@ export interface RunnerDeps {
   /** 日志最后写入时间(判断是否卡住); 文件不在 = null */
   lastWrite(p: string): Date | null;
   append(p: string, line: string): Promise<void>;
+  /** 等一会儿(等旧进程收尾); 单测注入成不真等的版本, 免得跑满 5 秒 */
+  sleep(ms: number): Promise<void>;
   now(): Date;
   uuid(): string;
 }
@@ -89,6 +91,7 @@ export function createRunnerDeps(): RunnerDeps {
     },
     readLines: async (p) => (await fs.promises.readFile(p, 'utf8').catch(() => '')).split('\n').filter(Boolean),
     append: (p, line) => fs.promises.mkdir(path.dirname(p), { recursive: true }).then(() => fs.promises.appendFile(p, line + '\n')),
+    sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
     now: () => new Date(),
     uuid: () => randomUUID(),
   };
@@ -193,7 +196,7 @@ export async function startFilm(db: PrismaClient, deps: RunnerDeps, i: { project
 async function waitOldTurnExit(deps: RunnerDeps, s: FilmSession, parsed: ParsedLog) {
   if (!s.pid || !deps.isAlive(s.pid, s.turnStartedAt)) return;
   if (!parsed.last.ended) throw new FilmBusy('上一轮还没完全停下，等几秒再试');
-  for (let i = 0; i < 25 && deps.isAlive(s.pid, s.turnStartedAt); i++) await new Promise((r) => setTimeout(r, 200));
+  for (let i = 0; i < 25 && deps.isAlive(s.pid, s.turnStartedAt); i++) await deps.sleep(200);
   if (deps.isAlive(s.pid, s.turnStartedAt)) deps.killGroup(s.pid);
 }
 
