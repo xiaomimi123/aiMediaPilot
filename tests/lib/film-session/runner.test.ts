@@ -208,7 +208,8 @@ describe('film runner', () => {
     const { db } = fakeDb();
     let alive = true;
     const killed: number[] = [];
-    const deps = realDeps({ isAlive: (pid) => (pid === 4242 ? alive : createRunnerDeps().isAlive(pid)), killGroup: (pid) => void killed.push(pid) });
+    // since 必须透传: 刚启动的 60 秒内只按进程在不在判断, 丢掉它就会去核对命令行, 子进程还没 exec 完就被判死
+    const deps = realDeps({ isAlive: (pid, since) => (pid === 4242 ? alive : createRunnerDeps().isAlive(pid, since)), killGroup: (pid) => void killed.push(pid) });
     const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
     await settle(db, deps, s.id);
     await db.filmSession.update({ where: { id: s.id }, data: { pid: 4242 } });
@@ -269,7 +270,8 @@ describe('film runner', () => {
     const { db } = fakeDb();
     let alive = true;
     const killed: number[] = [];
-    const deps = realDeps({ isAlive: (pid) => (pid === 4242 ? alive : createRunnerDeps().isAlive(pid)), killGroup: (pid) => void killed.push(pid) });
+    // since 必须透传: 刚启动的 60 秒内只按进程在不在判断, 丢掉它就会去核对命令行, 子进程还没 exec 完就被判死
+    const deps = realDeps({ isAlive: (pid, since) => (pid === 4242 ? alive : createRunnerDeps().isAlive(pid, since)), killGroup: (pid) => void killed.push(pid) });
     const s = await startFilm(db, deps, { projectId: 'p1', kind: 'new', model: 'opus' });
     await settle(db, deps, s.id);
     await db.filmSession.update({ where: { id: s.id }, data: { pid: 4242, filmDir: 'remotion/films/p1-v4' } });
