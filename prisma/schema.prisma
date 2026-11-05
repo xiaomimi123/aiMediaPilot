@@ -532,3 +532,20 @@ model VoiceSample {
 
   @@index([createdAt])
 }
+
+/// 写稿台的草稿: 从灵感速记展开或直接开写, 自动保存, 写完润色建作品
+model Draft {
+  id        String   @id @default(cuid())
+  title     String   @default("")
+  body      String   @db.Text
+  /// idea(从点子池展开) | blank(直接开写)
+  source    String   @default("blank")
+  /// 来源 TopicIdea.id, 没有为 null
+  ideaId    String?
+  /// blank | expanding(AI 扩写中) | done
+  status    String   @default("blank")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([updatedAt])
+}

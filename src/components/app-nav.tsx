@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bot, Compass, LayoutDashboard, Clapperboard, Settings } from 'lucide-react';
+import { Bot, Compass, LayoutDashboard, Clapperboard, Settings, PenLine } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export const NAV_ITEMS = [
   { href: '/', label: '总览', icon: LayoutDashboard },
   { href: '/works', label: '作品', icon: Clapperboard },
+  { href: '/drafts', label: '写稿', icon: PenLine },
   { href: '/topics', label: '选题', icon: Compass },
   { href: '/assistant', label: '助手', icon: Bot },
   { href: '/settings', label: '设置', icon: Settings },

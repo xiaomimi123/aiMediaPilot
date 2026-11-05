@@ -9,8 +9,8 @@ import { AppNav, isActive, NAV_ITEMS } from '@/components/app-nav';
 afterEach(cleanup);
 
 describe('AppNav', () => {
-  it('has the five entries in order', () => {
-    expect(NAV_ITEMS.map((i) => i.label)).toEqual(['总览', '作品', '选题', '助手', '设置']);
+  it('has the six entries in order', () => {
+    expect(NAV_ITEMS.map((i) => i.label)).toEqual(['总览', '作品', '写稿', '选题', '助手', '设置']);
   });
   it('treats project pages as part of 作品', () => {
     expect(isActive('/projects/abc', '/works')).toBe(true);
