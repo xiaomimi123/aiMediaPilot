@@ -43,6 +43,18 @@ export function PolishPanel({ result, useLabel, keepLabel, onUse, onKeep, busy =
           </ul>
         )}
       </div>
+      {result.flavor && result.flavor.length > 0 && (
+        <div className="rounded-[var(--r-md)] bg-[var(--warning-subtle)] p-2">
+          <p className="text-xs text-[var(--warning)]">这几句还有 AI 腔，念之前改掉：</p>
+          <ul className="list-disc pl-5">
+            {result.flavor.map((h, i) => (
+              <li key={i}>
+                {`${h.segment}：${h.text}`} — {h.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {result.questions.length > 0 && (
         <div>
           <p className="mb-1 text-xs text-[var(--text-tertiary)]">需要你确认的地方</p>

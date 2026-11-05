@@ -39,6 +39,7 @@ function DraftEditor({ draft, onClose, onChanged }: { draft: Draft; onClose: () 
   const [expandBusy, setExpandBusy] = useState(false);
   const [expandErr, setExpandErr] = useState<string | null>(null);
   const [questions, setQuestions] = useState<string[]>([]);
+  const [flavor, setFlavor] = useState<{ kind: string; label: string; text: string }[]>([]);
   const [polishResult, setPolishResult] = useState<PolishResult | null>(null);
   const [busy, setBusy] = useState<'polish' | 'create' | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -79,6 +80,7 @@ function DraftEditor({ draft, onClose, onChanged }: { draft: Draft; onClose: () 
     setExpandBusy(true);
     setExpandErr(null);
     setQuestions([]);
+    setFlavor([]);
     const j = await post(`/api/drafts/${draft.id}/expand`, { targetSec });
     setExpandBusy(false);
     if (!j.success) {
@@ -88,6 +90,7 @@ function DraftEditor({ draft, onClose, onChanged }: { draft: Draft; onClose: () 
     setBody(j.data.body);
     if (!title.trim()) setTitle(j.data.title);
     setQuestions(Array.isArray(j.data.questions) ? j.data.questions : []);
+    setFlavor(Array.isArray(j.data.flavor) ? j.data.flavor : []);
     onChanged();
   };
 
@@ -142,6 +145,18 @@ function DraftEditor({ draft, onClose, onChanged }: { draft: Draft; onClose: () 
       />
       {expandErr && <p className="text-sm text-[var(--danger)]">{expandErr}</p>}
       {err && <p className="text-sm text-[var(--danger)]">{err}</p>}
+      {flavor.length > 0 && (
+        <div className="rounded-[var(--r-md)] bg-[var(--warning-subtle)] p-3">
+          <p className="mb-1 text-xs font-medium text-[var(--warning)]">扩写稿里还有 AI 腔，念之前顺手改掉：</p>
+          <ul className="list-disc space-y-0.5 pl-5 text-sm">
+            {flavor.map((h, i) => (
+              <li key={i}>
+                「{h.text}」— {h.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {questions.length > 0 && (
         <div className="rounded-[var(--r-md)] bg-[var(--accent-subtle)] p-3">
           <p className="mb-1 text-xs font-medium">补上这些，稿子会更好：</p>

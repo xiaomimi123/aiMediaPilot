@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ROLE_SHARE, SEGMENT_ROLES, type Script } from './model';
 import { checkDuration, countSpokenChars, estimateSec, CHARS_PER_SEC, TOTAL_TOLERANCE, type DurationReport } from './duration';
 import { MAX_REPAIR_ROUNDS, segmentGuide, type StructuredLLM } from './write';
+import { findFlavorInScript } from './flavor-check';
 import { COPY_RUN } from '@/lib/benchmark/copy-check';
 
 export const CHANGE_KINDS = ['删', '挪', '改', '错字'] as const;
@@ -23,6 +24,8 @@ export interface PolishResult {
   questions: string[];
   /** 润色稿里原文没有的片段(连续 12 字以上), 页面上让用户确认 */
   added: string[];
+  /** 程序扫出的 AI 腔残留, 页面上列出来让用户/编导改 */
+  flavor: import('./flavor-check').FlavorHit[];
 }
 
 const SYSTEM_PROMPT = `你是抖音口播博主的编导，帮博主润色他自己写的口播稿。
@@ -33,6 +36,7 @@ const SYSTEM_PROMPT = `你是抖音口播博主的编导，帮博主润色他自
 - 改动必须全部列进 changes，每条一句话说清改了哪里（kind 只能是 删 / 挪 / 改 / 错字）；没改的地方不要列。
 - 意思不清、前后对不上、观众听不懂的术语，不要自己猜着改，写进 questions 让用户确认。
 - 按 6 个故事节拍切段：钩子 → 我是谁·当时 → 遇到什么 → 怎么做的 → 结果 → 经验或悬念；原文没有对应内容的节拍，就把相邻内容分过去，不要编。
+- 原文里若发现 AI 腔（「不是…而是…」句式、犹豫词「说实话/我觉得可能」、套话垫场「总而言之/众所周知」、书面热词「赋能/底层逻辑」），按「改」列出并改成大白话；拿不准是不是博主口头禅的，写进 questions 问，别直接改。
 - 只输出 JSON：{"title": "视频标题", "segments": [{"text": "逐字稿"}, ...共 6 段], "changes": [{"kind": "删", "what": "…"}], "questions": ["…"]}。`;
 
 const toScript = (o: PolishOut): Script => ({ segments: o.segments.map((s, i) => ({ id: `s${i + 1}`, role: SEGMENT_ROLES[i], text: s.text.trim() })) });
@@ -168,5 +172,5 @@ export async function polishScript(opts: { llm: StructuredLLM; text: string; tar
       break;
     }
   }
-  return { title: out.title, script, report, changes, questions: out.questions, added: findAdded(script.segments.map((s) => s.text).join('\n'), original) };
+  return { title: out.title, script, report, changes, questions: out.questions, added: findAdded(script.segments.map((s) => s.text).join('\n'), original), flavor: findFlavorInScript(script) };
 }

@@ -4,6 +4,7 @@ import { writeScript } from '@/lib/script/write';
 import { formatPersona, type PersonaLike, type Tool } from './types';
 import { formatReference, loadReference } from '@/lib/benchmark/adopt';
 import { copiedSummary, findCopiedInScript } from '@/lib/benchmark/copy-check';
+import { flavorSummary, findFlavorInScript } from '@/lib/script/flavor-check';
 import { formatLessons, loadActiveLessons } from '@/lib/retro/lessons';
 import { recentSampleTexts } from '@/lib/voice/samples';
 
@@ -41,14 +42,16 @@ export const writeScriptTool: Tool<z.infer<typeof Input>> = {
       },
     });
     const copied = ref ? findCopiedInScript(script, ref.transcript) : [];
+    const flavor = findFlavorInScript(script);
     const summary =
       (report.ok ? `写稿：6 段，约 ${report.totalSec} 秒` : `写稿：约 ${report.totalSec} 秒，自修 ${rounds} 轮后仍超出目标 ${targetSec} 秒`) +
-      copiedSummary(copied);
+      copiedSummary(copied) +
+      flavorSummary(flavor);
     return {
       ok: true,
       summary,
       segmentIds: script.segments.map((s) => s.id),
-      data: { title, durationOk: report.ok, totalSec: report.totalSec, issues: [...report.issues, ...report.hints], copied },
+      data: { title, durationOk: report.ok, totalSec: report.totalSec, issues: [...report.issues, ...report.hints], copied, flavor },
     };
   },
 };

@@ -15,6 +15,7 @@ const result = (over = {}) => ({
   changes: [{ kind: '删' as const, what: '删了重复的「然后」' }, { kind: '错字' as const, what: '「在」改成「再」' }],
   questions: ['hermes 指的是什么？'],
   added: [],
+  flavor: [],
   ...over,
 });
 
