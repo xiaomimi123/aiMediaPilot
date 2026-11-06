@@ -22,7 +22,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const ideaText = draft.ideaId ? (await prisma.topicIdea.findUnique({ where: { id: draft.ideaId } }))?.text ?? null : null;
     const out = await expandDraft({ llm: m.llm, body: draft.body, ideaText, targetSec });
     const d = await prisma.draft.update({ where: { id: params.id }, data: { title: draft.title.trim() || out.title.slice(0, 100), body: out.text, status: 'done' } });
-    return ok({ ...draft, title: d.title, body: d.body, status: 'done', questions: out.questions });
+    return ok({ ...draft, title: d.title, body: d.body, status: 'done', questions: out.questions, flavor: out.flavor });
   } catch (e) {
     await prisma.draft.update({ where: { id: params.id }, data: { status: 'done' } }).catch(() => null);
     return fail(e instanceof Error ? e.message : String(e), 502);
