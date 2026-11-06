@@ -9,10 +9,11 @@ import { formatLessons, loadActiveLessons } from '@/lib/retro/lessons';
 import { loadCurrentTranscript } from '@/lib/recording/transcript';
 import { recentSampleTexts } from '@/lib/voice/samples';
 import { loadPredictContext, predictScript, scriptSegments } from '@/lib/predict/run';
+import { freshItems } from '@/lib/sources/fetch';
 import type { CandidateStore } from './candidates';
 import { RECENT_HOURS, succeededRecently, TARGET_SEC, type GenDeps } from './generate';
 
-export function createCandidateStore(db: PrismaClient): CandidateStore {
+export function createCandidateStore(db: PrismaClient, now = new Date()): CandidateStore {
   return {
     async usedKeys() {
       const rows = await db.dailyTopic.findMany({ select: { source: true, sourceId: true } });
@@ -39,6 +40,7 @@ export function createCandidateStore(db: PrismaClient): CandidateStore {
       return out;
     },
     freshIdeas: () => db.topicIdea.findMany({ where: { status: 'fresh' } }),
+    freshSourceItems: () => freshItems(db, now),
   };
 }
 
@@ -73,6 +75,7 @@ export async function createGenDeps(db: PrismaClient, now: Date): Promise<GenDep
       }
     },
     markIdeaUsed: async (id) => void (await db.topicIdea.update({ where: { id }, data: { status: 'used' } })),
+    markSourceUsed: async (id) => void (await db.sourceItem.update({ where: { id }, data: { status: 'used' } })),
     recordRun: async (r) => void (await db.dailyTopicRun.create({ data: { day: r.day, created: r.created, skipped: r.skipped as unknown as Prisma.InputJsonValue } })),
     async doneRecently(now) {
       const rows = await db.dailyTopicRun.findMany({ where: { created: { gte: 1 }, createdAt: { gte: new Date(now.getTime() - RECENT_HOURS * 3600_000) } }, select: { createdAt: true } });

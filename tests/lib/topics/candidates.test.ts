@@ -10,20 +10,21 @@ function store(over: Partial<CandidateStore> = {}): CandidateStore {
     benchmarkHits: async () => [],
     ownWorks: async () => [],
     freshIdeas: async () => [],
+    freshSourceItems: async () => [],
     ...over,
   };
 }
 
 describe('pickCandidates', () => {
   it('takes one from each source first', () => {
-    expect(pickCandidates({ benchmark: [c('benchmark', 'b1'), c('benchmark', 'b2')], sequel: [c('sequel', 's1')], idea: [c('idea', 'i1')] }).map((x) => x.sourceId)).toEqual(['b1', 's1', 'i1']);
+    expect(pickCandidates({ benchmark: [c('benchmark', 'b1'), c('benchmark', 'b2')], sequel: [c('sequel', 's1')], idea: [c('idea', 'i1')], source: [] }).map((x) => x.sourceId)).toEqual(['b1', 's1', 'i1']);
   });
   it('fills from the other sources when one is empty', () => {
-    expect(pickCandidates({ benchmark: [c('benchmark', 'b1'), c('benchmark', 'b2')], sequel: [], idea: [c('idea', 'i1'), c('idea', 'i2')] }).map((x) => x.sourceId)).toEqual(['b1', 'i1', 'b2']);
+    expect(pickCandidates({ benchmark: [c('benchmark', 'b1'), c('benchmark', 'b2')], sequel: [], idea: [c('idea', 'i1'), c('idea', 'i2')], source: [] }).map((x) => x.sourceId)).toEqual(['b1', 'i1', 'b2']);
   });
   it('returns fewer than 3 or none when material runs out', () => {
-    expect(pickCandidates({ benchmark: [], sequel: [c('sequel', 's1')], idea: [] })).toHaveLength(1);
-    expect(pickCandidates({ benchmark: [], sequel: [], idea: [] })).toEqual([]);
+    expect(pickCandidates({ benchmark: [], sequel: [c('sequel', 's1')], idea: [], source: [] })).toHaveLength(1);
+    expect(pickCandidates({ benchmark: [], sequel: [], idea: [], source: [] })).toEqual([]);
   });
 });
 

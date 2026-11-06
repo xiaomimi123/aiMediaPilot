@@ -1,8 +1,8 @@
 import { median } from '@/lib/benchmark/rules';
 export { localDay } from '@/lib/retro/metrics-store';
 
-export type TopicSource = 'benchmark' | 'sequel' | 'idea';
-export const SOURCES: TopicSource[] = ['benchmark', 'sequel', 'idea'];
+export type TopicSource = 'benchmark' | 'sequel' | 'idea' | 'source';
+export const SOURCES: TopicSource[] = ['benchmark', 'sequel', 'idea', 'source'];
 
 export interface Candidate {
   source: TopicSource;
@@ -21,6 +21,8 @@ export interface CandidateStore {
   /** 已关联发布作品的项目: 片尾一段(定稿或转写的最后一段) + 播放 */
   ownWorks(): Promise<{ projectId: string; title: string; lastText: string | null; play: number }[]>;
   freshIdeas(): Promise<{ id: string; text: string; createdAt: Date }[]>;
+  /** 信息源条目(近几天没出过选题的, 按热度排) */
+  freshSourceItems(): Promise<{ id: string; title: string; summary: string | null; url: string; heat: number; provider: string }[]>;
 }
 
 export const BENCHMARK_DAYS = 14;
@@ -56,7 +58,15 @@ export async function loadPools(store: CandidateStore, now: Date): Promise<Recor
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
     .map((i) => ({ source: 'idea' as const, sourceId: i.id, material: i.text }));
 
-  return { benchmark, sequel, idea };
+  const source = (await store.freshSourceItems())
+    .filter((i) => fresh('source', i.id))
+    .map((i) => ({
+      source: 'source' as const,
+      sourceId: i.id,
+      material: `${i.provider === 'github' ? 'GitHub 热门仓库' : 'Hacker News 热帖'}（${i.heat.toLocaleString('en-US')} ${i.provider === 'github' ? 'stars' : 'points'}）：${i.title}${i.summary ? ` —— ${i.summary.slice(0, 200)}` : ''}（${i.url}）`,
+    }));
+
+  return { benchmark, sequel, idea, source };
 }
 
 /** 先各来源取 1 个, 再按来源顺序轮流补, 最多 max 个 */

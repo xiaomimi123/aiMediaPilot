@@ -51,7 +51,7 @@ const PLAN_SYSTEM = `你是抖音 AI 知识类博主的编导，根据给你的�
 - title：选题标题（20 字内）；why：为什么值得做（一句）；hook：开头钩子（一句口语）；direction：给写稿的方向说明（讲什么、什么角度、用什么例子）。
 只输出 JSON：{"title": "", "why": "", "hook": "", "direction": "", "questions": [], "kind": "talk", "checklist": []}`;
 
-const SOURCE_LABEL: Record<TopicSource, string> = { benchmark: '对标', sequel: '续集', idea: '点子' };
+const SOURCE_LABEL: Record<TopicSource, string> = { benchmark: '对标', sequel: '续集', idea: '点子', source: '资讯' };
 
 export interface NewDailyTopic {
   day: string;
@@ -81,6 +81,8 @@ export interface GenDeps {
   predict(script: Script, benchmarkVideoId: string | undefined): Promise<ScriptPrediction | null>;
   save(t: NewDailyTopic): Promise<'saved' | 'duplicate'>;
   markIdeaUsed(id: string): Promise<void>;
+  /** 资讯条目出过选题后标 used, 不再重复出 */
+  markSourceUsed(id: string): Promise<void>;
   recordRun(r: { day: string; created: number; skipped: { source?: TopicSource; reason: string }[] }): Promise<void>;
   /** 最近 6 小时内有过成功的生成(按时间算, 不按日历天: 23:00 成功后 0:00、1:00 的补跑要跳过) */
   doneRecently(now: Date): Promise<boolean>;
@@ -137,6 +139,7 @@ async function oneTopic(d: GenDeps, llm: StructuredLLM, c: Candidate, day: strin
   const saved = await d.save({ day, source: c.source, sourceId: c.sourceId, ...plan, script, copied, prediction });
   if (saved === 'duplicate') return { error: DUPLICATE_REASON };
   if (c.source === 'idea') await d.markIdeaUsed(c.sourceId);
+  if (c.source === 'source') await d.markSourceUsed(c.sourceId);
   return { ok: true };
 }
 

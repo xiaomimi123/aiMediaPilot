@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  每晚 19:00 抓信息源(GitHub 爆发仓库 + HN 热帖)入库, 排在回采(20:00)、巡检(20:30)、选题(23:00)之前,
+  让 23:00 的选题能吃到当天最新的资讯。定时触发带 --scheduled: 今天已经抓过就跳过(失败补跑由设置页控制)。
+
+  装: cp 到 ~/Library/LaunchAgents/ 后 launchctl load -w
+  卸: launchctl unload -w ~/Library/LaunchAgents/com.mediapilot.fetch-sources.plist
+
+  RunAtLoad 特意设为 false —— 装的时候不该顺手跑一次。想立刻验证就手动跑 npx tsx scripts/fetch-sources.ts。
+
+  日志写在项目的 logs/fetch-sources.log, 失败不分流(同 daily-topics 的规矩)。
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.mediapilot.fetch-sources</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>cd "__PROJECT_DIR__" || exit 1; exec npx tsx scripts/fetch-sources.ts --scheduled</string>
+  </array>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>19</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>StandardOutPath</key>
+  <string>__PROJECT_DIR__/logs/fetch-sources.log</string>
+  <key>StandardErrorPath</key>
+  <string>__PROJECT_DIR__/logs/fetch-sources.log</string>
+
+  <key>WorkingDirectory</key>
+  <string>__PROJECT_DIR__</string>
+</dict>
+</plist>

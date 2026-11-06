@@ -459,6 +459,29 @@ model FilmSession {
   @@index([status])
 }
 
+/// 信息源条目: 每天从 GitHub Trending / HN 抓的热门(全收不过滤, 选题时再挑)
+model SourceItem {
+  id        String   @id @default(cuid())
+  /// github | hackernews
+  provider  String
+  /// 去重键: github=仓库全名, hn=HN id
+  outerId   String
+  title     String
+  /// 仓库简介 / HN 帖子链接的正文(可空)
+  summary   String?
+  url       String
+  /// 热度: github=新增 star 数, hn=帖子的 points
+  heat      Int      @default(0)
+  /// fresh(没出过选题) | used(已出选题)
+  status    String   @default("fresh")
+  /// 抓取那天(本机时区 YYYY-MM-DD)
+  day       String
+  createdAt DateTime @default(now())
+
+  @@unique([provider, outerId])
+  @@index([day])
+}
+
 /// 点子池: 用户随手写的选题点子
 model TopicIdea {
   id        String   @id @default(cuid())

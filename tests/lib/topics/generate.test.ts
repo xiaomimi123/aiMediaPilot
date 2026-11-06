@@ -20,6 +20,7 @@ function deps(over: Partial<GenDeps> = {}) {
       benchmarkHits: async () => [{ id: 'b1', ratio: 5, author: 'A', topic: 'AI 回消息', desc: '', transcript: '对标原文一二三四五六七八九十一二' }],
       ownWorks: async () => [{ projectId: 'p1', title: 'U盘', lastText: '单独来讲一期', play: 300 }],
       freshIdeas: async () => [{ id: 'i1', text: '讲讲 vibe coding 踩过的坑', createdAt: new Date('2026-10-01') }],
+      freshSourceItems: async () => [],
     },
     personaText: '定位',
     lessons: undefined,
@@ -28,6 +29,7 @@ function deps(over: Partial<GenDeps> = {}) {
     predict: async () => ({ scores: [], inputHash: 'h', formulaVersion: 1, result: { center: 4500 } as never }),
     save: async (t) => (saved.push(t), 'saved'),
     markIdeaUsed: async (id) => void used.push(id),
+    markSourceUsed: async (id) => void used.push(`source:${id}`),
     recordRun: async (r) => void runs.push(r),
     doneRecently: async () => false,
     ...over,
@@ -44,6 +46,25 @@ describe('generateDailyTopics', () => {
     expect(saved[0]).toMatchObject({ day: '2026-10-09', prediction: { inputHash: 'h' } });
     expect(used).toEqual(['i1']);
     expect(runs).toEqual([{ day: '2026-10-09', created: 3, skipped: [] }]);
+  });
+  it('picks a source item as 资讯 when its pool has entries and marks it used', async () => {
+    const { d, saved, used } = deps({
+      benchmarkHits: async () => [],
+      store: {
+        usedKeys: async () => new Set(),
+        benchmarkHits: async () => [],
+        ownWorks: async () => [],
+        freshIdeas: async () => [],
+        freshSourceItems: async () => [{ id: 'src1', title: 'deepseek-ai/dsh-superagent', summary: 'agent system', url: 'https://github.com/x', heat: 19000, provider: 'github' }],
+      },
+    });
+    const r = await generateDailyTopics(d);
+    expect(r.created).toBe(1);
+    expect(saved[0]).toMatchObject({ source: 'source', title: '对标题' });
+    expect(used).toContain('source:src1');
+    // 资讯材料进了写稿的 facts
+    const writeCall = (d.write as ReturnType<typeof vi.fn>).mock?.calls?.[0]?.[0] as { facts?: string } | undefined;
+    if (writeCall?.facts) expect(writeCall.facts).toContain('GitHub 热门仓库');
   });
   it('keeps a topic when its prediction fails', async () => {
     const { d, saved } = deps({ predict: async () => null });
@@ -81,7 +102,7 @@ describe('generateDailyTopics', () => {
     expect((saved[0].copied as unknown[]).length).toBeGreaterThan(0);
   });
   it('records why nothing was generated', async () => {
-    const none = deps({ store: { usedKeys: async () => new Set(), benchmarkHits: async () => [], ownWorks: async () => [], freshIdeas: async () => [] } });
+    const none = deps({ store: { usedKeys: async () => new Set(), benchmarkHits: async () => [], ownWorks: async () => [], freshIdeas: async () => [], freshSourceItems: async () => [] } });
     expect(await generateDailyTopics(none.d)).toMatchObject({ created: 0, skipped: [{ reason: '没有可用的选题来源：加几个对标账号，或在点子池里写几句' }] });
     const noModel = deps({ llm: null });
     expect(await generateDailyTopics(noModel.d)).toMatchObject({ created: 0, skipped: [{ reason: '还没有可用的模型' }] });

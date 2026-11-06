@@ -5,7 +5,7 @@ import { localDay, type TopicSource } from './candidates';
 import { checklistQuestion, ChecklistSchema, rewriteWithAnswers, TARGET_SEC, type GenDeps } from './generate';
 
 export const EXPIRE_DAYS = 3;
-const LABEL: Record<TopicSource, string> = { benchmark: '对标', sequel: '续集', idea: '点子' };
+const LABEL: Record<TopicSource, string> = { benchmark: '对标', sequel: '续集', idea: '点子', source: '资讯' };
 
 export interface DailyCard { id: string; day: string; source: TopicSource; sourceLabel: string; title: string; why: string; hook: string; script: Script; copied: number; predictedCenter: number | null; status: string; questions: string[]; answers: string[]; answered: boolean }
 
