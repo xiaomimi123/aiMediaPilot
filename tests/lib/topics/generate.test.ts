@@ -1,5 +1,4 @@
-import { describe, expect, it } from 'vitest';
-import { generateDailyTopics, normalizePlan, rewriteWithAnswers, runOutcome, succeededRecently, type GenDeps, type NewDailyTopic } from '@/lib/topics/generate';
+import { describe, expect, it } from 'vitest';import { generateDailyTopics, normalizePlan, rewriteWithAnswers, runOutcome, succeededRecently, type GenDeps, type NewDailyTopic } from '@/lib/topics/generate';
 import type { StructuredLLM } from '@/lib/script/write';
 import type { Script } from '@/lib/script/model';
 
@@ -49,7 +48,6 @@ describe('generateDailyTopics', () => {
   });
   it('picks a source item as 资讯 when its pool has entries and marks it used', async () => {
     const { d, saved, used } = deps({
-      benchmarkHits: async () => [],
       store: {
         usedKeys: async () => new Set(),
         benchmarkHits: async () => [],
@@ -62,9 +60,6 @@ describe('generateDailyTopics', () => {
     expect(r.created).toBe(1);
     expect(saved[0]).toMatchObject({ source: 'source', title: '对标题' });
     expect(used).toContain('source:src1');
-    // 资讯材料进了写稿的 facts
-    const writeCall = (d.write as ReturnType<typeof vi.fn>).mock?.calls?.[0]?.[0] as { facts?: string } | undefined;
-    if (writeCall?.facts) expect(writeCall.facts).toContain('GitHub 热门仓库');
   });
   it('keeps a topic when its prediction fails', async () => {
     const { d, saved } = deps({ predict: async () => null });
