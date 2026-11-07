@@ -44,6 +44,17 @@ export const NIGHTLY_TASKS = {
     /** 失败时 0:00、1:00 补跑; 脚本带 --scheduled, 今天已生成过就跳过 */
     retryAfterMin: [60, 120] as number[],
   },
+  sources: {
+    label: '信息源抓取',
+    launchdLabel: 'com.mediapilot.fetch-sources',
+    npmScript: 'fetch:sources',
+    scriptFile: 'scripts/fetch-sources.ts',
+    log: 'logs/fetch-sources.log',
+    defaultHour: 19,
+    defaultMinute: 0,
+    /** 抓 GitHub/HN 不碰抖音, 失败损失小, 不安排补跑(明天 19:00 自然会再来) */
+    retryAfterMin: [] as number[],
+  },
 } as const;
 
 export type TaskKey = keyof typeof NIGHTLY_TASKS;

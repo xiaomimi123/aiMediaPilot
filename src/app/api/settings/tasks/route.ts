@@ -1,5 +1,5 @@
 import { ok } from '@/lib/api';
-import { readCollectStatus, readScanStatus, readTopicsStatus } from '@/lib/douyin/collect-log';
+import { readCollectStatus, readScanStatus, readTopicsStatus, readSourcesStatus } from '@/lib/douyin/collect-log';
 import { createTaskDeps, getSchedule, isTaskRunning, manualRunsLeft, NIGHTLY_TASKS, type TaskKey } from '@/lib/tasks/nightly';
 
 export const dynamic = 'force-dynamic';
@@ -14,11 +14,13 @@ export interface TaskView {
   lastMessage: string | null;
   hint: string;
   manualLeft: number;
+  /** 失败会不会自动补跑(回采/巡检/选题会, 抓信息源不会) */
+  retryAfterMin: boolean;
 }
 
 export async function GET() {
   const d = createTaskDeps();
-  const statuses = { collect: await readCollectStatus(), scan: await readScanStatus(), topics: await readTopicsStatus() };
+  const statuses = { collect: await readCollectStatus(), scan: await readScanStatus(), topics: await readTopicsStatus(), sources: await readSourcesStatus() };
   const views: TaskView[] = [];
   for (const key of Object.keys(NIGHTLY_TASKS) as TaskKey[]) {
     const s = statuses[key];
@@ -32,6 +34,7 @@ export async function GET() {
       lastMessage: s.lastRun?.message ?? null,
       hint: s.hint,
       manualLeft: await manualRunsLeft(d, key),
+      retryAfterMin: NIGHTLY_TASKS[key].retryAfterMin.length > 0,
     });
   }
   return ok(views);

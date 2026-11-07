@@ -19,6 +19,7 @@ async function main(): Promise<void> {
   const db = new PrismaClient();
   try {
     const now = new Date();
+    log('开始抓取');
     if (process.argv.includes('--scheduled')) {
       const today = localDay(now);
       const last = await db.sourceItem.findFirst({ where: { day: today }, orderBy: { createdAt: 'desc' } });

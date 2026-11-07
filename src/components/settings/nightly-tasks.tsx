@@ -49,7 +49,20 @@ function TaskCard({ t, onChanged }: { t: TaskView; onChanged: (justStarted?: boo
         <span className={`text-xs ${t.schedule.enabled ? 'text-[var(--success)]' : 'text-[var(--text-tertiary)]'}`}>
           {t.schedule.enabled ? `定时已开 · 每晚 ${pad(t.schedule.hour)}:${pad(t.schedule.minute)}` : '定时未开'}
         </span>
-        {t.schedule.enabled && <span className="text-xs text-[var(--text-tertiary)]">失败会在 1 小时、2 小时后各自动补跑一次</span>}
+        {t.schedule.enabled && t.retryAfterMin && <span className="text-xs text-[var(--text-tertiary)]">失败会自动补跑</span>}
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-xs text-[var(--text-secondary)]">{t.schedule.enabled ? '自动运行' : '已停用'}</span>
+          <button
+            role="switch"
+            aria-checked={t.schedule.enabled}
+            aria-label={`${t.schedule.enabled ? '关闭' : '开启'}${t.label}定时`}
+            disabled={busy}
+            onClick={() => void setSchedule(!t.schedule.enabled)}
+            className={`relative h-6 w-11 rounded-full transition-colors disabled:opacity-50 ${t.schedule.enabled ? 'bg-[var(--accent)]' : 'bg-[var(--border-strong)]'}`}
+          >
+            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${t.schedule.enabled ? 'left-[22px]' : 'left-0.5'}`} />
+          </button>
+        </div>
       </div>
       <p className={`mt-1 text-xs ${running || t.state === 'ok' ? 'text-[var(--text-secondary)]' : 'text-[var(--warning)]'}`}>{status}</p>
       <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
@@ -59,14 +72,7 @@ function TaskCard({ t, onChanged }: { t: TaskView; onChanged: (justStarted?: boo
         <span className="text-xs text-[var(--text-tertiary)]">今天还能手动 {t.manualLeft} 次</span>
         <span className="mx-1 h-4 w-px bg-[var(--border-subtle)]" />
         <input type="time" className="rounded-md border border-[var(--border-default)] bg-[var(--bg-inset)] px-2 py-0.5 text-sm" value={time} onChange={(e) => setTime(e.target.value)} />
-        {t.schedule.enabled ? (
-          <>
-            <button className="btn-secondary" disabled={busy} onClick={() => void setSchedule(true)}>改时间</button>
-            <button className="text-xs text-[var(--text-tertiary)]" disabled={busy} onClick={() => void setSchedule(false)}>关闭定时</button>
-          </>
-        ) : (
-          <button className="btn-secondary" disabled={busy} onClick={() => void setSchedule(true)}>开启每晚定时</button>
-        )}
+        <button className="btn-secondary" disabled={busy} onClick={() => void setSchedule(true)}>改时间</button>
       </div>
       {msg && <p className={`mt-2 text-xs ${msg.ok ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>{msg.text}</p>}
     </div>

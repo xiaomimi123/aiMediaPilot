@@ -49,6 +49,13 @@ export const TOPICS_SPEC: RunLogSpec = {
   install: '在「设置 · 每晚任务」开启每晚定时，或点「立即运行」先跑一次。',
 };
 
+export const SOURCES_SPEC: RunLogSpec = {
+  start: '开始抓取',
+  done: '抓取完成',
+  noun: '信息源抓取',
+  install: '在「设置 · 每晚任务」开启定时，或点「立即运行」先跑一次。',
+};
+
 export function parseRunLog(text: string, now: Date, spec: RunLogSpec): CollectStatus {
   const runs: { startedAt: string; lines: { at: string; msg: string }[] }[] = [];
   let pendingReason: { at: string; msg: string } | null = null;
@@ -134,4 +141,8 @@ export function readScanStatus(now = new Date(), file = path.join(process.cwd(),
 
 export function readTopicsStatus(now = new Date(), file = path.join(process.cwd(), 'logs', 'daily-topics.log')): Promise<CollectStatus> {
   return readRunStatus(file, now, TOPICS_SPEC);
+}
+
+export function readSourcesStatus(now = new Date(), file = path.join(process.cwd(), 'logs', 'fetch-sources.log')): Promise<CollectStatus> {
+  return readRunStatus(file, now, SOURCES_SPEC);
 }
