@@ -6,7 +6,8 @@ import { ROLE_LABEL } from '@/lib/script/model';
 
 type RepoItem = { id: string; outerId: string; title: string; summary: string | null; url: string; heat: number; day: string };
 type Segment = { id: string; role: string; text: string };
-type NewsResult = { title: string; script: { segments: Segment[] }; questions: string[]; flavor: { kind: string; label: string; text: string }[]; readmeUrl?: string; project?: { id: string } };
+type VoiceResult = { file: string; speaker: string; bytes: number } | { error: string };
+type NewsResult = { title: string; script: { segments: Segment[] }; questions: string[]; flavor: { kind: string; label: string; text: string }[]; readmeUrl?: string; project?: { id: string }; voice?: VoiceResult };
 
 const post = (url: string, body: unknown) =>
   fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
@@ -21,6 +22,7 @@ export function OpenSourceNews() {
   const [result, setResult] = useState<NewsResult | null>(null);
   const [resultRepo, setResultRepo] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [withVoice, setWithVoice] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -47,9 +49,16 @@ export function OpenSourceNews() {
     if (!result || !resultRepo || creating) return;
     setCreating(true);
     setErr(null);
-    const j = await post('/api/sources/news', { outerId: resultRepo, action: 'create', title: result.title });
+    const j = await post('/api/sources/news', { outerId: resultRepo, action: 'create', title: result.title, voice: withVoice });
     setCreating(false);
     if (!j.success) return setErr(j.message);
+    const v = j.data.voice as VoiceResult | null | undefined;
+    if (v && 'error' in v) {
+      // 配音失败不拦建作品: 提示后照常进项目
+      setErr(`作品已建好，但配音没生成：${v.error}`);
+      setTimeout(() => router.push(`/projects/${j.data.project.id}`), 2500);
+      return;
+    }
     router.push(`/projects/${j.data.project.id}`);
   };
 
@@ -108,10 +117,14 @@ export function OpenSourceNews() {
               </ul>
             </div>
           )}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button className="btn-primary" disabled={creating} onClick={() => void create()}>
-              {creating ? '建作品中…' : '就做这条（建作品）'}
+              {creating ? (withVoice ? '建作品并配音中…' : '建作品中…') : '就做这条（建作品）'}
             </button>
+            <label className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+              <input type="checkbox" checked={withVoice} onChange={(e) => setWithVoice(e.target.checked)} />
+              同时生成 AI 配音（火山 TTS）
+            </label>
             <button className="btn-secondary" disabled={creating} onClick={() => setResult(null)}>
               收起
             </button>
