@@ -28,6 +28,13 @@ export interface CandidateStore {
 export const BENCHMARK_DAYS = 14;
 export const SEQUEL_HOOK = /下期|下一期|单独(来)?讲|下次|后面再说|留着/;
 
+/** 信息源条目在选题材料里的展示文案 */
+const SOURCE_LABEL: Record<string, (heat: number) => string> = {
+  github: (h) => `GitHub 热门仓库（${h.toLocaleString('en-US')} stars）`,
+  hackernews: (h) => `Hacker News 热帖（${h.toLocaleString('en-US')} points）`,
+  x: (h) => `X 热帖（${h.toLocaleString('en-US')} 浏览）`,
+};
+
 export async function loadPools(store: CandidateStore, now: Date): Promise<Record<TopicSource, Candidate[]>> {
   const used = await store.usedKeys();
   const fresh = (source: TopicSource, id: string) => !used.has(`${source}:${id}`);
@@ -63,7 +70,7 @@ export async function loadPools(store: CandidateStore, now: Date): Promise<Recor
     .map((i) => ({
       source: 'source' as const,
       sourceId: i.id,
-      material: `${i.provider === 'github' ? 'GitHub 热门仓库' : 'Hacker News 热帖'}（${i.heat.toLocaleString('en-US')} ${i.provider === 'github' ? 'stars' : 'points'}）：${i.title}${i.summary ? ` —— ${i.summary.slice(0, 200)}` : ''}（${i.url}）`,
+      material: `${SOURCE_LABEL[i.provider]?.(i.heat) ?? i.provider}：${i.title}${i.summary ? ` —— ${i.summary.slice(0, 200)}` : ''}（${i.url}）`,
     }));
 
   return { benchmark, sequel, idea, source };
