@@ -7,6 +7,7 @@ import { AccountPanel } from './account-panel';
 import { SuggestPanel } from './suggest-panel';
 import { DailyTopics } from './daily-topics';
 import { OwnScript } from './own-script';
+import { OpenSourceNews } from './open-source-news';
 import { IdeaPool } from './idea-pool';
 
 export function TopicsView() {
@@ -48,6 +49,7 @@ export function TopicsView() {
     <div className="space-y-4">
       <OwnScript />
       <DailyTopics />
+      <OpenSourceNews />
       <IdeaPool />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-4">
