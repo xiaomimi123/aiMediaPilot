@@ -14,6 +14,7 @@
     "scan:benchmarks": "tsx scripts/scan-benchmarks.ts",
     "topics:daily": "tsx scripts/daily-topics.ts",
     "fetch:sources": "tsx scripts/fetch-sources.ts",
+    "news:daily": "tsx scripts/news-daily.ts",
     "import:legacy": "tsx scripts/import-legacy.ts",
     "test": "vitest run",
     "test:watch": "vitest",

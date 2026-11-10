@@ -55,6 +55,17 @@ export const NIGHTLY_TASKS = {
     /** 抓 GitHub/HN 不碰抖音, 失败损失小, 不安排补跑(明天 19:00 自然会再来) */
     retryAfterMin: [] as number[],
   },
+  news: {
+    label: '快讯自动出稿',
+    launchdLabel: 'com.mediapilot.news-daily',
+    npmScript: 'news:daily',
+    scriptFile: 'scripts/news-daily.ts',
+    log: 'logs/news-daily.log',
+    defaultHour: 19,
+    defaultMinute: 35,
+    /** 在信息源抓取(19:00)之后; 失败损失小, 不安排补跑 */
+    retryAfterMin: [] as number[],
+  },
 } as const;
 
 export type TaskKey = keyof typeof NIGHTLY_TASKS;

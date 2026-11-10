@@ -4,6 +4,7 @@ import { getActiveModel, NO_MODEL_MESSAGE } from '@/lib/llm/provider';
 import { fetchReadme } from '@/lib/sources/news';
 import { designHandsOn, handsOnIdeaText } from '@/lib/sources/hands-on';
 import { addIdea } from '@/lib/topics/daily';
+import { HANDS_ON_TARGET_SEC } from '@/lib/sources/hands-on';
 import { createProject } from '@/lib/project/create';
 import { toProjectView } from '@/lib/project/view';
 import { rewriteWithAnswers } from '@/lib/topics/generate';
@@ -12,9 +13,6 @@ import { recentSampleTexts } from '@/lib/voice/samples';
 import { formatPersona, type PersonaLike } from '@/lib/tools/types';
 
 export const dynamic = 'force-dynamic';
-
-/** 亲测档目标时长(秒): roadmap 定的 60~90, 取上限让实测细节装得下 */
-export const HANDS_ON_TARGET_SEC = 90;
 
 type Body = { outerId?: string; ideaId?: string; action?: 'plan' | 'write'; questions?: unknown; answers?: unknown };
 

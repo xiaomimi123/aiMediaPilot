@@ -1,5 +1,5 @@
 import { ok } from '@/lib/api';
-import { readCollectStatus, readScanStatus, readTopicsStatus, readSourcesStatus } from '@/lib/douyin/collect-log';
+import { readCollectStatus, readScanStatus, readTopicsStatus, readSourcesStatus, readNewsStatus } from '@/lib/douyin/collect-log';
 import { createTaskDeps, getSchedule, isTaskRunning, manualRunsLeft, NIGHTLY_TASKS, type TaskKey } from '@/lib/tasks/nightly';
 
 export const dynamic = 'force-dynamic';
@@ -20,7 +20,7 @@ export interface TaskView {
 
 export async function GET() {
   const d = createTaskDeps();
-  const statuses = { collect: await readCollectStatus(), scan: await readScanStatus(), topics: await readTopicsStatus(), sources: await readSourcesStatus() };
+  const statuses = { collect: await readCollectStatus(), scan: await readScanStatus(), topics: await readTopicsStatus(), sources: await readSourcesStatus(), news: await readNewsStatus() };
   const views: TaskView[] = [];
   for (const key of Object.keys(NIGHTLY_TASKS) as TaskKey[]) {
     const s = statuses[key];

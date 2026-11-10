@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  每晚 19:35 自动出一条开源快讯(在 19:00 信息源抓取之后): 挑近 3 天最热的 fresh GitHub
+  仓库, 读 README 写 30 秒稿建作品 + AI 配音。定时触发带 --scheduled: 今天已经出过就跳过。
+
+  装: cp 到 ~/Library/LaunchAgents/ 后 launchctl load -w
+  卸: launchctl unload -w ~/Library/LaunchAgents/com.mediapilot.news-daily.plist
+
+  RunAtLoad 特意设为 false —— 装的时候不该顺手跑一次。想立刻验证就手动跑 npx tsx scripts/news-daily.ts。
+
+  日志写在项目的 logs/news-daily.log, 失败不分流(同 daily-topics 的规矩)。
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.mediapilot.news-daily</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>cd "__PROJECT_DIR__" || exit 1; exec npx tsx scripts/news-daily.ts --scheduled</string>
+  </array>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>19</integer>
+    <key>Minute</key>
+    <integer>35</integer>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>StandardOutPath</key>
+  <string>__PROJECT_DIR__/logs/news-daily.log</string>
+  <key>StandardErrorPath</key>
+  <string>__PROJECT_DIR__/logs/news-daily.log</string>
+
+  <key>WorkingDirectory</key>
+  <string>__PROJECT_DIR__</string>
+</dict>
+</plist>

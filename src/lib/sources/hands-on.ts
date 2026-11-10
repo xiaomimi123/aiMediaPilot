@@ -39,3 +39,6 @@ export function handsOnIdeaText(plan: HandsOnPlan, repo: string, starCount: numb
   const stars = starCount !== null ? `（GitHub ${starCount.toLocaleString('en-US')} stars）` : '';
   return `【亲测档·${repo}${stars}】\n标题方向：${plan.title}\n讲什么：${plan.direction}\n钩子方向：${plan.hook}\n（这是快讯档升级的亲测档选题，等我亲手装完答完实测问题再按我的话写 90 秒稿。）`;
 }
+
+/** 亲测档目标时长(秒): roadmap 定的 60~90, 取上限让实测细节装得下 */
+export const HANDS_ON_TARGET_SEC = 90;
