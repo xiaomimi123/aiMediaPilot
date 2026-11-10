@@ -49,6 +49,21 @@ npm run dev                 # http://localhost:3000
 
 改了 `prisma/schema.prisma` 之后必须 `npx prisma generate` 并重启 `npm run dev`。不要在 dev 运行时跑 `npm run build`。
 
+## 每日开源横屏成片
+
+`pipeline/` 一条命令出 1920×1080(普通仓库页或真抓实测,由项目 JSON 的卡片种类决定)。macOS:
+
+```bash
+brew install ffmpeg
+# 另外需要 Node 24、Python 3.13
+python3.13 -m venv .venv && source .venv/bin/activate
+pip install -r pipeline/requirements.txt && python -m playwright install chromium
+npm install --prefix pipeline
+python pipeline/run.py pipeline/projects/scrapling.json
+```
+
+配音默认火山克隆音色:在 `.env` 填 `VOLC_APPID`、`VOLC_ACCESS_TOKEN`、`VOLC_SECRET_KEY`(没有 Access Token 时 SECRET_KEY 当作 Access Token),`VOLC_VOICE_ID` 改音色。免费 edge-tts:`python pipeline/run.py pipeline/projects/scrapling.json --tts edge`。重跑某步:`--force tts`;只跑后面几步:`--only stills,render`;跳过:`--skip term`。产物在 `pipeline/build/`,不入库。字体随仓库分发。
+
 ## 环境变量（`.env`）
 
 | 变量 | 说明 |
@@ -130,6 +145,7 @@ src/lib/douyin/ account/  回采日志解析、总览账号数据、账号每日
 src/lib/persona/          人设档案 schema
 src/lib/settings/ health/ .env 写入、DeepSeek key 测试、依赖体检
 remotion/                出片用的 Remotion 子工程（kit 组件库 + 渲染脚本）
+pipeline/                每日开源横屏:一条命令从仓库页/真抓实测到成片
 scripts/                 回采、旧数据导入、字级对齐
 ```
 

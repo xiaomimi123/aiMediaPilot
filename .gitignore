@@ -62,3 +62,9 @@ scripts/align/__pycache__
 /remotion/node_modules/
 /remotion/films/*
 !/remotion/films/.gitkeep
+
+# 每日开源横屏流水线:截图、配音、终端回放、成片、venv。字体和项目 JSON 要入库。
+/pipeline/build/
+/pipeline/**/__pycache__/
+/pipeline/demos/**/*.csv
+/pipeline/demos/**/*.json
