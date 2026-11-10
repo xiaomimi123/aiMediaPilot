@@ -6,13 +6,14 @@ import { getActiveModel, NO_MODEL_MESSAGE } from '@/lib/llm/provider';
 import { writeNewsScript, fetchReadme, NEWS_TARGET_SEC } from '@/lib/sources/news';
 import { synthesizeSpeech, ttsConfigFromEnv, DEFAULT_SPEAKER } from '@/lib/sources/tts';
 import { buildDemoMaterial } from '@/lib/sources/demo-material';
+import { buildCoverMaterial } from '@/lib/sources/cover-material';
 import { createProject } from '@/lib/project/create';
 import { toProjectView } from '@/lib/project/view';
 import { projectDir } from '@/lib/files/storage';
 
 export const dynamic = 'force-dynamic';
 
-type Body = { outerId?: string; action?: 'preview' | 'create'; topic?: string; title?: string; voice?: boolean; speaker?: string; demo?: boolean };
+type Body = { outerId?: string; action?: 'preview' | 'create'; topic?: string; title?: string; voice?: boolean; speaker?: string; demo?: boolean; cover?: boolean };
 
 /** 从 SourceItem 里找 github 条目 */
 async function findItem(outerId: string) {
@@ -80,7 +81,25 @@ export async function POST(req: Request) {
           demo = { error: e instanceof Error ? e.message : String(e) };
         }
       }
-      return ok({ ...out, project: toProjectView(p), voice, demo });
+
+      // 封面(风格 D 模板, 1080×1440): 失败不拦建作品
+      let cover: { file: string; coverText: string[] } | { error: string } | null = null;
+      if (b.cover) {
+        try {
+          const c = await buildCoverMaterial(prisma, {
+            projectId: p.id,
+            repo: outerId,
+            starCount: item.heat,
+            readme: readme.text,
+            scriptText: out.script.segments.map((s) => s.text).join('\n'),
+            llm: m.llm,
+          });
+          cover = { file: c.file, coverText: c.coverText };
+        } catch (e) {
+          cover = { error: e instanceof Error ? e.message : String(e) };
+        }
+      }
+      return ok({ ...out, project: toProjectView(p), voice, demo, cover });
     }
     return ok({ ...out, readmeUrl: readme.url });
   } catch (e) {

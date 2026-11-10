@@ -46,6 +46,20 @@ export interface DemoVideoResult {
   durationSec: number;
 }
 
+/** 对一个页面截单张 PNG(封面用; 与录屏同一套 Playwright 加载逻辑) */
+export async function screenshotPage(opts: { url: string; outFile: string; width?: number; height?: number }): Promise<void> {
+  const { chromium } = await loadPlaywright();
+  const browser = await chromium.launch({ args: ['--force-device-scale-factor=1'] });
+  try {
+    const page = await browser.newPage({ viewport: { width: opts.width ?? 1080, height: opts.height ?? 1440 } });
+    await page.goto(opts.url, { waitUntil: 'load', timeout: 20_000 });
+    await page.waitForTimeout(800); // 字体/图片落地
+    await page.screenshot({ path: opts.outFile });
+  } finally {
+    await browser.close().catch(() => null);
+  }
+}
+
 /** 录一段演示动画并转码成横版 mp4。失败抛错(人话)。 */
 export async function recordDemoVideo(opts: DemoVideoOpts): Promise<DemoVideoResult> {
   const width = opts.width ?? 1920;

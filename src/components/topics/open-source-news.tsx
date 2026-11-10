@@ -8,7 +8,8 @@ type RepoItem = { id: string; outerId: string; title: string; summary: string | 
 type Segment = { id: string; role: string; text: string };
 type VoiceResult = { file: string; speaker: string; bytes: number } | { error: string };
 type DemoResult = { file: string; kind: string } | { error: string };
-type NewsResult = { title: string; script: { segments: Segment[] }; questions: string[]; flavor: { kind: string; label: string; text: string }[]; readmeUrl?: string; project?: { id: string }; voice?: VoiceResult; demo?: DemoResult };
+type CoverResult = { file: string; coverText: string[] } | { error: string };
+type NewsResult = { title: string; script: { segments: Segment[] }; questions: string[]; flavor: { kind: string; label: string; text: string }[]; readmeUrl?: string; project?: { id: string }; voice?: VoiceResult; demo?: DemoResult; cover?: CoverResult };
 
 const post = (url: string, body: unknown) =>
   fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
@@ -25,6 +26,7 @@ export function OpenSourceNews() {
   const [creating, setCreating] = useState(false);
   const [withVoice, setWithVoice] = useState(true);
   const [withDemo, setWithDemo] = useState(true);
+  const [withCover, setWithCover] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -51,14 +53,16 @@ export function OpenSourceNews() {
     if (!result || !resultRepo || creating) return;
     setCreating(true);
     setErr(null);
-    const j = await post('/api/sources/news', { outerId: resultRepo, action: 'create', title: result.title, voice: withVoice, demo: withDemo });
+    const j = await post('/api/sources/news', { outerId: resultRepo, action: 'create', title: result.title, voice: withVoice, demo: withDemo, cover: withCover });
     setCreating(false);
     if (!j.success) return setErr(j.message);
     const v = j.data.voice as VoiceResult | null | undefined;
     const d = j.data.demo as DemoResult | null | undefined;
+    const c = j.data.cover as CoverResult | null | undefined;
     const problems: string[] = [];
     if (v && 'error' in v) problems.push(`配音没生成：${v.error}`);
     if (d && 'error' in d) problems.push(`演示画面没生成：${d.error}`);
+    if (c && 'error' in c) problems.push(`封面没生成：${c.error}`);
     if (problems.length) {
       // 配音/演示失败不拦建作品: 提示后照常进项目
       setErr(`作品已建好，但${problems.join('；')}`);
@@ -134,6 +138,10 @@ export function OpenSourceNews() {
             <label className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
               <input type="checkbox" checked={withDemo} onChange={(e) => setWithDemo(e.target.checked)} />
               同时生成演示画面（官网/介绍页录屏，约 1 分钟）
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+              <input type="checkbox" checked={withCover} onChange={(e) => setWithCover(e.target.checked)} />
+              同时生成封面（4:3）
             </label>
             <button className="btn-secondary" disabled={creating} onClick={() => setResult(null)}>
               收起
