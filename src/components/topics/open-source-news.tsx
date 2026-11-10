@@ -10,6 +10,7 @@ type VoiceResult = { file: string; speaker: string; bytes: number } | { error: s
 type DemoResult = { file: string; kind: string } | { error: string };
 type CoverResult = { file: string; coverText: string[] } | { error: string };
 type NewsResult = { title: string; script: { segments: Segment[] }; questions: string[]; flavor: { kind: string; label: string; text: string }[]; readmeUrl?: string; project?: { id: string }; voice?: VoiceResult; demo?: DemoResult; cover?: CoverResult };
+type HandsOnResult = { ideaId: string; title: string; hook: string; direction: string; questions: string[] };
 
 const post = (url: string, body: unknown) =>
   fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
@@ -27,6 +28,12 @@ export function OpenSourceNews() {
   const [withVoice, setWithVoice] = useState(true);
   const [withDemo, setWithDemo] = useState(true);
   const [withCover, setWithCover] = useState(true);
+  // 亲测档: 正在升级的仓库 / 升级结果(实测问题清单) / 用户填的回答
+  const [handsOnBusy, setHandsOnBusy] = useState<string | null>(null);
+  const [handsOn, setHandsOn] = useState<HandsOnResult | null>(null);
+  const [handsOnRepo, setHandsOnRepo] = useState<string | null>(null);
+  const [handsOnAnswers, setHandsOnAnswers] = useState<string[]>([]);
+  const [handsOnWriting, setHandsOnWriting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -72,6 +79,31 @@ export function OpenSourceNews() {
     router.push(`/projects/${j.data.project.id}`);
   };
 
+  const upgradeHandsOn = async (item: RepoItem) => {
+    if (handsOnBusy) return;
+    setHandsOnBusy(item.outerId);
+    setErr(null);
+    const j = await post('/api/sources/hands-on', { outerId: item.outerId });
+    setHandsOnBusy(null);
+    if (!j.success) return setErr(j.message);
+    setHandsOn(j.data as HandsOnResult);
+    setHandsOnRepo(item.outerId);
+    setHandsOnAnswers(new Array((j.data as HandsOnResult).questions.length).fill(''));
+    setResult(null);
+  };
+
+  const writeHandsOn = async () => {
+    if (!handsOn || !handsOnRepo || handsOnWriting) return;
+    setHandsOnWriting(true);
+    setErr(null);
+    const j = await post('/api/sources/hands-on', { outerId: handsOnRepo, action: 'write', ideaId: handsOn.ideaId, questions: handsOn.questions, answers: handsOnAnswers });
+    setHandsOnWriting(false);
+    if (!j.success) return setErr(j.message);
+    setHandsOn(null);
+    setHandsOnRepo(null);
+    router.push(`/projects/${j.data.project.id}`);
+  };
+
   return (
     <section className="card space-y-3">
       <div>
@@ -94,6 +126,9 @@ export function OpenSourceNews() {
                 <span className="shrink-0 chip text-xs">{`${r.heat.toLocaleString('en-US')} stars`}</span>
                 <button className="btn-secondary shrink-0 px-3 py-1 text-xs" disabled={busyId !== null} onClick={() => void preview(r)}>
                   {busyId === r.outerId ? '正在读 README…' : '出稿'}
+                </button>
+                <button className="btn-secondary shrink-0 px-3 py-1 text-xs" disabled={handsOnBusy !== null || busyId !== null} onClick={() => void upgradeHandsOn(r)}>
+                  {handsOnBusy === r.outerId ? '出实测清单…' : '升级亲测档'}
                 </button>
               </div>
               {r.summary && <p className="mt-1 truncate text-xs text-[var(--text-secondary)]">{r.summary}</p>}
@@ -146,6 +181,38 @@ export function OpenSourceNews() {
             <button className="btn-secondary" disabled={creating} onClick={() => setResult(null)}>
               收起
             </button>
+          </div>
+        </div>
+      )}
+      {handsOn && handsOnRepo && (
+        <div className="space-y-3 rounded-[var(--r-md)] border border-[var(--accent-border)] bg-[var(--bg-surface)] p-4 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <b>{handsOn.title}</b>
+            <span className="text-xs text-[var(--text-tertiary)]">{handsOnRepo} · 亲测档 90 秒</span>
+          </div>
+          <p className="text-xs text-[var(--text-secondary)]">钩子方向：{handsOn.hook}</p>
+          <p className="text-xs text-[var(--text-secondary)]">已存进点子池。下面这些问题要你亲手装完才能答——边装边答几句真话，答完按你的话写稿，没答的留【待补】。</p>
+          {handsOn.questions.map((q, i) => (
+            <div key={i} className="space-y-1">
+              <div>{q}</div>
+              <textarea
+                rows={2}
+                className="w-full rounded-[var(--r-md)] bg-[var(--bg-inset)] px-2 py-1.5"
+                placeholder="装到这步实际发生了什么，几句就行"
+                value={handsOnAnswers[i] ?? ''}
+                onChange={(e) => setHandsOnAnswers(handsOnAnswers.map((v, k) => (k === i ? e.target.value : v)))}
+              />
+            </div>
+          ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              className="btn-primary"
+              disabled={handsOnWriting || !handsOnAnswers.some((v) => (v ?? '').trim())}
+              onClick={() => void writeHandsOn()}
+            >
+              {handsOnWriting ? '按你的实测写稿中…' : '写完了，按我的话写（建作品）'}
+            </button>
+            <button className="btn-secondary" disabled={handsOnWriting} onClick={() => { setHandsOn(null); setHandsOnRepo(null); }}>收起（点子池里随时回来）</button>
           </div>
         </div>
       )}
