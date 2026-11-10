@@ -5,13 +5,14 @@ import { ok, fail } from '@/lib/api';
 import { getActiveModel, NO_MODEL_MESSAGE } from '@/lib/llm/provider';
 import { writeNewsScript, fetchReadme, NEWS_TARGET_SEC } from '@/lib/sources/news';
 import { synthesizeSpeech, ttsConfigFromEnv, DEFAULT_SPEAKER } from '@/lib/sources/tts';
+import { buildDemoMaterial } from '@/lib/sources/demo-material';
 import { createProject } from '@/lib/project/create';
 import { toProjectView } from '@/lib/project/view';
 import { projectDir } from '@/lib/files/storage';
 
 export const dynamic = 'force-dynamic';
 
-type Body = { outerId?: string; action?: 'preview' | 'create'; topic?: string; title?: string; voice?: boolean; speaker?: string };
+type Body = { outerId?: string; action?: 'preview' | 'create'; topic?: string; title?: string; voice?: boolean; speaker?: string; demo?: boolean };
 
 /** 从 SourceItem 里找 github 条目 */
 async function findItem(outerId: string) {
@@ -68,7 +69,18 @@ export async function POST(req: Request) {
           }
         }
       }
-      return ok({ ...out, project: toProjectView(p), voice });
+
+      // 演示素材(官网录屏或 README 自动构建的介绍页录屏): 失败不拦建作品, demo:false 或没选时跳过
+      let demo: { file: string; kind: string } | { error: string } | null = null;
+      if (b.demo) {
+        try {
+          const d = await buildDemoMaterial(prisma, { projectId: p.id, repo: outerId, starCount: item.heat, readme: readme.text, llm: m.llm });
+          demo = { file: d.file, kind: d.kind };
+        } catch (e) {
+          demo = { error: e instanceof Error ? e.message : String(e) };
+        }
+      }
+      return ok({ ...out, project: toProjectView(p), voice, demo });
     }
     return ok({ ...out, readmeUrl: readme.url });
   } catch (e) {
