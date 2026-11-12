@@ -8,6 +8,7 @@
   "dependencies": {
     "@remotion/bundler": "4.0.399",
     "@remotion/renderer": "4.0.399",
+    "playwright-core": "^1.48.0",
     "remotion": "4.0.399",
     "react": "19.0.0",
     "react-dom": "19.0.0"

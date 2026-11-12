@@ -19,7 +19,7 @@ description: 用 mp 命令行操作 MediaPilot 做一条抖音口播: 找选题�
    - 想知道能跑多少: `mp predict run <项目>`(按拖后腿的建议再磨); 手上几条稿子时 `mp predict list` 看先发哪条。
    然后 `mp project show <项目>` 把稿子给用户看。⏸ 用户确认后 `mp script finalize <项目>`。
 5. ⏸ **录口播**: 告诉用户在项目页「② 口播」用提词器录、上传; 转写完成后再继续(`mp project show` 显示"已转写 N 句")。
-6. **出片**: ⏸ 先问用户要不要现在出片, 同意后按 `produce-film` skill 做。
+6. **出片**: ⏸ 先问用户要不要现在出片, 同意后按 `produce-film` skill 做。用户点名「产品录屏3D」时走该 skill 里的产品录屏3D 一节(`mp film screenrec`), 不改竖版安全区。
 7. **发布**: `mp publish kit <项目>` 把标题/话题/封面字给用户; 用户自己在抖音发。
 8. **关联**: 第二天 `mp publish candidates`; 用户确认后 `mp publish link <项目> <作品>`(或用户给的链接)。
 9. **复盘**: 第 3 天后 `mp retro show <项目>`。写法经验候选 ⏸ 由用户决定, 再 `mp lessons adopt|reject <经验>`。

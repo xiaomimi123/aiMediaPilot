@@ -71,6 +71,10 @@ npm run -s mp -- film render <片子目录> [--stills]  # 关键帧或整片(79 
 npm run -s mp -- film register <片子目录> --summary <这一版改了什么>
 ```
 
+### 产品录屏3D（横版 1920×1080）
+
+开源项目网页实录走 `remotion/screenrec/`。渲染进现有的 `remotion/scripts/render.ts`：`mp film render <project.config.json>` 会转到这条；分步用 `mp film screenrec`（或 `npm run screenrec -- <配置> <步骤>`）。换项目主要是新建一份 `project.config.json`。做法、环境变量和 Invoify 范例见 `remotion/screenrec/README.md`。竖版抖音成片仍走风格 D，安全区不变。
+
 组件库在 `remotion/kit/`，每条片子的源码在 `remotion/films/`（不入库）。
 
 ## 常见问题

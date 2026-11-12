@@ -28,10 +28,32 @@ const blank = (): TurnResult => ({ ended: false, isError: false, errorText: null
 const text = (c: unknown): string => (typeof c === 'string' ? c : Array.isArray(c) ? c.map((x) => (typeof x === 'object' && x && 'text' in x ? String((x as { text: unknown }).text) : '')).join('') : '');
 const filmRel = (p: string) => /remotion\/films\/[^\s"'/]+/.exec(p)?.[0] ?? null;
 
+function describeScreenrec(cmd: string): string | null {
+  const step = /film screenrec\s+\S+\s+(record|voice|build|render|verify|cleanup)\b/.exec(cmd)?.[1];
+  const viaRender = /mp -- film render\b/.test(cmd) && /(?:screenrec|project\.config\.json)/.test(cmd);
+  if (!step && !viaRender) return null;
+  if (step === 'cleanup') return '列出产品录屏3D要清理的目录和进程';
+  if (step === 'verify') return '校验产品录屏3D成片';
+  if (step === 'voice') return '合成产品录屏3D配音';
+  if (step === 'record') return '录产品画面';
+  if (step === 'build') return '组装产品录屏3D画面参数';
+  if (step === 'render' && /--keys\b/.test(cmd)) return '渲染产品录屏3D关键帧';
+  if (step === 'render') return '渲染产品录屏3D成片';
+  if (viaRender && /--stills\b/.test(cmd)) return '渲染产品录屏3D关键帧';
+  if (viaRender) return '渲染产品录屏3D成片';
+  return null;
+}
+
+export function isScreenrecRender(cmd: string): boolean {
+  return /film screenrec\b/.test(cmd) || (/mp -- film render\b/.test(cmd) && /(?:screenrec|project\.config\.json)/.test(cmd));
+}
+
 function describe(u: Use, out: string, ok: boolean): string {
   const cmd = String(u.input.command ?? '');
   const file = String(u.input.file_path ?? '');
   if (u.name === 'Bash') {
+    const screen = describeScreenrec(cmd);
+    if (screen) return screen;
     if (/mp -- project export/.test(cmd)) return '读稿子和素材';
     if (/mp -- project list/.test(cmd)) return '找项目';
     if (/mp -- film new/.test(cmd)) return `建片子目录 v${/-v(\d+)/.exec(out)?.[1] ?? '?'}`;
@@ -116,7 +138,7 @@ export function parseLog(lines: string[]): ParsedLog {
           last.wroteShots = true;
           filmDir = filmDir ?? filmRel(file);
         }
-        if (ok && /mp -- film render/.test(cmd) && !/--stills/.test(cmd)) last.renderedFinal = true;
+        if (ok && /mp -- film render/.test(cmd) && !/--stills/.test(cmd) && !isScreenrecRender(cmd)) last.renderedFinal = true;
         if (ok && /mp -- film register/.test(cmd)) {
           last.registeredVersion = Number(/v(\d+)/.exec(out)?.[1] ?? NaN) || null;
           last.registeredSummary = /--summary "([^"]*)"/.exec(cmd)?.[1] ?? null;

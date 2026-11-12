@@ -10,5 +10,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["kit", "films", "scripts"]
+  "include": ["kit", "films", "scripts", "screenrec/src"]
 }
