@@ -7,6 +7,7 @@ import { registerFilm } from '@/lib/film/register';
 import { ShotsFileSchema, stillSecs } from '@/lib/film/shots';
 import { checkShots, checkNumbers, checkFilmSource, checkOrientation, type FilmData } from '@/lib/film/check';
 import { orientationLabel, type FilmOrientation } from '@/lib/film/orientation';
+import { filmRenderScreenrecArgs, screenrecConfigPath } from '@/lib/film/screenrec';
 import { ScriptSchema } from '@/lib/script/model';
 import { CliError, needArg, type Command } from '../registry';
 
@@ -105,6 +106,18 @@ export const FILM_COMMANDS: Command[] = [
     summary: '渲染片子',
     async run(_ctx, p) {
       const filmDir = path.resolve(needArg(p, 0, '片子目录'));
+      const screenrec = screenrecConfigPath(filmDir);
+      if (screenrec) {
+        let args: string[];
+        try {
+          args = filmRenderScreenrecArgs(screenrec, { stills: p.flags.stills === true, shots: p.flags.shots });
+        } catch (e) {
+          throw new CliError('bad_args', e instanceof Error ? e.message : String(e));
+        }
+        const code = run(TSX, [RENDER, ...args]);
+        if (code !== 0) throw new CliError('failed', '渲染失败（见上方输出）');
+        return { rendered: true, style: '产品录屏3D' as const, stills: p.flags.stills === true };
+      }
       let code: number;
       if (p.flags.stills) {
         const { shots } = await readFilm(filmDir);
@@ -125,7 +138,11 @@ export const FILM_COMMANDS: Command[] = [
       if (code !== 0) throw new CliError('failed', '渲染失败（见上方输出）');
       return { rendered: true };
     },
-    format: () => '渲染完成',
+    format: (d) => {
+      const x = d as { style?: string; stills?: boolean };
+      if (x.style !== '产品录屏3D') return '渲染完成';
+      return x.stills ? '产品录屏3D 关键帧完成（在该项目 work/keyframes/）' : '产品录屏3D 渲染完成（成片在 remotion/screenrec/out/）';
+    },
   },
   {
     path: ['film', 'register'],

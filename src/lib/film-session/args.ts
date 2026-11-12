@@ -17,6 +17,9 @@ export const FILM_ALLOWED_TOOLS = [
   'Bash(npm run -s mp -- film check:*)',
   'Bash(npm run -s mp -- film render:*)',
   'Bash(npm run -s mp -- film register:*)',
+  'Bash(npm run -s mp -- film screenrec:*)',
+  'Write(remotion/screenrec/projects/**)',
+  'Edit(remotion/screenrec/projects/**)',
   'Bash(ffmpeg:*)',
   'Bash(ffprobe:*)',
   'Bash(ls:*)',
@@ -50,6 +53,10 @@ export const FILM_DENIED_TOOLS = [
   'Edit(prisma/**)',
   'Write(remotion/kit/**)',
   'Edit(remotion/kit/**)',
+  'Write(remotion/screenrec/src/**)',
+  'Edit(remotion/screenrec/src/**)',
+  'Write(remotion/screenrec/scripts/**)',
+  'Edit(remotion/screenrec/scripts/**)',
   'Write(.claude/**)',
   'Edit(.claude/**)',
   'Read(./.env)',
@@ -65,6 +72,7 @@ export const FILM_RULES = `你在 MediaPilot 网页里被调用，用户在网�
 - 拿不准的事（素材丢了、不确定放哪里、要求矛盾）停下来问，不要猜。
 - film check 或渲染同一个错误连续 3 次没修好，停下来把报错和你的判断告诉用户。
 - 不改 remotion/kit、不删除文件、不碰片子目录以外的文件。
+- 例外：用户明确要「产品录屏3D」（开源项目网页实录，横版 1920×1080）时，不要 film new，也不要改 ChapterFrame。读 remotion/screenrec/README.md，换项目只改 remotion/screenrec/projects/<名>/project.config.json，然后用 \`npm run -s mp -- film screenrec <配置> record|voice|build|render|verify|cleanup\`。cleanup 只列出清单，不要执行它打印的删除命令。这条不运行 film register。竖版抖音仍走风格 D，顶部频道栏、右侧点赞列、底部文案的安全区不要改。
 - 不要用 cd 切换目录，命令和文件都写完整路径。
 - 录屏、截图、照片素材要整块铺满内容区（横版 1360×765、竖版 790×560），不要缩成小图。
 - 每次看关键帧都要逐镜写出结论：这一镜通过，或者有什么问题、怎么改；有问题就改完只重出改过的镜头再看。`;

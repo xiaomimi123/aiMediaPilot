@@ -19,7 +19,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "postinstall": "prisma generate",
-    "mp": "tsx scripts/mp.ts"
+    "mp": "tsx scripts/mp.ts",
+    "screenrec": "tsx scripts/mp.ts film screenrec"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.129.0",

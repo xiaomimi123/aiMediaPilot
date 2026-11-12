@@ -62,3 +62,9 @@ scripts/align/__pycache__
 /remotion/node_modules/
 /remotion/films/*
 !/remotion/films/.gitkeep
+
+# 产品录屏3D: 录屏、配音、浏览器 profile、渲染中间产物和成片。配置和源码要入库。
+/remotion/screenrec/out/
+/remotion/screenrec/**/work/
+/remotion/screenrec/**/__pycache__/
+/remotion/screenrec/**/*.pyc

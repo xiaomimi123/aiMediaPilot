@@ -1,0 +1,137 @@
+{
+ "slug": "invoify3d",
+ "name": "Invoify",
+ "formatTag": "产品录屏3D",
+ "workDir": "projects/invoify/work",
+ "scriptPath": "/workspace/media-team/scripts/2026-11-04_Invoify_情绪钩子_产品录屏3D_v3.md",
+ "app": {"url": "http://localhost:3200/zh-CN", "startCmd": "cd /workspace/media-team/work/invoify-demo/app && PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome NEXT_TELEMETRY_DISABLED=1 npx next dev -p 3200 -H localhost", "port": 3200},
+ "badge": "演示数据为模拟数据",
+ "sources": {
+  "githubAt": "2026-11-04 17:37(UTC+8)",
+  "readmeAt": "2026-11-04 17:37(UTC+8)",
+  "recFill": "2026-11-04 17:35(UTC+8)",
+  "recTemplate": "2026-11-04 17:36(UTC+8)",
+  "recBook": "2026-11-04 17:36(UTC+8)",
+  "stars": "6.4k",
+  "starsApi": "6383 @ 2026-11-04 17:37(UTC+8)"
+ },
+ "recMasks": [[8, 1000, 70, 70, "#fff"]],
+ "voice": {
+  "engine": "volc", "speakerEnv": "VOLC_SPEAKER_ID", "resourceEnv": "VOLC_RESOURCE_ID",
+  "gapLine": 0.12, "gapCard": 0.45, "lead": 0.15, "tail": 1.2, "maxPause": 0.5, "keepPause": 0.4,
+  "pronounce": {"Invoify": "因沃伊FY", "PDF": "P D F"}
+ },
+ "record": {
+  "chrome": "/usr/bin/google-chrome",
+  "viewport": [1920, 1146],
+  "crop": {"x": 0, "y": 66, "w": 1920, "h": 1080},
+  "profileDir": "projects/invoify/work/rec/profile",
+  "prep": [
+   {"do": "goto", "url": "{url}"}, {"do": "wait", "ms": 4000},
+   {"do": "fill", "sel": "[name='receiver.name']", "value": "示例客户 Sample Co.(模拟数据)"},
+   {"do": "fill", "sel": "[name='receiver.address']", "value": "2 Sample Street"},
+   {"do": "fill", "sel": "[name='receiver.zipCode']", "value": "54321"},
+   {"do": "fill", "sel": "[name='receiver.city']", "value": "Sample City"},
+   {"do": "fill", "sel": "[name='receiver.country']", "value": "Sample Land"},
+   {"do": "fill", "sel": "[name='receiver.email']", "value": "client@example.com"},
+   {"do": "fill", "sel": "[name='receiver.phone']", "value": "000-0000-0000"},
+   {"do": "click", "role": "button", "name": "/^Save client/"}, {"do": "wait", "ms": 1500},
+   {"do": "click", "role": "button", "name": "More actions"}, {"do": "wait", "ms": 400},
+   {"do": "click", "sel": "button:has-text('新建发票'):visible, [role=menuitem]:has-text('新建发票'):visible"}, {"do": "wait", "ms": 500},
+   {"do": "click", "sel": "[role=alertdialog] button >> nth=-1"}, {"do": "press", "key": "Escape"}, {"do": "wait", "ms": 1500},
+   {"do": "fill", "sel": "[name='sender.name']", "value": "演示发件人 Demo Seller(模拟数据)"},
+   {"do": "fill", "sel": "[name='sender.address']", "value": "1 Example Road"},
+   {"do": "fill", "sel": "[name='sender.zipCode']", "value": "12345"},
+   {"do": "fill", "sel": "[name='sender.city']", "value": "Demo City"},
+   {"do": "fill", "sel": "[name='sender.country']", "value": "Demo Land"},
+   {"do": "fill", "sel": "[name='sender.email']", "value": "seller@example.com"},
+   {"do": "fill", "sel": "[name='sender.phone']", "value": "000-1111-2222"},
+   {"do": "fill", "sel": "[name='receiver.address']", "value": "2 Sample Street"},
+   {"do": "fill", "sel": "[name='receiver.zipCode']", "value": "54321"},
+   {"do": "fill", "sel": "[name='receiver.email']", "value": "client@example.com"},
+   {"do": "fill", "sel": "[name='receiver.phone']", "value": "000-0000-0000"},
+   {"do": "click", "role": "button", "name": "发票详情"}, {"do": "wait", "ms": 700},
+   {"do": "click", "sel": "button[id$='-form-item'] >> nth=0"}, {"do": "click", "sel": ".rdp button:text-is('4')"}, {"do": "press", "key": "Escape"},
+   {"do": "click", "sel": "button[id$='-form-item'] >> nth=1"}, {"do": "click", "sel": ".rdp button:text-is('4')"}, {"do": "press", "key": "Escape"},
+   {"do": "click", "role": "button", "name": "支付信息"}, {"do": "wait", "ms": 700},
+   {"do": "fill", "sel": "[name='details.paymentInformation.bankName']", "value": "Demo Bank(模拟)"},
+   {"do": "fill", "sel": "[name='details.paymentInformation.accountName']", "value": "Demo Seller"},
+   {"do": "fill", "sel": "[name='details.paymentInformation.accountNumber']", "value": "0000000000"},
+   {"do": "click", "role": "button", "name": "摘要"}, {"do": "wait", "ms": 700},
+   {"do": "fill", "sel": "[name='details.paymentTerms']", "value": "Net 30"},
+   {"do": "click", "role": "button", "name": "发件人 & 收件人"}, {"do": "wait", "ms": 3000}
+  ],
+  "clips": {
+   "fill": [
+    {"do": "type", "sel": "[name='receiver.name']", "value": "示例客户 Sample Co.(模拟数据)", "delay": 60, "event": "typed:客户名"},
+    {"do": "type", "sel": "[name='receiver.city']", "value": "Sample City", "delay": 40},
+    {"do": "type", "sel": "[name='receiver.country']", "value": "Sample Land", "delay": 40, "event": "typed:城市国家"},
+    {"do": "click", "role": "button", "name": "下一步", "event": "click:下一步"}, {"do": "wait", "ms": 600},
+    {"do": "type", "sel": "[name='details.invoiceNumber']", "value": "DEMO-0001", "delay": 60},
+    {"do": "click", "role": "button", "name": "下一步"}, {"do": "wait", "ms": 700},
+    {"do": "type", "sel": "[name='details.items[0].name']", "value": "示例服务 Demo Service(模拟数据)", "delay": 50, "event": "typed:商品"},
+    {"do": "type", "sel": "[name='details.items[0].quantity']", "value": "3", "delay": 80},
+    {"do": "type", "sel": "[name='details.items[0].unitPrice']", "value": "100", "delay": 80, "event": "typed:数量单价"},
+    {"do": "wait", "ms": 1500}
+   ],
+   "template": [
+    {"do": "click", "role": "button", "name": "/^Template/"}, {"do": "wait", "ms": 900},
+    {"do": "click", "sel": "[role=dialog] button >> nth=18", "event": "pick:Sidebar"}, {"do": "wait", "ms": 500}, {"do": "press", "key": "Escape"}, {"do": "wait", "ms": 2300},
+    {"do": "click", "role": "button", "name": "/^Template/"}, {"do": "wait", "ms": 900},
+    {"do": "click", "sel": "[role=dialog] button >> nth=19", "event": "pick:Bold Header"}, {"do": "wait", "ms": 500}, {"do": "press", "key": "Escape"}, {"do": "wait", "ms": 2300},
+    {"do": "click", "role": "button", "name": "生成PDF", "event": "click:生成PDF"},
+    {"do": "waitFor", "role": "button", "name": "Download", "exact": true, "timeout": 30000, "event": "PDF显示"}, {"do": "wait", "ms": 2500}
+   ],
+   "book": [
+    {"do": "wait", "ms": 1200, "event": "Clients(1) 已存"},
+    {"do": "click", "role": "button", "name": "More actions"}, {"do": "wait", "ms": 600},
+    {"do": "click", "sel": "button:has-text('新建发票'):visible, [role=menuitem]:has-text('新建发票'):visible"}, {"do": "wait", "ms": 900},
+    {"do": "click", "sel": "[role=alertdialog] button >> nth=-1", "event": "click:Create new invoice"}, {"do": "press", "key": "Escape"}, {"do": "wait", "ms": 1300},
+    {"do": "click", "role": "button", "name": "/^Clients/", "event": "click:Clients"}, {"do": "wait", "ms": 1000},
+    {"do": "click", "text": "示例客户 Sample Co.(模拟数据)", "event": "pick:示例客户"}, {"do": "wait", "ms": 2200}
+   ]
+  },
+  "between": {"book": [{"do": "click", "role": "button", "name": "Back to Live Preview", "optional": true}, {"do": "click", "role": "button", "name": "发件人 & 收件人", "optional": true}, {"do": "wait", "ms": 1200}]},
+  "screenshots": [
+   {"name": "github", "url": "https://github.com/al1abb/invoify", "wait": 5000, "source": "githubAt"},
+   {"name": "readme", "url": "https://github.com/al1abb/invoify", "wait": 5000, "scrollTo": "article p:has-text('No account, no subscription')", "scrollOffset": -300, "boxOf": "article p:has-text('No account, no subscription')", "source": "readmeAt"}
+  ]
+ },
+ "assets": {
+  "rec/fill.mp4": "rec/fill/fill.mp4", "rec/template.mp4": "rec/template/template.mp4", "rec/book.mp4": "rec/book/book.mp4",
+  "shots/github.png": "shots/github.png", "shots/readme.png": "shots/readme.png", "shots/result_pdf.png": "shots/result_pdf.png",
+  "shots/app_filled.png": "shots/app_filled.png", "shots/app_local.png": "shots/app_local.png"
+ },
+ "shots": [
+  {"kind": "hook", "lines": ["做外贸的,给海外客户开发票,", "还在 Word 里手填,对半天格式吗?"],
+   "view": {"fanSec": 1.0, "pages": [{"img": "shots/github.png", "k": -1}, {"img": "shots/app_filled.png", "k": 1}, {"img": "shots/result_pdf.png", "k": 0}],
+    "question": [[{"t": "给海外客户开发票"}], [{"t": "还在 "}, {"t": "Word 里手填?", "hl": true}]],
+    "label": "Invoify 本机实录 · 生成的 PDF · {recTemplate}"}},
+  {"kind": "github", "lines": ["今天给大家推荐一款开源的工具,", "叫 Invoify,六千多颗星。"], "pad": 0.2,
+   "view": {"img": "shots/github.png", "nameXY": [417, 186], "starXY": [1540, 188], "focus": [760, 1340, 400], "starArrow": "Star {stars}", "label": "GitHub 仓库页截图 · {githubAt}",
+    "stickers": [{"at": ["line", 1, 0.6], "dur": ["toEnd", 0.2], "text": "{stars} Star", "src": "出处:GitHub 仓库页 · {githubAt}截图", "x": 1500, "y": 880, "rot": -4, "kind": "green", "size": 56}]}},
+  {"kind": "rec", "lines": ["打开网页,左边填客户和商品,", "右边发票实时变。"], "pad": 0.6,
+   "view": {"src": "rec/fill.mp4", "tag": "真实录屏 · 本机 Invoify · {recFill}",
+    "segs": [{"from": 0.9, "to": 3.7, "focus": [[0.9, 520, 420, 1.35], [3.7, 560, 460, 1.4]]}, {"from": 5.4, "to": "rest", "focus": [[5.4, 1200, 520, 1.2], [8.7, 1250, 500, 1.3]]}],
+    "stickers": [{"at": 0.4, "dur": 2.4, "text": "左边填", "x": 330, "y": 880, "rot": -5, "kind": "yellow", "size": 56}, {"at": 3.2, "dur": ["toEnd", 0.2], "text": "右边实时变", "x": 1580, "y": 880, "rot": 5, "kind": "green", "size": 56}]}},
+  {"kind": "rec", "lines": ["模板随便切,", "点一下,生成真的 PDF。"], "pad": 0.8,
+   "view": {"src": "rec/template.mp4", "tag": "真实录屏 · 本机 Invoify · {recTemplate}",
+    "segs": [{"from": 1.3, "to": 4.35, "focus": [[1.3, 960, 540, 1], [4.35, 1300, 520, 1.1]]}, {"from": 8.4, "to": "rest", "focus": [[8.4, 1500, 300, 1.2], [10.0, 1300, 560, 1.15]]}],
+    "stickers": [{"at": 0.3, "dur": 2.6, "text": "换模板", "x": 330, "y": 880, "rot": -5, "kind": "yellow", "size": 56}, {"at": 3.3, "dur": ["toEnd", 0.2], "text": "真的 PDF ✓", "src": "本机实测:1 页 A4", "x": 1560, "y": 880, "rot": 5, "kind": "green", "size": 56}]}},
+  {"kind": "rec", "lines": ["客户存进地址簿,", "下一张发票一点就带出来。"], "pad": 0.6,
+   "view": {"src": "rec/book.mp4", "tag": "真实录屏 · 本机 Invoify · {recBook}",
+    "segs": [{"from": 1.1, "to": "rest", "focus": [[1.1, 520, 300, 1.35], [3.0, 1100, 420, 1.1], [3.9, 520, 300, 1.35], [6.6, 520, 420, 1.35]]}],
+    "stickers": [{"at": 0.2, "dur": 1.8, "text": "已存进地址簿", "x": 330, "y": 880, "rot": -5, "kind": "yellow", "size": 50}, {"at": ["end", 1.8], "dur": 1.6, "text": "一点带出 ✓", "x": 1560, "y": 880, "rot": 5, "kind": "green", "size": 56}]}},
+  {"kind": "readme", "lines": ["不用注册,", "客户资料存在你自己的浏览器里。"],
+   "view": {"img": "shots/readme.png", "box": {"x": 385, "y": 803.59375, "width": 838, "height": 72}, "label": "GitHub README 截图 · {readmeAt}", "localImg": "shots/app_local.png", "url": "localhost:3200/zh-CN",
+    "stickers": [{"at": 0.9, "dur": ["toEnd", 0.2], "text": "不用注册", "src": "出处:README「No account…」", "x": 470, "y": 820, "rot": -4, "kind": "yellow", "size": 60}]}},
+  {"kind": "end", "lines": ["开发票,你更烦手填,", "还是烦交软件费?", "评论区说。"],
+   "view": {"bg": "shots/result_pdf.png", "title": "开发票,你更烦哪个?", "a": "A 手填对格式", "b": "B 交软件费", "ctaLine": 2}}
+ ],
+ "verify": {"keyTimes": [0, 1, 4, 11, 16.5, 23.5, 28.5, 33, 40], "forbid": ["关注我"], "targetSec": [38, 46]},
+ "cleanup": {
+  "dirs": ["/workspace/media-team/work/invoify-demo", "/workspace/media-team/work/rembg-demo"],
+  "processes": ["next dev -p 3200", "rembg s"],
+  "keep": ["/workspace/media-team/films", "projects/invoify/work/build"]
+ }
+}

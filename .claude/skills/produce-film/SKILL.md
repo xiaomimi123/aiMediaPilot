@@ -29,7 +29,25 @@ description: 给 MediaPilot 项目出一条口播成片(竖版默认用风格 D 
 - 被要求了版式时, 检查用 `npm run -s mp -- film check <片子目录> --expect landscape`。
 - 其余流程与竖版相同(第 7 步看关键帧时按横版的内容区 1360×765 判断)。
 
-## 流程(每一步都要做, 不许跳)
+## 横版产品录屏3D(点名才用)
+
+用户明确要「产品录屏3D」或开源项目网页实录时, 不用 ChapterFrame, 也不用上面的风格 C。这是另一条配置驱动的 1920×1080 成片: 痛点问句钩子、约 1 秒的 3D 扇出、Playwright 持久 profile + CDP 录屏(视口 1920×1146, ffmpeg 裁掉顶部 66px)、GitHub/README 截图(上屏数字只来自 `sources`, 带 UTC+8 到分钟的采集时间)、克隆音色口播和字幕、结尾二选一。换项目主要是新建 `remotion/screenrec/projects/<名>/project.config.json`, 不要改 `remotion/screenrec/src`。
+
+```bash
+npm run -s mp -- film screenrec <配置> record
+npm run -s mp -- film screenrec <配置> voice --check
+npm run -s mp -- film screenrec <配置> build
+npm run -s mp -- film screenrec <配置> render --keys
+npm run -s mp -- film screenrec <配置> render --film
+npm run -s mp -- film screenrec <配置> verify <成片.mp4>
+npm run -s mp -- film screenrec <配置> cleanup
+```
+
+`mp film render <配置>` 也会转到同一条 `remotion/scripts/render.ts`。cleanup 只打印清单, 不要执行它给出的删除命令。这条不 `film register`。竖版抖音仍走风格 D, 安全区不要改。步骤、环境变量和 Invoify 范例见 `remotion/screenrec/README.md`。
+
+## 流程(风格 D / 风格 C, 每一步都要做, 不许跳)
+
+上面「产品录屏3D」点名才走, 不套下面这 10 步。
 
 1. **找项目**: `npm run -s mp -- project list`(不熟悉命令时先 `npm run -s mp -- help`)。用户说的项目名对不上就问。
 2. **读资料**: `npm run -s mp -- project export <id>`。读稿子、逐句转写、素材说明。
