@@ -1,22 +1,23 @@
-/** 风格 C · 极客手账。所有数值以 spec §4.1 为准, 改这里即改全部片子。 */
+/** 风格 C · 明亮杂志。暖白纸、墨色字、一个橙色。字号与安全区仍按原版式, 不再用钴蓝方格纸。 */
 export const W = 1080;
 export const H = 1920;
 export const FPS = 30;
 
 export const C = {
-  bg: '#F6F7F9',
-  grid: '#E3E7EE',
-  ink: '#0F172A',
-  muted: '#64748B',
-  accent: '#2563EB',
-  accentSoft: '#EEF2FF',
-  accentInk: '#1E3A8A',
-  marker: '#FDE68A',
+  bg: '#F6F1E7',
+  grid: '#E7DDD0',
+  ink: '#1C1916',
+  muted: '#5C534C',
+  accent: '#C2410C',
+  accentSoft: '#FFF3EA',
+  accentInk: '#8A3410',
+  marker: '#FFE08A',
   card: '#FFFFFF',
 } as const;
 
-export const FONT = '-apple-system, "PingFang SC", "Hiragino Sans GB", sans-serif';
-export const MONO = '"SF Mono", ui-monospace, Menlo, monospace';
+/** 与 remotion/kit/fonts.ts 注册的族名一致; 文件在 pipeline/fonts, 渲染时打进包。 */
+export const FONT = '"MP Inter", "MP Noto SC", "PingFang SC", "Noto Sans SC", sans-serif';
+export const MONO = '"MP JetBrains Mono", "MP Noto SC", ui-monospace, monospace';
 
 type Rect = { left: number; top: number; width: number; height: number };
 /**

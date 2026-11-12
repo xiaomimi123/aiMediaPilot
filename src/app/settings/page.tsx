@@ -27,9 +27,9 @@ export default async function SettingsPage() {
   const parsed = row ? PersonaSchema.safeParse(row) : null;
   const persona = parsed?.success ? parsed.data : EMPTY_PERSONA;
   return (
-    <div className="h-full overflow-y-auto px-4 py-6 md:px-8">
-      <h1 className="mb-3 text-[22px] font-bold">设置</h1>
-      <nav className="sticky top-0 z-10 -mx-4 mb-4 flex gap-2 overflow-x-auto bg-[var(--bg-canvas)] px-4 py-2 md:-mx-8 md:px-8">
+    <div className="h-full overflow-y-auto px-5 py-8 md:px-10">
+      <h1 className="page-title mb-4">设置</h1>
+      <nav className="sticky top-0 z-10 -mx-5 mb-5 flex gap-2 overflow-x-auto bg-[var(--bg-canvas)] px-5 py-2 md:-mx-10 md:px-10">
         {SECTIONS.map((s) => (
           <a key={s.id} href={`#${s.id}`} className="chip shrink-0">{s.label}</a>
         ))}

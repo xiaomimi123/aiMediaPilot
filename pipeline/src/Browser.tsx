@@ -126,10 +126,10 @@ export const Browser: React.FC<{ beats: Beat[]; times: number[]; endSec: number;
   return (
     <div style={{ position: 'absolute', inset: 0, background: '#fff' }}>
       {/* 外框: 标签栏 + 地址栏 */}
-      <div style={{ position: 'absolute', left: 0, top: 0, width: W, height: BAR, background: '#EFE8DB', borderBottom: '2px solid #141414', display: 'flex', alignItems: 'center', gap: 18, padding: '0 22px', fontFamily: SANS }}>
-        {['#FF5F57', '#FEBC2E', '#28C840'].map((x) => <div key={x} style={{ width: 16, height: 16, borderRadius: 8, background: x }} />)}
-        <div style={{ color: '#6E675E', fontSize: 30, fontWeight: 700, margin: '0 6px 0 14px' }}>‹ ›</div>
-        <div style={{ flex: 1, height: 46, borderRadius: 23, background: '#fff', border: '1.5px solid #D6CCBB', display: 'flex', alignItems: 'center', gap: 14, padding: '0 22px', color: '#141414', fontSize: 25 }}>
+      <div style={{ position: 'absolute', left: 0, top: 0, width: W, height: BAR, background: '#F3EBE0', borderBottom: '1px solid #141414', display: 'flex', alignItems: 'center', gap: 16, padding: '0 24px', fontFamily: SANS }}>
+        {['#FF5F57', '#FEBC2E', '#28C840'].map((x) => <div key={x} style={{ width: 14, height: 14, borderRadius: 7, background: x }} />)}
+        <div style={{ color: '#6E675E', fontSize: 26, fontWeight: 700, margin: '0 8px 0 12px', letterSpacing: 2 }}>‹ ›</div>
+        <div style={{ flex: 1, height: 44, borderRadius: 22, background: '#fff', border: '1px solid #E0D5C6', display: 'flex', alignItems: 'center', gap: 12, padding: '0 20px', color: '#141414', fontSize: 24, boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8)' }}>
           <svg width="16" height="20" viewBox="0 0 16 20"><rect x="1" y="8" width="14" height="11" rx="2" fill="#6E675E" /><path d="M4 8V5a4 4 0 0 1 8 0v3" stroke="#6E675E" strokeWidth="2" fill="none" /></svg>
           <span><span style={{ color: '#141414', fontWeight: 700 }}>{url.split('/')[0]}</span><span style={{ color: '#6E675E' }}>/{url.split('/').slice(1).join('/')}</span></span>
         </div>

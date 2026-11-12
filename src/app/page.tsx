@@ -10,8 +10,8 @@ export const dynamic = 'force-dynamic';
 export default async function Overview() {
   const data = await loadOverview(prisma, new Date());
   return (
-    <div className="h-full overflow-y-auto px-4 py-6 md:px-8">
-      <h1 className="mb-5 text-[22px] font-bold">总览</h1>
+    <div className="h-full overflow-y-auto px-5 py-8 md:px-10">
+      <h1 className="page-title mb-7">总览</h1>
       <div className="space-y-4">
         <TodayPanel data={data} />
         <MetricCards m={data.metrics} />

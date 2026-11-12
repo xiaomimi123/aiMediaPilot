@@ -4,30 +4,30 @@
 @tailwind utilities;
 
 /*
- * 视觉语言：暖白卡片（2026-10 改版，spec 2026-10-01-ui-warm-redesign）。
+ * 视觉语言：明亮杂志。暖白纸、墨色字、一个橙色，和成片同一套。
  * 令牌真源是 tokens.css；这里把令牌桥接到 shadcn 语义变量（HSL 三元组，供 Tailwind 的 /alpha 修饰），
  * 改令牌时两处一起改。红色只表示"这里有问题"，数字一律等宽对齐。
  */
 
 @layer base {
   :root {
-    --background: 37 31% 95%;        /* --bg-canvas #F6F3EE */
-    --foreground: 26 9% 15%;         /* --text-primary #2B2724 */
+    --background: 40 45% 94%;        /* --bg-canvas #F6F1E7 */
+    --foreground: 30 12% 10%;        /* --text-primary #1C1916 */
     --card: 40 100% 99%;             /* --bg-surface #FFFDF9 */
-    --card-foreground: 26 9% 15%;
-    --primary: 26 79% 38%;           /* --accent #AD5614 */
+    --card-foreground: 30 12% 10%;
+    --primary: 17 88% 40%;           /* --accent #C2410C */
     --primary-foreground: 0 0% 100%;
-    --secondary: 36 41% 93%;         /* --bg-elevated #F4EEE5 */
-    --secondary-foreground: 26 9% 15%;
+    --secondary: 33 38% 92%;         /* --bg-elevated #F3EBE1 */
+    --secondary-foreground: 30 12% 10%;
     --muted: 34 50% 95%;             /* --bg-surface-hover #F8F2EA */
-    --muted-foreground: 30 10% 40%;  /* --text-secondary #6F655B */
+    --muted-foreground: 26 10% 33%;  /* --text-secondary #5C534C */
     --ui-hover: 34 50% 95%;
-    --ui-hover-foreground: 26 9% 15%;
+    --ui-hover-foreground: 30 12% 10%;
     --destructive: 0 61% 48%;        /* --danger #C53030 */
     --destructive-foreground: 0 0% 100%;
-    --border: 37 30% 89%;            /* --border-subtle #ECE6DC */
-    --input: 35 27% 84%;             /* --border-default #E2D9CC */
-    --ring: 26 79% 38%;
+    --border: 34 28% 86%;            /* --border-subtle #E7DDD0 */
+    --input: 33 29% 79%;             /* --border-default #D9CBBA */
+    --ring: 17 88% 40%;
     --radius: 10px;
     --status-success: 143 48% 32%;
     --status-warning: 25 91% 34%;
@@ -53,12 +53,16 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  /*
-   * 标题不再走衬线(纸感退役)。h1-h3 收紧字距 —— 设计稿的 Display/Title 系列
-   * 都带负字距, 深色高密度界面里宽字距的中文标题会显得松。
-   */
   h1, h2, h3 {
-    letter-spacing: -0.01em;
+    letter-spacing: -0.02em;
+    font-weight: 800;
+  }
+
+  .page-title {
+    font-size: 32px;
+    line-height: 1.15;
+    font-weight: 800;
+    letter-spacing: -0.03em;
   }
 
   /* 数字一律等宽 —— 分数、时长、字数在这个工具里到处都是, 跳动会很扰 */
@@ -113,7 +117,7 @@
     background: var(--bg-surface);
     border-radius: var(--r-lg);
     box-shadow: var(--shadow-card);
-    padding: 16px;
+    padding: 20px;
   }
   @media (max-width: 767px) {
     .card { padding: 12px; }
@@ -141,5 +145,5 @@
     padding: 2px 10px; border-radius: var(--r-full); font-size: 12px; line-height: 18px;
     background: var(--bg-elevated); color: var(--text-secondary);
   }
-  .font-display { font-family: var(--font-display); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .font-display { font-family: var(--font-display); font-variant-numeric: tabular-nums; letter-spacing: -0.03em; font-weight: 800; }
 }

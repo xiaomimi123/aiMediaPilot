@@ -5,8 +5,8 @@ import { C, MONO } from './tokens';
 /** 浏览器窗 / 手机外框, 用来装录屏、截图、图片 */
 export const WindowFrame: React.FC<{ kind: 'browser' | 'phone'; title?: string; children: React.ReactNode }> = ({ kind, title, children }) =>
   kind === 'browser' ? (
-    <div style={{ background: C.card, borderRadius: 28, overflow: 'hidden', boxShadow: '0 24px 60px rgba(15,23,42,0.14)', border: `2px solid ${C.grid}` }}>
-      <div style={{ height: 64, display: 'flex', alignItems: 'center', gap: 14, padding: '0 26px', background: '#EEF1F5' }}>
+    <div style={{ background: C.card, borderRadius: 20, overflow: 'hidden', boxShadow: '0 16px 40px rgba(40,28,12,0.12)', border: `1px solid ${C.grid}` }}>
+      <div style={{ height: 64, display: 'flex', alignItems: 'center', gap: 14, padding: '0 26px', background: '#F3EBE0' }}>
         {['#F87171', '#FBBF24', '#34D399'].map((c) => (
           <span key={c} style={{ width: 20, height: 20, borderRadius: 10, background: c }} />
         ))}
@@ -15,7 +15,7 @@ export const WindowFrame: React.FC<{ kind: 'browser' | 'phone'; title?: string; 
       <div style={{ position: 'relative', background: '#000' }}>{children}</div>
     </div>
   ) : (
-    <div style={{ width: 430, margin: '0 auto', borderRadius: 60, padding: 18, background: C.ink, boxShadow: '0 24px 60px rgba(15,23,42,0.25)' }}>
+    <div style={{ width: 430, margin: '0 auto', borderRadius: 60, padding: 18, background: C.ink, boxShadow: '0 24px 60px rgba(40,28,12,0.22)' }}>
       <div style={{ borderRadius: 44, overflow: 'hidden', background: '#000' }}>{children}</div>
     </div>
   );

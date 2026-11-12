@@ -24,8 +24,14 @@ export function AppNav() {
   const pathname = usePathname() ?? '/';
   return (
     <>
-      <nav data-testid="sidebar" className="hidden md:flex w-[var(--sidebar-w)] shrink-0 flex-col gap-1 bg-[var(--bg-base)] p-4">
-        <div className="mb-4 px-2 font-display text-lg font-bold">MediaPilot</div>
+      <nav data-testid="sidebar" className="hidden md:flex w-[var(--sidebar-w)] shrink-0 flex-col gap-1 border-r border-[var(--border-subtle)] bg-[var(--bg-base)] px-4 py-6">
+        <div className="mb-6 flex items-center gap-2.5 px-2">
+          <span className="h-2.5 w-2.5 shrink-0 bg-[var(--accent)]" aria-hidden />
+          <div>
+            <div className="text-[15px] font-extrabold tracking-tight">MediaPilot</div>
+            <div className="text-[11px] font-medium tracking-wide text-[var(--text-tertiary)]">出片工作台</div>
+          </div>
+        </div>
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const on = isActive(pathname, href);
           return (
@@ -33,7 +39,7 @@ export function AppNav() {
               key={href}
               href={href}
               aria-current={on ? 'page' : undefined}
-              className={cn('flex items-center gap-3 rounded-[var(--r-md)] px-3 py-2 text-[15px]', on ? 'bg-[var(--accent-subtle)] font-semibold text-[var(--accent)]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]')}
+              className={cn('flex items-center gap-3 rounded-[var(--r-md)] px-3 py-2.5 text-[15px]', on ? 'bg-[var(--accent-subtle)] font-semibold text-[var(--accent)]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]')}
             >
               <Icon size={18} />
               {label}

@@ -16,9 +16,9 @@ export default async function WorksPage({ searchParams }: { searchParams?: { sta
   if (sort === 'predict') cards = [...cards].sort((a, b) => (b.center ?? -1) - (a.center ?? -1));
   const q = (s: string, so = sort) => `/works?${new URLSearchParams({ ...(s !== 'all' ? { stage: s } : {}), ...(so !== 'updated' ? { sort: so } : {}) })}`;
   return (
-    <div className="h-full overflow-y-auto px-4 py-6 md:px-8">
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <h1 className="text-[22px] font-bold">作品</h1>
+    <div className="h-full overflow-y-auto px-5 py-8 md:px-10">
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <h1 className="page-title">作品</h1>
         <div className="flex-1" />
         <Link href={q(stage, sort === 'predict' ? 'updated' : 'predict')} className="text-sm text-[var(--accent)]">
           {sort === 'predict' ? '按更新时间' : '按预测排序'}

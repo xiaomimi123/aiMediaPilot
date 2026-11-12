@@ -15,26 +15,26 @@ const pop = (f: number, d: number) => spring({ frame: f - d, fps: FPS, config: {
 const fadeUp = (f: number, d: number): React.CSSProperties => { const s = spring({ frame: f - d, fps: FPS, config: { damping: 200 }, durationInFrames: 12 }); return { opacity: s, transform: `translateY(${(1 - s) * 24}px)` }; };
 
 export const Src: React.FC<{ text: string; style?: React.CSSProperties }> = ({ text, style }) => (
-  <div style={{ position: 'absolute', left: 0, bottom: 0, padding: '7px 16px', background: 'rgba(255,255,255,.96)', borderLeft: `6px solid ${OR}`, boxShadow: '0 4px 14px rgba(0,0,0,.10)', fontSize: 22, fontWeight: 600, color: INK, fontFamily: SANS, zIndex: 20, ...style }}>{text}</div>
+  <div style={{ position: 'absolute', left: 0, bottom: 0, padding: '8px 18px', background: 'rgba(255,253,249,.96)', borderLeft: `5px solid ${OR}`, borderRadius: '0 8px 8px 0', boxShadow: '0 8px 20px rgba(40,28,12,.10)', fontSize: 20, fontWeight: 600, letterSpacing: 0.2, color: INK, fontFamily: SANS, zIndex: 20, ...style }}>{text}</div>
 );
 const Badge: React.FC<{ children: React.ReactNode; big?: boolean; outline?: boolean }> = ({ children, big, outline }) => (
-  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: big ? '10px 26px' : '8px 20px', borderRadius: 999, background: outline ? 'transparent' : OR, border: `2px solid ${outline ? INK : OR}`, color: outline ? INK : '#fff', fontSize: big ? 32 : 26, fontWeight: 800, whiteSpace: 'nowrap' }}>{children}</div>
+  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: big ? '11px 28px' : '9px 22px', borderRadius: 999, background: outline ? 'transparent' : OR, border: `2px solid ${outline ? INK : OR}`, color: outline ? INK : '#fff', fontSize: big ? 30 : 24, fontWeight: 800, letterSpacing: 0.3, whiteSpace: 'nowrap' }}>{children}</div>
 );
 
 // ---------- 表格 ----------
 const COLS = [{ k: '#', w: 110 }, { k: 'title', w: 0 }, { k: 'price', w: 150 }, { k: 'rating', w: 130 }, { k: 'in_stock', w: 150 }];
 const Row: React.FC<{ i: number; r: string[]; h: number; hi?: boolean; fs?: number }> = ({ i, r, h, hi, fs = 26 }) => (
-  <div style={{ height: h, display: 'flex', alignItems: 'center', fontFamily: MONO, fontSize: fs, color: hi ? '#fff' : INK, background: hi ? OR : i % 2 ? '#FBF8F2' : '#fff', borderBottom: '1px solid #E8E1D4' }}>
-    <div style={{ flex: `0 0 ${COLS[0].w}px`, paddingLeft: 18, color: hi ? '#fff' : MUTED }}>{i + 1}</div>
-    <div style={{ flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', paddingRight: 16 }}>{r[0]}</div>
-    <div style={{ flex: `0 0 ${COLS[2].w}px` }}>{r[1]}</div>
-    <div style={{ flex: `0 0 ${COLS[3].w}px` }}>{r[2]}</div>
+  <div style={{ height: h, display: 'flex', alignItems: 'center', fontFamily: MONO, fontSize: fs, color: hi ? '#fff' : INK, background: hi ? OR : i % 2 ? '#FBF7F1' : '#fff', borderBottom: '1px solid #EFE6DA' }}>
+    <div style={{ flex: `0 0 ${COLS[0].w}px`, paddingLeft: 20, color: hi ? '#fff' : MUTED, fontVariantNumeric: 'tabular-nums' }}>{i + 1}</div>
+    <div style={{ flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', paddingRight: 18 }}>{r[0]}</div>
+    <div style={{ flex: `0 0 ${COLS[2].w}px`, fontVariantNumeric: 'tabular-nums' }}>{r[1]}</div>
+    <div style={{ flex: `0 0 ${COLS[3].w}px`, fontVariantNumeric: 'tabular-nums' }}>{r[2]}</div>
     <div style={{ flex: `0 0 ${COLS[4].w}px` }}>{r[3]}</div>
   </div>
 );
 const Head: React.FC<{ h: number; fs?: number }> = ({ h, fs = 24 }) => (
-  <div style={{ height: h, display: 'flex', alignItems: 'center', fontFamily: MONO, fontSize: fs, fontWeight: 700, color: '#fff', background: INK }}>
-    {COLS.map((c) => <div key={c.k} style={c.w ? { flex: `0 0 ${c.w}px`, paddingLeft: c.k === '#' ? 18 : 0 } : { flex: 1 }}>{c.k}</div>)}
+  <div style={{ height: h, display: 'flex', alignItems: 'center', fontFamily: MONO, fontSize: fs, fontWeight: 700, letterSpacing: 0.4, color: '#fff', background: INK }}>
+    {COLS.map((c) => <div key={c.k} style={c.w ? { flex: `0 0 ${c.w}px`, paddingLeft: c.k === '#' ? 20 : 0 } : { flex: 1 }}>{c.k}</div>)}
   </div>
 );
 
@@ -44,7 +44,7 @@ export const CsvHook: React.FC<{ c: C }> = ({ c }) => {
   const rows = csv[c.csv] ?? [];
   const f = useCurrentFrame();
   if (!rows.length) return <div style={{ fontFamily: SANS, fontSize: 40, fontWeight: 800, color: INK }}>缺少表格 {c.csv}</div>;
-  const RH = 36, VIS = 17, N = rows.length;
+  const RH = 40, VIS = 15, N = rows.length;
   const END = 50; // 1.67s 滚到底
   const k = interpolate(f, [0, END], [0, 1], { ...clamp, easing: Easing.bezier(0.45, 0, 0.25, 1) });
   const top = k * (N - (VIS - 1)) * RH;
@@ -54,17 +54,16 @@ export const CsvHook: React.FC<{ c: C }> = ({ c }) => {
   const shakeAmp = (a: number, d: number) => Math.max(0, 1 - (f - a) / d) * (f >= a ? 1 : 0);
   const sh = 14 * Math.max(shakeAmp(0, 8), shakeAmp(HIT, 10));
   const sx = Math.sin(f * 2.7) * sh, sy = Math.cos(f * 3.3) * sh;
-  const flash0 = interpolate(f, [0, 7], [0.55, 0], clamp);
-  const flash1 = f < HIT ? 0 : interpolate(f, [HIT, HIT + 6], [0.75, 0], clamp);
+  const flash1 = f < HIT ? 0 : interpolate(f, [HIT, HIT + 8], [0.35, 0], clamp);
   const st = pop(f, HIT - 3);
   const ring = interpolate(f, [HIT, HIT + 16], [0, 1], clamp);
   const blur = f < END ? Math.min(6, Math.abs(interpolate(f, [0, END / 2, END], [0, 1, 0], clamp)) * 6) : 0;
   return (
     <div style={{ position: 'absolute', inset: 0, transform: `translate(${sx}px,${sy}px)` }}>
       {/* 表格 */}
-      <div style={{ position: 'absolute', left: 0, top: 10, width: 1040, height: RH * VIS + 46 + 4, background: '#fff', border: `3px solid ${INK}`, overflow: 'hidden', boxShadow: '0 20px 50px rgba(60,40,10,.14)' }}>
-        <div style={{ height: 46, background: INK, display: 'flex', alignItems: 'center', gap: 14, padding: '0 18px', color: '#fff', fontFamily: MONO, fontSize: 24, fontWeight: 700 }}>
-          <span style={{ width: 14, height: 14, background: OR }} />snap_1.csv<span style={{ marginLeft: 'auto', color: '#bbb', fontWeight: 400 }}>{N} rows</span>
+      <div style={{ position: 'absolute', left: 0, top: 18, width: 1040, height: RH * VIS + 52, background: '#fff', border: `1.5px solid ${INK}`, borderRadius: 16, overflow: 'hidden', boxShadow: '0 18px 44px rgba(40,28,12,.12)' }}>
+        <div style={{ height: 52, background: INK, display: 'flex', alignItems: 'center', gap: 14, padding: '0 20px', color: '#fff', fontFamily: MONO, fontSize: 22, fontWeight: 700, letterSpacing: 0.3 }}>
+          <span style={{ width: 12, height: 12, background: OR }} />snap_1.csv<span style={{ marginLeft: 'auto', color: '#D5CFC6', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{N} rows</span>
         </div>
         <Head h={RH} fs={22} />
         <div style={{ position: 'relative', height: RH * (VIS - 1), overflow: 'hidden', filter: `blur(${blur * 0.25}px)` }}>
@@ -76,23 +75,26 @@ export const CsvHook: React.FC<{ c: C }> = ({ c }) => {
       {/* 右侧大字 */}
       <div style={{ position: 'absolute', left: 1110, top: 0, right: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ alignSelf: 'flex-start' }}><Badge>{c.tag}</Badge></div>
-        <div style={{ fontFamily: SANS, fontWeight: 900, color: INK, fontSize: 200, letterSpacing: -8, lineHeight: 1, marginTop: 34, fontVariantNumeric: 'tabular-nums' }}>{count}</div>
-        <div style={{ fontFamily: SANS, fontWeight: 900, color: INK, fontSize: 92, lineHeight: 1.05 }}>本书</div>
-        <div style={{ fontSize: 32, fontWeight: 700, color: MUTED, marginTop: 10 }}>书名 · 价格 · 评分 · 库存</div>
+        <div style={{ fontFamily: SANS, fontWeight: 900, color: INK, fontSize: 188, letterSpacing: -4, lineHeight: 0.92, marginTop: 28, fontVariantNumeric: 'tabular-nums' }}>{count}</div>
+        <div style={{ fontFamily: SANS, fontWeight: 900, color: INK, fontSize: 84, lineHeight: 1.05, marginTop: 6 }}>本书</div>
+        <div style={{ fontSize: 28, fontWeight: 700, color: MUTED, marginTop: 16, letterSpacing: 0.6 }}>书名 · 价格 · 评分 · 库存</div>
         <div style={{ position: 'relative', marginTop: 26, height: 230 }}>
           <div style={{ position: 'absolute', left: 120, top: 110, width: 10, height: 10, borderRadius: '50%', border: `${8 * (1 - ring)}px solid ${OR}`, transform: `translate(-50%,-50%) scale(${ring * 70})`, opacity: f >= HIT ? 1 - ring : 0 }} />
-          <div style={{ display: 'inline-block', padding: '6px 34px', background: OR, color: '#fff', fontFamily: SANS, fontWeight: 900, fontSize: c.big2Size ?? 190, lineHeight: 1.05, letterSpacing: -4, whiteSpace: 'nowrap', transform: `rotate(-4deg) scale(${f < HIT - 3 ? 0 : 2.2 - 1.2 * st})`, opacity: f < HIT - 3 ? 0 : Math.min(1, st * 2), boxShadow: '10px 10px 0 #141414' }}>{c.big2}</div>
+          <div style={{ display: 'inline-block', padding: '4px 28px', background: OR, color: '#fff', fontFamily: SANS, fontWeight: 900, fontSize: c.big2Size ?? 168, lineHeight: 1.02, letterSpacing: -3, whiteSpace: 'nowrap', transform: `rotate(-3deg) scale(${f < HIT - 3 ? 0 : 2.2 - 1.2 * st})`, opacity: f < HIT - 3 ? 0 : Math.min(1, st * 2), boxShadow: '7px 7px 0 #141414' }}>{c.big2}</div>
         </div>
       </div>
       {/* 速度线 */}
-      <svg width={1920} height={1080} style={{ position: 'absolute', left: -64, top: -104, pointerEvents: 'none', opacity: interpolate(f, [0, 4, 30, 44], [1, 1, 0.6, 0], clamp) }}>
-        {Array.from({ length: 34 }).map((_, i) => {
-          const a = (i / 34) * Math.PI * 2 + 0.3; const r0 = 560 + ((i * 97) % 160), r1 = r0 + 160 + ((i * 53) % 220);
-          const cx = 1500, cy = 470; const ph = (f * 18 + i * 40) % 300;
-          return <line key={i} x1={cx + Math.cos(a) * (r0 + ph)} y1={cy + Math.sin(a) * (r0 + ph)} x2={cx + Math.cos(a) * (r1 + ph)} y2={cy + Math.sin(a) * (r1 + ph)} stroke={i % 3 ? INK : OR} strokeWidth={i % 3 ? 2 : 5} opacity={0.55} />;
-        })}
-      </svg>
-      <div style={{ position: 'absolute', left: -64, top: -104, width: 1920, height: 1080, background: OR, opacity: flash0, pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', left: 1088, top: -8, width: 760, height: 640, overflow: 'hidden', pointerEvents: 'none', opacity: interpolate(f, [0, 6, 28, 42], [0.9, 0.9, 0.35, 0], clamp) }}>
+        <svg width={760} height={640}>
+          {Array.from({ length: 18 }).map((_, i) => {
+            const a = -0.9 + (i / 17) * 1.8;
+            const len = 90 + ((i * 37) % 80);
+            const cx = 250, cy = 250;
+            const ph = (f * 10 + i * 28) % 120;
+            return <line key={i} x1={cx + Math.cos(a) * (70 + ph)} y1={cy + Math.sin(a) * (40 + ph * 0.35)} x2={cx + Math.cos(a) * (70 + ph + len)} y2={cy + Math.sin(a) * (40 + ph * 0.35) + Math.sin(a) * len} stroke={i % 3 ? INK : OR} strokeWidth={i % 3 ? 1.5 : 3} opacity={0.45} strokeLinecap="round" />;
+          })}
+        </svg>
+      </div>
       <div style={{ position: 'absolute', left: -64, top: -104, width: 1920, height: 1080, background: '#fff', opacity: flash1, pointerEvents: 'none' }} />
       <Src text={c.source} />
     </div>
@@ -116,8 +118,8 @@ export const TermView: React.FC<{ s: any; el: number; fs?: number; maxLines: num
   const his: RegExp[] = (s.hi ?? []).map((x: string) => new RegExp(x));
   const blink = Math.floor(el * 2.2) % 2 === 0;
   return (
-    <div style={{ position: 'relative', height: '100%', borderRadius: 14, background: '#161616', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 16px 40px rgba(60,40,10,.18)' }}>
-      <div style={{ flex: '0 0 58px', background: '#262626', display: 'flex', alignItems: 'center', gap: 12, padding: '0 10px 0 22px' }}>
+    <div style={{ position: 'relative', height: '100%', borderRadius: 18, background: '#161616', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 18px 44px rgba(40,28,12,.16)' }}>
+      <div style={{ flex: '0 0 60px', background: '#242424', display: 'flex', alignItems: 'center', gap: 12, padding: '0 14px 0 22px' }}>
         {['#FF5F57', '#FEBC2E', '#28C840'].map((x) => <div key={x} style={{ width: 16, height: 16, borderRadius: 8, background: x }} />)}
         <div style={{ marginLeft: 16, fontFamily: SANS, fontSize: 22, color: '#BDBDBD', fontWeight: 600 }}>{s.win}</div>
         {el >= tEnd - 0.1 && rec.dur > 0.5 && (
@@ -127,7 +129,7 @@ export const TermView: React.FC<{ s: any; el: number; fs?: number; maxLines: num
           </div>
         )}
       </div>
-      <div style={{ padding: '12px 28px', fontFamily: MONO, fontSize: fs, lineHeight: 1.4, color: '#EDEDED', whiteSpace: 'pre' }}>
+      <div style={{ padding: '16px 28px 18px', fontFamily: MONO, fontSize: fs, lineHeight: 1.5, color: '#F3F0EA', whiteSpace: 'pre' }}>
         {vis.map((l, i) => {
           const h = !l.p && his.some((r) => r.test(l.t));
           return (
@@ -185,11 +187,11 @@ export const RTerm: React.FC<{ c: C }> = ({ c }) => {
           </div>
         )}
         {t >= cpAt && (
-          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 372, background: CREAM, border: `3px solid ${INK}`, padding: '18px 26px', display: 'flex', flexDirection: 'column', gap: 0, opacity: pk, transform: `translateY(${(1 - pk) * 120}px)`, boxShadow: '0 -16px 50px rgba(0,0,0,.30)' }}>
+          <div style={{ position: 'absolute', left: 16, right: 16, bottom: 12, height: 360, background: CREAM, border: `1.5px solid ${INK}`, borderRadius: 16, padding: '16px 22px', display: 'flex', flexDirection: 'column', gap: 0, opacity: pk, transform: `translateY(${(1 - pk) * 28}px)`, boxShadow: '0 16px 40px rgba(40,28,12,.16)' }}>
             <div style={{ fontSize: 30, fontWeight: 900, color: INK, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12, height: 62 }}><span style={{ width: 14, height: 14, background: OR }} />{cp.label}
               {t >= (st[2] ?? cpAt + 1) - 0.1 && csvChips.length > 0 && <div style={{ marginLeft: 'auto', display: 'flex', gap: 14 }}>{csvChips.map((x, i) => <div key={i} style={{ ...fadeUp(f, Math.round((st[2] ?? cpAt + 1) * FPS) + i * 5), padding: '6px 26px', background: OR, color: '#fff', fontSize: 40, fontWeight: 900 }}>{x}</div>)}</div>}
             </div>
-            <div style={{ border: `2px solid ${INK}`, background: '#fff' }}>
+            <div style={{ border: `1px solid ${INK}`, borderRadius: 10, overflow: 'hidden', background: '#fff' }}>
               <Head h={48} fs={24} />
               {table.slice(0, cp.rows).map((r, i) => <Row key={i} i={i} r={r} h={i === cp.hi ? 64 : 46} fs={i === cp.hi ? 30 : 23} hi={i === cp.hi && t >= cpAt + 0.4} />)}
             </div>
@@ -214,25 +216,27 @@ export const Code: React.FC<{ c: C }> = ({ c }) => {
   const b = pop(f, 6);
   return (
     <div style={{ position: 'absolute', inset: 0, paddingBottom: 46 }}>
-      <div style={{ position: 'relative', height: '100%', background: '#161616', borderRadius: 14, overflow: 'hidden', boxShadow: '0 16px 40px rgba(60,40,10,.18)' }}>
-        <div style={{ height: 50, background: '#262626', display: 'flex', alignItems: 'center', gap: 12, padding: '0 22px' }}>
+      <div style={{ position: 'relative', height: '100%', background: '#161616', borderRadius: 18, overflow: 'hidden', boxShadow: '0 18px 44px rgba(40,28,12,.16)' }}>
+        <div style={{ height: 56, background: '#242424', display: 'flex', alignItems: 'center', gap: 12, padding: '0 22px' }}>
           {['#FF5F57', '#FEBC2E', '#28C840'].map((x) => <div key={x} style={{ width: 16, height: 16, borderRadius: 8, background: x }} />)}
           <div style={{ marginLeft: 16, fontFamily: MONO, fontSize: 22, color: '#BDBDBD' }}>{c.file}</div>
         </div>
-        <div style={{ padding: '12px 0', fontFamily: MONO, fontSize: 19.5, lineHeight: '29px', color: '#E6E6E6', whiteSpace: 'pre' }}>
+        <div style={{ padding: '10px 0 6px', fontFamily: MONO, fontSize: 19, lineHeight: '28px', color: '#F3F0EA', whiteSpace: 'pre' }}>
           {src.map((l, i) => {
             const on = hi.includes(i + 1) || (sweep >= 0 && i < sweep);
             const strong = hi.includes(i + 1);
+            const comment = l.trimStart().startsWith('#');
+            const hash = comment ? -1 : l.indexOf(' # ');
             return (
-              <div key={i} style={{ display: 'flex', background: strong ? 'rgba(255,90,31,.28)' : on ? 'rgba(255,255,255,.06)' : undefined, borderLeft: `6px solid ${strong ? OR : 'transparent'}`, opacity: hi.length && !strong ? 0.45 : 1 }}>
-                <span style={{ flex: '0 0 56px', textAlign: 'right', paddingRight: 16, color: on ? OR : '#666', fontWeight: on ? 700 : 400 }}>{i + 1}</span>
-                <span>{l.startsWith('#') || l.includes('#  ') ? l : l}</span>
+              <div key={i} style={{ display: 'flex', background: strong ? 'rgba(255,90,31,.22)' : on ? 'rgba(255,255,255,.05)' : undefined, borderLeft: `4px solid ${strong ? OR : 'transparent'}`, opacity: hi.length && !strong ? 0.42 : 1 }}>
+                <span style={{ flex: '0 0 64px', textAlign: 'right', paddingRight: 18, color: on ? OR : '#7A756E', fontWeight: on ? 700 : 400, fontVariantNumeric: 'tabular-nums' }}>{i + 1}</span>
+                <span style={{ color: comment ? '#A39E96' : undefined }}>{hash > 0 ? <>{l.slice(0, hash)}<span style={{ color: '#A39E96' }}>{l.slice(hash)}</span></> : l}</span>
               </div>
             );
           })}
         </div>
-        <div style={{ position: 'absolute', right: 40, top: 80, textAlign: 'right', transform: `scale(${b})`, transformOrigin: 'right top' }}>
-          <div style={{ display: 'inline-block', padding: '8px 30px', background: OR, color: '#fff', fontSize: 120, fontWeight: 900, letterSpacing: -4, lineHeight: 1.05, boxShadow: '8px 8px 0 #000' }}>{src.length} 行</div>
+        <div style={{ position: 'absolute', right: 36, top: 78, textAlign: 'right', transform: `scale(${b})`, transformOrigin: 'right top' }}>
+          <div style={{ display: 'inline-block', padding: '6px 26px', background: OR, color: '#fff', fontSize: 96, fontWeight: 900, letterSpacing: -2, lineHeight: 1.05, borderRadius: 6, boxShadow: '6px 6px 0 #141414' }}>{src.length} 行</div>
           {li > 0 && <div key={li} style={{ ...fadeUp(f, Math.round(c._starts[li] * FPS)), marginTop: 22, padding: '12px 26px', background: '#fff', color: INK, fontSize: 44, fontWeight: 900, borderLeft: `10px solid ${OR}` }}>{c.notes[li]}</div>}
         </div>
       </div>
@@ -274,7 +278,7 @@ export const Uses: React.FC<{ c: C }> = ({ c }) => {
       <div style={{ ...fadeUp(f, 0), fontSize: 64, fontWeight: 900, color: INK }}>同样的做法,还能做</div>
       <div style={{ display: 'flex', gap: 40 }}>
         {(c.items as string[]).map((x, i) => (
-          <div key={i} style={{ ...fadeUp(f, 8 + i * 9), flex: 1, background: '#fff', borderTop: `10px solid ${i === 0 ? OR : INK}`, padding: '56px 44px 80px', boxShadow: '0 12px 40px rgba(60,40,10,.08)' }}>
+          <div key={i} style={{ ...fadeUp(f, 8 + i * 9), flex: 1, background: '#fff', borderTop: `8px solid ${i === 0 ? OR : INK}`, borderRadius: 4, padding: '48px 40px 72px', boxShadow: '0 14px 36px rgba(40,28,12,.08)' }}>
             <div style={{ fontSize: 90, fontWeight: 900, color: OR, lineHeight: 1 }}>{String(i + 1).padStart(2, '0')}</div>
             <div style={{ fontSize: 88, fontWeight: 900, color: INK, marginTop: 26 }}>{x}</div>
           </div>
@@ -295,7 +299,7 @@ export const Question: React.FC<{ c: C }> = ({ c }) => {
   return (
     <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 40, paddingBottom: 60 }}>
       <div style={{ ...fadeUp(f, 0), fontSize: 30, fontWeight: 800, color: OR, letterSpacing: 3, display: 'flex', alignItems: 'center', gap: 14 }}><span style={{ width: 14, height: 14, background: OR }} />留言区</div>
-      <div style={{ ...fadeUp(f, 3), fontSize: 120, fontWeight: 900, color: INK, lineHeight: 1.12, whiteSpace: 'pre-line', letterSpacing: -2 }}>{c.q}</div>
+      <div style={{ ...fadeUp(f, 3), fontSize: 108, fontWeight: 900, color: INK, lineHeight: 1.18, whiteSpace: 'pre-line', letterSpacing: -1 }}>{c.q}</div>
       <div style={{ alignSelf: 'flex-start', transform: `scale(${b}) rotate(-3deg)`, transformOrigin: 'left center', padding: '14px 40px', background: OR, color: '#fff', fontSize: 64, fontWeight: 900, boxShadow: '8px 8px 0 #141414' }}>{c.sub} ↓</div>
     </div>
   );

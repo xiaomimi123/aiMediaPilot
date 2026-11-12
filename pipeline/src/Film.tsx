@@ -26,15 +26,15 @@ const wan = (n: number) => (n >= 10000 ? `${(n / 10000).toFixed(1)} 万` : fmt(n
 const useIn = (delay = 0) => {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const s = spring({ frame: f - delay, fps, config: { damping: 200 }, durationInFrames: 14 });
-  return { opacity: s, transform: `translateY(${(1 - s) * 28}px)` } as React.CSSProperties;
+  const s = spring({ frame: f - delay, fps, config: { damping: 200, mass: 0.7 }, durationInFrames: 16 });
+  return { opacity: s, transform: `translateY(${(1 - s) * 14}px)` } as React.CSSProperties;
 };
 
 const Source: React.FC<{ text?: string }> = ({ text }) => {
   const p = useP();
   return (
-    <div style={{ position: 'absolute', left: 0, bottom: 6, fontSize: 23, color: p.theme.muted, fontFamily: SANS, display: 'flex', alignItems: 'center', gap: 12 }}>
-      <span style={{ width: 22, height: 3, background: p.theme.accent }} />
+    <div style={{ position: 'absolute', left: 0, bottom: 8, fontSize: 22, color: p.theme.muted, fontFamily: SANS, fontWeight: 600, letterSpacing: 0.2, display: 'flex', alignItems: 'center', gap: 14 }}>
+      <span style={{ width: 28, height: 3, background: p.theme.accent }} />
       {text ?? `数据来源: github.com/${p.repo} · 截至 ${p.asOf}`}
     </div>
   );
@@ -42,19 +42,19 @@ const Source: React.FC<{ text?: string }> = ({ text }) => {
 
 const Kicker: React.FC<{ children: React.ReactNode; delay?: number }> = ({ children, delay = 0 }) => {
   const p = useP();
-  return <div style={{ ...useIn(delay), fontSize: 28, fontWeight: 800, color: p.theme.accent, letterSpacing: 3, display: 'flex', alignItems: 'center', gap: 14 }}><span style={{ width: 14, height: 14, background: p.theme.accent }} />{children}</div>;
+  return <div style={{ ...useIn(delay), fontSize: 26, fontWeight: 800, color: p.theme.accent, letterSpacing: 2.4, display: 'flex', alignItems: 'center', gap: 14 }}><span style={{ width: 12, height: 12, background: p.theme.accent }} />{children}</div>;
 };
 
 const Title: React.FC<{ children: React.ReactNode; size?: number }> = ({ children, size = 72 }) => {
   const p = useP();
-  return <div style={{ ...useIn(0), fontSize: size, fontWeight: 900, color: p.theme.ink, lineHeight: 1.12, whiteSpace: 'pre-line', letterSpacing: -1 }}>{children}</div>;
+  return <div style={{ ...useIn(0), fontSize: size, fontWeight: 900, color: p.theme.ink, lineHeight: 1.16, whiteSpace: 'pre-line', letterSpacing: -0.5 }}>{children}</div>;
 };
 
 /** solid: 主色实心白字; 否则墨色细描边 */
 const Chip: React.FC<{ children: React.ReactNode; solid?: boolean; delay?: number; size?: number }> = ({ children, solid, delay = 0, size = 30 }) => {
   const p = useP();
   return (
-    <div style={{ ...useIn(delay), display: 'inline-flex', alignItems: 'center', gap: 10, padding: '10px 24px', borderRadius: 999, border: `2px solid ${solid ? p.theme.accent : p.theme.ink}`, color: solid ? '#fff' : p.theme.ink, background: solid ? p.theme.accent : 'transparent', fontSize: size, fontWeight: 700 }}>
+    <div style={{ ...useIn(delay), display: 'inline-flex', alignItems: 'center', gap: 10, padding: '12px 26px', borderRadius: 999, border: `2px solid ${solid ? p.theme.accent : p.theme.ink}`, color: solid ? '#fff' : p.theme.ink, background: solid ? p.theme.accent : 'transparent', fontSize: size, fontWeight: 700, letterSpacing: 0.2 }}>
       {children}
     </div>
   );
@@ -62,7 +62,7 @@ const Chip: React.FC<{ children: React.ReactNode; solid?: boolean; delay?: numbe
 
 const Big: React.FC<{ children: React.ReactNode; size?: number; color?: string }> = ({ children, size = 220, color }) => {
   const p = useP();
-  return <div style={{ fontFamily: NUM, fontSize: size, fontWeight: 900, lineHeight: 0.95, color: color ?? p.theme.ink, letterSpacing: -6 }}>{children}</div>;
+  return <div style={{ fontFamily: NUM, fontSize: size, fontWeight: 900, lineHeight: 0.92, color: color ?? p.theme.ink, letterSpacing: -4, fontVariantNumeric: 'tabular-nums' }}>{children}</div>;
 };
 
 // ---------- 信息卡(杂志版式: 奶白底、粗黑大字、一个主色、细线分隔) ----------
@@ -93,15 +93,15 @@ const Overview: React.FC<{ c: Card }> = ({ c }) => {
   return (
     <div style={{ height: '100%', padding: '40px 20px 60px', display: 'flex', flexDirection: 'column' }}>
       <Kicker>github.com/{p.repo}</Kicker>
-      <div style={{ ...useIn(3), fontSize: 120, fontWeight: 900, color: p.theme.ink, marginTop: 10, letterSpacing: -3 }}>{p.name}</div>
-      <div style={{ ...useIn(6), fontSize: 42, color: p.theme.muted, marginTop: 4 }}>{c.desc ?? p.tagline}</div>
+      <div style={{ ...useIn(3), fontSize: 112, fontWeight: 900, color: p.theme.ink, marginTop: 14, letterSpacing: -2, lineHeight: 1.02 }}>{p.name}</div>
+      <div style={{ ...useIn(6), fontSize: 40, color: p.theme.muted, marginTop: 12, lineHeight: 1.35 }}>{c.desc ?? p.tagline}</div>
       <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
         {nodes.map((n, i) => {
           const o = interpolate(f, [12 + i * 9, 22 + i * 9], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
           return (
             <React.Fragment key={i}>
               {i > 0 && <div style={{ opacity: o, flex: '0 0 80px', textAlign: 'center', fontSize: 56, fontWeight: 900, color: p.theme.accent }}>→</div>}
-              <div style={{ opacity: o, flex: 1, padding: '34px 18px', borderTop: `6px solid ${p.theme.ink}`, background: '#fff', textAlign: 'center', fontSize: 40, fontWeight: 800, color: p.theme.ink }}>{n}</div>
+              <div style={{ opacity: o, flex: 1, padding: '36px 20px', borderTop: `6px solid ${p.theme.ink}`, background: '#fff', textAlign: 'center', fontSize: 38, fontWeight: 800, color: p.theme.ink, lineHeight: 1.25, boxShadow: '0 10px 28px rgba(40,28,12,0.06)' }}>{n}</div>
             </React.Fragment>
           );
         })}
@@ -213,12 +213,12 @@ const Terminal: React.FC<{ c: Card }> = ({ c }) => {
         <Title size={56}>{c.title}</Title>
         <Chip solid={!server} delay={4} size={26}>{c.originLabel ?? (server ? '服务器实测输出' : 'README 截取')}</Chip>
       </div>
-      <div style={{ flex: 1, borderRadius: 14, background: '#161616', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 16px 40px rgba(60,40,10,.15)' }}>
-        <div style={{ height: 50, background: '#262626', display: 'flex', alignItems: 'center', gap: 12, padding: '0 22px' }}>
+      <div style={{ flex: 1, borderRadius: 18, background: '#161616', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 18px 44px rgba(40,28,12,0.16)' }}>
+        <div style={{ height: 56, background: '#242424', display: 'flex', alignItems: 'center', gap: 12, padding: '0 22px' }}>
           {['#FF5F57', '#FEBC2E', '#28C840'].map((x) => <div key={x} style={{ width: 18, height: 18, borderRadius: 9, background: x }} />)}
           <div style={{ marginLeft: 20, fontFamily: MONO, fontSize: 22, color: '#A3A3A3' }}>{c.windowTitle ?? 'bash'}</div>
         </div>
-        <div style={{ padding: '22px 32px', fontFamily: MONO, fontSize: c.fontSize ?? 30, lineHeight: 1.45, color: '#F5F5F5', whiteSpace: 'pre' }}>
+        <div style={{ padding: '26px 36px', fontFamily: MONO, fontSize: c.fontSize ?? 30, lineHeight: 1.55, color: '#F4F1EC', whiteSpace: 'pre' }}>
           <div><span style={{ color: p.theme.accent }}>$ </span>{cmd.slice(0, typed)}{typed < cmd.length && <span style={{ background: '#F5F5F5' }}> </span>}</div>
           {out.slice(0, shown).map((l, i) => <div key={i}>{l || ' '}</div>)}
         </div>
@@ -233,7 +233,7 @@ const Install: React.FC<{ c: Card }> = ({ c }) => {
   return (
     <div style={{ height: '100%', padding: '30px 20px 60px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 46 }}>
       <Title size={80}>{c.title}</Title>
-      <div style={{ ...useIn(8), padding: '50px 56px', textAlign: c.prompt === '' ? 'center' : 'left', background: '#161616', borderLeft: `14px solid ${p.theme.accent}`, fontFamily: MONO, fontSize: c.cmdSize ?? 66, fontWeight: 700, color: '#fff' }}>
+      <div style={{ ...useIn(8), padding: '52px 56px', textAlign: c.prompt === '' ? 'center' : 'left', background: '#161616', borderLeft: `12px solid ${p.theme.accent}`, borderRadius: '0 16px 16px 0', fontFamily: MONO, fontSize: c.cmdSize ?? 64, fontWeight: 700, color: '#fff', lineHeight: 1.35, boxShadow: '0 16px 40px rgba(40,28,12,0.12)' }}>
         {c.prompt !== '' && <span style={{ color: p.theme.accent }}>{c.prompt ?? '$'} </span>}{c.cmd}
       </div>
       <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap' }}>
@@ -280,10 +280,10 @@ const Captions: React.FC<{ caps: Cap[] }> = ({ caps }) => {
   const c = caps.find((x) => t >= x.startSec && t < x.endSec);
   if (!c) return null;
   const len = Array.from(c.text).reduce((a, ch) => a + (ch.codePointAt(0)! > 0x2e80 ? 1 : 0.55), 0);
-  const size = Math.min(46, Math.floor(1300 / Math.max(1, len)));
+  const size = Math.min(42, Math.floor(1180 / Math.max(1, len)));
   return (
-    <div style={{ position: 'absolute', left: 0, right: 0, bottom: 40, display: 'flex', justifyContent: 'center' }}>
-      <div style={{ background: 'rgba(17,17,17,0.82)', color: '#fff', fontFamily: SANS, fontWeight: 700, fontSize: size, lineHeight: 1.3, padding: '10px 30px', borderRadius: 8, maxWidth: 1400, textAlign: 'center' }}>
+    <div style={{ position: 'absolute', left: 64, right: 210, bottom: 34, display: 'flex', justifyContent: 'center' }}>
+      <div style={{ background: '#161412', color: '#fff', fontFamily: SANS, fontWeight: 700, fontSize: size, lineHeight: 1.35, letterSpacing: 0.3, padding: '13px 32px', borderRadius: 12, maxWidth: 1240, textAlign: 'center', boxShadow: '0 12px 32px rgba(20,16,10,0.22)' }}>
         {c.text}
       </div>
     </div>
@@ -300,11 +300,11 @@ export const Film: React.FC<FilmProps> = ({ project: p, timeline, screens = {}, 
   return (
     <Ctx.Provider value={p}><HCtx.Provider value={{ recs, csv }}>
       <AbsoluteFill style={{ fontFamily: SANS, background: T.bg }}>
-        <div style={{ position: 'absolute', left: 64, right: 64, top: 86, height: 2, background: T.ink }} />
+        <div style={{ position: 'absolute', left: 64, right: 64, top: 82, height: 1, background: T.ink }} />
         <Audio src={staticFile('narr.mp3')} />
         {/* 左上声明 / 右上水印 */}
-        <div style={{ position: 'absolute', left: 64, top: 36, fontSize: 25, fontWeight: 700, color: T.ink, display: 'flex', alignItems: 'center', gap: 12 }}><span style={{ width: 12, height: 12, background: T.accent }} />{p.chrome.topLeft}</div>
-        <div style={{ position: 'absolute', right: 64, top: 34, fontSize: 28, fontWeight: 900, color: T.ink, letterSpacing: 1 }}>{p.chrome.watermark}</div>
+        <div style={{ position: 'absolute', left: 64, top: 32, fontSize: 22, fontWeight: 700, color: T.ink, letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 12 }}><span style={{ width: 11, height: 11, background: T.accent }} />{p.chrome.topLeft}</div>
+        <div style={{ position: 'absolute', right: 64, top: 30, fontSize: 22, fontWeight: 800, color: T.ink, letterSpacing: 1.6 }}>{p.chrome.watermark}</div>
         {/* 卡片区 */}
         {p.cards.map((c, i) => {
           const s = timeline.cards[i];
@@ -337,8 +337,8 @@ export const Film: React.FC<FilmProps> = ({ project: p, timeline, screens = {}, 
           );
         })}
         {/* 右下页码 */}
-        <div style={{ position: 'absolute', right: 64, bottom: 36, fontFamily: NUM, fontWeight: 900, color: T.ink, display: 'flex', alignItems: 'baseline', gap: 6 }}>
-          <span style={{ color: T.accent, fontSize: 52, letterSpacing: -1 }}>{String(idx + 1).padStart(2, '0')}</span><span style={{ fontSize: 30, color: T.muted }}>/ {String(n).padStart(2, '0')}</span>
+        <div style={{ position: 'absolute', right: 64, bottom: 32, fontFamily: NUM, fontWeight: 800, color: T.ink, display: 'flex', alignItems: 'baseline', gap: 4, fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ color: T.accent, fontSize: 44, letterSpacing: -1, fontWeight: 900 }}>{String(idx + 1).padStart(2, '0')}</span><span style={{ fontSize: 26, color: T.muted, fontWeight: 700 }}>/ {String(n).padStart(2, '0')}</span>
         </div>
         <Captions caps={timeline.captions} />
       </AbsoluteFill>
@@ -350,9 +350,9 @@ const CardShell: React.FC<{ children: React.ReactNode; framed?: boolean; noFade?
   const p = useP();
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const s = noFade ? 1 : spring({ frame: f, fps, config: { damping: 200 }, durationInFrames: 12 });
+  const s = noFade ? 1 : spring({ frame: f, fps, config: { damping: 200, mass: 0.65 }, durationInFrames: 14 });
   return (
-    <div style={{ position: 'absolute', left: 64, top: 104, width: 1792, height: 800, borderRadius: framed ? 16 : 0, background: framed ? '#fff' : 'transparent', border: framed ? `2px solid ${p.theme.ink}` : 'none', boxShadow: framed ? '0 24px 60px rgba(60,40,10,0.14)' : 'none', overflow: framed ? 'hidden' : 'visible', opacity: s, transform: `scale(${0.97 + 0.03 * s})` }}>
+    <div style={{ position: 'absolute', left: 64, top: 108, width: 1792, height: 784, borderRadius: framed ? 18 : 0, background: framed ? '#fff' : 'transparent', border: framed ? `1.5px solid ${p.theme.ink}` : 'none', boxShadow: framed ? '0 18px 48px rgba(40,28,12,0.12)' : 'none', overflow: framed ? 'hidden' : 'visible', transform: `translateY(${(1 - s) * 18}px)` }}>
       {children}
     </div>
   );
