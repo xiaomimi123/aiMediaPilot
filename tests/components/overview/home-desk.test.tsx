@@ -52,7 +52,7 @@ describe('accountLine', () => {
 
 describe('HomeDesk', () => {
   it('puts hot topics and the idea backlog first, and explains an empty desk', () => {
-    render(<HomeDesk hot={[]} totalHot={0} ideas={[]} writing={[]} account={null} />);
+    render(<HomeDesk hot={[]} totalHot={0} ideas={[]} writing={[]} sources={[]} fetchLine="没有抓取日志。" account={null} />);
     expect(screen.getByRole('heading', { name: '热点选题' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: '待写的点子' })).toBeTruthy();
     expect(screen.getByText(/每天 19:00 会从 GitHub/)).toBeTruthy();
@@ -69,14 +69,18 @@ describe('HomeDesk', () => {
         totalHot={70}
         ideas={[idea()]}
         writing={[{ id: 'p1', title: '未完成的那条' }]}
+        sources={[{ label: 'GitHub', count: 40, newest: '今天' }, { label: 'X', count: 0, newest: null }]}
+        fetchLine="没有抓取日志。"
         account="粉丝 12"
       />,
     );
     expect(screen.getByText('D4Vinci/Scrapling')).toBeTruthy();
     expect(screen.getByText('84')).toBeTruthy();
-    expect(screen.getByText(/101,876 stars · 今天 · 还没写/)).toBeTruthy();
+    expect(screen.getByText('101,876 stars')).toBeTruthy();
+    expect(screen.getByText('还没写')).toBeTruthy();
     expect(screen.getByText('抓网页的库，自适应选择器。')).toBeTruthy();
-    expect(screen.getByText('抖音口播 · 录操作用横版')).toBeTruthy();
+    expect(screen.getAllByText('GitHub').length).toBeGreaterThan(0);
+    expect(screen.getByText('40')).toBeTruthy();
     expect(screen.getAllByRole('button', { name: '开始写' })).toHaveLength(2);
     expect(screen.getByRole('button', { name: '做成作品' })).toBeTruthy();
     expect(screen.getByText('用一行命令讲清安装')).toBeTruthy();

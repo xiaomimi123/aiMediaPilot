@@ -145,7 +145,7 @@ export function ProjectWorkspace({
       </div>
       {/* 底部留出悬浮按钮的位置, 不挡最后一行 */}
       <div className="min-h-0 flex-1 pb-16">
-        <div className="mx-auto h-full w-full max-w-[820px]">
+        <div className="h-full w-full">
           {tab === 'topic' && (
             <div className="h-full overflow-y-auto px-4 py-5 md:px-6">
               <TopicStep reference={reference} />

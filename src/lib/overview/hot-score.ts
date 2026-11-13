@@ -131,6 +131,13 @@ function handsOn(input: ScoreInput): { value: number; detail: string } {
   return { value: 0, detail: '不是仓库，不做亲测录屏。这项记 0。' };
 }
 
+/** 页面上的一行公式，权重跟 HOT_SCORE 走。 */
+export function formulaLine(): string {
+  const w = HOT_SCORE.weights;
+  const pct = (n: number) => `${Math.round(n * 100)}%`;
+  return `热度 ${pct(w.heat)} · 新旧 ${pct(w.recency)} · 赛道 ${pct(w.fit)} · 亲测 ${pct(w.handsOn)}。没有历史热度，所以没有增速。`;
+}
+
 export function scoreHot(input: ScoreInput, now: Date, ctx: ScoreContext = { extraTerms: [] }): HotScore {
   const cap = heatCap(input.provider);
   const heatValue = input.heat == null || cap == null ? null : Math.round(logScore(input.heat, cap) * 10) / 10;

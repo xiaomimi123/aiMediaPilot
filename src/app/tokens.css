@@ -58,7 +58,7 @@
   --mono: var(--font-mono-face), ui-monospace, "JetBrains Mono", monospace;
 
   /* ---- 布局 ---- */
-  --sidebar-w: 248px;
+  --sidebar-w: 196px;
   --drawer-w:  400px;
   --tabbar-h:  60px;
 }

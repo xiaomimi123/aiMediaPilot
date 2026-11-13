@@ -1,28 +1,45 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { IdeaCard } from '@/lib/overview/home';
+import type { IdeaCard, SourceStat } from '@/lib/overview/home';
 import type { FeedRow } from '@/lib/overview/feed';
-import { HotList, ScoreNote } from '@/components/overview/hot-feed';
+import { formulaLine } from '@/lib/overview/hot-score';
+import { HomeTable } from '@/components/overview/hot-feed';
 
 const post = (url: string, body: unknown) =>
   fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
     .then((r) => r.json())
     .catch(() => ({ success: false, message: '服务没有响应' }));
 
+function Panel({ title, children, extra }: { title: string; children: ReactNode; extra?: ReactNode }) {
+  return (
+    <section className="rounded-2xl bg-[var(--bg-surface)] p-4 shadow-[var(--shadow-card)]">
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <h2 className="text-base font-extrabold">{title}</h2>
+        {extra}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 export function HomeDesk({
   hot,
   totalHot,
   ideas,
   writing,
+  sources,
+  fetchLine,
   account,
 }: {
   hot: FeedRow[];
   totalHot: number;
   ideas: IdeaCard[];
   writing: { id: string; title: string }[];
+  sources: SourceStat[];
+  fetchLine: string;
   account: string | null;
 }) {
   const router = useRouter();
@@ -65,90 +82,104 @@ export function HomeDesk({
     });
 
   return (
-    <div className="mx-auto max-w-[1120px] text-base leading-7">
-      <h1 className="page-title">今天写什么</h1>
-      <p className="mt-3 max-w-[68ch] text-base leading-7 text-[var(--text-secondary)]">先看热点和还没写的点子。下面是按热度分置顶的一批，其余在全部列表里。</p>
-      <div className="mt-3">
-        <ScoreNote />
+    <div className="flex h-full flex-col px-5 py-4">
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <h1 className="page-title">今天写什么</h1>
+        <p className="text-[15px] leading-6 text-[var(--text-secondary)]">{formulaLine()}</p>
       </div>
-      {err && <p className="mt-4 text-base text-[var(--danger)]">{err}</p>}
+      {err && <p className="mt-2 text-[15px] text-[var(--danger)]">{err}</p>}
 
-      <div className="mt-8 grid grid-cols-1 items-start gap-10 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.7fr)] lg:gap-12">
-        <section>
-          <div className="flex flex-wrap items-baseline justify-between gap-3">
-            <h2 className="text-[22px] font-extrabold tracking-tight">热点选题</h2>
+      <div className="mt-3 grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_300px] gap-4">
+        <section className="flex min-h-0 flex-col rounded-2xl bg-[var(--bg-surface)] shadow-[var(--shadow-card)]">
+          <div className="flex items-baseline justify-between px-3 pt-3">
+            <h2 className="text-base font-extrabold">热点选题</h2>
             {totalHot > 0 && (
-              <Link href="/feed" className="text-base text-[var(--accent)]">
+              <Link href="/feed" className="text-[15px] text-[var(--accent)]">
                 {`全部 ${totalHot} 条`}
               </Link>
             )}
           </div>
-          {hot.length === 0 ? (
-            <p className="mt-4 max-w-[40rem] text-base leading-7">
-              还没有热点。每天 19:00 会从 GitHub、Hacker News 和 X 抓一批，终端也可以跑 <span className="whitespace-nowrap font-mono text-[15px]">npm run fetch:sources</span>。抓进来之后都会出现在这里，不再只留近 3 天或热度前 40 条。
-            </p>
-          ) : (
-            <div className="mt-4">
-              <HotList rows={hot} />
-            </div>
-          )}
+          <div className="min-h-0 flex-1 overflow-auto">
+            {hot.length === 0 ? (
+              <p className="px-3 py-3 text-[15px] leading-6">还没有热点。每天 19:00 会从 GitHub、Hacker News 和 X 抓一批，终端也可以跑 npm run fetch:sources。</p>
+            ) : (
+              <HomeTable rows={hot} />
+            )}
+          </div>
         </section>
 
-        <section className="lg:sticky lg:top-8">
-          <h2 className="text-[22px] font-extrabold tracking-tight">待写的点子</h2>
-          <form
-            className="mt-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void saveIdea();
-            }}
-          >
-            <textarea
-              rows={3}
-              className="w-full rounded-xl bg-[var(--bg-surface)] px-4 py-3 text-base leading-7 shadow-[var(--shadow-card)] outline-none"
-              placeholder="记一句还没写的点子"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-            />
-            <button className="btn-secondary mt-3 h-11 px-5 text-base" disabled={busy !== null || !draft.trim()} type="submit">
-              {busy === 'new-idea' ? '存下…' : '先存着'}
-            </button>
-          </form>
-          {ideas.length === 0 ? (
-            <p className="mt-4 text-base leading-7">点子池是空的。上面写一句先存着，或者在热点上点「存点子」。</p>
-          ) : (
-            <ul className="mt-4 space-y-3">
-              {ideas.map((idea) => (
-                <li key={idea.id} className="rounded-2xl bg-[var(--bg-surface)] px-5 py-4 shadow-[var(--shadow-card)]">
-                  <p className="text-lg font-semibold leading-7">{idea.text}</p>
-                  <div className="mt-3 flex items-center justify-between gap-3">
-                    <span className="text-base text-[var(--text-secondary)]">{idea.status}</span>
-                    <button className="btn-primary h-11 shrink-0 px-5 text-base" disabled={busy !== null} onClick={() => void writeIdea(idea)}>
-                      {busy === idea.id ? '正在打开…' : idea.draftId ? '继续写' : '开始写'}
+        <aside className="flex min-h-0 flex-col gap-3 overflow-auto">
+          <Panel title="待写的点子">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void saveIdea();
+              }}
+            >
+              <textarea
+                rows={2}
+                className="w-full rounded-lg bg-[var(--bg-inset)] px-3 py-2 text-[15px] leading-6 outline-none"
+                placeholder="记一句还没写的点子"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+              />
+              <button className="btn-secondary mt-2 h-8 px-3 text-[15px]" disabled={busy !== null || !draft.trim()} type="submit">
+                {busy === 'new-idea' ? '存下…' : '先存着'}
+              </button>
+            </form>
+            {ideas.length === 0 ? (
+              <p className="mt-2 text-[15px] leading-6">点子池是空的。</p>
+            ) : (
+              <ul className="mt-2 space-y-2">
+                {ideas.map((idea) => (
+                  <li key={idea.id} className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[15px] font-semibold leading-6">{idea.text}</p>
+                      <p className="text-[15px] leading-6 text-[var(--text-secondary)]">{idea.status}</p>
+                    </div>
+                    <button className="btn-primary h-8 shrink-0 px-3 text-[15px]" disabled={busy !== null} onClick={() => void writeIdea(idea)}>
+                      {busy === idea.id ? '打开…' : idea.draftId ? '继续写' : '开始写'}
                     </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
 
-      {writing.length > 0 && (
-        <section className="mt-12 border-t border-[var(--border-subtle)] pt-8">
-          <h2 className="text-lg font-extrabold">接着写</h2>
-          <ul className="mt-2">
-            {writing.map((w) => (
-              <li key={w.id}>
-                <Link href={`/projects/${w.id}`} className="block py-2 text-base hover:text-[var(--accent)]">
-                  {w.title}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      {account && <p className="mt-8 text-base text-[var(--text-secondary)]">{account}</p>}
+          <Panel title="接着写">
+            {writing.length === 0 ? (
+              <p className="text-[15px] leading-6">没有进行中的作品。</p>
+            ) : (
+              <ul>
+                {writing.map((w) => (
+                  <li key={w.id}>
+                    <Link href={`/projects/${w.id}`} className="block py-1 text-[15px] leading-6 hover:text-[var(--accent)]">
+                      {w.title}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+
+          <Panel title="信息源">
+            <table className="w-full text-[15px] leading-6">
+              <tbody>
+                {sources.map((s) => (
+                  <tr key={s.label}>
+                    <td className="py-0.5 pr-2">{s.label}</td>
+                    <td className="py-0.5 text-right tabular-nums font-semibold">{s.count}</td>
+                    <td className="py-0.5 pl-3 text-right text-[var(--text-secondary)]">{s.newest ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-2 text-[15px] leading-6 text-[var(--text-secondary)]">{fetchLine}</p>
+          </Panel>
+
+          {account && <p className="px-1 text-[15px] leading-6 text-[var(--text-secondary)]">{account}</p>}
+        </aside>
+      </div>
     </div>
   );
 }

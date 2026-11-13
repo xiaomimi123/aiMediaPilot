@@ -23,15 +23,14 @@ export function isActive(pathname: string, href: string): boolean {
 export function AppNav() {
   const pathname = usePathname() ?? '/';
   return (
-    <>
-      <nav data-testid="sidebar" className="hidden md:flex w-[var(--sidebar-w)] shrink-0 flex-col gap-1 border-r border-[var(--border-subtle)] bg-[var(--bg-base)] px-4 py-6">
-        <div className="mb-6 flex items-center gap-2.5 px-2">
-          <span className="h-2.5 w-2.5 shrink-0 bg-[var(--accent)]" aria-hidden />
-          <div>
-            <div className="text-[15px] font-extrabold tracking-tight">MediaPilot</div>
-            <div className="text-[11px] font-medium tracking-wide text-[var(--text-tertiary)]">出片工作台</div>
-          </div>
+    <nav data-testid="sidebar" className="flex w-[var(--sidebar-w)] shrink-0 flex-col gap-1 border-r border-[var(--border-subtle)] bg-[var(--bg-base)] px-3 py-5">
+      <div className="mb-5 flex items-center gap-2.5 px-2">
+        <span className="h-2.5 w-2.5 shrink-0 bg-[var(--accent)]" aria-hidden />
+        <div>
+          <div className="text-[15px] font-extrabold tracking-tight">MediaPilot</div>
+          <div className="text-[15px] text-[var(--text-secondary)]">出片工作台</div>
         </div>
+      </div>
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const on = isActive(pathname, href);
           return (
@@ -46,19 +45,6 @@ export function AppNav() {
             </Link>
           );
         })}
-      </nav>
-      <div data-testid="tabbar-spacer" className="h-[var(--tabbar-h)] md:hidden" aria-hidden />
-      <nav data-testid="tabbar" className="fixed inset-x-0 bottom-0 z-40 flex h-[var(--tabbar-h)] items-stretch justify-around bg-[var(--bg-base)] shadow-[0_-1px_0_var(--border-subtle)] md:hidden">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-          const on = isActive(pathname, href);
-          return (
-            <Link key={href} href={href} aria-current={on ? 'page' : undefined} className={cn('flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px]', on ? 'text-[var(--accent)]' : 'text-[var(--text-tertiary)]')}>
-              <Icon size={20} />
-              {label}
-            </Link>
-          );
-        })}
-      </nav>
-    </>
+    </nav>
   );
 }

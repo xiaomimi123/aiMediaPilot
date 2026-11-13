@@ -47,15 +47,12 @@ export function TopicsView() {
   };
 
   return (
-    <div className="space-y-4">
-      <OwnScript />
-      <DailyTopics />
-      <OpenSourceNews />
-      <XHotPosts />
-      <IdeaPool />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="min-w-0 space-y-4">
-          <SuggestPanel />
+    <div className="grid grid-cols-2 items-start gap-4">
+      <div className="min-w-0 space-y-4">
+        <OwnScript />
+        <DailyTopics />
+        <OpenSourceNews />
+        <SuggestPanel />
           <div className="flex gap-2">
             <input
               className="min-w-0 flex-1 rounded-md border border-[var(--border-default)] bg-[var(--bg-inset)] px-2 py-1.5 text-sm"
@@ -86,7 +83,10 @@ export function TopicsView() {
               ))}
             </div>
           )}
-        </div>
+      </div>
+      <div className="min-w-0 space-y-4">
+        <XHotPosts />
+        <IdeaPool />
         <AccountPanel onChanged={() => void load()} />
       </div>
     </div>

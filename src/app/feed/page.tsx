@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
-import { FEED_PAGE_SIZE, countByProvider, feedHref, loadFeedRows, parseFeedQuery, rankFeed, type FeedQuery } from '@/lib/overview/feed';
-import { HotList, ScoreNote } from '@/components/overview/hot-feed';
+import { FEED_PAGE_SIZE, countByProvider, feedHref, loadFeedRows, parseFeedQuery, rankFeed } from '@/lib/overview/feed';
+import { FeedBoard } from '@/components/overview/hot-feed';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,11 +31,13 @@ const SORTS: { id: string; label: string }[] = [
 
 function Chip({ href, on, children }: { href: string; on: boolean; children: ReactNode }) {
   return (
-    <Link href={href} className={`inline-flex h-10 items-center rounded-full px-4 text-base ${on ? 'bg-[var(--accent)] font-semibold text-white' : 'bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-[var(--shadow-card)]'}`}>
+    <Link href={href} className={`inline-flex h-8 items-center rounded-full px-3 text-[15px] ${on ? 'bg-[var(--accent)] font-semibold text-white' : 'bg-[var(--bg-surface)] text-[var(--text-primary)]'}`}>
       {children}
     </Link>
   );
 }
+
+const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] ?? '' : v ?? '');
 
 export default async function FeedPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
   const now = new Date();
@@ -50,92 +52,70 @@ export default async function FeedPage({ searchParams }: { searchParams: Record<
   const shown = query.page === page ? query : { ...query, page };
 
   return (
-    <div className="h-full overflow-y-auto px-5 py-8 md:px-10">
-      <div className="mx-auto max-w-[1120px]">
-        <p className="text-base">
+    <div className="flex h-full flex-col px-5 py-4">
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <h1 className="page-title">热点</h1>
+        <p className="text-[15px] leading-6">
           <Link href="/" className="text-[var(--accent)]">
             今天写什么
           </Link>
+          {` · 库里 ${all.length} 条`}
+          {ranked.length !== all.length ? `，当前 ${ranked.length} 条` : ''}
         </p>
-        <h1 className="page-title mt-3">热点</h1>
-        <p className="mt-3 text-base leading-7">
-          {`库里 ${all.length} 条都在这里，不按 3 天截断，也不按来源只留前几十条。`}
-          {ranked.length !== all.length ? ` 当前显示 ${ranked.length} 条。` : ''}
-        </p>
-        <div className="mt-3">
-          <ScoreNote />
-        </div>
-
-        <form action="/feed" className="mt-6 flex flex-wrap items-center gap-3">
-          {shown.source !== 'all' && <input type="hidden" name="source" value={shown.source} />}
-          {shown.range !== 'all' && <input type="hidden" name="range" value={shown.range} />}
-          {shown.status !== 'all' && <input type="hidden" name="status" value={shown.status} />}
-          {shown.sort !== 'score' && <input type="hidden" name="sort" value={shown.sort} />}
-          <input
-            name="q"
-            defaultValue={shown.q}
-            placeholder="搜标题或简介"
-            className="h-11 w-full max-w-md rounded-xl bg-[var(--bg-surface)] px-4 text-base shadow-[var(--shadow-card)] outline-none"
-          />
-          <button className="btn-secondary h-11 px-5 text-base" type="submit">
-            搜索
-          </button>
-        </form>
-
-        <div className="mt-5 flex flex-wrap gap-2">
-          <Chip href={feedHref(shown, { source: 'all' })} on={shown.source === 'all'}>
-            {`全部 ${all.length}`}
-          </Chip>
-          {counts.map((c) => (
-            <Chip key={c.provider} href={feedHref(shown, { source: c.provider })} on={shown.source === c.provider}>
-              {`${c.label} ${c.count}`}
-            </Chip>
-          ))}
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {RANGES.map((r) => (
-            <Chip key={r.id} href={feedHref(shown, { range: r.id })} on={shown.range === r.id}>
-              {r.label}
-            </Chip>
-          ))}
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {STATUSES.map((s) => (
-            <Chip key={s.id} href={feedHref(shown, { status: s.id })} on={shown.status === s.id}>
-              {s.label}
-            </Chip>
-          ))}
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {SORTS.map((s) => (
-            <Chip key={s.id} href={feedHref(shown, { sort: s.id })} on={shown.sort === s.id}>
-              {s.label}
-            </Chip>
-          ))}
-        </div>
-
-        <div className="mt-6">
-          {rows.length === 0 ? (
-            <p className="max-w-[40rem] text-base leading-7">这个条件下没有条目。换来源、时间或状态，或者把搜索清掉。</p>
-          ) : (
-            <HotList rows={rows} startRank={start + 1} keyboard />
-          )}
-        </div>
-
         {pages > 1 && (
-          <p className="mt-6 flex flex-wrap gap-4 text-base">
+          <p className="ml-auto flex gap-3 text-[15px]">
             {page > 1 && (
               <Link href={feedHref(shown, { page: page - 1 })} className="text-[var(--accent)]">
                 上一页
               </Link>
             )}
-            <span className="text-[var(--text-secondary)]">{`第 ${page} / ${pages} 页`}</span>
+            <span>{`第 ${page} / ${pages} 页`}</span>
             {page < pages && (
               <Link href={feedHref(shown, { page: page + 1 })} className="text-[var(--accent)]">
                 下一页
               </Link>
             )}
           </p>
+        )}
+      </div>
+
+      <form action="/feed" className="mt-3 flex flex-wrap items-center gap-2">
+        {shown.source !== 'all' && <input type="hidden" name="source" value={shown.source} />}
+        {shown.range !== 'all' && <input type="hidden" name="range" value={shown.range} />}
+        {shown.status !== 'all' && <input type="hidden" name="status" value={shown.status} />}
+        {shown.sort !== 'score' && <input type="hidden" name="sort" value={shown.sort} />}
+        <input name="q" defaultValue={shown.q} placeholder="搜标题或简介" className="h-8 w-56 rounded-lg bg-[var(--bg-surface)] px-3 text-[15px] outline-none" />
+        <button className="btn-secondary h-8 px-3 text-[15px]" type="submit">
+          搜索
+        </button>
+        <Chip href={feedHref(shown, { source: 'all' })} on={shown.source === 'all'}>{`全部 ${all.length}`}</Chip>
+        {counts.map((c) => (
+          <Chip key={c.provider} href={feedHref(shown, { source: c.provider })} on={shown.source === c.provider}>
+            {`${c.label} ${c.count}`}
+          </Chip>
+        ))}
+        {RANGES.map((r) => (
+          <Chip key={r.id} href={feedHref(shown, { range: r.id })} on={shown.range === r.id}>
+            {r.label}
+          </Chip>
+        ))}
+        {STATUSES.map((s) => (
+          <Chip key={s.id} href={feedHref(shown, { status: s.id })} on={shown.status === s.id}>
+            {s.label}
+          </Chip>
+        ))}
+        {SORTS.map((s) => (
+          <Chip key={s.id} href={feedHref(shown, { sort: s.id })} on={shown.sort === s.id}>
+            {s.label}
+          </Chip>
+        ))}
+      </form>
+
+      <div className="mt-3 min-h-0 flex-1">
+        {rows.length === 0 ? (
+          <p className="text-[15px] leading-6">这个条件下没有条目。</p>
+        ) : (
+          <FeedBoard rows={rows} startRank={start + 1} initialKey={one(searchParams.row) || null} />
         )}
       </div>
     </div>

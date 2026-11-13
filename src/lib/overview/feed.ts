@@ -13,7 +13,7 @@ import { scoreHot, type HotScore } from './hot-score';
  * 抓取本身仍有上限（GitHub 两次搜索各 20 条、HN 首页 30 条、X 原创前 30 条）。那是入库前的事，列表把库里有的都算上。
  */
 
-export const HOME_PIN = 12;
+export const HOME_PIN = 18;
 export const FEED_PAGE_SIZE = 30;
 
 const FIT_DOUYIN = '抖音口播';
