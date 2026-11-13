@@ -1,32 +1,9 @@
 import type { PrismaClient } from '@prisma/client';
 import { listDrafts } from '@/lib/draft/store';
-import { freshItems } from '@/lib/sources/fetch';
-import { listDaily, listIdeas } from '@/lib/topics/daily';
+import { listIdeas } from '@/lib/topics/daily';
+import { HOME_PIN, loadFeedRows, rankFeed, type FeedRow } from './feed';
 
-/** 这条流水线实际会出的成片。没有按条目另存「适合哪些平台」，这里只按来源区分。 */
-const FIT_DOUYIN = '适合抖音口播';
-const FIT_GITHUB = '适合抖音口播，录操作时用横版';
-
-const PROVIDER_NAME: Record<string, string> = {
-  github: 'GitHub',
-  hackernews: 'Hacker News',
-  x: 'X',
-};
-
-export interface HotCard {
-  id: string;
-  kind: 'daily' | 'source';
-  title: string;
-  /** 来源名，如 GitHub、抖音对标 */
-  source: string;
-  /** 已有的热度，没有就不显示 */
-  heat: string | null;
-  /** 每日选题的 why，或信息源自带的简介。没有就不显示 */
-  why: string | null;
-  fit: string;
-  status: string;
-  url: string | null;
-}
+export type { FeedRow };
 
 export interface IdeaCard {
   id: string;
@@ -37,21 +14,11 @@ export interface IdeaCard {
 }
 
 export interface HomeDesk {
-  hot: HotCard[];
-  /** 热点多于首页能放下的条数 */
-  moreHot: number;
+  hot: FeedRow[];
+  /** 没被忽略的全部条数。首页只置顶其中的前若干条。 */
+  totalHot: number;
   ideas: IdeaCard[];
 }
-
-const heatOf = (provider: string, heat: number): string => {
-  const n = heat.toLocaleString('en-US');
-  if (provider === 'github') return `${n} stars`;
-  if (provider === 'hackernews') return `${n} points`;
-  if (provider === 'x') return `${n} 浏览`;
-  return n;
-};
-
-const fitOf = (provider: string | null): string => (provider === 'github' ? FIT_GITHUB : FIT_DOUYIN);
 
 /** 账号这一行：全空或全 0 时不占首页 */
 export function accountLine(m: { fans: number | null; likes: number | null; works: number; views: number }): string | null {
@@ -63,61 +30,15 @@ export function accountLine(m: { fans: number | null; likes: number | null; work
   return parts.join(' · ');
 }
 
-const HOT_LIMIT = 8;
+const OPEN = { q: '', source: 'all', range: 'all', status: 'open', sort: 'score', page: 1 };
 
 export async function loadHome(db: PrismaClient, now: Date): Promise<HomeDesk> {
-  const [daily, items, ideas, drafts] = await Promise.all([
-    listDaily(db, now).catch(() => ({ topics: [], lastRun: null })),
-    freshItems(db, now, 3).catch(() => []),
+  const [rows, ideas, drafts] = await Promise.all([
+    loadFeedRows(db, now).catch(() => []),
     listIdeas(db).catch(() => []),
     listDrafts(db).catch(() => []),
   ]);
-
-  const sourceIds = daily.topics.filter((t) => t.source === 'source').map((t) => t.sourceId);
-  const benchIds = daily.topics.filter((t) => t.source === 'benchmark').map((t) => t.sourceId);
-  const [linked, benches] = await Promise.all([
-    sourceIds.length ? db.sourceItem.findMany({ where: { id: { in: sourceIds } } }) : Promise.resolve([]),
-    benchIds.length ? db.benchmarkVideo.findMany({ where: { id: { in: benchIds } }, select: { id: true, ratio: true } }) : Promise.resolve([]),
-  ]);
-  const linkedById = new Map(linked.map((s) => [s.id, s]));
-  const ratioById = new Map(benches.map((b) => [b.id, b.ratio]));
-  const consumed = new Set(sourceIds);
-
-  const fromDaily: HotCard[] = daily.topics.map((t) => {
-    const item = t.source === 'source' ? linkedById.get(t.sourceId) : undefined;
-    const provider = item?.provider ?? null;
-    const ratio = t.source === 'benchmark' ? ratioById.get(t.sourceId) : null;
-    const source =
-      t.source === 'benchmark' ? '抖音对标' : t.source === 'sequel' ? '续集' : t.source === 'idea' ? '点子' : (PROVIDER_NAME[provider ?? ''] ?? t.sourceLabel);
-    const heat = item ? heatOf(item.provider, item.heat) : ratio != null ? `平时的 ${ratio} 倍` : null;
-    return {
-      id: t.id,
-      kind: 'daily',
-      title: t.title,
-      source,
-      heat,
-      why: t.why.trim() || null,
-      fit: fitOf(provider),
-      status: t.answered ? '按你的话写过' : '有初稿',
-      url: item?.url ?? null,
-    };
-  });
-
-  const fromSource: HotCard[] = items
-    .filter((i) => !consumed.has(i.id))
-    .map((i) => ({
-      id: i.id,
-      kind: 'source' as const,
-      title: i.title,
-      source: PROVIDER_NAME[i.provider] ?? i.provider,
-      heat: heatOf(i.provider, i.heat),
-      why: i.summary?.trim() || null,
-      fit: fitOf(i.provider),
-      status: '还没写',
-      url: i.url,
-    }));
-
-  const hotAll = [...fromDaily, ...fromSource];
+  const open = rankFeed(rows, OPEN, now);
   const draftByIdea = new Map(drafts.filter((d) => d.ideaId && d.status !== 'done').map((d) => [d.ideaId as string, d.id]));
   const ideaCards: IdeaCard[] = [];
   for (const idea of ideas) {
@@ -125,6 +46,5 @@ export async function loadHome(db: PrismaClient, now: Date): Promise<HomeDesk> {
     if (idea.status === 'fresh') ideaCards.push({ id: idea.id, text: idea.text, status: '待写', draftId: null });
     else if (draftId) ideaCards.push({ id: idea.id, text: idea.text, status: '写到一半', draftId });
   }
-
-  return { hot: hotAll.slice(0, HOT_LIMIT), moreHot: Math.max(0, hotAll.length - HOT_LIMIT), ideas: ideaCards };
+  return { hot: open.slice(0, HOME_PIN), totalHot: open.length, ideas: ideaCards };
 }

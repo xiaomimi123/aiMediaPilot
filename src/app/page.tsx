@@ -12,7 +12,7 @@ export default async function Overview() {
     <div className="h-full overflow-y-auto px-5 py-8 md:px-10">
       <HomeDesk
         hot={home.hot}
-        moreHot={home.moreHot}
+        totalHot={home.totalHot}
         ideas={home.ideas}
         writing={overview.inProgress.map((w) => ({ id: w.id, title: w.title }))}
         account={accountLine(overview.metrics)}

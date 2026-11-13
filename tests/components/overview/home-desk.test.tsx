@@ -2,22 +2,40 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { HomeDesk } from '@/components/overview/home-desk';
-import { accountLine, type HotCard, type IdeaCard } from '@/lib/overview/home';
+import { accountLine, type IdeaCard } from '@/lib/overview/home';
+import type { FeedRow } from '@/lib/overview/feed';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: () => {}, refresh: () => {} }) }));
 
 afterEach(cleanup);
 
-const hot = (over: Partial<HotCard> = {}): HotCard => ({
-  id: 'h1',
+const hot = (over: Partial<FeedRow> = {}): FeedRow => ({
+  key: 'source:h1',
   kind: 'source',
+  refId: 'h1',
+  dailyId: null,
+  provider: 'github',
+  sourceLabel: 'GitHub',
   title: 'D4Vinci/Scrapling',
-  source: 'GitHub',
-  heat: '101,876 stars',
   why: '抓网页的库，自适应选择器。',
-  fit: '适合抖音口播，录操作时用横版',
-  status: '还没写',
   url: 'https://github.com/D4Vinci/Scrapling',
+  heat: 101876,
+  heatLabel: '101,876 stars',
+  seenAt: '2026-11-13',
+  seenLabel: '今天',
+  statusKey: 'fresh',
+  status: '还没写',
+  fit: '抖音口播 · 录操作用横版',
+  score: {
+    total: 84,
+    parts: [
+      { key: 'heat', label: '热度', value: 90, weight: 0.45, applied: 0.45, detail: '当前 101,876 stars，按 100,000 封顶取对数。库里没有上一次的 star，不算增速。' },
+      { key: 'recency', label: '新旧', value: 90, weight: 0.25, applied: 0.25, detail: '距今 0.3 天，半衰期 3 天。' },
+      { key: 'fit', label: '赛道', value: 60, weight: 0.2, applied: 0.2, detail: '命中工具。' },
+      { key: 'handsOn', label: '亲测', value: 100, weight: 0.1, applied: 0.1, detail: 'GitHub 仓库，可以录操作做成亲测。' },
+    ],
+  },
+  canAdopt: false,
   ...over,
 });
 
@@ -34,7 +52,7 @@ describe('accountLine', () => {
 
 describe('HomeDesk', () => {
   it('puts hot topics and the idea backlog first, and explains an empty desk', () => {
-    render(<HomeDesk hot={[]} moreHot={0} ideas={[]} writing={[]} account={null} />);
+    render(<HomeDesk hot={[]} totalHot={0} ideas={[]} writing={[]} account={null} />);
     expect(screen.getByRole('heading', { name: '热点选题' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: '待写的点子' })).toBeTruthy();
     expect(screen.getByText(/每天 19:00 会从 GitHub/)).toBeTruthy();
@@ -44,18 +62,28 @@ describe('HomeDesk', () => {
     expect(screen.queryByText(/定时没开/)).toBeNull();
   });
 
-  it('shows source, heat, why, fit, status, and the write action', () => {
-    render(<HomeDesk hot={[hot(), hot({ id: 'd1', kind: 'daily', title: '安装只要一行', source: '点子', heat: null, why: '片尾留了钩子', fit: '适合抖音口播', status: '有初稿' })]} moreHot={2} ideas={[idea()]} writing={[{ id: 'p1', title: '未完成的那条' }]} account="粉丝 12" />);
+  it('shows score, source, heat, why, fit, status, and the write action', () => {
+    render(
+      <HomeDesk
+        hot={[hot(), hot({ key: 'daily:d1', refId: 'd1', dailyId: 'd1', provider: 'idea', sourceLabel: '点子', title: '安装只要一行', heat: null, heatLabel: null, why: '片尾留了钩子', fit: '适合抖音口播', status: '有初稿', statusKey: 'draft', canAdopt: true, score: { total: 61, parts: hot().score.parts } })]}
+        totalHot={70}
+        ideas={[idea()]}
+        writing={[{ id: 'p1', title: '未完成的那条' }]}
+        account="粉丝 12"
+      />,
+    );
     expect(screen.getByText('D4Vinci/Scrapling')).toBeTruthy();
-    expect(screen.getByText(/GitHub · 101,876 stars · 还没写/)).toBeTruthy();
+    expect(screen.getByText('84')).toBeTruthy();
+    expect(screen.getByText(/101,876 stars · 今天 · 还没写/)).toBeTruthy();
     expect(screen.getByText('抓网页的库，自适应选择器。')).toBeTruthy();
-    expect(screen.getByText('适合抖音口播，录操作时用横版')).toBeTruthy();
+    expect(screen.getByText('抖音口播 · 录操作用横版')).toBeTruthy();
     expect(screen.getAllByRole('button', { name: '开始写' })).toHaveLength(2);
     expect(screen.getByRole('button', { name: '做成作品' })).toBeTruthy();
     expect(screen.getByText('用一行命令讲清安装')).toBeTruthy();
     expect(screen.getByText('待写')).toBeTruthy();
-    expect(screen.getByRole('link', { name: '选题页还有 2 条' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: '全部 70 条' }).getAttribute('href')).toBe('/feed');
     expect(screen.getByRole('link', { name: '未完成的那条' })).toBeTruthy();
     expect(screen.getByText('粉丝 12')).toBeTruthy();
+    expect(screen.getByText(/没有历史热度，所以没有增速/)).toBeTruthy();
   });
 });
