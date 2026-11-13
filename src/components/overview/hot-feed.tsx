@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { FeedRow } from '@/lib/overview/feed';
+import { clusterSources, whyLine, type TopicCluster } from '@/lib/overview/cluster';
 import { formulaLine } from '@/lib/overview/hot-score';
 import type { ScorePart } from '@/lib/overview/hot-score';
 
@@ -17,8 +18,6 @@ const SOURCE_COLOR: Record<string, string> = {
   reddit: 'text-[var(--soft)]',
   benchmark: 'text-[var(--success)]',
 };
-
-const fitShort = (row: FeedRow) => (row.provider === 'github' ? '口播·横版' : '口播');
 
 function useRowActions() {
   const router = useRouter();
@@ -100,95 +99,115 @@ function PartLine({ part }: { part: ScorePart }) {
   );
 }
 
-const th = 'sticky top-0 bg-[var(--bg-surface)] px-2 py-2 text-left text-[15px] font-semibold';
-const td = 'border-t border-[var(--border-subtle)] px-2 py-2 align-top';
-
-function Cols({ withFit }: { withFit: boolean }) {
+function Badges({ cluster }: { cluster: TopicCluster }) {
   return (
-    <colgroup>
-      <col className="w-10" />
-      <col className="w-12" />
-      <col />
-      <col className="w-[132px]" />
-      <col className="w-[112px]" />
-      {withFit && <col className="w-14" />}
-      <col className="w-[76px]" />
-      {withFit && <col className="w-[104px]" />}
-      <col className="w-[96px]" />
-    </colgroup>
+    <span className="flex flex-wrap items-center gap-x-2">
+      {clusterSources(cluster).map((source) => (
+        <span key={source.provider} className={`text-[13px] font-semibold ${SOURCE_COLOR[source.provider] ?? ''}`}>
+          {source.label}
+        </span>
+      ))}
+    </span>
   );
 }
 
-export function HomeTable({ rows }: { rows: FeedRow[] }) {
+function metaLine(row: FeedRow): string {
+  return [whyLine(row), row.seenLabel, row.status].filter(Boolean).join(' · ');
+}
+
+export function HomePicks({ picks }: { picks: TopicCluster[] }) {
   const { busy, err, write, adopt } = useRowActions();
-  if (rows.length === 0) return null;
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  if (picks.length === 0) return null;
   return (
     <div>
-      {err && <p className="px-3 py-2 text-[15px] text-[var(--danger)]">{err}</p>}
-      <table className="w-full table-fixed border-collapse text-[15px] leading-6">
-        <Cols withFit={false} />
-        <thead>
-          <tr>
-            <th className={th}>序</th>
-            <th className={th}>分</th>
-            <th className={th}>标题</th>
-            <th className={th}>来源</th>
-            <th className={th}>热度</th>
-            <th className={th}>状态</th>
-            <th className={th}>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={row.key} className="hover:bg-[var(--bg-surface-hover)]">
-              <td className={`${td} tabular-nums text-[var(--text-secondary)]`}>{String(i + 1).padStart(2, '0')}</td>
-              <td className={`${td} text-base font-extrabold tabular-nums`}>{row.score.total}</td>
-              <td className={td}>
-                <div className="truncate font-semibold">{row.title}</div>
-                {row.why && <div className="line-clamp-2 text-[var(--text-secondary)]">{row.why}</div>}
-              </td>
-              <td className={`${td} whitespace-nowrap font-semibold ${SOURCE_COLOR[row.provider] ?? ''}`}>{row.sourceLabel}</td>
-              <td className={`${td} truncate tabular-nums`}>{row.heatLabel ?? '—'}</td>
-              <td className={`${td} truncate`}>{row.status}</td>
-              <td className={td}>
-                <Primary row={row} busy={busy} onWrite={write} onAdopt={adopt} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {err && <p className="px-4 py-2 text-[15px] text-[var(--danger)]">{err}</p>}
+      <ul>
+        {picks.map((cluster) => {
+          const expanded = open.has(cluster.id);
+          return (
+            <li key={cluster.id} className="border-t border-[var(--border-subtle)] px-4 py-3 first:border-t-0">
+              <div className="flex items-start gap-4">
+                <div className="w-10 pt-0.5 text-xl font-extrabold tabular-nums">{cluster.lead.score.total}</div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[16px] font-semibold leading-6">{cluster.lead.title}</p>
+                  <p className="truncate text-[14px] leading-6 text-[var(--text-secondary)]">{metaLine(cluster.lead)}</p>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <Badges cluster={cluster} />
+                    {cluster.related.length > 0 && (
+                      <button
+                        type="button"
+                        className="text-[14px] text-[var(--text-secondary)] underline-offset-2 hover:underline"
+                        onClick={() =>
+                          setOpen((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(cluster.id)) next.delete(cluster.id);
+                            else next.add(cluster.id);
+                            return next;
+                          })
+                        }
+                      >
+                        {expanded ? '收起' : `+${cluster.related.length} 相关`}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <Primary row={cluster.lead} busy={busy} onWrite={write} onAdopt={adopt} />
+              </div>
+              {expanded && (
+                <ul className="mt-2 space-y-2 pl-14">
+                  {cluster.related.map((row) => (
+                    <li key={row.key} className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-[14px] leading-6">{row.title}</p>
+                        <p className="truncate text-[14px] leading-6 text-[var(--text-secondary)]">{`${row.sourceLabel} · ${metaLine(row)}`}</p>
+                      </div>
+                      <Primary row={row} busy={busy} onWrite={write} onAdopt={adopt} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
 
-export function FeedBoard({ rows, startRank = 1, initialKey = null }: { rows: FeedRow[]; startRank?: number; initialKey?: string | null }) {
+function sectionLabel(cluster: TopicCluster, groupBy: 'source' | 'date'): string {
+  return groupBy === 'source' ? cluster.lead.sourceLabel : cluster.lead.seenLabel || '更早';
+}
+
+export function FeedBoard({ clusters, groupBy, initialKey = null }: { clusters: TopicCluster[]; groupBy: 'source' | 'date'; initialKey?: string | null }) {
   const { busy, err, saved, write, adopt, dismiss, save } = useRowActions();
-  const [sel, setSel] = useState(() => Math.max(0, rows.findIndex((r) => r.key === initialKey)));
-  const selected = rows[sel] ?? rows[0] ?? null;
-  const api = useRef({ write, adopt, save, dismiss, rows, sel });
-  api.current = { write, adopt, save, dismiss, rows, sel };
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const visible = clusters.flatMap((cluster) => [cluster.lead, ...(expanded.has(cluster.id) ? cluster.related : [])]);
+  const [selKey, setSelKey] = useState<string | null>(initialKey);
+  const selected = visible.find((row) => row.key === selKey) ?? visible[0] ?? null;
+  const api = useRef({ write, adopt, save, dismiss, visible, selKey });
+  api.current = { write, adopt, save, dismiss, visible, selKey };
 
   useEffect(() => {
-    setSel((i) => {
-      const hit = initialKey ? rows.findIndex((r) => r.key === initialKey) : -1;
-      if (hit >= 0) return hit;
-      return Math.min(i, Math.max(0, rows.length - 1));
-    });
-  }, [rows, initialKey]);
+    if (initialKey) setSelKey(initialKey);
+  }, [initialKey]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
       const cur = api.current;
-      const row = cur.rows[cur.sel];
+      const index = cur.visible.findIndex((row) => row.key === cur.selKey);
+      const row = cur.visible[index] ?? cur.visible[0];
       if (!row) return;
       if (e.key === 'j' || e.key === 'ArrowDown') {
         e.preventDefault();
-        setSel((i) => Math.min(cur.rows.length - 1, i + 1));
+        const next = cur.visible[Math.min(cur.visible.length - 1, Math.max(0, index) + 1)];
+        if (next) setSelKey(next.key);
       } else if (e.key === 'k' || e.key === 'ArrowUp') {
         e.preventDefault();
-        setSel((i) => Math.max(0, i - 1));
+        const next = cur.visible[Math.max(0, (index < 0 ? 0 : index) - 1)];
+        if (next) setSelKey(next.key);
       } else if (e.key === 'w') {
         e.preventDefault();
         void cur.write(row);
@@ -207,57 +226,62 @@ export function FeedBoard({ rows, startRank = 1, initialKey = null }: { rows: Fe
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  if (rows.length === 0 || !selected) return null;
+  if (clusters.length === 0 || !selected) return null;
+  const toggle = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  let previous = '';
 
   return (
     <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_340px] gap-4">
       <div className="min-h-0 overflow-auto rounded-2xl bg-[var(--bg-surface)] shadow-[var(--shadow-card)]">
-        {err && <p className="px-3 py-2 text-[15px] text-[var(--danger)]">{err}</p>}
-        <table className="w-full table-fixed border-collapse text-[15px] leading-6">
-          <Cols withFit />
-          <thead>
-            <tr>
-              <th className={th}>序</th>
-              <th className={th}>分</th>
-              <th className={th}>标题</th>
-              <th className={th}>来源</th>
-              <th className={th}>热度</th>
-              <th className={th}>时间</th>
-              <th className={th}>状态</th>
-              <th className={th}>平台</th>
-              <th className={th}>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, i) => {
-              const on = row.key === selected.key;
-              return (
-                <tr key={row.key} className={on ? 'bg-[var(--accent-subtle)]' : 'cursor-pointer hover:bg-[var(--bg-surface-hover)]'} onClick={() => setSel(i)}>
-                  <td className={`${td} tabular-nums text-[var(--text-secondary)]`}>{String(startRank + i).padStart(2, '0')}</td>
-                  <td className={`${td} text-base font-extrabold tabular-nums`}>{row.score.total}</td>
-                  <td className={td}>
-                    <div className="truncate font-semibold">{row.title}</div>
-                    {row.why && <div className="truncate text-[var(--text-secondary)]">{row.why}</div>}
-                  </td>
-                  <td className={`${td} whitespace-nowrap font-semibold ${SOURCE_COLOR[row.provider] ?? ''}`}>{row.sourceLabel}</td>
-                  <td className={`${td} truncate tabular-nums`}>{row.heatLabel ?? '—'}</td>
-                  <td className={`${td} truncate`}>{row.seenLabel || '—'}</td>
-                  <td className={`${td} truncate`}>{row.status}</td>
-                  <td className={`${td} truncate`}>{fitShort(row)}</td>
-                  <td className={td} onClick={(e) => e.stopPropagation()}>
-                    {row.statusKey === 'dismissed' ? (
-                      <button type="button" className="text-[15px] underline-offset-2 hover:underline" disabled={busy !== null} onClick={() => void dismiss(row)}>
-                        {busy === `${row.key}:dismiss` ? '恢复…' : '恢复'}
+        {err && <p className="px-4 py-2 text-[15px] text-[var(--danger)]">{err}</p>}
+        <ul>
+          {clusters.map((cluster) => {
+            const label = sectionLabel(cluster, groupBy);
+            const header = label !== previous;
+            previous = label;
+            const on = cluster.lead.key === selected.key;
+            const isOpen = expanded.has(cluster.id);
+            return (
+              <li key={cluster.id}>
+                {header && <h2 className="border-t border-[var(--border-subtle)] px-4 pb-1 pt-4 text-[14px] font-semibold text-[var(--text-secondary)] first:border-t-0">{label}</h2>}
+                <div className={`flex items-start gap-3 px-4 py-2.5 ${on ? 'bg-[var(--accent-subtle)]' : 'cursor-pointer hover:bg-[var(--bg-surface-hover)]'}`} onClick={() => setSelKey(cluster.lead.key)}>
+                  <div className="w-9 pt-0.5 text-base font-extrabold tabular-nums">{cluster.lead.score.total}</div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[15px] font-semibold leading-6">{cluster.lead.title}</p>
+                    <p className="truncate text-[14px] leading-5 text-[var(--text-secondary)]">{metaLine(cluster.lead)}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3" onClick={(e) => e.stopPropagation()}>
+                    <Badges cluster={cluster} />
+                    {cluster.related.length > 0 && (
+                      <button type="button" className="text-[14px] text-[var(--text-secondary)] underline-offset-2 hover:underline" onClick={() => toggle(cluster.id)}>
+                        {isOpen ? '收起' : `+${cluster.related.length} 相关`}
+                      </button>
+                    )}
+                    {cluster.lead.statusKey === 'dismissed' ? (
+                      <button type="button" className="text-[15px] underline-offset-2 hover:underline" disabled={busy !== null} onClick={() => void dismiss(cluster.lead)}>
+                        {busy === `${cluster.lead.key}:dismiss` ? '恢复…' : '恢复'}
                       </button>
                     ) : (
-                      <Primary row={row} busy={busy} onWrite={write} onAdopt={adopt} />
+                      <Primary row={cluster.lead} busy={busy} onWrite={write} onAdopt={adopt} />
                     )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                  </div>
+                </div>
+                {isOpen &&
+                  cluster.related.map((row) => (
+                    <div key={row.key} className={`flex items-center gap-3 py-2 pl-16 pr-4 ${row.key === selected.key ? 'bg-[var(--accent-subtle)]' : 'cursor-pointer hover:bg-[var(--bg-surface-hover)]'}`} onClick={() => setSelKey(row.key)}>
+                      <p className="min-w-0 flex-1 truncate text-[14px] leading-6 text-[var(--text-secondary)]">{`${row.sourceLabel} · ${row.title}`}</p>
+                    </div>
+                  ))}
+              </li>
+            );
+          })}
+        </ul>
       </div>
       <aside className="min-h-0 overflow-auto rounded-2xl bg-[var(--bg-surface)] p-4 shadow-[var(--shadow-card)]">
         <p className="text-[15px] leading-6 text-[var(--text-secondary)]">{formulaLine()}</p>

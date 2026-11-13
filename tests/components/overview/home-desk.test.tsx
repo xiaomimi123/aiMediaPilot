@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { HomeDesk } from '@/components/overview/home-desk';
 import { accountLine, type IdeaCard } from '@/lib/overview/home';
+import type { TopicCluster } from '@/lib/overview/cluster';
 import type { FeedRow } from '@/lib/overview/feed';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: () => {}, refresh: () => {} }) }));
@@ -40,6 +41,7 @@ const hot = (over: Partial<FeedRow> = {}): FeedRow => ({
 });
 
 const idea = (over: Partial<IdeaCard> = {}): IdeaCard => ({ id: 'i1', text: '用一行命令讲清安装', status: '待写', draftId: null, ...over });
+const pick = (item: FeedRow, related: FeedRow[] = []): TopicCluster => ({ id: item.key, lead: item, related });
 
 describe('accountLine', () => {
   it('hides a row of zeros', () => {
@@ -52,8 +54,8 @@ describe('accountLine', () => {
 
 describe('HomeDesk', () => {
   it('puts hot topics and the idea backlog first, and explains an empty desk', () => {
-    render(<HomeDesk hot={[]} totalHot={0} ideas={[]} writing={[]} sources={[]} fetchLine="没有抓取日志。" account={null} />);
-    expect(screen.getByRole('heading', { name: '热点选题' })).toBeTruthy();
+    render(<HomeDesk picks={[]} totalHot={0} ideas={[]} writing={[]} sources={[]} fetchLine="没有抓取日志。" account={null} />);
+    expect(screen.getByRole('heading', { name: '今天最值得写' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: '待写的点子' })).toBeTruthy();
     expect(screen.getByText(/每天 19:00 会从 GitHub/)).toBeTruthy();
     expect(screen.getByText(/点子池是空的/)).toBeTruthy();
@@ -65,7 +67,10 @@ describe('HomeDesk', () => {
   it('shows score, source, heat, why, fit, status, and the write action', () => {
     render(
       <HomeDesk
-        hot={[hot(), hot({ key: 'daily:d1', refId: 'd1', dailyId: 'd1', provider: 'idea', sourceLabel: '点子', title: '安装只要一行', heat: null, heatLabel: null, why: '片尾留了钩子', fit: '适合抖音口播', status: '有初稿', statusKey: 'draft', canAdopt: true, score: { total: 61, parts: hot().score.parts } })]}
+        picks={[
+          pick(hot()),
+          pick(hot({ key: 'daily:d1', refId: 'd1', dailyId: 'd1', provider: 'idea', sourceLabel: '点子', title: '安装只要一行', heat: null, heatLabel: null, why: '片尾留了钩子', fit: '适合抖音口播', status: '有初稿', statusKey: 'draft', canAdopt: true, score: { total: 61, parts: hot().score.parts } })),
+        ]}
         totalHot={70}
         ideas={[idea()]}
         writing={[{ id: 'p1', title: '未完成的那条' }]}
@@ -76,9 +81,9 @@ describe('HomeDesk', () => {
     );
     expect(screen.getByText('D4Vinci/Scrapling')).toBeTruthy();
     expect(screen.getByText('84')).toBeTruthy();
-    expect(screen.getByText('101,876 stars')).toBeTruthy();
-    expect(screen.getByText('还没写')).toBeTruthy();
-    expect(screen.getByText('抓网页的库，自适应选择器。')).toBeTruthy();
+    expect(screen.getByText(/101,876 stars/)).toBeTruthy();
+    expect(screen.getByText(/还没写/)).toBeTruthy();
+    expect(screen.getByText(/抓网页的库，自适应选择器/)).toBeTruthy();
     expect(screen.getAllByText('GitHub').length).toBeGreaterThan(0);
     expect(screen.getByText('40')).toBeTruthy();
     expect(screen.getAllByRole('button', { name: '开始写' })).toHaveLength(2);
@@ -88,6 +93,6 @@ describe('HomeDesk', () => {
     expect(screen.getByRole('link', { name: '全部 70 条' }).getAttribute('href')).toBe('/feed');
     expect(screen.getByRole('link', { name: '未完成的那条' })).toBeTruthy();
     expect(screen.getByText('粉丝 12')).toBeTruthy();
-    expect(screen.getByText(/没有历史热度，所以没有增速/)).toBeTruthy();
+    expect(screen.queryByText(/没有历史热度/)).toBeNull();
   });
 });

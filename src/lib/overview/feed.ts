@@ -13,25 +13,7 @@ import { scoreHot, type HotScore } from './hot-score';
  * 抓取本身仍有上限（GitHub 两次搜索各 20 条、HN 首页 30 条）。X 和 Reddit 读中转仓库的 latest.json，列表把库里有的都算上。
  */
 
-export const HOME_PIN = 18;
-
-/**
- * 首页表格：先取分数最高的一批，再把没挤进来的来源各补一条（该来源里分数最高的）。
- * 补上的仍按分数排，不改分。这样 GitHub、Hacker News、X、Reddit 有数据时首页都能看见。
- */
-export function pinHome(open: FeedRow[], limit = HOME_PIN): FeedRow[] {
-  const head = open.slice(0, limit);
-  const seen = new Set(head.map((row) => row.provider));
-  const extra: FeedRow[] = [];
-  for (const row of open) {
-    if (seen.has(row.provider)) continue;
-    seen.add(row.provider);
-    extra.push(row);
-  }
-  const keep = new Set([...head, ...extra].map((row) => row.key));
-  return open.filter((row) => keep.has(row.key));
-}
-export const FEED_PAGE_SIZE = 30;
+export const FEED_PAGE_SIZE = 40;
 
 const FIT_DOUYIN = '抖音口播';
 const FIT_GITHUB = '抖音口播 · 录操作用横版';
@@ -76,6 +58,8 @@ export interface FeedQuery {
   status: string;
   sort: string;
   page: number;
+  /** curated 收起低分和没实质内容的帖；all 把库里筛完的都摊开 */
+  show: 'curated' | 'all';
 }
 
 const STATUS_LABEL: Record<StatusKey, string> = {
@@ -101,17 +85,19 @@ export function parseFeedQuery(sp: Record<string, string | string[] | undefined>
     status: ['fresh', 'used', 'draft', 'adopted', 'dismissed', 'open'].includes(status) ? status : 'all',
     sort: ['heat', 'new'].includes(sort) ? sort : 'score',
     page: Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1,
+    show: one(sp.show) === 'all' ? 'all' : 'curated',
   };
 }
 
 export function feedHref(q: FeedQuery, patch: Partial<FeedQuery> = {}): string {
-  const next = { ...q, page: patch.page ?? (patch.sort || patch.source || patch.range || patch.status || patch.q != null ? 1 : q.page), ...patch };
+  const next = { ...q, page: patch.page ?? (patch.sort || patch.source || patch.range || patch.status || patch.show || patch.q != null ? 1 : q.page), ...patch };
   const p = new URLSearchParams();
   if (next.q) p.set('q', next.q);
   if (next.source !== 'all') p.set('source', next.source);
   if (next.range !== 'all') p.set('range', next.range);
   if (next.status !== 'all') p.set('status', next.status);
   if (next.sort !== 'score') p.set('sort', next.sort);
+  if (next.show === 'all') p.set('show', 'all');
   if (next.page > 1) p.set('page', String(next.page));
   const s = p.toString();
   return s ? `/feed?${s}` : '/feed';

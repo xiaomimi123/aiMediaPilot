@@ -4,9 +4,8 @@ import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { IdeaCard, SourceStat } from '@/lib/overview/home';
-import type { FeedRow } from '@/lib/overview/feed';
-import { formulaLine } from '@/lib/overview/hot-score';
-import { HomeTable } from '@/components/overview/hot-feed';
+import type { TopicCluster } from '@/lib/overview/cluster';
+import { HomePicks } from '@/components/overview/hot-feed';
 
 const post = (url: string, body: unknown) =>
   fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
@@ -26,7 +25,7 @@ function Panel({ title, children, extra }: { title: string; children: ReactNode;
 }
 
 export function HomeDesk({
-  hot,
+  picks,
   totalHot,
   ideas,
   writing,
@@ -34,7 +33,7 @@ export function HomeDesk({
   fetchLine,
   account,
 }: {
-  hot: FeedRow[];
+  picks: TopicCluster[];
   totalHot: number;
   ideas: IdeaCard[];
   writing: { id: string; title: string }[];
@@ -84,26 +83,23 @@ export function HomeDesk({
   return (
     <div className="flex h-full flex-col px-5 py-4">
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        <h1 className="page-title">今天写什么</h1>
-        <p className="text-[15px] leading-6 text-[var(--text-secondary)]">{formulaLine()}</p>
+        <h1 className="page-title">今天最值得写</h1>
+        <p className="text-[15px] leading-6 text-[var(--text-secondary)]">同一件事收成一条，大约 10 条。其余在全部里。</p>
+        {totalHot > 0 && (
+          <Link href="/feed" className="ml-auto text-[15px] text-[var(--accent)]">
+            {`全部 ${totalHot} 条`}
+          </Link>
+        )}
       </div>
       {err && <p className="mt-2 text-[15px] text-[var(--danger)]">{err}</p>}
 
       <div className="mt-3 grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_300px] gap-4">
         <section className="flex min-h-0 flex-col rounded-2xl bg-[var(--bg-surface)] shadow-[var(--shadow-card)]">
-          <div className="flex items-baseline justify-between px-3 pt-3">
-            <h2 className="text-base font-extrabold">热点选题</h2>
-            {totalHot > 0 && (
-              <Link href="/feed" className="text-[15px] text-[var(--accent)]">
-                {`全部 ${totalHot} 条`}
-              </Link>
-            )}
-          </div>
           <div className="min-h-0 flex-1 overflow-auto">
-            {hot.length === 0 ? (
-              <p className="px-3 py-3 text-[15px] leading-6">还没有热点。每天 19:00 会从 GitHub、Hacker News、X 和 Reddit 抓一批，终端也可以跑 npm run fetch:sources。</p>
+            {picks.length === 0 ? (
+              <p className="px-4 py-4 text-[15px] leading-6">还没有值得写的。每天 19:00 会从 GitHub、Hacker News、X 和 Reddit 抓一批，终端也可以跑 npm run fetch:sources。</p>
             ) : (
-              <HomeTable rows={hot} />
+              <HomePicks picks={picks} />
             )}
           </div>
         </section>

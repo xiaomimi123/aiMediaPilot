@@ -10,7 +10,7 @@ export default async function Overview() {
   const [home, overview] = await Promise.all([loadHome(prisma, now), loadOverview(prisma, now)]);
   return (
     <HomeDesk
-      hot={home.hot}
+      picks={home.picks}
       totalHot={home.totalHot}
       ideas={home.ideas}
       writing={overview.inProgress.map((w) => ({ id: w.id, title: w.title }))}
