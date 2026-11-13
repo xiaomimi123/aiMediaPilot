@@ -49,7 +49,11 @@ describe('scoreHot', () => {
     const hn = scoreHot(base({ provider: 'hackernews', title: 'Show HN: a database', url: 'https://news.ycombinator.com/item?id=1', heat: 120 }), now);
     expect(hn.parts.find((p) => p.key === 'heat')?.detail).toMatch(/评论数没有入库/);
     const x = scoreHot(base({ provider: 'x', title: 'ship it', url: 'https://x.com/a/status/1', heat: 4000 }), now);
-    expect(x.parts.find((p) => p.key === 'heat')?.detail).toMatch(/没有分开存/);
+    expect(x.parts.find((p) => p.key === 'heat')?.detail).toMatch(/浏览/);
+    expect(x.parts.find((p) => p.key === 'heat')?.detail).toMatch(/不算增速/);
+    const reddit = scoreHot(base({ provider: 'reddit', title: 'ai tool for money', url: 'https://www.reddit.com/r/x', heat: 0 }), now);
+    expect(reddit.parts.find((p) => p.key === 'heat')?.value).toBeNull();
+    expect(reddit.parts.find((p) => p.key === 'heat')?.detail).toMatch(/没有赞/);
     expect(x.parts.find((p) => p.key === 'handsOn')?.value).toBe(0);
   });
 

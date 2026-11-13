@@ -101,7 +101,7 @@ export function HomeDesk({
           </div>
           <div className="min-h-0 flex-1 overflow-auto">
             {hot.length === 0 ? (
-              <p className="px-3 py-3 text-[15px] leading-6">还没有热点。每天 19:00 会从 GitHub、Hacker News 和 X 抓一批，终端也可以跑 npm run fetch:sources。</p>
+              <p className="px-3 py-3 text-[15px] leading-6">还没有热点。每天 19:00 会从 GitHub、Hacker News、X 和 Reddit 抓一批，终端也可以跑 npm run fetch:sources。</p>
             ) : (
               <HomeTable rows={hot} />
             )}

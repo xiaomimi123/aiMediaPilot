@@ -5,7 +5,8 @@
  * 热度（各源自己的刻度，对数后封顶 100）：
  * - GitHub：当前 star 数。抓取会覆盖旧值，没有上一次的数，不算增速。
  * - Hacker News：points。评论数没有入库。
- * - X：库里只有一个整数。抓取时优先记浏览，没有浏览才记点赞，没有分开存。
+ * - X：浏览数。没有浏览数时抓取才改记点赞。点赞、转发、回复、引用不进这一列。
+ * - Reddit：快照没有赞或分数，不设封顶，热度项不计入。
  * - 对标：digg / 平时中位数。没有基线就是没有这项。
  * 新旧：抓取日或发布时间，半衰期 3 天。
  * 赛道：标题和简介是否碰到 AI、搞钱、工具。账号定位里的内容支柱名称一并算；没填就不加词。
@@ -15,7 +16,7 @@
 export const HOT_SCORE = {
   weights: { heat: 0.45, recency: 0.25, fit: 0.2, handsOn: 0.1 },
   halfLifeDays: 3,
-  caps: { github: 100_000, hackernews: 500, x: 100_000, benchmark: 10 },
+  caps: { github: 100_000, hackernews: 500, x: 100_000, benchmark: 10, reddit: null as number | null },
   track: {
     ai: ['ai', 'agent', 'llm', 'gpt', '模型', '智能体', '大模型', 'claude', 'openai', 'deepseek', '机器学习'],
     money: ['搞钱', '变现', '赚钱', '收入', '副业', '定价', '价格', '付费', '商业', 'saas'],
@@ -86,16 +87,18 @@ function heatCap(provider: string): number | null {
   if (provider === 'hackernews') return HOT_SCORE.caps.hackernews;
   if (provider === 'x') return HOT_SCORE.caps.x;
   if (provider === 'benchmark') return HOT_SCORE.caps.benchmark;
+  if (provider === 'reddit') return HOT_SCORE.caps.reddit;
   return null;
 }
 
 function heatDetail(input: ScoreInput, cap: number | null): string {
-  if (input.heat == null || cap == null) return '没有能用的热度字段，这一项不计入。';
+  if (input.provider === 'reddit' || cap == null) return input.provider === 'reddit' ? 'Reddit 没有赞、评论或分数，这一项不计入。' : '没有能用的热度字段，这一项不计入。';
+  if (input.heat == null) return '没有能用的热度字段，这一项不计入。';
   const n = input.heat.toLocaleString('en-US');
   const top = cap.toLocaleString('en-US');
   if (input.provider === 'github') return `当前 ${n} stars，按 ${top} 封顶取对数。库里没有上一次的 star，不算增速。`;
   if (input.provider === 'hackernews') return `${n} points，按 ${top} 封顶取对数。评论数没有入库。`;
-  if (input.provider === 'x') return `库里只有一个整数 ${n}。抓取时优先记浏览，没有浏览才记点赞，没有分开存，也不算增速。按 ${top} 封顶取对数。`;
+  if (input.provider === 'x') return `浏览 ${n}。点赞、转发、回复、引用没有写进这一列，也没有上一次的数，不算增速。按 ${top} 封顶取对数。`;
   if (input.provider === 'benchmark') return `平时的 ${n} 倍，按 ${top} 倍封顶。点赞、评论、转发没有再合成一项。`;
   return '这个来源没有热度刻度，这一项不计入。';
 }

@@ -14,6 +14,7 @@ const post = (url: string, body: unknown) =>
 const SOURCE_COLOR: Record<string, string> = {
   hackernews: 'text-[var(--accent)]',
   x: 'text-[var(--info)]',
+  reddit: 'text-[var(--soft)]',
   benchmark: 'text-[var(--success)]',
 };
 

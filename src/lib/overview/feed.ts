@@ -10,10 +10,27 @@ import { scoreHot, type HotScore } from './hot-score';
  * - 不因为已经做成每日选题就把原条目藏起来。
  * - 首页只是置顶，其余在 /feed，不再链到不列出这些行的选题页。
  *
- * 抓取本身仍有上限（GitHub 两次搜索各 20 条、HN 首页 30 条、X 原创前 30 条）。那是入库前的事，列表把库里有的都算上。
+ * 抓取本身仍有上限（GitHub 两次搜索各 20 条、HN 首页 30 条）。X 和 Reddit 读中转仓库的 latest.json，列表把库里有的都算上。
  */
 
 export const HOME_PIN = 18;
+
+/**
+ * 首页表格：先取分数最高的一批，再把没挤进来的来源各补一条（该来源里分数最高的）。
+ * 补上的仍按分数排，不改分。这样 GitHub、Hacker News、X、Reddit 有数据时首页都能看见。
+ */
+export function pinHome(open: FeedRow[], limit = HOME_PIN): FeedRow[] {
+  const head = open.slice(0, limit);
+  const seen = new Set(head.map((row) => row.provider));
+  const extra: FeedRow[] = [];
+  for (const row of open) {
+    if (seen.has(row.provider)) continue;
+    seen.add(row.provider);
+    extra.push(row);
+  }
+  const keep = new Set([...head, ...extra].map((row) => row.key));
+  return open.filter((row) => keep.has(row.key));
+}
 export const FEED_PAGE_SIZE = 30;
 
 const FIT_DOUYIN = '抖音口播';
@@ -23,6 +40,7 @@ export const SOURCE_LABEL: Record<string, string> = {
   github: 'GitHub',
   hackernews: 'Hacker News',
   x: 'X',
+  reddit: 'Reddit',
   benchmark: '抖音对标',
   sequel: '续集',
   idea: '点子',
@@ -78,7 +96,7 @@ export function parseFeedQuery(sp: Record<string, string | string[] | undefined>
   const page = Number(one(sp.page));
   return {
     q: one(sp.q).trim(),
-    source: ['github', 'hackernews', 'x', 'benchmark', 'sequel', 'idea'].includes(source) ? source : 'all',
+    source: ['github', 'hackernews', 'x', 'reddit', 'benchmark', 'sequel', 'idea'].includes(source) ? source : 'all',
     range: ['1', '3', '7', '30'].includes(range) ? range : 'all',
     status: ['fresh', 'used', 'draft', 'adopted', 'dismissed', 'open'].includes(status) ? status : 'all',
     sort: ['heat', 'new'].includes(sort) ? sort : 'score',
@@ -131,7 +149,8 @@ function heatLabel(provider: string, heat: number | null): string | null {
   if (provider === 'github') return `${n} stars`;
   if (provider === 'hackernews') return `${n} points`;
   if (provider === 'benchmark') return `平时的 ${n} 倍`;
-  if (provider === 'x') return `${n} 热度`;
+  if (provider === 'x') return `${n} 浏览`;
+  if (provider === 'reddit') return null;
   return n;
 }
 
@@ -221,7 +240,7 @@ export async function loadFeedRows(db: PrismaClient, now: Date): Promise<FeedRow
         title: daily?.status === 'new' && daily.title.trim() ? daily.title : item.title,
         summary: daily?.status === 'new' && daily.why.trim() ? daily.why : item.summary,
         url: item.url,
-        heat: item.heat,
+        heat: item.provider === 'reddit' ? null : item.heat,
         seenAt: item.day,
         statusKey,
         canAdopt: daily?.status === 'new',
@@ -316,7 +335,7 @@ export function rankFeed(rows: FeedRow[], query: FeedQuery, now: Date): FeedRow[
 }
 
 export function countByProvider(rows: FeedRow[]): { provider: string; label: string; count: number }[] {
-  const order = ['github', 'hackernews', 'x', 'benchmark', 'sequel', 'idea'];
+  const order = ['github', 'hackernews', 'x', 'reddit', 'benchmark', 'sequel', 'idea'];
   const counts = new Map<string, number>();
   for (const r of rows) counts.set(r.provider, (counts.get(r.provider) ?? 0) + 1);
   return [...counts.entries()]

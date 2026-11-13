@@ -2,7 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 import { readSourcesStatus } from '@/lib/douyin/collect-log';
 import { listDrafts } from '@/lib/draft/store';
 import { listIdeas } from '@/lib/topics/daily';
-import { HOME_PIN, loadFeedRows, rankFeed, type FeedRow } from './feed';
+import { loadFeedRows, pinHome, rankFeed, type FeedRow } from './feed';
 
 export type { FeedRow };
 
@@ -35,6 +35,7 @@ const SOURCE_ORDER = [
   ['github', 'GitHub'],
   ['hackernews', 'Hacker News'],
   ['x', 'X'],
+  ['reddit', 'Reddit'],
 ] as const;
 
 const dayLabel = (day: string | null, now: Date): string | null => {
@@ -94,5 +95,5 @@ export async function loadHome(db: PrismaClient, now: Date): Promise<HomeDesk> {
     else if (draftId) ideaCards.push({ id: idea.id, text: idea.text, status: '写到一半', draftId });
   }
   const health = await loadSourceHealth(db, now).catch(() => ({ sources: [], fetchLine: '没有抓取日志。' }));
-  return { hot: open.slice(0, HOME_PIN), totalHot: open.length, ideas: ideaCards, sources: health.sources, fetchLine: health.fetchLine };
+  return { hot: pinHome(open), totalHot: open.length, ideas: ideaCards, sources: health.sources, fetchLine: health.fetchLine };
 }
