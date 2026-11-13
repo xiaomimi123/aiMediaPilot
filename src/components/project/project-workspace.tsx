@@ -132,11 +132,11 @@ export function ProjectWorkspace({
 
   return (
     <div className={cn('flex h-full flex-col transition-[padding]', chatOpen && 'lg:pr-[var(--drawer-w)]')}>
-      <div className="px-4 pt-4 md:px-8">
+      <div className="px-5 pt-7 md:px-10">
         <input
           // 非受控输入只读一次 defaultValue; 以标题做 key, agent 改名后刷新才会跟上
           key={project.title}
-          className="mb-3 w-full bg-transparent text-[22px] font-bold outline-none"
+          className="page-title mb-4 w-full bg-transparent outline-none"
           defaultValue={project.title}
           onBlur={(e) => e.target.value.trim() !== project.title && void patch({ title: e.target.value })}
         />
@@ -145,7 +145,7 @@ export function ProjectWorkspace({
       </div>
       {/* 底部留出悬浮按钮的位置, 不挡最后一行 */}
       <div className="min-h-0 flex-1 pb-16">
-        <div className="mx-auto h-full w-full max-w-[820px]">
+        <div className="h-full w-full">
           {tab === 'topic' && (
             <div className="h-full overflow-y-auto px-4 py-5 md:px-6">
               <TopicStep reference={reference} />

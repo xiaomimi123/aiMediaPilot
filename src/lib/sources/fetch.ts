@@ -2,16 +2,16 @@ import type { PrismaClient } from '@prisma/client';
 import { fetchX } from './x';
 
 /**
- * 信息源采集: GitHub(最近爆发的仓库) + Hacker News(热帖) + X(热帖, 用户自建中转仓库), 全收不过滤。
+ * 信息源采集: GitHub(最近爆发的仓库) + Hacker News(热帖) + X 与 Reddit(私有中转仓库), 全收不过滤。
  * 每晚选题把没用的条目当「资讯」来源喂给编导; 抓取只是入库, 不碰模型。
  *
  * 数据源(2026-11-06 真机验证过可达):
  * - GitHub Search API, 无需 key, 搜索限 10 次/分钟 —— 关键词按天轮换, 一天只发 2-4 个请求
  * - HN Algolia API, 无需 key, front_page 一发请求
- * - X: git clone 用户的中转仓库拿 latest.json, 见 ./x.ts
+ * - X 与 Reddit: 私有仓库 x-workbench-feed 的 latest.json, 见 ./x.ts
  */
 
-export const LOCAL_SOURCE_PROVIDERS = ['github', 'hackernews', 'x'] as const;
+export const LOCAL_SOURCE_PROVIDERS = ['github', 'hackernews', 'x', 'reddit'] as const;
 export type SourceProvider = (typeof LOCAL_SOURCE_PROVIDERS)[number];
 
 type Db = Pick<PrismaClient, 'sourceItem'>;

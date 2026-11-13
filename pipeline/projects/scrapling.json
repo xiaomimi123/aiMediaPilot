@@ -1,0 +1,375 @@
+{
+ "slug": "scrapling",
+ "repo": "D4Vinci/Scrapling",
+ "name": "Scrapling",
+ "tagline": "真实上手:练习站抓 1000 本书",
+ "asOf": "2026-11-03 11:14(北京时间,GitHub API)",
+ "stats": {
+  "stars": 93087,
+  "forks": 9794,
+  "updated": "2026-11-03",
+  "license": "BSD-3-Clause"
+ },
+ "theme": {
+  "bg": "#F6F1E7",
+  "bg2": "#FFFFFF",
+  "card": "#FFFFFF",
+  "ink": "#141414",
+  "muted": "#6E675E",
+  "accent": "#FF5A1F",
+  "accent2": "#141414",
+  "good": "#141414",
+  "bad": "#FF5A1F"
+ },
+ "chrome": {
+  "topLeft": "纯干货分享，不存在站外引流",
+  "watermark": "@xiaomi · 每日开源"
+ },
+ "voice": {
+  "speaker": "S_HXY3ePta2",
+  "gapLine": 0.05,
+  "gapCard": 0.12,
+  "lead": 0.1,
+  "pronounce": {
+   "Scrapling": "斯克莱普林",
+   " scrapling": "斯克莱普林",
+   "curl_cffi": "curl cffi",
+   "隔天": "格天",
+   "十五英镑": "十五英磅"
+  },
+  "tail": 0.5,
+  "rate": "+12%"
+ },
+ "screens": [
+  {
+   "id": "home",
+   "url": "https://books.toscrape.com/",
+   "viewport": [
+    1280,
+    720
+   ],
+   "maxHeight": 1500,
+   "marks": {
+    "warn": {
+     "css": ".alert-warning"
+    },
+    "first": {
+     "css": "article.product_pod",
+     "nth": 0
+    }
+   }
+  }
+ ],
+ "cards": [
+  {
+   "kind": "csvhook",
+   "lines": [
+    "一千本书,几秒钟抓进表格。"
+   ],
+   "csv": "snap_1",
+   "big": "1000本书",
+   "big2": "5到8秒",
+   "tag": "练习站实测 · books.toscrape.com",
+   "source": "snap_1.csv(11:08 实跑)· 三次实测 5.5 / 7.0 / 8.1 秒:本次重跑 11:12、run_snap1.log、run_snap2.log",
+   "big2Size": 150
+  },
+  {
+   "kind": "rterm",
+   "title": "装库:一行命令",
+   "badge": "终端录屏 · 真实运行",
+   "lines": [
+    "安装只要一行命令,四到六秒。",
+    "要带 fetchers,只装 scrapling,会报缺 curl_cffi。"
+   ],
+   "sessions": [
+    {
+     "line": 0,
+     "dt": 0,
+     "rec": "install",
+     "cmd": "time pip install 'scrapling[fetchers]==0.5.1'",
+     "win": "全新 venv",
+     "speed": 3,
+     "hi": [
+      "^Successfully installed",
+      "^real"
+     ],
+     "tag": "本次重跑"
+    },
+    {
+     "line": 1,
+     "dt": 0.9,
+     "rec": "pit",
+     "cmd": "pip install -q scrapling==0.5.1",
+     "win": "对照:另一个全新 venv,只装 scrapling",
+     "speed": 1,
+     "hi": [
+      "ModuleNotFoundError"
+     ],
+     "bad": true,
+     "tag": "本次重跑"
+    }
+   ],
+   "source": "本机录制。带 fetchers;只装 scrapling 会缺 curl_cffi",
+   "fs": 22,
+   "maxLines": 18
+  },
+  {
+   "kind": "code",
+   "file": "books_spider.py",
+   "lines": [
+    "脚本一共二十三行,",
+    "尊重 robots,最多五个并发,",
+    "抓书名、价格、评分和库存。"
+   ],
+   "hi": [
+    [],
+    [
+     8
+    ],
+    [
+     13,
+     14,
+     15,
+     16
+    ]
+   ],
+   "notes": [
+    "共 23 行",
+    "robots + 5 并发",
+    "书名 / 价格 / 评分 / 库存"
+   ],
+   "source": "demos/scrapling/books_spider.py(scrapling 0.5)",
+   "path": "../demos/scrapling/books_spider.py"
+  },
+  {
+   "kind": "rterm",
+   "title": "跑一遍:全站 1000 本",
+   "badge": "终端录屏 · 真实运行",
+   "lines": [
+    "一千本,五十页,没失败,没被拦。",
+    "第一行是:A Light in the Attic,",
+    "五十一块七毛七英镑,三星,有货。"
+   ],
+   "sessions": [
+    {
+     "line": 0,
+     "dt": 0,
+     "rec": "spider",
+     "cmd": "time python books_spider.py snap_3",
+     "win": "books.toscrape.com · 并发 5 · 遵守 robots",
+     "speed": 3,
+     "hi": [
+      "^抓到",
+      "^real"
+     ],
+     "tag": "本次重跑"
+    }
+   ],
+   "chip": {
+    "line": 0,
+    "dt": 2.0,
+    "text": "失败 0 · 被拦 0 · 状态 200 × 50",
+    "sub": "日志回放:run1_verbose_first_try.log(11:07 首跑统计)"
+   },
+   "csvPanel": {
+    "line": 1,
+    "csv": "snap_3",
+    "rows": 4,
+    "hi": 0,
+    "label": "snap_3.csv 前 4 行"
+   },
+   "source": "本机录制,只抓 books.toscrape.com 练习站"
+  },
+  {
+   "kind": "stats",
+   "lines": [
+    "价格从十英镑到五十九块九九,均价三十五块零七。",
+    "再写十七行,筛出低于十五英镑、四星以上、有货的,",
+    "一共四十一本。"
+   ],
+   "range": "£10.00 – £59.99",
+   "avg": "£35.07",
+   "count": "41",
+   "countLabel": "本:< £15 · ≥4★ · 有货",
+   "session": {
+    "line": 1,
+    "dt": 0.3,
+    "rec": "watch",
+    "cmd": "python price_watch.py snap_1.csv snap_3.csv 15",
+    "win": "price_watch.py · 17 行",
+    "speed": 1,
+    "hi": [
+     "^低于"
+    ]
+   },
+   "source": "本次抓取统计 · price_watch.py 本机实跑"
+  },
+  {
+   "kind": "rterm",
+   "title": "价格监控:两次对比",
+   "badge": "终端录屏 · 模拟数据",
+   "stamp": "模拟数据",
+   "lines": [
+    "隔天再抓一次对比,就能列出涨价降价。",
+    "这段是模拟数据,练习站的价格不会动。"
+   ],
+   "sessions": [
+    {
+     "line": 0,
+     "dt": 0,
+     "rec": "sim",
+     "cmd": "python price_watch.py snap_0_SIMULATED.csv snap_3.csv 15",
+     "win": "旧快照 snap_0_SIMULATED.csv = 人为改了 2 本书价格",
+     "speed": 1,
+     "hi": [
+      "降价",
+      "涨价"
+     ]
+    }
+   ],
+   "chip": {
+    "line": 1,
+    "dt": 0,
+    "text": "真实两次对比(11:08 vs 11:12):价格变动 0 本",
+    "sub": "练习站价格固定,上面的 2 本变动是演示用的模拟数据"
+   },
+   "source": "旧快照是人为改了 2 本书价格的模拟数据"
+  },
+  {
+   "kind": "uses",
+   "lines": [
+    "同样的做法,能做价格监控、选品表、竞品调研。",
+    "这只是方法,不承诺能赚钱。"
+   ],
+   "items": [
+    "价格监控",
+    "选品表",
+    "竞品调研"
+   ],
+   "note": "只是方法,不承诺收益"
+  },
+  {
+   "kind": "browser",
+   "lines": [
+    "只抓允许抓的站,先看条款。",
+    "这是我们在练习站上的实测。"
+   ],
+   "beats": [
+    {
+     "line": 0,
+     "dt": 0,
+     "screen": "home",
+     "scroll": 0,
+     "zoom": 1
+    },
+    {
+     "line": 0,
+     "dt": 0.6,
+     "screen": "home",
+     "focus": "warn",
+     "zoom": 1.22,
+     "cursor": "warn",
+     "callout": {
+      "mark": "warn",
+      "text": "站方声明:这是给爬虫练习用的演示站",
+      "place": "below",
+      "big": true
+     }
+    },
+    {
+     "line": 1,
+     "dt": 0.2,
+     "screen": "home",
+     "focus": "first",
+     "zoom": 1.25,
+     "cursor": "first",
+     "callout": {
+      "mark": "first",
+      "text": "就是这 1000 本书",
+      "place": "right"
+     }
+    }
+   ],
+   "source": "books.toscrape.com 首页 · 站方声明这是爬虫练习站"
+  },
+  {
+   "kind": "question",
+   "lines": [
+    "你最想盯哪类商品的价格?评论区说。"
+   ],
+   "q": "你最想盯\n哪类商品的价格?",
+   "sub": "评论区说"
+  }
+ ],
+ "commands": [
+  {
+   "id": "install",
+   "cwd": "../demos/scrapling",
+   "venv": "fetchers",
+   "run": "time pip install 'scrapling[fetchers]==0.5.1'",
+   "timeout": 600
+  },
+  {
+   "id": "pit",
+   "cwd": "../demos/scrapling",
+   "venv": "min",
+   "run": "pip install -q scrapling==0.5.1",
+   "then": [
+    "python -c \"from scrapling.fetchers import Fetcher\""
+   ],
+   "allowFail": true,
+   "timeout": 300
+  },
+  {
+   "id": "spider",
+   "cwd": "../demos/scrapling",
+   "venv": "fetchers",
+   "run": "time python books_spider.py snap_3",
+   "outputs": [
+    "snap_3.csv"
+   ],
+   "timeout": 180
+  },
+  {
+   "id": "snap1",
+   "cwd": "../demos/scrapling",
+   "venv": "fetchers",
+   "run": "python books_spider.py snap_1",
+   "outputs": [
+    "snap_1.csv"
+   ],
+   "record": false,
+   "timeout": 180
+  },
+  {
+   "id": "simcsv",
+   "cwd": "../demos/scrapling",
+   "run": "python make_sim.py snap_1.csv snap_0_SIMULATED.csv",
+   "outputs": [
+    "snap_0_SIMULATED.csv"
+   ],
+   "record": false
+  },
+  {
+   "id": "watch",
+   "cwd": "../demos/scrapling",
+   "venv": "fetchers",
+   "run": "python price_watch.py snap_1.csv snap_3.csv 15"
+  },
+  {
+   "id": "sim",
+   "cwd": "../demos/scrapling",
+   "venv": "fetchers",
+   "run": "python price_watch.py snap_0_SIMULATED.csv snap_3.csv 15"
+  }
+ ],
+ "datasets": {
+  "snap_1": {
+   "path": "../demos/scrapling/snap_1.csv"
+  },
+  "snap_3": {
+   "path": "../demos/scrapling/snap_3.csv",
+   "limit": 12
+  }
+ }
+}

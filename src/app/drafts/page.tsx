@@ -2,11 +2,13 @@ import { DraftDesk } from '@/components/drafts/draft-desk';
 
 export const dynamic = 'force-dynamic';
 
-export default function DraftsPage() {
+export default function DraftsPage({ searchParams }: { searchParams?: { draft?: string } }) {
   return (
-    <div className="h-full overflow-y-auto px-4 py-6 md:px-8">
-      <h1 className="mb-5 text-[22px] font-bold">写稿台</h1>
-      <DraftDesk />
+    <div className="flex h-full flex-col overflow-hidden px-5 py-4">
+      <h1 className="page-title mb-3">写稿台</h1>
+      <div className="min-h-0 flex-1">
+        <DraftDesk initialOpen={searchParams?.draft ?? null} />
+      </div>
     </div>
   );
 }

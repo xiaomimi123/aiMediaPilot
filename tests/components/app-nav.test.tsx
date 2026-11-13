@@ -18,17 +18,13 @@ describe('AppNav', () => {
     expect(isActive('/', '/')).toBe(true);
     expect(isActive('/settings', '/settings')).toBe(true);
   });
-  it('renders a sidebar and a bottom tab bar, marking the current page', () => {
+  it('renders a sidebar and marks the current page', () => {
     pathname = '/topics';
     render(<AppNav />);
     const current = screen.getAllByRole('link', { current: 'page' });
-    expect(current).toHaveLength(2);
-    expect(current.every((a) => a.textContent?.includes('选题'))).toBe(true);
-    expect(screen.getByTestId('tabbar').className).toContain('md:hidden');
-    expect(screen.getByTestId('sidebar').className).toContain('hidden md:flex');
-  });
-  it('reserves space for the bottom tab bar', () => {
-    render(<AppNav />);
-    expect(screen.getByTestId('tabbar-spacer').className).toContain('md:hidden');
+    expect(current).toHaveLength(1);
+    expect(current[0].textContent).toContain('选题');
+    expect(screen.getByTestId('sidebar')).toBeTruthy();
+    expect(screen.queryByTestId('tabbar')).toBeNull();
   });
 });

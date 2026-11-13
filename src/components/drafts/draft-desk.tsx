@@ -198,11 +198,11 @@ function DraftEditor({ draft, onClose, onChanged }: { draft: Draft; onClose: () 
 }
 
 /** 写稿台: 顶部速记, 下面草稿箱。有灵感 3 秒记一条, 想写了点开接着写。 */
-export function DraftDesk() {
+export function DraftDesk({ initialOpen = null }: { initialOpen?: string | null }) {
   const [drafts, setDrafts] = useState<Draft[] | null>(null);
   const [quick, setQuick] = useState('');
   const [quickBusy, setQuickBusy] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(initialOpen);
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -248,56 +248,59 @@ export function DraftDesk() {
     await load();
   };
 
-  return (
-    <div className="space-y-4">
-      <section className="card space-y-3">
-        <h2 className="text-[15px] font-semibold">灵感速记</h2>
-        <p className="text-xs text-[var(--text-secondary)]">有想法 3 秒记下来。现在就写，点「写成草稿」；先攒着，点「存进点子池」（晚间生成选题也会吃它）。</p>
-        <textarea
-          className="h-20 w-full rounded-[var(--r-md)] bg-[var(--bg-inset)] px-3 py-2 text-sm"
-          placeholder="一个想法、一段开头、一个选题……想到什么写什么"
-          value={quick}
-          onChange={(e) => setQuick(e.target.value)}
-        />
-        {err && <p className="text-sm text-[var(--danger)]">{err}</p>}
-        <div className="flex gap-2">
-          <button className="btn-primary" disabled={!quick.trim() || quickBusy} onClick={() => void quickSave()}>
-            写成草稿
-          </button>
-          <button className="btn-secondary" disabled={!quick.trim() || quickBusy} onClick={() => void fromIdea()}>
-            存进点子池
-          </button>
-        </div>
-      </section>
+  const open = drafts?.find((d) => d.id === openId) ?? null;
 
-      <section className="space-y-3">
-        <h2 className="text-[15px] font-semibold">草稿箱</h2>
-        {!drafts ? (
-          <p className="text-sm text-[var(--text-tertiary)]">加载中…</p>
-        ) : drafts.length === 0 ? (
-          <p className="text-sm text-[var(--text-tertiary)]">还没有草稿。上面记一条灵感，或直接点「写成草稿」开写。</p>
-        ) : (
-          <ul className="space-y-2">
-            {drafts.map((d) =>
-              openId === d.id ? (
-                <li key={d.id}>
-                  <DraftEditor draft={d} onClose={() => setOpenId(null)} onChanged={() => void load()} />
-                </li>
-              ) : (
-                <li key={d.id} className="card flex items-center gap-3">
+  return (
+    <div className="grid h-full grid-cols-[320px_minmax(0,1fr)] gap-4">
+      <div className="flex min-h-0 flex-col gap-3 overflow-auto">
+        <section className="rounded-2xl bg-[var(--bg-surface)] p-4 shadow-[var(--shadow-card)]">
+          <h2 className="text-base font-extrabold">灵感速记</h2>
+          <textarea
+            className="mt-2 h-24 w-full rounded-lg bg-[var(--bg-inset)] px-3 py-2 text-[15px] leading-6"
+            placeholder="一个想法、一段开头、一个选题"
+            value={quick}
+            onChange={(e) => setQuick(e.target.value)}
+          />
+          {err && <p className="mt-2 text-[15px] text-[var(--danger)]">{err}</p>}
+          <div className="mt-2 flex gap-2">
+            <button className="btn-primary h-8 px-3 text-[15px]" disabled={!quick.trim() || quickBusy} onClick={() => void quickSave()}>
+              写成草稿
+            </button>
+            <button className="btn-secondary h-8 px-3 text-[15px]" disabled={!quick.trim() || quickBusy} onClick={() => void fromIdea()}>
+              存进点子池
+            </button>
+          </div>
+        </section>
+        <section className="min-h-0 flex-1">
+          <h2 className="mb-2 text-base font-extrabold">草稿箱</h2>
+          {!drafts ? (
+            <p className="text-[15px]">加载中…</p>
+          ) : drafts.length === 0 ? (
+            <p className="text-[15px] leading-6">还没有草稿。</p>
+          ) : (
+            <ul className="space-y-1">
+              {drafts.map((d) => (
+                <li key={d.id} className={`flex items-center gap-2 rounded-lg px-2 py-2 ${openId === d.id ? 'bg-[var(--accent-subtle)]' : 'hover:bg-[var(--bg-surface-hover)]'}`}>
                   <button className="min-w-0 flex-1 text-left" onClick={() => setOpenId(d.id)}>
-                    <p className="truncate text-sm font-medium">{d.title || d.body.split('\n')[0].slice(0, 40) || '未命名草稿'}</p>
-                    <p className="truncate text-xs text-[var(--text-tertiary)]">{`${d.body.slice(0, 60)}${d.body.length > 60 ? '…' : ''} · ${timeAgo(d.updatedAt)}`}</p>
+                    <p className="truncate text-[15px] font-semibold">{d.title || d.body.split('\n')[0].slice(0, 40) || '未命名草稿'}</p>
+                    <p className="truncate text-[15px] text-[var(--text-secondary)]">{timeAgo(d.updatedAt)}</p>
                   </button>
-                  <button className="shrink-0 text-xs text-[var(--danger)]" aria-label={`删除草稿：${d.title || d.body.slice(0, 10)}`} onClick={() => void remove(d.id)}>
+                  <button className="shrink-0 text-[15px] text-[var(--danger)]" aria-label={`删除草稿：${d.title || d.body.slice(0, 10)}`} onClick={() => void remove(d.id)}>
                     删除
                   </button>
                 </li>
-              ),
-            )}
-          </ul>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+      <div className="min-h-0 overflow-auto">
+        {open ? (
+          <DraftEditor draft={open} onClose={() => setOpenId(null)} onChanged={() => void load()} />
+        ) : (
+          <p className="text-[15px] leading-6">点左边一条草稿接着写，或先在速记里写成草稿。</p>
         )}
-      </section>
+      </div>
     </div>
   );
 }

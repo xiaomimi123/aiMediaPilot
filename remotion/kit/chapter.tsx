@@ -1,6 +1,7 @@
 import React from 'react';
 import { AbsoluteFill, Easing, Img, OffthreadVideo, interpolate, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
 import { FONT, MONO } from './tokens';
+import './fonts';
 import { captionLayout } from './text';
 import type { CaptionLine } from './Captions';
 
@@ -15,9 +16,9 @@ import type { CaptionLine } from './Captions';
  */
 export const D = {
   paper: '#F4EFE6',
-  dot: '#D8CFBF',
+  dot: '#E4D9C8',
   ink: '#151515',
-  muted: '#8B8476',
+  muted: '#5C534C',
   pink: '#E6307F',
   pinkSoft: '#FCE4EF',
   yellow: '#FFD12E',
@@ -111,8 +112,8 @@ export const ChapterFrame: React.FC<{
         fontFamily: FONT,
         color: D.ink,
         background: D.paper,
-        backgroundImage: `radial-gradient(${D.dot} 2.2px, transparent 2.4px)`,
-        backgroundSize: '34px 34px',
+        backgroundImage: `radial-gradient(${D.dot} 1.15px, transparent 1.3px)`,
+        backgroundSize: '28px 28px',
       }}
     >
       {/* 顶部章节条 */}
@@ -247,7 +248,7 @@ export const headline = (size: number, extra?: React.CSSProperties): React.CSSPr
   fontSize: size,
   fontWeight: 900,
   lineHeight: 1.18,
-  letterSpacing: -1,
+  letterSpacing: 0,
   color: D.ink,
   ...extra,
 });

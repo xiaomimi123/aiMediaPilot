@@ -27,14 +27,14 @@ export default async function SettingsPage() {
   const parsed = row ? PersonaSchema.safeParse(row) : null;
   const persona = parsed?.success ? parsed.data : EMPTY_PERSONA;
   return (
-    <div className="h-full overflow-y-auto px-4 py-6 md:px-8">
-      <h1 className="mb-3 text-[22px] font-bold">设置</h1>
-      <nav className="sticky top-0 z-10 -mx-4 mb-4 flex gap-2 overflow-x-auto bg-[var(--bg-canvas)] px-4 py-2 md:-mx-8 md:px-8">
+    <div className="h-full overflow-y-auto px-5 py-4">
+      <h1 className="page-title mb-3">设置</h1>
+      <nav className="sticky top-0 z-10 -mx-5 mb-4 flex flex-wrap gap-2 bg-[var(--bg-canvas)] px-5 py-2">
         {SECTIONS.map((s) => (
           <a key={s.id} href={`#${s.id}`} className="chip shrink-0">{s.label}</a>
         ))}
       </nav>
-      <div className="max-w-3xl space-y-4">
+      <div className="grid grid-cols-2 items-start gap-4">
         <section id="persona" className="card scroll-mt-16">
           <h3 className="mb-3 text-[15px] font-semibold">账号定位</h3>
           {parsed !== null && !parsed.success && <p className="mb-3 text-sm text-[var(--warning)]">旧档案格式不完整，已按空白显示。保存会覆盖旧档案。</p>}

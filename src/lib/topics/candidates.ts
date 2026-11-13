@@ -33,6 +33,7 @@ const SOURCE_LABEL: Record<string, (heat: number) => string> = {
   github: (h) => `GitHub 热门仓库（${h.toLocaleString('en-US')} stars）`,
   hackernews: (h) => `Hacker News 热帖（${h.toLocaleString('en-US')} points）`,
   x: (h) => `X 热帖（${h.toLocaleString('en-US')} 浏览）`,
+  reddit: () => 'Reddit 热帖（快照没有分数）',
 };
 
 export async function loadPools(store: CandidateStore, now: Date): Promise<Record<TopicSource, Candidate[]>> {

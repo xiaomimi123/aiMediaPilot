@@ -3,11 +3,10 @@ import { AbsoluteFill, OffthreadVideo, staticFile } from 'remotion';
 import { C, FONT } from './tokens';
 import { useLayout } from './layout';
 import { Captions, type CaptionLine } from './Captions';
-
-const GRID = 70;
+import './fonts';
 
 /**
- * 固定画框: 方格纸底 + 左上标题区 + 内容区(overflow hidden, 内容不可能压到小窗与字幕)
+ * 固定画框: 暖白纸 + 标题区 + 内容区(overflow hidden, 内容不可能压到小窗与字幕)
  * + 右上角人物小窗(口播原片, 带原声) + 底部字幕。每条片子只往 children(内容区)里放东西。
  */
 export const Frame: React.FC<{
@@ -26,8 +25,6 @@ export const Frame: React.FC<{
         fontFamily: FONT,
         color: C.ink,
         background: C.bg,
-        backgroundImage: `linear-gradient(${C.grid} 2px, transparent 2px), linear-gradient(90deg, ${C.grid} 2px, transparent 2px)`,
-        backgroundSize: `${GRID}px ${GRID}px`,
       }}
     >
       {title && (
@@ -50,9 +47,9 @@ export const Frame: React.FC<{
         style={{
           position: 'absolute',
           ...Z.pip,
-          borderRadius: 36,
-          border: '12px solid #fff',
-          boxShadow: '0 20px 60px rgba(15,23,42,0.18)',
+          borderRadius: 28,
+          border: '10px solid #fff',
+          boxShadow: '0 18px 48px rgba(40,28,12,0.16)',
           overflow: 'hidden',
           background: C.ink,
         }}

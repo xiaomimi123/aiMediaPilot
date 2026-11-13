@@ -38,6 +38,7 @@
     "node_modules",
     "vendor",
     "tools",
-    "remotion"
+    "remotion",
+    "pipeline"
   ]
 }

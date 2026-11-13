@@ -8,7 +8,7 @@ export function ChatDrawer({ open, onOpenChange, unread, children }: { open: boo
   return (
     <>
       {!open && (
-        <button className="btn-primary fixed bottom-[calc(var(--tabbar-h)+16px)] right-4 z-30 shadow-[var(--shadow-pop)] md:bottom-6 md:right-6" onClick={() => onOpenChange(true)}>
+        <button className="btn-primary fixed bottom-6 right-6 z-30 shadow-[var(--shadow-pop)]" onClick={() => onOpenChange(true)}>
           <MessageCircle size={16} />
           和编导聊
           {unread && <span aria-label="有新消息" className="ml-1 h-2 w-2 rounded-full bg-[var(--danger)]" />}

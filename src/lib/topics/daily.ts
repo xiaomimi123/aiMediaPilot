@@ -7,7 +7,7 @@ import { checklistQuestion, ChecklistSchema, rewriteWithAnswers, TARGET_SEC, typ
 export const EXPIRE_DAYS = 3;
 const LABEL: Record<TopicSource, string> = { benchmark: '对标', sequel: '续集', idea: '点子', source: '资讯' };
 
-export interface DailyCard { id: string; day: string; source: TopicSource; sourceLabel: string; title: string; why: string; hook: string; script: Script; copied: number; predictedCenter: number | null; status: string; questions: string[]; answers: string[]; answered: boolean }
+export interface DailyCard { id: string; day: string; source: TopicSource; sourceId: string; sourceLabel: string; title: string; why: string; hook: string; script: Script; copied: number; predictedCenter: number | null; status: string; questions: string[]; answers: string[]; answered: boolean }
 
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.map((x) => (typeof x === 'string' ? x : '')) : []);
 
@@ -38,7 +38,7 @@ export async function listDaily(db: PrismaClient, now: Date) {
   const topics: DailyCard[] = rows
     .map((t) => {
       const p = t.prediction as unknown as ScriptPrediction | null;
-      return { id: t.id, day: t.day, source: t.source as TopicSource, sourceLabel: LABEL[t.source as TopicSource], title: t.title, why: t.why, hook: t.hook, script: t.script as unknown as Script, copied: (t.copied as unknown[]).length, predictedCenter: p?.result?.center ?? null, status: t.status, ...qa(t) };
+      return { id: t.id, day: t.day, source: t.source as TopicSource, sourceId: t.sourceId, sourceLabel: LABEL[t.source as TopicSource], title: t.title, why: t.why, hook: t.hook, script: t.script as unknown as Script, copied: (t.copied as unknown[]).length, predictedCenter: p?.result?.center ?? null, status: t.status, ...qa(t) };
     })
     .sort((a, b) => (b.predictedCenter ?? -1) - (a.predictedCenter ?? -1));
   const run = await db.dailyTopicRun.findFirst({ orderBy: { createdAt: 'desc' } });

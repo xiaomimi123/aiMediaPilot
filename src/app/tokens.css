@@ -1,34 +1,34 @@
-/* MediaPilot 设计变量 — 暖白卡片（2026-10 改版，spec 2026-10-01-ui-warm-redesign）
+/* MediaPilot 设计变量 — 明亮杂志（与成片同一套：暖白纸、墨色字、橙色强调）
    颜色已按 WCAG AA 校准（tests/lib/ui/contrast.test.ts 从本文件读值验证）。
    用法：在 app/globals.css 顶部 @import "./tokens.css"; */
 
 :root {
   /* ---- 背景 ---- */
-  --bg-canvas:        #F6F3EE; /* 页面底(米白) */
-  --bg-base:          #FBF8F3; /* 侧栏、抽屉 */
+  --bg-canvas:        #F6F1E7; /* 页面底(暖白) */
+  --bg-base:          #FBF7F2; /* 侧栏、抽屉 */
   --bg-surface:       #FFFDF9; /* 卡片 */
   --bg-surface-hover: #F8F2EA; /* 行 / 卡片悬停、当前导航项 */
-  --bg-elevated:      #F4EEE5; /* 次级按钮底、进度槽 */
-  --bg-inset:         #F1ECE4; /* 输入框、内嵌块 */
+  --bg-elevated:      #F3EBE1; /* 次级按钮底、进度槽 */
+  --bg-inset:         #F3EEE6; /* 输入框、内嵌块 */
 
   /* ---- 描边 ---- */
-  --border-subtle:    #ECE6DC;
-  --border-default:   #E2D9CC;
-  --border-strong:    #D3C7B6;
+  --border-subtle:    #E7DDD0;
+  --border-default:   #D9CBBA;
+  --border-strong:    #C9B8A4;
 
   /* ---- 文字 ---- */
-  --text-primary:     #2B2724;
-  --text-secondary:   #6F655B;
-  --text-tertiary:    #71665A;
+  --text-primary:     #1C1916;
+  --text-secondary:   #5C534C;
+  --text-tertiary:    #6A6058;
   --text-disabled:    #A39787; /* 空值 "—" */
   --text-on-accent:   #FFFFFF;
 
-  /* ---- 强调(橙棕; 只用于主操作、当前位置、链接) ---- */
-  --accent:           #AD5614;
-  --accent-hover:     #944810;
-  --accent-subtle:    #FFF6E8;
-  --accent-border:    #F3E2CF;
-  --chart:            #C2651D; /* 图表线条 / 横条, 只用于图形 */
+  /* ---- 强调(橙; 只用于主操作、当前位置、链接。#C2410C 与白字、暖白底都过 AA) ---- */
+  --accent:           #C2410C;
+  --accent-hover:     #A8380A;
+  --accent-subtle:    #FFF3EA;
+  --accent-border:    #F3D7C4;
+  --chart:            #C2410C; /* 图表线条 / 横条, 只用于图形 */
 
   /* ---- 状态(语义固定; 红色只表示有问题) ---- */
   --success:          #2B7A49;  --success-subtle: #E8F4EC;
@@ -49,16 +49,16 @@
   --r-full:999px;
 
   /* ---- 投影 ---- */
-  --shadow-card: 0 1px 2px rgba(60, 40, 20, 0.06), 0 6px 18px rgba(60, 40, 20, 0.06);
-  --shadow-pop:  0 8px 28px rgba(60, 40, 20, 0.14);
+  --shadow-card: 0 1px 2px rgba(40, 28, 12, 0.05), 0 10px 28px rgba(40, 28, 12, 0.06);
+  --shadow-pop:  0 12px 32px rgba(40, 28, 12, 0.14);
 
-  /* ---- 字体 ---- */
-  --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Source Han Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
-  --font-display: "Songti SC", "Source Han Serif SC", "Noto Serif SC", Georgia, serif;
-  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  /* ---- 字体(layout.tsx 用 next/font 把 Inter / Noto Sans SC / JetBrains Mono 注成变量) ---- */
+  --font: var(--font-latin), var(--font-cjk), "PingFang SC", "Noto Sans SC", sans-serif;
+  --font-display: var(--font-latin), var(--font-cjk), "PingFang SC", sans-serif;
+  --mono: var(--font-mono-face), ui-monospace, "JetBrains Mono", monospace;
 
   /* ---- 布局 ---- */
-  --sidebar-w: 224px;
+  --sidebar-w: 196px;
   --drawer-w:  400px;
   --tabbar-h:  60px;
 }

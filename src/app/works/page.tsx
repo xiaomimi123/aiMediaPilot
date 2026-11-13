@@ -16,9 +16,9 @@ export default async function WorksPage({ searchParams }: { searchParams?: { sta
   if (sort === 'predict') cards = [...cards].sort((a, b) => (b.center ?? -1) - (a.center ?? -1));
   const q = (s: string, so = sort) => `/works?${new URLSearchParams({ ...(s !== 'all' ? { stage: s } : {}), ...(so !== 'updated' ? { sort: so } : {}) })}`;
   return (
-    <div className="h-full overflow-y-auto px-4 py-6 md:px-8">
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <h1 className="text-[22px] font-bold">作品</h1>
+    <div className="h-full overflow-y-auto px-5 py-4">
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <h1 className="page-title">作品</h1>
         <div className="flex-1" />
         <Link href={q(stage, sort === 'predict' ? 'updated' : 'predict')} className="text-sm text-[var(--accent)]">
           {sort === 'predict' ? '按更新时间' : '按预测排序'}
@@ -33,9 +33,9 @@ export default async function WorksPage({ searchParams }: { searchParams?: { sta
         ))}
       </div>
       {cards.length === 0 ? (
-        <div className="card text-sm text-[var(--text-secondary)]">{all.length === 0 ? '还没有作品。新建一个，和编导聊聊这条讲什么。' : '这个阶段没有作品。'}</div>
+        <p className="text-[15px] leading-6">{all.length === 0 ? '还没有作品。新建一个，和编导聊聊这条讲什么。' : '这个阶段没有作品。'}</p>
       ) : (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[repeat(auto-fill,minmax(280px,1fr))] md:gap-4">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
           {cards.map((c) => (
             <WorkCard key={c.id} card={c} />
           ))}

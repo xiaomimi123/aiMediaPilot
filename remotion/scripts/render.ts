@@ -15,7 +15,14 @@ async function main() {
   if (!filmDirArg || !flag || !value) throw new Error('用法: render.ts <filmDir> --stills <秒,...> | --out <mp4>');
   const filmDir = path.resolve(filmDirArg);
   const t0 = Date.now();
-  const serveUrl = await bundle({ entryPoint: path.join(filmDir, 'index.tsx'), publicDir: path.join(filmDir, 'public') });
+  const serveUrl = await bundle({
+    entryPoint: path.join(filmDir, 'index.tsx'),
+    publicDir: path.join(filmDir, 'public'),
+    webpackOverride: (config) => {
+      config.module.rules.push({ test: /\.woff2$/, type: 'asset/resource' });
+      return config;
+    },
+  });
   const composition = await selectComposition({ serveUrl, id: 'Film' });
 
   if (flag === '--stills') {

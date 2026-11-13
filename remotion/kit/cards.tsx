@@ -12,7 +12,7 @@ const ease = (t: number, at: number, dur = 0.35) => interpolate(t, [at, at + dur
 
 /** 白色便签卡: 大部分内容的容器 */
 export const Note: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }> = ({ children, style }) => (
-  <div style={{ background: C.card, borderRadius: 36, boxShadow: '0 24px 60px rgba(15,23,42,0.10)', padding: '48px 52px', fontFamily: FONT, color: C.ink, ...style }}>
+  <div style={{ background: C.card, borderRadius: 28, boxShadow: '0 16px 40px rgba(40,28,12,0.08)', padding: '48px 52px', fontFamily: FONT, color: C.ink, ...style }}>
     {children}
   </div>
 );

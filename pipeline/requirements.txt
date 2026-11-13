@@ -1,0 +1,5 @@
+playwright>=1.49
+edge-tts>=6.1.12
+numpy>=2.0
+requests>=2.32
+pyte>=0.8.1
