@@ -198,11 +198,11 @@ function DraftEditor({ draft, onClose, onChanged }: { draft: Draft; onClose: () 
 }
 
 /** 写稿台: 顶部速记, 下面草稿箱。有灵感 3 秒记一条, 想写了点开接着写。 */
-export function DraftDesk() {
+export function DraftDesk({ initialOpen = null }: { initialOpen?: string | null }) {
   const [drafts, setDrafts] = useState<Draft[] | null>(null);
   const [quick, setQuick] = useState('');
   const [quickBusy, setQuickBusy] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(initialOpen);
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
